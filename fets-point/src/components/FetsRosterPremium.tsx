@@ -931,14 +931,7 @@ export function FetsRosterPremium() {
             </div>
           </div>
 
-          <div className="flex w-full justify-center lg:w-auto lg:flex-1 relative lg:-mt-8 -my-2 lg:my-0">
-            <LocationSelectorThread
-              activeBranch={activeBranch}
-              setActiveBranch={setActiveBranch as (b: string) => void}
-              availableBranches={centreOptions}
-              canSwitch={canSwitchCentre}
-            />
-          </div>
+          <div className="hidden lg:block lg:flex-1" />
 
           <div className="flex items-center gap-4 flex-wrap justify-end w-full lg:w-auto">
             <div className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 text-white/60 rounded-xl text-xs font-bold uppercase tracking-widest shadow-lg">

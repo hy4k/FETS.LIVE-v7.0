@@ -6,7 +6,7 @@ import {
   Calendar, Server, Newspaper, PackageSearch, Brain, UserCheck,
   ChevronDown, X, MapPin, Activity, CheckCircle2,
   MessageSquare, AlertCircle, ArrowUpRight, Settings2,
-  Layers, Lock, Zap, GraduationCap
+  Layers, Lock, Zap, GraduationCap, Briefcase, BookOpen
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../lib/supabase';
@@ -15,6 +15,7 @@ import { useAppModules } from '../hooks/useAppModules';
 import { useDashboardStats, useUpcomingSchedule, useSevenDayRosterStaff } from '../hooks/useCommandCentre';
 import { SevenDayExamOutlook } from './SevenDayExamOutlook';
 import { canSwitchBranches, formatBranchName, getAvailableBranches } from '../utils/authUtils';
+import { isMithunEmail } from '../utils/authUtils';
 import { useAuth } from '../hooks/useAuth';
 import { format } from 'date-fns';
 
@@ -33,7 +34,7 @@ export function MobileHome({ setActiveTab, profile }: MobileHomeProps) {
   const [showManagementSheet, setShowManagementSheet] = useState(false);
   const [staffPresent, setStaffPresent] = useState<any[]>([]);
 
-  const isMithun = profile?.email === 'mithun@fets.in';
+  const isMithun = isMithunEmail(profile?.email);
   const availableBranches = getAvailableBranches(profile?.email, profile?.role);
   const canSwitch = canSwitchBranches(profile?.email, profile?.role);
 
@@ -72,7 +73,7 @@ export function MobileHome({ setActiveTab, profile }: MobileHomeProps) {
     { id: 'command-center', label: 'LIVE', icon: Zap, gradient: 'from-amber-500 to-yellow-600' },
     { id: 'candidate-tracker', label: 'Register', icon: Users, gradient: 'from-blue-500 to-cyan-600' },
     { id: 'fets-calendar', label: 'Calendar', icon: Calendar, gradient: 'from-violet-500 to-purple-600' },
-    { id: 'my-desk', label: 'My Desk', icon: MessageSquare, gradient: 'from-pink-500 to-rose-600' },
+    { id: 'client-portal', label: 'Clients', icon: Briefcase, gradient: 'from-amber-500 to-orange-600' },
     { id: 'fets-roster', label: 'Roster', icon: UserCheck, gradient: 'from-indigo-500 to-blue-600' },
     { id: 'incident-log', label: 'Cases', icon: AlertCircle, gradient: 'from-orange-500 to-red-600' },
     { id: 'cma-availability', label: 'CMA US', icon: GraduationCap, gradient: 'from-teal-500 to-emerald-600' },
@@ -94,7 +95,7 @@ export function MobileHome({ setActiveTab, profile }: MobileHomeProps) {
   // Management items (accessible to all) from secondRowItems
   const managementItems = [
     { id: 'incident-log', label: 'Raise A Case', icon: AlertCircle },
-    { id: 'my-desk', label: 'My Desk', icon: MessageSquare },
+    { id: 'client-portal', label: 'Client Portal', icon: Briefcase },
     { id: 'system-manager', label: 'System Manager', icon: Server },
     { id: 'lost-and-found', label: 'Lost & Found', icon: PackageSearch },
     { id: 'fets-intelligence', label: 'FETS AI', icon: Brain },
@@ -221,6 +222,55 @@ export function MobileHome({ setActiveTab, profile }: MobileHomeProps) {
             </motion.div>
           ))}
         </div>
+      </div>
+
+      {isMithun && (
+        <div className="px-6 mb-8">
+          <motion.button
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            whileTap={{ scale: 0.97 }}
+            onClick={() => setActiveTab('my-desk')}
+            className="w-full sov-card !rounded-2xl !p-5 flex items-center justify-between relative overflow-hidden active:border-[#FACC15]/40 transition-all"
+          >
+            <div className="absolute inset-y-0 right-0 w-1/2 bg-gradient-to-l from-pink-500/10 to-transparent blur-2xl" />
+            <div className="flex items-center gap-4 relative z-10">
+              <div className="w-12 h-12 rounded-xl bg-pink-500/10 border border-pink-500/20 flex items-center justify-center">
+                <BookOpen size={23} className="text-[#FACC15]" />
+              </div>
+              <div className="text-left">
+                <span className="font-black text-white text-base uppercase tracking-tight block leading-none mb-1">My Desk</span>
+                <span className="text-[#FACC15]/45 text-[9px] font-bold uppercase tracking-[0.2em]">Workbook, notes, to-do, accounting</span>
+              </div>
+            </div>
+            <ChevronRight size={18} className="text-white/20 relative z-10" />
+          </motion.button>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════
+          CLIENT WORKSPACE — prominent internal portal entry
+      ═══════════════════════════════════════════════════════ */}
+      <div className="px-6 mb-8">
+        <motion.button
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          whileTap={{ scale: 0.97 }}
+          onClick={() => setActiveTab('client-portal')}
+          className="w-full sov-card !rounded-2xl !p-5 flex items-center justify-between relative overflow-hidden active:border-[#FACC15]/40 transition-all"
+        >
+          <div className="absolute inset-y-0 right-0 w-1/2 bg-gradient-to-l from-[#FACC15]/10 to-transparent blur-2xl" />
+          <div className="flex items-center gap-4 relative z-10">
+            <div className="w-12 h-12 rounded-xl bg-[#FACC15]/10 border border-[#FACC15]/25 flex items-center justify-center">
+              <Briefcase size={23} className="text-[#FACC15]" />
+            </div>
+            <div className="text-left">
+              <span className="font-black text-white text-base uppercase tracking-tight block leading-none mb-1">Client Portal</span>
+              <span className="text-[#FACC15]/45 text-[9px] font-bold uppercase tracking-[0.2em]">Schedules, invoice counts, support</span>
+            </div>
+          </div>
+          <ChevronRight size={18} className="text-white/20 relative z-10" />
+        </motion.button>
       </div>
 
       {/* ═══════════════════════════════════════════════════════

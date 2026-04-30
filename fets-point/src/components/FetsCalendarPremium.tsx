@@ -18,8 +18,6 @@ import { validateSessionCapacity } from '../utils/sessionUtils'
 import { useCalendarSessions, useSessionMutations } from '../hooks/useCalendarSessions'
 import { useClients, useClientExams } from '../hooks/useClients'
 import { toast } from 'react-hot-toast'
-import { LocationSelectorThread } from './LocationSelectorThread'
-import { canSwitchBranches, getAvailableBranches } from '../utils/authUtils'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface Session {
@@ -174,12 +172,10 @@ const timeToMinutes = (time: string): number => {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function FetsCalendarPremium() {
-  const { user, hasPermission, profile } = useAuth()
+  const { user, hasPermission } = useAuth()
   const canEdit = hasPermission('calendar_edit')
-  const { activeBranch, setActiveBranch } = useBranch()
+  const { activeBranch } = useBranch()
   const { applyFilter, isGlobalView } = useBranchFilter()
-  const canSwitchCentre = canSwitchBranches(profile?.email, profile?.role)
-  const centreOptions = getAvailableBranches(profile?.email, profile?.role)
 
   // Date/View state
   const [currentDate, setCurrentDate] = useState(new Date())
@@ -431,12 +427,17 @@ export function FetsCalendarPremium() {
                 >
                   {date.getDate()}
                 </span>
-                {total > 0 && (
-                  <span className={`text-[10px] font-black px-1.5 py-0.5 rounded
-                    ${isCurrentDay ? 'bg-[#f6c810] text-black' : 'bg-white/10 text-white/80'}`}>
+                <span
+                  className="min-w-[3.25rem] rounded-lg border border-[#f6c810]/70 bg-[#f6c810]/15 px-2.5 py-1 text-right shadow-[0_0_18px_rgba(246,200,16,0.22)]"
+                  title={`${total} total candidates`}
+                >
+                  <span className="block text-[8px] font-black uppercase leading-none tracking-wider text-[#f6c810]/80">
+                    Total
+                  </span>
+                  <span className="block text-xl font-black leading-none tabular-nums text-[#f6c810]">
                     {total}
                   </span>
-                )}
+                </span>
               </div>
               {/* Session pills */}
               <div className="space-y-1.5">
@@ -705,14 +706,7 @@ export function FetsCalendarPremium() {
             </div>
           </div>
 
-          <div className="flex w-full justify-center lg:w-auto lg:flex-1 relative lg:-mt-12 -my-4 lg:my-0 z-50">
-            <LocationSelectorThread
-              activeBranch={activeBranch}
-              setActiveBranch={setActiveBranch as (b: string) => void}
-              availableBranches={centreOptions}
-              canSwitch={canSwitchCentre}
-            />
-          </div>
+          <div className="hidden lg:block lg:flex-1" />
 
           <div className="flex items-center gap-3 flex-wrap justify-end w-full lg:w-auto">
             <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0A0A0B] border border-[rgba(255, 255, 255, 0.1)] text-[#f6c810] rounded-lg text-xs font-bold">

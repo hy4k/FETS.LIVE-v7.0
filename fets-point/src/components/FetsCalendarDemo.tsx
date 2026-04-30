@@ -4,9 +4,6 @@ import { formatDateForIST } from '../utils/dateUtils'
 import { useParagonCelpipBookings } from '../hooks/useParagonCelpipBookings'
 import { useParagonSyncRuns, type ParagonSyncDetails, type ParagonSyncRunRow } from '../hooks/useParagonSyncRuns'
 import { useBranch } from '../hooks/useBranch'
-import { useAuth } from '../hooks/useAuth'
-import { LocationSelectorThread } from './LocationSelectorThread'
-import { canSwitchBranches, getAvailableBranches } from '../utils/authUtils'
 
 const MONTHS = [
   new Date(2026, 3, 1),
@@ -75,10 +72,7 @@ const branchLabel = (branch: string | null | undefined) => {
 }
 
 export function FetsCalendarDemo() {
-  const { profile } = useAuth()
-  const { activeBranch, setActiveBranch } = useBranch()
-  const canSwitch = canSwitchBranches(profile?.email, profile?.role)
-  const availableBranches = getAvailableBranches(profile?.email, profile?.role)
+  const { activeBranch } = useBranch()
 
   const [monthIndex, setMonthIndex] = useState(0)
 
@@ -198,15 +192,6 @@ export function FetsCalendarDemo() {
               Refresh
             </button>
           </div>
-        </div>
-
-        <div className="mb-8">
-          <LocationSelectorThread
-            activeBranch={activeBranch}
-            setActiveBranch={setActiveBranch}
-            availableBranches={availableBranches}
-            canSwitch={canSwitch}
-          />
         </div>
 
         {/* Update summary — month-scoped plain language */}
@@ -398,11 +383,17 @@ export function FetsCalendarDemo() {
                 >
                   <div className="flex items-center justify-between mb-2 md:mb-3">
                     <span className="text-lg md:text-xl font-bold text-white">{date.getDate()}</span>
-                    {totalBooked > 0 && (
-                      <span className="text-xs md:text-sm px-2 py-1 rounded-md bg-amber-400 text-black font-bold tabular-nums">
+                    <span
+                      className="min-w-[3.25rem] rounded-lg border border-amber-300/70 bg-amber-300/15 px-2.5 py-1 text-right shadow-[0_0_18px_rgba(251,191,36,0.22)]"
+                      title={`${totalBooked} total candidates`}
+                    >
+                      <span className="block text-[8px] font-black uppercase leading-none tracking-wider text-amber-200/85">
+                        Total
+                      </span>
+                      <span className="block text-xl md:text-2xl font-black leading-none tabular-nums text-amber-300">
                         {totalBooked}
                       </span>
-                    )}
+                    </span>
                   </div>
 
                   <div className="space-y-2">

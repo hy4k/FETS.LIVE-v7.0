@@ -11,7 +11,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useStaff, useStaffMutations } from '../hooks/useStaffManagement'
 import { toast } from 'react-hot-toast'
 import { StaffProfile } from '../types/shared'
-import { getAvailableBranches, formatBranchName } from '../utils/authUtils'
+import { getAvailableBranches, formatBranchName, isMithunEmail } from '../utils/authUtils'
 import { getCurrentISTDateString } from '../utils/dateUtils'
 import { ClientControl } from './ClientControl'
 import { useAppModules } from '../hooks/useAppModules'
@@ -134,7 +134,7 @@ export function UserManagement({ onNavigate }: UserManagementProps = {}) {
         setFormData({ ...formData, [field]: newArray })
     }
 
-    const isSuperAdmin = currentUser?.email === 'mithun@fets.in';
+    const isSuperAdmin = isMithunEmail(currentUser?.email);
 
     // Access Denied Screen
     if (!isSuperAdmin) {

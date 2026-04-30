@@ -17,6 +17,9 @@ Thumbs.db
 pnpm-debug.log*
 npm-debug.log*
 
+# Prometric session cookie (do not commit — store in GitHub Secret PROMETRIC_SESSION_JSON)
+.prometric-session.json
+
 # Environment
 .env*
 !.env.example

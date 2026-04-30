@@ -3,6 +3,7 @@ import { X, Calendar, Users, FileText, Send, CheckCircle, XCircle, Clock, Trash2
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { useBranch } from '../hooks/useBranch'
+import { isMithunEmail } from '../utils/authUtils'
 import toast from 'react-hot-toast'
 
 import { LeaveRequest } from '../types/shared'
@@ -254,7 +255,7 @@ export const EnhancedRequestsModal: React.FC<RequestsModalProps> = ({
 
   // Filter requests based on user role and tab
   const getFilteredRequests = () => {
-    const isAdmin = profile?.role === 'super_admin' || profile?.email === 'mithun@fets.in';
+    const isAdmin = profile?.role === 'super_admin' || isMithunEmail(profile?.email);
 
     if (activeTab === 'my-requests') {
       return requests.filter(r => r.user_id === profile?.id)

@@ -6,7 +6,11 @@
 /**
  * Super admin email addresses
  */
-const SUPER_ADMIN_EMAILS = ['mithun@fets.in']
+const SUPER_ADMIN_EMAILS = ['mithun@fets.in', 'mithun@fets.live']
+
+export function isMithunEmail(email: string | null | undefined): boolean {
+  return Boolean(email && SUPER_ADMIN_EMAILS.includes(email.toLowerCase()))
+}
 
 /**
  * Check if a user is a super admin based on email and role
@@ -16,7 +20,7 @@ const SUPER_ADMIN_EMAILS = ['mithun@fets.in']
  */
 export function isSuperAdmin(email: string | null | undefined, role: string | null | undefined): boolean {
   if (!email || !role) return false
-  return role === 'super_admin' && SUPER_ADMIN_EMAILS.includes(email.toLowerCase())
+  return role === 'super_admin' && isMithunEmail(email)
 }
 
 /**

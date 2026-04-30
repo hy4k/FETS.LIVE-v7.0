@@ -4,15 +4,16 @@ import {
   Bell, ChevronDown, MapPin, LayoutDashboard,
   Brain, ShieldAlert, MessageSquare, ClipboardList,
   CalendarDays, UserSearch, UserCheck, Menu, LogOut,
-  Server, Cpu, Shield, X, PackageSearch, AlertCircle, BookOpen,
+  Server, Cpu, Shield, X, PackageSearch, AlertCircle, BookOpen, Briefcase,
   ChevronRight, Settings2, Layers, GraduationCap
 } from 'lucide-react';
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useBranch } from '../hooks/useBranch';
-import { canSwitchBranches, formatBranchName, getAvailableBranches } from '../utils/authUtils';
+import { canSwitchBranches, formatBranchName, getAvailableBranches, isMithunEmail } from '../utils/authUtils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppModules } from '../hooks/useAppModules';
+import { LocationSelectorThread } from './LocationSelectorThread';
 
 interface HeaderProps {
   isMobile?: boolean;
@@ -86,7 +87,7 @@ export function Header({ isMobile = false, sidebarOpen = false, setSidebarOpen, 
   // Management dropdown state
   const [showManagementMenu, setShowManagementMenu] = useState(false);
   const managementRef = useRef<HTMLDivElement>(null);
-  const isMithun = profile?.email === 'mithun@fets.in';
+  const isMithun = isMithunEmail(profile?.email);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -105,12 +106,12 @@ export function Header({ isMobile = false, sidebarOpen = false, setSidebarOpen, 
     { id: 'command-center', label: 'LIVE', icon: LayoutDashboard },
     { id: 'fets-calendar', label: 'CALENDAR', icon: CalendarDays },
     { id: 'fets-calendar-demo', label: 'CELPIP', icon: CalendarDays },
+    { id: 'client-portal', label: 'CLIENTS', icon: Briefcase },
     { id: 'fets-roster', label: 'ROSTER', icon: UserCheck },
     { id: 'cma-availability', label: 'CMA US', icon: GraduationCap },
   ];
 
   const secondRowItems = [
-    { id: 'my-desk', label: 'MY DESK', icon: MessageSquare },
     { id: 'system-manager', label: 'SYSTEM MANAGER', icon: Server },
     { id: 'lost-and-found', label: 'LOST & FOUND', icon: PackageSearch },
     { id: 'fets-intelligence', label: 'FETS AI', icon: Brain },
@@ -407,8 +408,15 @@ export function Header({ isMobile = false, sidebarOpen = false, setSidebarOpen, 
           </div>
 
           {/* RIGHT: COMMAND CONTROLS */}
-          <div className="flex items-center justify-end gap-4 md:gap-6 shrink-0 w-64">
-            {/* BRANCH SELECTOR (Desktop) - MOVED TO COMMAND CENTRE */}
+          <div className="flex items-center justify-end gap-3 md:gap-4 shrink-0 w-[360px]">
+            {!isMobile && (
+              <LocationSelectorThread
+                activeBranch={activeBranch}
+                setActiveBranch={setActiveBranch as any}
+                availableBranches={availableBranches}
+                canSwitch={canSwitch}
+              />
+            )}
 
             {/* MANAGEMENT DROPDOWN (Desktop) - MOVED TO COMMAND CENTRE */}
 

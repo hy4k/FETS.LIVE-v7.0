@@ -16,7 +16,6 @@ import {
     Layers,
     Timer,
     Zap,
-    Target,
     FileText,
     Globe,
     MapPin
@@ -63,8 +62,16 @@ interface ClientAnalysis {
 
 interface OverlapInfo {
     date: string;
+    branch: string;
     sessions: CalendarSession[];
-    overlapHours: number;
+    conflictPeriods: {
+        start: string;
+        end: string;
+        candidates: number;
+        capacity: number;
+        excessCandidates: number;
+        sessions: CalendarSession[];
+    }[];
     totalCandidates: number;
     capacity: number;
     excessCandidates: number;
@@ -202,6 +209,18 @@ export const CalendarAnalysis: React.FC<CalendarAnalysisProps> = ({ onClose, act
         };
     };
 
+    const formatDateLabel = (date: string): string => {
+        return new Date(date).toLocaleDateString('en-IN', {
+            weekday: 'short',
+            day: '2-digit',
+            month: 'short'
+        });
+    };
+
+    const getBranchLabel = (branch: string): string => {
+        return branch.charAt(0).toUpperCase() + branch.slice(1);
+    };
+
     // Calculate client-wise analysis with center breakdown
     const clientAnalysis = useMemo((): ClientAnalysis[] => {
         const clientMap: { [key: string]: ClientAnalysis } = {};
@@ -259,91 +278,83 @@ export const CalendarAnalysis: React.FC<CalendarAnalysisProps> = ({ onClose, act
         return Object.values(clientMap).sort((a, b) => b.totalCandidates - a.totalCandidates);
     }, [sessions]);
 
-    // Calculate overlap analysis
+    // Calculate overlap analysis from actual concurrent exam timings and branch seat capacity.
     const overlapAnalysis = useMemo((): OverlapInfo[] => {
-        const dateMap: { [date: string]: CalendarSession[] } = {};
+        const branchDateMap: { [key: string]: CalendarSession[] } = {};
 
         sessions.forEach(session => {
-            if (!dateMap[session.date]) {
-                dateMap[session.date] = [];
-            }
-            dateMap[session.date].push(session);
+            const branch = session.branch_location || 'calicut';
+            const key = `${session.date}__${branch}`;
+            if (!branchDateMap[key]) branchDateMap[key] = [];
+            branchDateMap[key].push(session);
         });
 
         const overlaps: OverlapInfo[] = [];
 
-        Object.entries(dateMap).forEach(([date, daySessions]) => {
-            if (daySessions.length < 2) return;
+        Object.entries(branchDateMap).forEach(([key, daySessions]) => {
+            const [date, branch] = key.split('__');
+            const capacity = getBranchCapacity(branch);
+            const timePoints = Array.from(new Set(daySessions.flatMap(session => [
+                timeToMinutes(session.start_time),
+                timeToMinutes(session.end_time)
+            ]))).sort((a, b) => a - b);
 
-            // Sort by start time
-            daySessions.sort((a, b) => a.start_time.localeCompare(b.start_time));
+            const conflictPeriods: OverlapInfo['conflictPeriods'] = [];
 
-            // Calculate overlaps
-            let hasOverlap = false;
-            let overlapHours = 0;
-            const overlapPeriods: { start: string; end: string; sessions: CalendarSession[] }[] = [];
+            for (let i = 0; i < timePoints.length - 1; i++) {
+                const start = timePoints[i];
+                const end = timePoints[i + 1];
+                if (start === end) continue;
 
-            for (let i = 0; i < daySessions.length; i++) {
-                for (let j = i + 1; j < daySessions.length; j++) {
-                    const session1 = daySessions[i];
-                    const session2 = daySessions[j];
-
-                    // Check if times overlap
-                    const start1 = timeToMinutes(session1.start_time);
-                    const end1 = timeToMinutes(session1.end_time);
-                    const start2 = timeToMinutes(session2.start_time);
-                    const end2 = timeToMinutes(session2.end_time);
-
-                    if (start2 < end1 && end2 > start1) {
-                        hasOverlap = true;
-                        const overlapStart = Math.max(start1, start2);
-                        const overlapEnd = Math.min(end1, end2);
-                        overlapHours += (overlapEnd - overlapStart) / 60;
-                        overlapPeriods.push({
-                            start: minutesToTime(overlapStart),
-                            end: minutesToTime(overlapEnd),
-                            sessions: [session1, session2]
-                        });
-                    }
-                }
-            }
-
-            if (hasOverlap) {
-                const totalCandidates = daySessions.reduce((sum, s) => sum + s.candidate_count, 0);
-                const capacity = getBranchCapacity(activeBranch || 'calicut');
-                const excessCandidates = Math.max(0, totalCandidates - capacity);
-
-                const suggestions: string[] = [];
-
-                if (excessCandidates > 0) {
-                    suggestions.push(`Consider early check-in for first exam (${overlapPeriods[0]?.sessions[0]?.exam_name || 'first session'}) to clear ${Math.ceil(excessCandidates / 2)} candidates before overlap window.`);
-                }
-
-                // Check if extending beyond 5 PM would help
-                const lastEndTime = Math.max(...daySessions.map(s => timeToMinutes(s.end_time)));
-                if (lastEndTime <= timeToMinutes('17:00') && excessCandidates > 0) {
-                    suggestions.push(`Extend operating hours beyond 5 PM to accommodate ${excessCandidates} excess candidates.`);
-                }
-
-                // Check if staggering could help
-                if (overlapHours >= 1) {
-                    suggestions.push(`Stagger exam start times by ${Math.ceil(overlapHours)}+ hour(s) to reduce concurrent load.`);
-                }
-
-                overlaps.push({
-                    date,
-                    sessions: daySessions,
-                    overlapHours: Math.round(overlapHours * 10) / 10,
-                    totalCandidates,
-                    capacity,
-                    excessCandidates,
-                    suggestions
+                const activeSessions = daySessions.filter(session => {
+                    const sessionStart = timeToMinutes(session.start_time);
+                    const sessionEnd = timeToMinutes(session.end_time);
+                    return sessionStart < end && sessionEnd > start;
                 });
+
+                const concurrentCandidates = activeSessions.reduce((sum, session) => sum + session.candidate_count, 0);
+                if (concurrentCandidates > capacity) {
+                    conflictPeriods.push({
+                        start: minutesToTime(start),
+                        end: minutesToTime(end),
+                        candidates: concurrentCandidates,
+                        capacity,
+                        excessCandidates: concurrentCandidates - capacity,
+                        sessions: activeSessions.sort((a, b) => a.start_time.localeCompare(b.start_time))
+                    });
+                }
             }
+
+            if (conflictPeriods.length === 0) return;
+
+            const maxLoad = Math.max(...conflictPeriods.map(period => period.candidates));
+            const maxExcess = Math.max(...conflictPeriods.map(period => period.excessCandidates));
+            const conflictingSessions = Array.from(
+                new Map(conflictPeriods.flatMap(period => period.sessions).map(session => [session.id, session])).values()
+            ).sort((a, b) => a.start_time.localeCompare(b.start_time));
+            const firstConflict = conflictPeriods[0];
+
+            overlaps.push({
+                date,
+                branch,
+                sessions: conflictingSessions,
+                conflictPeriods,
+                totalCandidates: maxLoad,
+                capacity,
+                excessCandidates: maxExcess,
+                suggestions: [
+                    `${getBranchLabel(branch)} has ${capacity} seats. During ${firstConflict.start}-${firstConflict.end}, ${firstConflict.candidates} candidates are scheduled at the same time.`,
+                    `Move or stagger at least ${maxExcess} candidate${maxExcess === 1 ? '' : 's'} from the highlighted overlapping time window.`,
+                    'Check the listed exam timings before adding another session in the same interval.'
+                ]
+            });
         });
 
-        return overlaps.sort((a, b) => b.excessCandidates - a.excessCandidates);
-    }, [sessions, activeBranch]);
+        return overlaps.sort((a, b) => {
+            if (b.excessCandidates !== a.excessCandidates) return b.excessCandidates - a.excessCandidates;
+            return a.date.localeCompare(b.date);
+        });
+    }, [sessions]);
 
     // Calculate totals
     const totals = useMemo(() => {
@@ -362,14 +373,15 @@ export const CalendarAnalysis: React.FC<CalendarAnalysisProps> = ({ onClose, act
         });
 
         // Weekly totals
-        const weeklyTotals: { week: number; candidates: number; sessions: number }[] = [];
-        const weekMap: { [week: number]: { candidates: number; sessions: number } } = {};
+        const weeklyTotals: { week: number; weekStart: string; weekEnd: string; candidates: number; sessions: number }[] = [];
+        const weekMap: { [week: number]: { candidates: number; sessions: number; weekStart: string; weekEnd: string } } = {};
 
         sessions.forEach(session => {
             const date = new Date(session.date);
             const week = getWeekNumber(date);
+            const { start, end } = getWeekRange(date);
             if (!weekMap[week]) {
-                weekMap[week] = { candidates: 0, sessions: 0 };
+                weekMap[week] = { candidates: 0, sessions: 0, weekStart: start, weekEnd: end };
             }
             weekMap[week].candidates += session.candidate_count;
             weekMap[week].sessions += 1;
@@ -379,11 +391,44 @@ export const CalendarAnalysis: React.FC<CalendarAnalysisProps> = ({ onClose, act
             weeklyTotals.push({ week: parseInt(week), ...data });
         });
 
+        const dailyMap: {
+            [date: string]: {
+                booked: number;
+                seats: number;
+                sessions: number;
+                branches: { [branch: string]: { booked: number; seats: number; sessions: number } };
+            };
+        } = {};
+
+        sessions.forEach(session => {
+            const branch = session.branch_location || 'calicut';
+            if (!dailyMap[session.date]) {
+                dailyMap[session.date] = { booked: 0, seats: 0, sessions: 0, branches: {} };
+            }
+            if (!dailyMap[session.date].branches[branch]) {
+                dailyMap[session.date].branches[branch] = {
+                    booked: 0,
+                    seats: getBranchCapacity(branch),
+                    sessions: 0
+                };
+                dailyMap[session.date].seats += getBranchCapacity(branch);
+            }
+            dailyMap[session.date].booked += session.candidate_count;
+            dailyMap[session.date].sessions += 1;
+            dailyMap[session.date].branches[branch].booked += session.candidate_count;
+            dailyMap[session.date].branches[branch].sessions += 1;
+        });
+
+        const dailyBreakdown = Object.entries(dailyMap)
+            .map(([date, data]) => ({ date, ...data }))
+            .sort((a, b) => a.date.localeCompare(b.date));
+
         return {
             totalCandidates,
             totalSessions,
             byBranch,
-            weeklyTotals: weeklyTotals.sort((a, b) => a.week - b.week)
+            weeklyTotals: weeklyTotals.sort((a, b) => a.week - b.week),
+            dailyBreakdown
         };
     }, [sessions]);
 
@@ -468,7 +513,7 @@ Overlap Alerts:       ${overlapAnalysis.length}
 │  WEEKLY BREAKDOWN:
 `;
             client.weeklyBreakdown.forEach(week => {
-                report += `│    Week ${week.weekNumber} (${week.weekStart} - ${week.weekEnd}): ${week.candidates} Candidates
+                report += `│    ${week.weekStart} - ${week.weekEnd}: ${week.candidates} Candidates
 `;
             });
 
@@ -479,13 +524,17 @@ Overlap Alerts:       ${overlapAnalysis.length}
         report += `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-                     CENTER-WISE SUMMARY
+                       DAILY BREAKDOWN
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 `;
 
-        Object.entries(totals.byBranch).forEach(([branch, data]) => {
+        totals.dailyBreakdown.forEach(day => {
             report += `
-  ${branch.toUpperCase().padEnd(12)}: ${data.candidates.toString().padStart(5)} Candidates | ${data.sessions} Sessions`;
+  ${formatDateLabel(day.date).padEnd(12)}: ${day.booked.toString().padStart(5)} booked / ${day.seats} seats | ${day.sessions} Sessions`;
+            Object.entries(day.branches).forEach(([branch, data]) => {
+                report += `
+      ${branch.toUpperCase().padEnd(10)} ${data.booked.toString().padStart(4)} / ${data.seats} seats`;
+            });
         });
 
         report += `
@@ -498,7 +547,7 @@ Overlap Alerts:       ${overlapAnalysis.length}
 
         totals.weeklyTotals.forEach(week => {
             report += `
-  Week ${week.week}: ${week.candidates.toString().padStart(5)} Candidates | ${week.sessions} Sessions`;
+  ${week.weekStart} - ${week.weekEnd}: ${week.candidates.toString().padStart(5)} Candidates | ${week.sessions} Sessions`;
         });
 
         if (overlapAnalysis.length > 0) {
@@ -513,9 +562,11 @@ Overlap Alerts:       ${overlapAnalysis.length}
                 const dateStr = new Date(overlap.date).toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short' });
                 report += `
   ${dateStr}:
-    • Overlap Duration: ${overlap.overlapHours} hours
-    • Total Candidates: ${overlap.totalCandidates} (Capacity: ${overlap.capacity})
-    • Excess Load: ${overlap.excessCandidates} candidates
+    • Branch: ${getBranchLabel(overlap.branch)}
+    • Peak Concurrent Candidates: ${overlap.totalCandidates} (Seats: ${overlap.capacity})
+    • Peak Excess Load: ${overlap.excessCandidates} candidates
+    • Conflict Windows:
+${overlap.conflictPeriods.map(period => `      - ${period.start}-${period.end}: ${period.candidates}/${period.capacity} candidates (${period.excessCandidates} excess)`).join('\n')}
     • Recommendations:
 ${overlap.suggestions.map(s => `      → ${s}`).join('\n')}
 `;
@@ -727,32 +778,57 @@ ${overlap.suggestions.map(s => `      → ${s}`).join('\n')}
 
                                     {/* Branch & Weekly Summary */}
                                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                        {/* Center-wise Summary */}
+                                        {/* Daily Breakdown */}
                                         <div className={`${neumorphicCard} p-8`}>
                                             <div className="flex items-center gap-3 mb-6">
                                                 <div className="p-2 bg-gradient-to-br from-blue-500/20 to-blue-600/20 rounded-lg text-blue-400">
-                                                    <Globe size={24} />
+                                                    <Calendar size={24} />
                                                 </div>
-                                                <h3 className="text-xl font-black text-white">Center-wise Summary</h3>
+                                                <div>
+                                                    <h3 className="text-xl font-black text-white">Daily Breakdown</h3>
+                                                    <p className="text-xs text-gray-500 font-medium">Booked candidates against actual seats for each day</p>
+                                                </div>
                                             </div>
-                                            <div className="space-y-4">
-                                                {Object.entries(totals.byBranch).map(([branch, data]) => (
-                                                    <div key={branch} className={`${neumorphicCardLight} p-5 flex items-center justify-between`}>
-                                                        <div className="flex items-center gap-4">
-                                                            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-600/20 flex items-center justify-center">
-                                                                <MapPin size={20} className="text-blue-400" />
-                                                            </div>
-                                                            <div>
-                                                                <h4 className="font-bold text-white uppercase">{branch}</h4>
-                                                                <p className="text-xs text-gray-500">{data.sessions} Sessions</p>
-                                                            </div>
-                                                        </div>
-                                                        <div className="text-right">
-                                                            <div className="text-2xl font-black text-[#92cdb3]">{data.candidates}</div>
-                                                            <p className="text-xs text-gray-500">Candidates</p>
-                                                        </div>
+                                            <div className="space-y-4 max-h-[520px] overflow-y-auto custom-scrollbar pr-2">
+                                                {totals.dailyBreakdown.length === 0 ? (
+                                                    <div className={`${neumorphicCardLight} p-8 text-center text-gray-500 font-bold`}>
+                                                        No session data for this month
                                                     </div>
-                                                ))}
+                                                ) : totals.dailyBreakdown.map(day => {
+                                                    const utilization = day.seats > 0 ? Math.min((day.booked / day.seats) * 100, 100) : 0;
+                                                    return (
+                                                        <div key={day.date} className={`${neumorphicCardLight} p-5`}>
+                                                            <div className="flex items-start justify-between gap-4 mb-4">
+                                                                <div>
+                                                                    <h4 className="font-black text-white">{formatDateLabel(day.date)}</h4>
+                                                                    <p className="text-xs text-gray-500">{day.sessions} session{day.sessions === 1 ? '' : 's'}</p>
+                                                                </div>
+                                                                <div className="text-right">
+                                                                    <div className="text-2xl font-black text-[#FFD633] tabular-nums">
+                                                                        {day.booked} / {day.seats}
+                                                                    </div>
+                                                                    <p className="text-xs text-gray-500">booked / seats</p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="h-2 w-full bg-[#0d1d1f] rounded-full overflow-hidden mb-3">
+                                                                <motion.div
+                                                                    initial={{ width: 0 }}
+                                                                    animate={{ width: `${utilization}%` }}
+                                                                    transition={{ duration: 0.6 }}
+                                                                    className="h-full bg-gradient-to-r from-[#FFD633] to-[#92cdb3] rounded-full"
+                                                                />
+                                                            </div>
+                                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                                {Object.entries(day.branches).map(([branch, data]) => (
+                                                                    <div key={branch} className="rounded-lg bg-[#0d1d1f]/60 px-3 py-2 flex items-center justify-between">
+                                                                        <span className="text-xs font-bold uppercase text-gray-400">{getBranchLabel(branch)}</span>
+                                                                        <span className="text-sm font-black text-white tabular-nums">{data.booked} / {data.seats}</span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
                                         </div>
 
@@ -768,7 +844,7 @@ ${overlap.suggestions.map(s => `      → ${s}`).join('\n')}
                                                 {totals.weeklyTotals.map(week => (
                                                     <div key={week.week} className={`${neumorphicCardLight} p-5`}>
                                                         <div className="flex items-center justify-between mb-3">
-                                                            <span className="font-bold text-white">Week {week.week}</span>
+                                                            <span className="font-bold text-white">{week.weekStart} - {week.weekEnd}</span>
                                                             <div className="flex items-center gap-4">
                                                                 <span className="text-sm text-gray-400">{week.sessions} sessions</span>
                                                                 <span className="text-xl font-black text-[#92cdb3]">{week.candidates}</span>
@@ -785,65 +861,6 @@ ${overlap.suggestions.map(s => `      → ${s}`).join('\n')}
                                                     </div>
                                                 ))}
                                             </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Client Summary Table */}
-                                    <div className={`${neumorphicCard} p-8`}>
-                                        <div className="flex items-center justify-between mb-6">
-                                            <div className="flex items-center gap-3">
-                                                <div className="p-2 bg-gradient-to-br from-emerald-500/20 to-emerald-600/20 rounded-lg text-emerald-400">
-                                                    <Target size={24} />
-                                                </div>
-                                                <h3 className="text-xl font-black text-white">Client Summary (For Invoice)</h3>
-                                            </div>
-                                        </div>
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full">
-                                                <thead>
-                                                    <tr className="border-b border-white/10">
-                                                        <th className="text-left py-4 px-4 font-bold text-gray-500 text-xs uppercase tracking-wider">Client</th>
-                                                        <th className="text-center py-4 px-4 font-bold text-gray-500 text-xs uppercase tracking-wider">Total Candidates</th>
-                                                        <th className="text-center py-4 px-4 font-bold text-gray-500 text-xs uppercase tracking-wider">Sessions</th>
-                                                        {['Calicut', 'Cochin'].map(branch => (
-                                                            <th key={branch} className="text-center py-4 px-4 font-bold text-gray-500 text-xs uppercase tracking-wider">{branch}</th>
-                                                        ))}
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {clientAnalysis.map(client => {
-                                                        const color = getClientColor(client.clientName);
-                                                        return (
-                                                            <tr key={client.clientName} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                                                                <td className="py-4 px-4">
-                                                                    <span className={`font-bold ${color.text}`}>{client.clientName}</span>
-                                                                </td>
-                                                                <td className="text-center py-4 px-4">
-                                                                    <span className="text-2xl font-black text-white">{client.totalCandidates}</span>
-                                                                </td>
-                                                                <td className="text-center py-4 px-4 text-gray-400 font-medium">{client.sessionCount}</td>
-                                                                {['calicut', 'cochin'].map(branch => (
-                                                                    <td key={branch} className="text-center py-4 px-4 text-gray-400">
-                                                                        {client.branches[branch]?.candidates || '-'}
-                                                                    </td>
-                                                                ))}
-                                                            </tr>
-                                                        );
-                                                    })}
-                                                    <tr className="border-t-2 border-[#92cdb3]/30 bg-[#92cdb3]/5">
-                                                        <td className="py-4 px-4 font-black text-[#92cdb3]">GRAND TOTAL</td>
-                                                        <td className="text-center py-4 px-4">
-                                                            <span className="text-3xl font-black text-[#92cdb3]">{totals.totalCandidates}</span>
-                                                        </td>
-                                                        <td className="text-center py-4 px-4 text-[#92cdb3] font-bold">{totals.totalSessions}</td>
-                                                        {['calicut', 'cochin'].map(branch => (
-                                                            <td key={branch} className="text-center py-4 px-4 text-[#92cdb3] font-bold">
-                                                                {totals.byBranch[branch]?.candidates || '-'}
-                                                            </td>
-                                                        ))}
-                                                    </tr>
-                                                </tbody>
-                                            </table>
                                         </div>
                                     </div>
                                 </motion.div>
@@ -891,7 +908,7 @@ ${overlap.suggestions.map(s => `      → ${s}`).join('\n')}
                                                     <div className="space-y-2">
                                                         {client.weeklyBreakdown.map(week => (
                                                             <div key={week.weekNumber} className="flex items-center gap-4">
-                                                                <span className="text-xs text-gray-400 w-24">Week {week.weekNumber}</span>
+                                                                <span className="text-xs text-gray-400 w-28">{week.weekStart} - {week.weekEnd}</span>
                                                                 <div className="flex-1 h-3 bg-[#0d1d1f] rounded-full overflow-hidden">
                                                                     <motion.div
                                                                         initial={{ width: 0 }}
@@ -936,8 +953,8 @@ ${overlap.suggestions.map(s => `      → ${s}`).join('\n')}
                                                 <div className="flex items-center gap-4 text-rose-400">
                                                     <AlertTriangle size={24} />
                                                     <div>
-                                                        <h3 className="font-bold text-lg">Capacity Conflicts Detected</h3>
-                                                        <p className="text-gray-400 text-sm">Review the following dates for scheduling adjustments</p>
+                                                        <h3 className="font-bold text-lg">Seat Capacity Conflicts Detected</h3>
+                                                        <p className="text-gray-400 text-sm">Only time windows where concurrent candidates exceed actual branch seats are shown.</p>
                                                     </div>
                                                 </div>
                                             </div>
@@ -951,10 +968,10 @@ ${overlap.suggestions.map(s => `      → ${s}`).join('\n')}
                                                             </h3>
                                                             <div className="flex items-center gap-4 mt-2">
                                                                 <span className="px-3 py-1 bg-rose-500/20 text-rose-400 rounded-full text-xs font-bold">
-                                                                    {overlap.overlapHours}h overlap
+                                                                    {getBranchLabel(overlap.branch)}
                                                                 </span>
                                                                 <span className="px-3 py-1 bg-[#92cdb3]/20 text-[#92cdb3] rounded-full text-xs font-bold">
-                                                                    {overlap.totalCandidates} / {overlap.capacity} capacity
+                                                                    Peak {overlap.totalCandidates} / {overlap.capacity} seats
                                                                 </span>
                                                                 {overlap.excessCandidates > 0 && (
                                                                     <span className="px-3 py-1 bg-red-500/30 text-red-400 rounded-full text-xs font-bold">
@@ -965,9 +982,43 @@ ${overlap.suggestions.map(s => `      → ${s}`).join('\n')}
                                                         </div>
                                                     </div>
 
+                                                    {/* Conflict Windows */}
+                                                    <div className="mb-6">
+                                                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Over-capacity Time Windows</h4>
+                                                        <div className="space-y-3">
+                                                            {overlap.conflictPeriods.map((period, pIdx) => (
+                                                                <div key={`${period.start}-${period.end}-${pIdx}`} className="rounded-xl bg-rose-500/10 border border-rose-500/25 p-4">
+                                                                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-3">
+                                                                        <div className="flex items-center gap-3">
+                                                                            <Clock size={16} className="text-rose-300" />
+                                                                            <span className="font-black text-white">{period.start} - {period.end}</span>
+                                                                        </div>
+                                                                        <div className="text-rose-300 font-black tabular-nums">
+                                                                            {period.candidates} / {period.capacity} seats
+                                                                            <span className="ml-2 text-xs text-rose-400">+{period.excessCandidates} excess</span>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                                                        {period.sessions.map(session => (
+                                                                            <div key={`${period.start}-${session.id}`} className="rounded-lg bg-[#0d1d1f]/70 px-3 py-2">
+                                                                                <div className="flex items-center justify-between gap-3">
+                                                                                    <span className="font-bold text-white truncate">{session.exam_name}</span>
+                                                                                    <span className="text-[#FFD633] font-black tabular-nums">{session.candidate_count}</span>
+                                                                                </div>
+                                                                                <p className="text-xs text-gray-500 mt-1">
+                                                                                    {session.client_name} · {session.start_time} - {session.end_time}
+                                                                                </p>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+
                                                     {/* Sessions Timeline */}
                                                     <div className="mb-6">
-                                                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Session Timeline</h4>
+                                                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Conflicting Sessions</h4>
                                                         <div className="space-y-3">
                                                             {overlap.sessions.map((session, sIdx) => {
                                                                 const color = getClientColor(session.client_name);

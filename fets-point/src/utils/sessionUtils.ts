@@ -16,7 +16,7 @@ export const getBranchCapacity = (branch: string = 'calicut'): number => {
     case 'calicut':
       return 40
     case 'cochin':
-      return 30
+      return 31
     case 'kannur':
       return 50
     default:

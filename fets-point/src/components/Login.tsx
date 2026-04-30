@@ -102,7 +102,38 @@ export function Login() {
         }} />
       </motion.div>
 
-      <div className="relative z-10 w-full max-w-[420px] px-8">
+      <div className="relative z-10 w-full max-w-6xl px-6 md:px-8 grid lg:grid-cols-[1.1fr_420px] gap-8 lg:gap-12 items-center">
+        <motion.div
+          initial={{ opacity: 0, x: -24 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+          className="hidden lg:block text-white"
+        >
+          <div className="inline-flex items-center gap-3 rounded-full border border-white/25 bg-white/15 px-4 py-2 backdrop-blur-xl mb-8">
+            <span className="h-2 w-2 rounded-full bg-white shadow-[0_0_18px_rgba(255,255,255,0.75)]" />
+            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/75">Secure exam operations</span>
+          </div>
+          <h1 className="text-7xl xl:text-8xl font-black tracking-[-0.07em] leading-none drop-shadow-sm">
+            fets<span className="text-white/45">.</span>live
+          </h1>
+          <p className="mt-6 max-w-2xl text-xl xl:text-2xl font-semibold leading-snug text-white/80">
+            Exam operations, calendars, rosters, client portals, and support workflows in one control room.
+          </p>
+          <div className="mt-10 grid grid-cols-3 gap-3 max-w-2xl">
+            {[
+              ['Calendar', 'Daily sessions and capacity'],
+              ['Clients', 'Invoice counts and support links'],
+              ['Roster', 'Staff readiness and coverage'],
+            ].map(([title, text]) => (
+              <div key={title} className="rounded-2xl border border-white/20 bg-white/12 p-4 backdrop-blur-xl">
+                <div className="text-sm font-black uppercase tracking-[0.18em] text-white">{title}</div>
+                <div className="mt-2 text-xs font-semibold leading-snug text-white/55">{text}</div>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+
+        <div className="w-full max-w-[420px] mx-auto rounded-[32px] border border-white/25 bg-white/12 px-6 md:px-8 backdrop-blur-2xl shadow-[0_24px_80px_rgba(120,80,0,0.22)]">
         <AnimatePresence mode="wait">
 
           {stage === 'credentials' && !showForgot && (
@@ -288,6 +319,7 @@ export function Login() {
           )}
 
         </AnimatePresence>
+        </div>
       </div>
 
       <motion.div

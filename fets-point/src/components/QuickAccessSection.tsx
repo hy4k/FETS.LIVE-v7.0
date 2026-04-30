@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { supabase } from '../lib/supabase'
+import { isMithunEmail } from '../utils/authUtils'
 import {
   LIVE_SUPPORT_CLIENTS,
   QUICK_ACCESS_EXTRA,
@@ -165,7 +166,7 @@ export function QuickAccessSection({
   const [editFieldType, setEditFieldType] = useState<QuickAccessFieldType>('other')
   const [editShareGlobally, setEditShareGlobally] = useState(false)
   const [revealedIds, setRevealedIds] = useState<Record<string, boolean>>({})
-  const isMithun = profile?.email?.toLowerCase() === 'mithun@fets.in' && profile?.role === 'super_admin'
+  const isMithun = isMithunEmail(profile?.email) && profile?.role === 'super_admin'
 
   const fetchItems = useCallback(async () => {
     if (!profile?.id) {

@@ -29,12 +29,12 @@ import { BranchIndicator } from './components/BranchIndicator';
 import { MobileHome } from './components/MobileHome';
 import { MobileCalendarView as MobileCalendar } from './components/MobileCalendarView';
 import { MobileRegisterView as MobileRegister } from './components/MobileRegisterView';
-import { MobileMyDesk } from './components/MobileMyDesk';
 import { MobileAiChat } from './components/MobileAiChat';
 import { MobileIncidentManager } from './components/MobileIncidentManager';
 
 import { supabase } from './lib/supabase';
 import { useIsMobile, useScreenSize } from './hooks/use-mobile';
+import { isMithunEmail } from './utils/authUtils';
 
 // Capacitor Imports
 import { App as CapacitorApp } from '@capacitor/app';
@@ -48,13 +48,14 @@ const Dashboard = lazy(() => import('./components/iCloud/iCloudDashboard').then(
 const AccessHubPage = lazy(() => import('./components/AccessHub').then(module => ({ default: module.AccessHub })))
 const CommandCentre = lazy(() => import('./components/CommandCentreFinal'))
 const CandidateTracker = lazy(() => import('./components/CandidateTrackerPremium').then(module => ({ default: module.CandidateTrackerPremium })))
-const MyDesk = lazy(() => import('./components/MyDeskLivingBoard').then(module => ({ default: module.MyDeskLivingBoard })))
+const MithunWorkbench = lazy(() => import('./components/MithunWorkbench').then(module => ({ default: module.MithunWorkbench })))
 const StaffManagement = lazy(() => import('./components/StaffManagement').then(module => ({ default: module.StaffManagement })))
 const FetsVault = lazy(() => import('./components/FetsVault').then(module => ({ default: module.FetsVault })))
 const FetsIntelligence = lazy(() => import('./components/FetsIntelligence').then(module => ({ default: module.FetsIntelligence })))
 const FetsRoster = lazy(() => import('./components/FetsRosterPremium'))
 const FetsCalendar = lazy(() => import('./components/FetsCalendarPremium').then(module => ({ default: module.FetsCalendarPremium })))
 const FetsCalendarDemo = lazy(() => import('./components/FetsCalendarDemo').then(module => ({ default: module.FetsCalendarDemo })))
+const ClientPortal = lazy(() => import('./components/ClientPortal').then(module => ({ default: module.ClientPortal })))
 const SystemManager = lazy(() => import('./components/SystemManager').then(module => ({ default: module.default })))
 
 const NewsManager = lazy(() => import('./components/NewsManager').then(module => ({ default: module.NewsManager })))
@@ -83,6 +84,7 @@ function AppContent() {
   const isMobile = useIsMobile()
   const [isRecovering, setIsRecovering] = useState(false)
   const [aiQuery, setAiQuery] = useState<string | undefined>(undefined)
+  const isMithun = isMithunEmail(profile?.email)
 
 
 
@@ -114,8 +116,9 @@ function AppContent() {
       if (activeTab === 'command-center') return <MobileHome setActiveTab={setActiveTab} profile={profile} />;
       if (activeTab === 'fets-calendar') return <MobileCalendar />;
       if (activeTab === 'fets-calendar-demo') return <FetsCalendarDemo />;
+      if (activeTab === 'client-portal') return <ClientPortal />;
       if (activeTab === 'candidate-tracker') return <MobileRegister />;
-      if (activeTab === 'my-desk') return <MobileMyDesk setActiveTab={setActiveTab} />;
+      if (activeTab === 'my-desk') return isMithun ? <MithunWorkbench onNavigate={setActiveTab} /> : <MobileHome setActiveTab={setActiveTab} profile={profile} />;
       if (activeTab === 'fets-intelligence') return <MobileAiChat />;
       if (activeTab === 'incident-log') return <MobileIncidentManager />;
       if (activeTab === 'access-hub') return <AccessHubPage />;
@@ -138,7 +141,8 @@ function AppContent() {
       'fets-roster': { component: <FetsRoster />, name: 'FETS Roster' },
       'fets-calendar': { component: <FetsCalendar />, name: 'FETS Calendar' },
       'fets-calendar-demo': { component: <FetsCalendarDemo />, name: 'CELPIP Calendar' },
-      'my-desk': { component: <MyDesk onNavigate={setActiveTab} />, name: 'My Desk' },
+      'client-portal': { component: <ClientPortal />, name: 'Client Portal' },
+      'my-desk': { component: isMithun ? <MithunWorkbench onNavigate={setActiveTab} /> : <CommandCentre onNavigate={setActiveTab} onAiQuery={(q: string) => { setAiQuery(q); setActiveTab('fets-intelligence'); }} />, name: 'My Desk' },
       'staff-management': { component: <StaffManagement />, name: 'Staff Management' },
       'fets-intelligence': { component: <FetsIntelligence initialQuery={aiQuery} />, name: 'FETS Intelligence' },
       'incident-log': { component: <RaiseACasePage />, name: 'Raise A Case' },

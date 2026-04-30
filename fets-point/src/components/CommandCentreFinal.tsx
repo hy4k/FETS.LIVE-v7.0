@@ -19,9 +19,9 @@ import { AccessHub } from './AccessHub'
 import { supabase } from '../lib/supabase'
 import { NotificationBanner } from './NotificationBanner'
 import { FetsChatPopup } from './FetsChatPopup'
-import { canEditRoster, canSwitchBranches, formatBranchName, getAvailableBranches } from '../utils/authUtils'
+import { canEditRoster, formatBranchName, isMithunEmail } from '../utils/authUtils'
 import { useAppModules } from '../hooks/useAppModules'
-import { LocationSelectorThread } from './LocationSelectorThread'
+import { useClients } from '../hooks/useClients'
 import { SevenDayExamOutlook } from './SevenDayExamOutlook'
 import { QuickAccessSection } from './QuickAccessSection'
 import { LIVE_SUPPORT_CLIENTS } from '../constants/liveSupportClients'
@@ -53,18 +53,15 @@ const BRANCH_LABELS: Record<string, string> = { calicut: 'Calicut', cochin: 'Coc
 
 export default function CommandCentre({ onNavigate, onAiQuery }: { onNavigate?: (tab: string) => void; onAiQuery?: (query: string) => void }) {
     const { profile, user } = useAuth()
-    const { activeBranch, setActiveBranch } = useBranch()
+    const { activeBranch } = useBranch()
     const { modules, toggleModule, isUpdating } = useAppModules()
 
-    const availableBranches = getAvailableBranches(profile?.email, profile?.role)
-    const canSwitch = canSwitchBranches(profile?.email, profile?.role)
-    const isMithun = profile?.email === 'mithun@fets.in'
+    const isMithun = isMithunEmail(profile?.email)
 
     const [showManagementMenu, setShowManagementMenu] = useState(false)
     const managementRef = React.useRef<HTMLDivElement>(null)
 
     const secondRowItems = [
-        { id: 'my-desk', label: 'MY DESK', icon: MessageSquare },
         { id: 'system-manager', label: 'SYSTEM MANAGER', icon: Server },
         { id: 'lost-and-found', label: 'LOST & FOUND', icon: PackageSearch },
         { id: 'fets-intelligence', label: 'FETS AI', icon: Brain },
@@ -88,6 +85,7 @@ export default function CommandCentre({ onNavigate, onAiQuery }: { onNavigate?: 
     const { data: examSchedule = [], isLoading: isLoadingSchedule } = useUpcomingSchedule()
     const { data: staffByDate = {}, isLoading: isLoadingRosterStaff } = useSevenDayRosterStaff()
     const { data: newsItems = [] } = useNews()
+    const { data: clients = [] } = useClients()
 
     const [opsMetrics, setOpsMetrics] = useState({ healthScore: 100, critical: 0, open: 0, topIssue: 'Stable' })
     const [loadingAnalysis, setLoadingAnalysis] = useState(true)
@@ -168,6 +166,17 @@ export default function CommandCentre({ onNavigate, onAiQuery }: { onNavigate?: 
     }, [dashboardData?.todaysExams, activeBranch]);
 
     const totalCandidates = filteredTodaysExams.reduce((s: number, e: any) => s + (e.candidate_count || 0), 0)
+    const clientWorkspaceStats = useMemo(() => {
+        const activeClients = new Set((examSchedule as any[]).map((s) => (s.client_name || '').trim()).filter(Boolean))
+        const upcomingClientSessions = (examSchedule as any[]).slice(0, 14).length
+        const upcomingCandidates = (examSchedule as any[]).slice(0, 14).reduce((sum, s) => sum + (s.candidate_count || 0), 0)
+        return {
+            totalClients: clients.length,
+            activeClients: activeClients.size,
+            upcomingClientSessions,
+            upcomingCandidates,
+        }
+    }, [clients.length, examSchedule])
     const healthColor = opsMetrics.healthScore >= 80 ? '#10b981' : opsMetrics.healthScore >= 50 ? '#f59e0b' : '#ef4444'
     const activeBranchLabel = BRANCH_LABELS[activeBranch] || formatBranchName(activeBranch)
     const scrollToQuickAccess = () => {
@@ -232,15 +241,7 @@ export default function CommandCentre({ onNavigate, onAiQuery }: { onNavigate?: 
                         </div>
                     </div>
 
-                    {/* Location Selector */}
-                    <div className="flex w-full justify-center lg:w-auto lg:flex-1 relative lg:-mt-12 -my-8 lg:my-0 z-50">
-                        <LocationSelectorThread
-                            activeBranch={activeBranch}
-                            setActiveBranch={setActiveBranch as any}
-                            availableBranches={availableBranches}
-                            canSwitch={canSwitch}
-                        />
-                    </div>
+                    <div className="hidden lg:block lg:flex-1" />
 
                     {/* Officer plate */}
                     <div className="flex items-center gap-4 sov-neuromorphic-yellow p-2 pr-6 rounded-2xl border-[#FACC15]/20 shadow-2xl group transition-all duration-500 hover:border-[#FACC15]/50">
@@ -260,6 +261,16 @@ export default function CommandCentre({ onNavigate, onAiQuery }: { onNavigate?: 
                             
                             {/* Controls inside Officer Plate */}
                             <div className="flex items-center gap-2 mt-1">
+                                {isMithun && (
+                                    <button
+                                        onClick={() => onNavigate?.('my-desk')}
+                                        className="group relative flex items-center gap-1.5 px-2 py-1 transition-all duration-300 rounded-sm border border-[#FACC15]/25 bg-[#FACC15]/10 hover:border-[#FACC15]/60 text-[#FACC15]"
+                                    >
+                                        <BookOpen size={10} />
+                                        <span className="text-[9px] font-bold uppercase tracking-[0.2em]">MY DESK</span>
+                                        <ArrowUpRight size={10} className="opacity-60" />
+                                    </button>
+                                )}
                                 {/* MANAGEMENT DROPDOWN */}
                                 <div ref={managementRef} className="relative shrink-0">
                                     <button
@@ -464,6 +475,13 @@ export default function CommandCentre({ onNavigate, onAiQuery }: { onNavigate?: 
                                     <p className="mt-4 max-w-2xl text-sm md:text-base text-white/45 leading-relaxed">
                                         Exams, roster, case reporting, support portals, and client credentials are grouped below so the home page is easier to scan and act on.
                                     </p>
+                                    <div className="mt-5 flex flex-wrap gap-2">
+                                        {['Today', 'Exam Operations', 'Client Workspace', 'Staff & Roster', 'Admin'].map(group => (
+                                            <span key={group} className="rounded-full border border-[#FACC15]/15 bg-[#FACC15]/8 px-3 py-1 text-[9px] font-black uppercase tracking-[0.18em] text-[#FACC15]/70">
+                                                {group}
+                                            </span>
+                                        ))}
+                                    </div>
                                 </div>
                                 <div className="rounded-2xl border border-[#FACC15]/20 bg-[#FACC15]/10 px-4 py-3 text-right shrink-0">
                                     <div className="text-[9px] font-black uppercase tracking-[0.3em] text-[#FACC15]/70">Centre</div>
@@ -492,9 +510,10 @@ export default function CommandCentre({ onNavigate, onAiQuery }: { onNavigate?: 
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 xl:grid-cols-1 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-3">
                         {[
                             { label: 'Raise a Case', sub: 'Report incidents and issues', icon: AlertCircle, onClick: () => onNavigate?.('incident-log'), tone: 'rose' },
+                            { label: 'Client Portal', sub: `${clientWorkspaceStats.totalClients} clients, ${clientWorkspaceStats.upcomingClientSessions} upcoming slots`, icon: Briefcase, onClick: () => onNavigate?.('client-portal'), tone: 'gold' },
                             { label: 'Roster', sub: canEditRoster(profile?.email, profile?.role) ? 'Mithun edit access enabled' : 'View-only for this user', icon: Calendar, onClick: () => onNavigate?.('fets-roster'), tone: 'gold' },
                             { label: 'Quick Access', sub: 'Client URLs, passwords, phones and notes', icon: Key, onClick: scrollToQuickAccess, tone: 'sky' },
                         ].map((action) => (
@@ -521,6 +540,57 @@ export default function CommandCentre({ onNavigate, onAiQuery }: { onNavigate?: 
                                 </div>
                             </button>
                         ))}
+                    </div>
+                </motion.section>
+
+                <div className="relative shrink-0 py-0.5" aria-hidden>
+                    <div className="h-px w-full bg-gradient-to-r from-transparent via-[#FACC15]/22 to-transparent shadow-[0_0_20px_rgba(250,204,21,0.06)]" />
+                </div>
+
+                <motion.section
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.14 }}
+                    className="sov-card relative overflow-hidden border-[#FACC15]/10"
+                    aria-label="Client workspace"
+                >
+                    <div className="absolute inset-y-0 right-0 w-2/3 bg-gradient-to-l from-[#FACC15]/10 via-sky-500/[0.04] to-transparent blur-3xl" />
+                    <div className="relative z-10 grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-6 items-center">
+                        <div>
+                            <div className="flex items-center gap-3 mb-3">
+                                <Briefcase size={16} className="text-[#FACC15]" />
+                                <span className="sov-label text-[#FACC15]">Client Workspace</span>
+                            </div>
+                            <h3 className="text-2xl md:text-3xl font-black text-white tracking-tighter leading-none">
+                                One place for client schedules, invoice counts, support links, and notes.
+                            </h3>
+                            <p className="mt-3 text-sm text-white/45 max-w-3xl">
+                                Open a staff-only client portal with monthly booked counts, centre splits, exam timings, support portals, and a working notes area.
+                            </p>
+                        </div>
+                        <div className="grid grid-cols-3 gap-3 min-w-full lg:min-w-[420px]">
+                            {[
+                                { label: 'Clients', value: clientWorkspaceStats.totalClients },
+                                { label: 'Active', value: clientWorkspaceStats.activeClients },
+                                { label: 'Booked', value: clientWorkspaceStats.upcomingCandidates },
+                            ].map(stat => (
+                                <div key={stat.label} className="rounded-2xl border border-white/[0.08] bg-black/20 p-4 text-center">
+                                    <div className="text-2xl font-black text-[#FACC15] tabular-nums">{stat.value}</div>
+                                    <div className="mt-2 text-[8px] font-black uppercase tracking-[0.2em] text-white/30">{stat.label}</div>
+                                </div>
+                            ))}
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => onNavigate?.('client-portal')}
+                            className="lg:col-span-2 w-full rounded-2xl border border-[#FACC15]/25 bg-[#FACC15] px-5 py-4 text-left text-black transition-all hover:brightness-105 flex items-center justify-between gap-4"
+                        >
+                            <div>
+                                <div className="text-sm font-black uppercase tracking-[0.18em]">Open Client Portal</div>
+                                <div className="mt-1 text-xs font-bold text-black/55">Internal-only workspace for FETS staff</div>
+                            </div>
+                            <ArrowUpRight size={18} />
+                        </button>
                     </div>
                 </motion.section>
 
