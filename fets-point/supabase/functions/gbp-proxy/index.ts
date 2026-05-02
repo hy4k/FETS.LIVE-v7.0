@@ -4,40 +4,40 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 
+// ── API Base URLs ──────────────────────────────────────────────────────────
 const GBP_BASE = 'https://mybusinessbusinessinformation.googleapis.com/v1'
 const GBP_REVIEWS_BASE = 'https://mybusiness.googleapis.com/v4'
 const GBP_POSTS_BASE = 'https://mybusiness.googleapis.com/v4'
 const GBP_QA_BASE = 'https://mybusinessqanda.googleapis.com/v1'
 const GBP_PERFORMANCE_BASE = 'https://businessprofileperformance.googleapis.com/v1'
-const GBP_NOTIFICATIONS_BASE = 'https://mybusinessnotifications.googleapis.com/v1'
 
-// FETS locations - hardcoded for Cochin and Calicut
-// These location IDs must be set as Supabase secrets after first OAuth flow
+// ── Location IDs from Supabase Secrets ────────────────────────────────────
 const LOCATIONS: Record<string, string> = {
   cochin: Deno.env.get('GBP_LOCATION_COCHIN') ?? '',
   calicut: Deno.env.get('GBP_LOCATION_CALICUT') ?? '',
 }
 
-const GOOGLE_CLIENT_ID = Deno.env.get('GOOGLE_CLIENT_ID') ?? ''
-const GOOGLE_CLIENT_SECRET = Deno.env.get('GOOGLE_CLIENT_SECRET') ?? ''
-const GOOGLE_REFRESH_TOKEN = Deno.env.get('GOOGLE_REFRESH_TOKEN') ?? ''
+// ── OAuth Credentials from Supabase Secrets ───────────────────────────────
+const CLIENT_ID = Deno.env.get('GBP_CLIENT_ID') ?? ''
+const CLIENT_SECRET = Deno.env.get('GBP_CLIENT_SECRET') ?? ''
+const REFRESH_TOKEN = Deno.env.get('GBP_REFRESH_TOKEN') ?? ''
 
-cors headers for dev and prod
+// ── CORS Headers ──────────────────────────────────────────────────────────
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 }
 
-/** Get a fresh access token using the stored refresh token */
+// ── Get OAuth2 access token from refresh token ────────────────────────────
 async function getAccessToken(): Promise<string> {
   const res = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      client_id: GOOGLE_CLIENT_ID,
-      client_secret: GOOGLE_CLIENT_SECRET,
-      refresh_token: GOOGLE_REFRESH_TOKEN,
+      client_id: CLIENT_ID,
+      client_secret: CLIENT_SECRET,
+      refresh_token: REFRESH_TOKEN,
       grant_type: 'refresh_token',
     }),
   })
@@ -48,7 +48,7 @@ async function getAccessToken(): Promise<string> {
   return data.access_token
 }
 
-/** Make an authenticated GBP API call */
+// ── Authenticated GBP API fetch ───────────────────────────────────────────
 async function gbpFetch(url: string, options: RequestInit = {}) {
   const token = await getAccessToken()
   const res = await fetch(url, {
@@ -56,15 +56,15 @@ async function gbpFetch(url: string, options: RequestInit = {}) {
     headers: {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
-      ...options.headers,
+      ...(options.headers as Record<string, string> ?? {}),
     },
   })
   const data = await res.json()
   return { data, status: res.status }
 }
 
+// ── Main Handler ──────────────────────────────────────────────────────────
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -77,7 +77,7 @@ serve(async (req) => {
 
     if (!locationName && action !== 'get-oauth-url') {
       return new Response(
-        JSON.stringify({ error: `Location ID for '${branch}' not configured. Set GBP_LOCATION_${branch.toUpperCase()} secret.` }),
+        JSON.stringify({ error: `Location ID for '${branch}' not configured.` }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
@@ -86,13 +86,13 @@ serve(async (req) => {
 
     switch (action) {
 
-      // ── LOCATION INFO ────────────────────────────────────────────
       case 'get-location': {
-        result = await gbpFetch(`${GBP_BASE}/${locationName}?readMask=name,title,phoneNumbers,regularHours,specialHours,websiteUri,profile,categories`)
+        result = await gbpFetch(
+          `${GBP_BASE}/${locationName}?readMask=name,title,phoneNumbers,regularHours,websiteUri,profile,categories`
+        )
         break
       }
 
-      // ── REVIEWS ─────────────────────────────────────────────────
       case 'list-reviews': {
         const pageToken = url.searchParams.get('pageToken') ?? ''
         const pageSize = url.searchParams.get('pageSize') ?? '20'
@@ -104,25 +104,22 @@ serve(async (req) => {
 
       case 'reply-to-review': {
         const body = await req.json()
-        const { reviewName, comment } = body
         result = await gbpFetch(
-          `${GBP_REVIEWS_BASE}/${reviewName}/reply`,
-          { method: 'PUT', body: JSON.stringify({ comment }) }
+          `${GBP_REVIEWS_BASE}/${body.reviewName}/reply`,
+          { method: 'PUT', body: JSON.stringify({ comment: body.comment }) }
         )
         break
       }
 
       case 'delete-reply': {
         const body = await req.json()
-        const { reviewName } = body
         result = await gbpFetch(
-          `${GBP_REVIEWS_BASE}/${reviewName}/reply`,
+          `${GBP_REVIEWS_BASE}/${body.reviewName}/reply`,
           { method: 'DELETE' }
         )
         break
       }
 
-      // ── POSTS ────────────────────────────────────────────────────
       case 'list-posts': {
         result = await gbpFetch(`${GBP_POSTS_BASE}/${locationName}/localPosts`)
         break
@@ -139,14 +136,10 @@ serve(async (req) => {
 
       case 'delete-post': {
         const body = await req.json()
-        result = await gbpFetch(
-          `${GBP_POSTS_BASE}/${body.postName}`,
-          { method: 'DELETE' }
-        )
+        result = await gbpFetch(`${GBP_POSTS_BASE}/${body.postName}`, { method: 'DELETE' })
         break
       }
 
-      // ── Q&A ──────────────────────────────────────────────────────
       case 'list-questions': {
         result = await gbpFetch(`${GBP_QA_BASE}/${locationName}/questions?pageSize=20`)
         break
@@ -154,15 +147,13 @@ serve(async (req) => {
 
       case 'answer-question': {
         const body = await req.json()
-        const { questionName, text } = body
         result = await gbpFetch(
-          `${GBP_QA_BASE}/${questionName}/answers`,
-          { method: 'POST', body: JSON.stringify({ text }) }
+          `${GBP_QA_BASE}/${body.questionName}/answers`,
+          { method: 'POST', body: JSON.stringify({ text: body.text }) }
         )
         break
       }
 
-      // ── INSIGHTS ────────────────────────────────────────────────
       case 'get-insights': {
         const startDate = url.searchParams.get('startDate') ?? getDateDaysAgo(28)
         const endDate = url.searchParams.get('endDate') ?? getTodayDate()
@@ -190,31 +181,6 @@ serve(async (req) => {
         break
       }
 
-      // ── NOTIFICATIONS ────────────────────────────────────────────
-      case 'get-notifications-settings': {
-        const accountName = locationName.split('/locations/')[0]
-        result = await gbpFetch(`${GBP_NOTIFICATIONS_BASE}/${accountName}/notificationSetting`)
-        break
-      }
-
-      // ── OAUTH INITIATION (one-time setup) ────────────────────────
-      case 'get-oauth-url': {
-        const scopes = [
-          'https://www.googleapis.com/auth/business.manage',
-        ].join(' ')
-        const oauthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-          `client_id=${GOOGLE_CLIENT_ID}` +
-          `&redirect_uri=${encodeURIComponent('https://fets.live/api/auth/google/callback')}` +
-          `&response_type=code` +
-          `&scope=${encodeURIComponent(scopes)}` +
-          `&access_type=offline` +
-          `&prompt=consent`
-        return new Response(
-          JSON.stringify({ url: oauthUrl }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-      }
-
       default:
         return new Response(
           JSON.stringify({ error: `Unknown action: ${action}` }),
@@ -224,10 +190,7 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify(result.data),
-      {
-        status: result.status,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
+      { status: result.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
 
   } catch (err) {
@@ -239,7 +202,7 @@ serve(async (req) => {
   }
 })
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────
 function getTodayDate() {
   return new Date().toISOString().split('T')[0]
 }
