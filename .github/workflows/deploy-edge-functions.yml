@@ -17,13 +17,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
         with:
-          node-version: '20'
-
-      - name: Install Supabase CLI
-        run: npm install -g supabase@latest
+          version: latest
 
       - name: Deploy gbp-proxy function
         run: |
