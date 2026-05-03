@@ -5,7 +5,7 @@ import {
   Brain, ShieldAlert, MessageSquare, ClipboardList,
   CalendarDays, UserSearch, UserCheck, Menu, LogOut,
   Server, Cpu, Shield, X, PackageSearch, AlertCircle, BookOpen, Briefcase,
-  ChevronRight, Settings2, Layers, GraduationCap
+  ChevronRight, Settings2, Layers, GraduationCap, Building2
 } from 'lucide-react';
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
@@ -109,6 +109,7 @@ export function Header({ isMobile = false, sidebarOpen = false, setSidebarOpen, 
     { id: 'client-portal', label: 'CLIENTS', icon: Briefcase },
     { id: 'fets-roster', label: 'ROSTER', icon: UserCheck },
     { id: 'cma-availability', label: 'CMA US', icon: GraduationCap },
+    { id: 'gbp', label: 'GOOGLE BUSINESS', icon: Building2 },
   ];
 
   const secondRowItems = [

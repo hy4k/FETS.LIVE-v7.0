@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, CalendarDays, AlertCircle, Brain, Globe, X, MapPin, CheckCircle2, GraduationCap, Briefcase } from 'lucide-react';
+import { LayoutDashboard, CalendarDays, AlertCircle, Brain, Globe, X, MapPin, CheckCircle2, GraduationCap, Briefcase, Building2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useBranch } from '../hooks/useBranch';
 import { useAppModules } from '../hooks/useAppModules';
@@ -23,11 +23,11 @@ export function BottomNav({ activeTab, setActiveTab }: BottomNavProps) {
   const navItems = [
     { id: 'command-center', label: 'Home', icon: LayoutDashboard },
     { id: 'fets-calendar', label: 'Calendar', icon: CalendarDays },
-    { id: 'fets-calendar-demo', label: 'CELPIP', icon: CalendarDays },
     { id: 'client-portal', label: 'Clients', icon: Briefcase },
     { id: 'incident-log', label: 'Cases', icon: AlertCircle },
     { id: 'fets-intelligence', label: 'AI', icon: Brain },
     { id: 'cma-availability', label: 'CMA US', icon: GraduationCap },
+    { id: 'gbp', label: 'GBP', icon: Building2 },
   ].filter(item => {
     const mod = modules.find(m => m.id === item.id);
     return !mod || mod.is_enabled;
