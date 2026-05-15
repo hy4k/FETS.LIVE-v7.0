@@ -11,7 +11,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY fets-point/package.json ./fets-point/
 
 # Install dependencies
-RUN pnpm install --no-frozen-lockfile
+RUN echo 'ignore-scripts=false' >> .npmrc && pnpm install --no-frozen-lockfile
 
 # Copy source code
 COPY fets-point/ ./fets-point/
