@@ -11,8 +11,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY fets-point/ ./fets-point/
 
 # Install dependencies
-RUN echo 'ignore-scripts=false' >> .npmrc && pnpm install --no-frozen-lockfile
-
+RUN echo 'ignore-scripts=false' >> .npmrc && echo 'approve-builds=*' >> .npmrc && pnpm install --no-frozen-lockfile
 # Build-time environment variables
 ARG VITE_SUPABASE_URL
 ARG VITE_SUPABASE_ANON_KEY
