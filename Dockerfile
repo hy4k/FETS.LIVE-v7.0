@@ -8,13 +8,10 @@ WORKDIR /app
 
 # Copy workspace config files
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY fets-point/package.json ./fets-point/
+COPY fets-point/ ./fets-point/
 
 # Install dependencies
 RUN echo 'ignore-scripts=false' >> .npmrc && pnpm install --no-frozen-lockfile
-
-# Copy source code
-COPY fets-point/ ./fets-point/
 
 # Build-time environment variables
 ARG VITE_SUPABASE_URL
@@ -29,6 +26,7 @@ ENV VITE_GBP_CLIENT_ID=$VITE_GBP_CLIENT_ID
 ENV VITE_GBP_LOCATION_COCHIN=$VITE_GBP_LOCATION_COCHIN
 ENV VITE_GBP_LOCATION_CALICUT=$VITE_GBP_LOCATION_CALICUT
 ENV VITE_APP_URL=$VITE_APP_URL
+
 # Build the app
 RUN pnpm build
 
@@ -43,5 +41,4 @@ COPY --from=builder /app/fets-point/dist /usr/share/nginx/html
 
 # Expose port 80
 EXPOSE 80
-
 CMD ["nginx", "-g", "daemon off;"]
