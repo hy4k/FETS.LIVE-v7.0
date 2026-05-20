@@ -105,11 +105,15 @@ export function Header({ isMobile = false, sidebarOpen = false, setSidebarOpen, 
   const topNavItems = [
     { id: 'command-center', label: 'LIVE', icon: LayoutDashboard },
     { id: 'fets-calendar', label: 'CALENDAR', icon: CalendarDays },
+    { id: 'fets-roster', label: 'ROSTER', icon: UserCheck },
+    { id: 'gbp', label: 'GOOGLE BUSINESS', icon: Building2 },
+  ];
+
+  // Mithun-only nav items — hidden from all other users
+  const mithunNavItems = [
     { id: 'fets-calendar-demo', label: 'CELPIP', icon: CalendarDays },
     { id: 'client-portal', label: 'CLIENTS', icon: Briefcase },
-    { id: 'fets-roster', label: 'ROSTER', icon: UserCheck },
     { id: 'cma-availability', label: 'CMA US', icon: GraduationCap },
-    { id: 'gbp', label: 'GOOGLE BUSINESS', icon: Building2 },
   ];
 
   const secondRowItems = [
@@ -269,6 +273,25 @@ export function Header({ isMobile = false, sidebarOpen = false, setSidebarOpen, 
                     </button>
                   ))}
 
+                  {isMithun && (
+                    <>
+                      <div className="h-px bg-white/5 my-1.5" />
+                      {mithunNavItems.map((item) => (
+                        <button
+                          key={item.id}
+                          onClick={() => { setActiveTab?.(item.id); setSidebarOpen?.(false); setShowManagementMenu(false); }}
+                          className="w-full flex items-center justify-between p-2 rounded-lg transition-all hover:bg-white/5 text-white/80"
+                        >
+                          <div className="flex items-center gap-2">
+                            <item.icon size={14} className="text-amber-400" />
+                            <span className="text-[10px] font-bold uppercase tracking-wider">{item.label}</span>
+                          </div>
+                          <ChevronRight size={12} className="opacity-20" />
+                        </button>
+                      ))}
+                    </>
+                  )}
+
                   {isMithun && modules.map(mod => (
                     <div
                       key={mod.id}
@@ -404,6 +427,20 @@ export function Header({ isMobile = false, sidebarOpen = false, setSidebarOpen, 
                     {item.label}
                   </button>
                 ))}
+                {isMithun && (
+                  <>
+                    <div className="h-px bg-white/10 my-0.5" />
+                    {mithunNavItems.map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => setActiveTab && setActiveTab(item.id)}
+                        className={`text-left text-base md:text-lg font-black tracking-[0.22em] transition-colors flex items-center gap-3 py-0.5 ${activeTab === item.id ? 'text-[#FACC15]' : 'text-white/40 hover:text-white/80'}`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </>
+                )}
               </div>
             </div>
           </div>
