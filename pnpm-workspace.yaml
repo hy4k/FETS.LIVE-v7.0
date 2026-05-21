@@ -7,7 +7,4 @@ allowBuilds:
   msw: set this to true or false
   sharp: set this to true or false
 
-ignoredBuiltDependencies:
-  - esbuild
-  - msw
-  - supabase
+onlyBuiltDependencies: []

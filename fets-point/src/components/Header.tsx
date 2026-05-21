@@ -105,11 +105,15 @@ export function Header({ isMobile = false, sidebarOpen = false, setSidebarOpen, 
   const topNavItems = [
     { id: 'command-center', label: 'LIVE', icon: LayoutDashboard },
     { id: 'fets-calendar', label: 'CALENDAR', icon: CalendarDays },
+    { id: 'fets-roster', label: 'ROSTER', icon: UserCheck },
+    { id: 'gbp', label: 'GOOGLE BUSINESS', icon: Building2 },
+  ];
+
+  // Mithun-only nav items — hidden from all other users
+  const mithunNavItems = [
     { id: 'fets-calendar-demo', label: 'CELPIP', icon: CalendarDays },
     { id: 'client-portal', label: 'CLIENTS', icon: Briefcase },
-    { id: 'fets-roster', label: 'ROSTER', icon: UserCheck },
     { id: 'cma-availability', label: 'CMA US', icon: GraduationCap },
-    { id: 'gbp', label: 'GOOGLE BUSINESS', icon: Building2 },
   ];
 
   const secondRowItems = [
@@ -128,113 +132,146 @@ export function Header({ isMobile = false, sidebarOpen = false, setSidebarOpen, 
     }
   };
 
+  const NavRow = ({ item, onClick }: { item: { id: string; label: string; icon: React.ElementType }; onClick: () => void }) => {
+    const isActive = activeTab === item.id;
+    return (
+      <button
+        onClick={onClick}
+        className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all border ${
+          isActive
+            ? 'bg-[#FACC15]/10 border-[#FACC15]/20 text-[#FACC15]'
+            : 'bg-white/[0.03] border-white/[0.06] text-white/60 active:bg-white/10'
+        }`}
+      >
+        <div className={`p-2 rounded-xl ${isActive ? 'bg-[#FACC15]/20' : 'bg-white/5'}`}>
+          <item.icon size={18} className={isActive ? 'text-[#FACC15]' : 'text-white/50'} />
+        </div>
+        <span className="text-[11px] font-black uppercase tracking-[0.2em] flex-1 text-left">{item.label}</span>
+        {isActive && <div className="w-1.5 h-1.5 rounded-full bg-[#FACC15]" />}
+      </button>
+    );
+  };
+
   const MobileMenu = () => (
     <motion.div
       initial={{ opacity: 0, x: '100%' }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: '100%' }}
-      transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-      className="fixed inset-0 z-[100] bg-[#0A0A0B] flex flex-col pt-safe"
+      transition={{ type: 'spring', damping: 28, stiffness: 220 }}
+      className="fixed inset-0 z-[100] bg-[#0A0A0B] flex flex-col"
     >
-      {/* Header of Mobile Menu */}
-      <div className="p-6 flex items-center justify-between border-b border-white/10">
+      {/* Top bar */}
+      <div className="px-5 pt-12 pb-4 flex items-center justify-between">
         <FetsLogo />
         <button
           onClick={() => setSidebarOpen?.(false)}
-          className="p-3 bg-white/5 rounded-xl text-white/60 active:bg-white/10"
+          className="p-2.5 bg-white/5 rounded-xl text-white/50 active:bg-white/10 transition-colors"
         >
-          <X className="w-6 h-6" />
+          <X className="w-5 h-5" />
         </button>
       </div>
 
-      {/* Profile Section */}
-      <div className="px-6 py-8">
-        <div className="flex flex-col gap-4 p-5 bg-white/5 border border-white/10 rounded-2xl">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-xl overflow-hidden shadow-lg border-2 border-[#FACC15]/40 p-0.5 bg-black/40">
-              {profile?.avatar_url ? (
-                <img src={profile.avatar_url} alt="Profile" className="w-full h-full object-cover rounded-lg" />
-              ) : (
-                <div className="w-full h-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-white text-2xl font-black rounded-lg">
-                  {profile?.full_name?.charAt(0)}
-                </div>
-              )}
-            </div>
-            <div className="flex-1">
-              <h2 className="text-lg font-black text-white tracking-tight leading-tight">{profile?.full_name}</h2>
-              <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest mt-0.5">{profile?.role?.replace('_', ' ')}</p>
-            </div>
-          </div>
-          
-          {/* Controls inside Profile Section */}
-          <div className="flex items-center gap-2 pt-2 border-t border-white/10">
-            {canSwitch && (
-              <button
-                onClick={() => setIsBranchDropdownOpen(!isBranchDropdownOpen)}
-                className={`
-                  flex-1 flex items-center justify-between px-3 py-2 transition-all duration-300
-                  rounded-lg border border-white/10
-                  ${isBranchDropdownOpen ? 'bg-[#FACC15]/10 border-[#FACC15]/50' : 'bg-white/5'}
-                `}
-              >
-                <div className="flex items-center gap-2">
-                  <MapPin size={12} className="text-[#FACC15]" />
-                  <span className="text-[10px] font-bold text-white uppercase tracking-widest">
-                    {currentBranchName}
-                  </span>
-                </div>
-                <ChevronDown size={12} className={`text-white/30 transition-transform duration-300 ${isBranchDropdownOpen ? 'rotate-180' : ''}`} />
-              </button>
-            )}
-
-            <button
-              onClick={() => setShowManagementMenu(!showManagementMenu)}
-              className={`
-                flex-1 flex items-center justify-between px-3 py-2 transition-all duration-300
-                rounded-lg border border-white/10
-                ${showManagementMenu ? 'bg-[#FACC15]/10 border-[#FACC15]/50' : 'bg-white/5'}
-              `}
-            >
-              <div className="flex items-center gap-2">
-                <Settings2 size={12} className="text-[#FACC15]" />
-                <span className="text-[10px] font-bold text-white uppercase tracking-widest">MGMT</span>
+      {/* Profile card */}
+      <div className="px-5 pb-5">
+        <div className="flex items-center gap-3 p-4 bg-white/[0.04] border border-white/[0.07] rounded-2xl">
+          <div className="w-12 h-12 rounded-xl overflow-hidden border-2 border-[#FACC15]/30 shrink-0">
+            {profile?.avatar_url ? (
+              <img src={profile.avatar_url} alt="Profile" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-white text-xl font-black">
+                {profile?.full_name?.charAt(0)}
               </div>
-              <ChevronDown size={12} className={`text-white/30 transition-transform duration-300 ${showManagementMenu ? 'rotate-180' : ''}`} />
-            </button>
-          </div>
-
-          {/* Branch Dropdown Content */}
-          <AnimatePresence>
-            {isBranchDropdownOpen && canSwitch && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="overflow-hidden"
-              >
-                <div className="pt-2 space-y-1">
-                  {availableBranches.map((branch) => (
-                    <button
-                      key={branch}
-                      onClick={() => { setActiveBranch(branch as any); setIsBranchDropdownOpen(false); }}
-                      className={`
-                        w-full flex items-center justify-between px-3 py-2 text-[10px] font-medium uppercase tracking-widest transition-all rounded-lg
-                        ${activeBranch === branch
-                          ? 'bg-[#FACC15]/10 text-[#FACC15]'
-                          : 'text-white/60 hover:bg-white/5 hover:text-white'
-                        }
-                      `}
-                    >
-                      <span>{formatBranchName(branch)}</span>
-                      {activeBranch === branch && <div className="w-1.5 h-1.5 bg-[#FACC15] rounded-full" />}
-                    </button>
-                  ))}
-                </div>
-              </motion.div>
             )}
-          </AnimatePresence>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-black text-white truncate">{profile?.full_name}</p>
+            <p className="text-[9px] font-bold text-amber-500 uppercase tracking-widest mt-0.5">{profile?.role?.replace('_', ' ')}</p>
+          </div>
+          {canSwitch && (
+            <button
+              onClick={() => setIsBranchDropdownOpen(!isBranchDropdownOpen)}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-all text-[9px] font-bold uppercase tracking-widest ${
+                isBranchDropdownOpen ? 'bg-[#FACC15]/10 border-[#FACC15]/40 text-[#FACC15]' : 'bg-white/5 border-white/10 text-white/50'
+              }`}
+            >
+              <MapPin size={10} />
+              {currentBranchName.split(' ')[0]}
+              <ChevronDown size={10} className={`transition-transform ${isBranchDropdownOpen ? 'rotate-180' : ''}`} />
+            </button>
+          )}
+        </div>
 
-          {/* Management Dropdown Content */}
+        {/* Branch picker */}
+        <AnimatePresence>
+          {isBranchDropdownOpen && canSwitch && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden"
+            >
+              <div className="pt-2 flex gap-2">
+                {availableBranches.map((branch) => (
+                  <button
+                    key={branch}
+                    onClick={() => { setActiveBranch(branch as any); setIsBranchDropdownOpen(false); }}
+                    className={`flex-1 py-2 rounded-xl text-[9px] font-bold uppercase tracking-widest transition-all border ${
+                      activeBranch === branch
+                        ? 'bg-[#FACC15]/10 border-[#FACC15]/30 text-[#FACC15]'
+                        : 'bg-white/[0.03] border-white/[0.06] text-white/40'
+                    }`}
+                  >
+                    {formatBranchName(branch)}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Scrollable nav */}
+      <div className="flex-1 overflow-y-auto px-5 pb-6 space-y-6">
+
+        {/* Core navigation */}
+        <div>
+          <p className="text-[9px] font-black text-white/30 uppercase tracking-[0.35em] mb-2.5 pl-1">Navigation</p>
+          <div className="space-y-1.5">
+            {topNavItems.map((item) => (
+              <NavRow
+                key={item.id}
+                item={item}
+                onClick={() => { setActiveTab?.(item.id); setSidebarOpen?.(false); }}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Mithun-only private section */}
+        {isMithun && (
+          <div>
+            <p className="text-[9px] font-black text-amber-500/60 uppercase tracking-[0.35em] mb-2.5 pl-1">Private</p>
+            <div className="space-y-1.5">
+              {mithunNavItems.map((item) => (
+                <NavRow
+                  key={item.id}
+                  item={item}
+                  onClick={() => { setActiveTab?.(item.id); setSidebarOpen?.(false); }}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Management tools (collapsible) */}
+        <div>
+          <button
+            onClick={() => setShowManagementMenu(!showManagementMenu)}
+            className="w-full flex items-center justify-between mb-2.5 pl-1 pr-2 group"
+          >
+            <p className="text-[9px] font-black text-white/30 uppercase tracking-[0.35em] group-hover:text-white/50 transition-colors">Management</p>
+            <ChevronDown size={12} className={`text-white/20 transition-transform group-hover:text-white/40 ${showManagementMenu ? 'rotate-180' : ''}`} />
+          </button>
           <AnimatePresence>
             {showManagementMenu && (
               <motion.div
@@ -243,81 +280,90 @@ export function Header({ isMobile = false, sidebarOpen = false, setSidebarOpen, 
                 exit={{ opacity: 0, height: 0 }}
                 className="overflow-hidden"
               >
-                <div className="pt-2 space-y-1">
+                <div className="space-y-1.5">
+                  {/* Raise a case — always visible */}
                   <button
                     onClick={() => { setActiveTab?.('incident-log'); setSidebarOpen?.(false); setShowManagementMenu(false); }}
-                    className="w-full flex items-center justify-between p-2 rounded-lg transition-all hover:bg-white/5 text-white/80"
+                    className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all border ${
+                      activeTab === 'incident-log'
+                        ? 'bg-[#FACC15]/10 border-[#FACC15]/20 text-[#FACC15]'
+                        : 'bg-white/[0.03] border-white/[0.06] text-white/60 active:bg-white/10'
+                    }`}
                   >
-                    <div className="flex items-center gap-2">
-                      <AlertCircle size={14} className="text-white/40" />
-                      <span className="text-[10px] font-bold uppercase tracking-wider">Raise A Case</span>
+                    <div className={`p-2 rounded-xl ${activeTab === 'incident-log' ? 'bg-[#FACC15]/20' : 'bg-white/5'}`}>
+                      <AlertCircle size={18} className={activeTab === 'incident-log' ? 'text-[#FACC15]' : 'text-white/50'} />
                     </div>
-                    <ChevronRight size={12} className="opacity-20" />
+                    <span className="text-[11px] font-black uppercase tracking-[0.2em] flex-1 text-left">Raise A Case</span>
+                    {activeTab === 'incident-log' && <div className="w-1.5 h-1.5 rounded-full bg-[#FACC15]" />}
                   </button>
 
+                  {/* Dynamic second-row items (system manager, lost & found, fets ai) */}
                   {secondRowItems.map((item) => (
-                    <button
+                    <NavRow
                       key={item.id}
+                      item={item}
                       onClick={() => { setActiveTab?.(item.id); setSidebarOpen?.(false); setShowManagementMenu(false); }}
-                      className="w-full flex items-center justify-between p-2 rounded-lg transition-all hover:bg-white/5 text-white/80"
-                    >
-                      <div className="flex items-center gap-2">
-                        <item.icon size={14} className="text-white/40" />
-                        <span className="text-[10px] font-bold uppercase tracking-wider">{item.label}</span>
-                      </div>
-                      <ChevronRight size={12} className="opacity-20" />
-                    </button>
+                    />
                   ))}
 
-                  {isMithun && modules.map(mod => (
-                    <div
-                      key={mod.id}
-                      className="flex items-center justify-between p-2 rounded-lg transition-all hover:bg-white/5"
-                    >
-                      <button
-                        onClick={() => { setActiveTab?.(mod.id); setSidebarOpen?.(false); setShowManagementMenu(false); }}
-                        className="flex items-center gap-2 flex-1 text-left"
-                      >
-                        <div className="p-1.5 rounded-md bg-white/5 text-white/40">
-                          <Layers size={14} />
-                        </div>
-                        <div>
-                          <div className="text-[10px] font-bold uppercase tracking-wider text-white/80">{mod.name}</div>
-                          <div className="text-[8px] text-white/30 uppercase tracking-widest">{mod.id.replace(/-/g, ' ')}</div>
-                        </div>
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); toggleModule(mod.id, !mod.is_enabled); }}
-                        disabled={isUpdating}
-                        className={`px-2 py-1 rounded-md text-[8px] font-bold uppercase transition-all ${mod.is_enabled ? 'bg-[#FACC15] text-black' : 'bg-white/10 text-white/40'}`}
-                      >
-                        {mod.is_enabled ? 'ON' : 'OFF'}
-                      </button>
-                    </div>
-                  ))}
-
+                  {/* Mithun admin tools */}
                   {isMithun && (
                     <>
-                      <div className="h-px bg-white/5 my-1.5" />
+                      <div className="h-px bg-white/5 my-2" />
+                      {modules.map(mod => (
+                        <div
+                          key={mod.id}
+                          className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-white/[0.03] border border-white/[0.06]"
+                        >
+                          <button
+                            onClick={() => { setActiveTab?.(mod.id); setSidebarOpen?.(false); setShowManagementMenu(false); }}
+                            className="flex items-center gap-3 flex-1 text-left"
+                          >
+                            <div className="p-2 rounded-xl bg-white/5">
+                              <Layers size={16} className="text-white/40" />
+                            </div>
+                            <div>
+                              <div className="text-[10px] font-black uppercase tracking-wider text-white/70">{mod.name}</div>
+                              <div className="text-[8px] text-white/30 uppercase tracking-widest">{mod.id.replace(/-/g, ' ')}</div>
+                            </div>
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); toggleModule(mod.id, !mod.is_enabled); }}
+                            disabled={isUpdating}
+                            className={`px-3 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-wider transition-all ${mod.is_enabled ? 'bg-[#FACC15] text-black' : 'bg-white/10 text-white/40'}`}
+                          >
+                            {mod.is_enabled ? 'ON' : 'OFF'}
+                          </button>
+                        </div>
+                      ))}
+                      <div className="h-px bg-white/5 my-1" />
                       <button
                         onClick={() => { setActiveTab?.('candidate-tracker'); setSidebarOpen?.(false); setShowManagementMenu(false); }}
-                        className="w-full flex items-center justify-between p-2 rounded-lg transition-all hover:bg-white/5 text-white/80"
+                        className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all border ${
+                          activeTab === 'candidate-tracker'
+                            ? 'bg-[#FACC15]/10 border-[#FACC15]/20 text-[#FACC15]'
+                            : 'bg-white/[0.03] border-white/[0.06] text-white/60 active:bg-white/10'
+                        }`}
                       >
-                        <div className="flex items-center gap-2">
-                          <ClipboardList size={14} className="text-cyan-400" />
-                          <span className="text-[10px] font-bold uppercase tracking-wider">Fets Register</span>
+                        <div className={`p-2 rounded-xl ${activeTab === 'candidate-tracker' ? 'bg-[#FACC15]/20' : 'bg-white/5'}`}>
+                          <ClipboardList size={18} className={activeTab === 'candidate-tracker' ? 'text-[#FACC15]' : 'text-cyan-400/70'} />
                         </div>
-                        <ChevronRight size={12} className="opacity-20" />
+                        <span className="text-[11px] font-black uppercase tracking-[0.2em] flex-1 text-left">Fets Register</span>
+                        {activeTab === 'candidate-tracker' && <div className="w-1.5 h-1.5 rounded-full bg-[#FACC15]" />}
                       </button>
                       <button
                         onClick={() => { setActiveTab?.('user-management'); setSidebarOpen?.(false); setShowManagementMenu(false); }}
-                        className="w-full flex items-center justify-between p-2 rounded-lg transition-all hover:bg-white/5 text-white/80"
+                        className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all border ${
+                          activeTab === 'user-management'
+                            ? 'bg-[#FACC15]/10 border-[#FACC15]/20 text-[#FACC15]'
+                            : 'bg-white/[0.03] border-white/[0.06] text-white/60 active:bg-white/10'
+                        }`}
                       >
-                        <div className="flex items-center gap-2">
-                          <Shield size={14} className="text-white/40" />
-                          <span className="text-[10px] font-bold uppercase tracking-wider">User Management</span>
+                        <div className={`p-2 rounded-xl ${activeTab === 'user-management' ? 'bg-[#FACC15]/20' : 'bg-white/5'}`}>
+                          <Shield size={18} className={activeTab === 'user-management' ? 'text-[#FACC15]' : 'text-white/40'} />
                         </div>
-                        <ChevronRight size={12} className="opacity-20" />
+                        <span className="text-[11px] font-black uppercase tracking-[0.2em] flex-1 text-left">User Management</span>
+                        {activeTab === 'user-management' && <div className="w-1.5 h-1.5 rounded-full bg-[#FACC15]" />}
                       </button>
                     </>
                   )}
@@ -326,45 +372,18 @@ export function Header({ isMobile = false, sidebarOpen = false, setSidebarOpen, 
             )}
           </AnimatePresence>
         </div>
-      </div>
 
-      {/* Navigation List */}
-      <div className="flex-1 overflow-y-auto px-6 pb-10 space-y-6">
-        <div>
-          <h3 className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em] mb-3 pl-2">Core Command</h3>
-          <div className="grid grid-cols-2 gap-3">
-            {topNavItems.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => { setActiveTab?.(item.id); setSidebarOpen?.(false); }}
-                className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl transition-all border ${activeTab === item.id
-                  ? 'bg-[#FACC15]/10 border-[#FACC15]/30 text-[#FACC15]'
-                  : 'bg-white/5 border-white/10 text-white/60 hover:text-white'
-                  }`}
-              >
-                <item.icon size={24} />
-                <span className="text-[9px] font-black uppercase tracking-wider text-center leading-tight">
-                  {item.label.split(' ').join('\n')}
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
+        {/* Sign out */}
+        <button
+          onClick={handleSignOut}
+          className="w-full flex items-center justify-center gap-2.5 py-4 bg-red-500/8 text-red-400 rounded-2xl border border-red-500/15 font-black uppercase tracking-widest text-[10px] active:bg-red-500/15 transition-colors"
+        >
+          <LogOut size={15} />
+          <span>Terminate Session</span>
+        </button>
 
-        {/* Action Buttons */}
-        <div className="pt-4 space-y-3">
-          <button
-            onClick={handleSignOut}
-            className="w-full flex items-center justify-center gap-2 p-4 bg-red-500/10 text-red-500 rounded-2xl border border-red-500/20 font-black uppercase tracking-widest text-[10px]"
-          >
-            <LogOut size={16} />
-            <span>Terminate Session</span>
-          </button>
-        </div>
-
-        {/* Version Info */}
-        <div className="p-6 text-center opacity-30">
-          <span className="text-[8px] font-black uppercase tracking-[0.5em] text-white/60">
+        <div className="pb-2 text-center">
+          <span className="text-[8px] font-black uppercase tracking-[0.5em] text-white/20">
             F.E.T.S | GLOBAL GRID v4.0.1
           </span>
         </div>
@@ -404,6 +423,20 @@ export function Header({ isMobile = false, sidebarOpen = false, setSidebarOpen, 
                     {item.label}
                   </button>
                 ))}
+                {isMithun && (
+                  <>
+                    <div className="h-px bg-white/10 my-0.5" />
+                    {mithunNavItems.map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => setActiveTab && setActiveTab(item.id)}
+                        className={`text-left text-base md:text-lg font-black tracking-[0.22em] transition-colors flex items-center gap-3 py-0.5 ${activeTab === item.id ? 'text-[#FACC15]' : 'text-white/40 hover:text-white/80'}`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </>
+                )}
               </div>
             </div>
           </div>
