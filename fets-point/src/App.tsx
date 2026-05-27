@@ -54,7 +54,6 @@ const FetsVault = lazy(() => import('./components/FetsVault').then(module => ({ 
 const FetsIntelligence = lazy(() => import('./components/FetsIntelligence').then(module => ({ default: module.FetsIntelligence })))
 const FetsRoster = lazy(() => import('./components/FetsRosterPremium'))
 const FetsCalendar = lazy(() => import('./components/FetsCalendarPremium').then(module => ({ default: module.FetsCalendarPremium })))
-const FetsCalendarDemo = lazy(() => import('./components/FetsCalendarDemo').then(module => ({ default: module.FetsCalendarDemo })))
 const ClientPortal = lazy(() => import('./components/ClientPortal').then(module => ({ default: module.ClientPortal })))
 const SystemManager = lazy(() => import('./components/SystemManager').then(module => ({ default: module.default })))
 
@@ -115,7 +114,7 @@ function AppContent() {
     if (isMobile) {
       if (activeTab === 'command-center') return <MobileHome setActiveTab={setActiveTab} profile={profile} />;
       if (activeTab === 'fets-calendar') return <MobileCalendar />;
-      if (activeTab === 'fets-calendar-demo') return isMithun ? <FetsCalendarDemo /> : <MobileHome setActiveTab={setActiveTab} profile={profile} />;
+      if (activeTab === 'fets-calendar-demo') return isMithun ? <FetsCalendar /> : <MobileHome setActiveTab={setActiveTab} profile={profile} />;
       if (activeTab === 'client-portal') return isMithun ? <ClientPortal /> : <MobileHome setActiveTab={setActiveTab} profile={profile} />;
       if (activeTab === 'candidate-tracker') return <MobileRegister />;
       if (activeTab === 'my-desk') return isMithun ? <MithunWorkbench onNavigate={setActiveTab} /> : <MobileHome setActiveTab={setActiveTab} profile={profile} />;
@@ -140,7 +139,7 @@ function AppContent() {
       'candidate-tracker': { component: <CandidateTracker />, name: 'Candidate Tracker' },
       'fets-roster': { component: <FetsRoster />, name: 'FETS Roster' },
       'fets-calendar': { component: <FetsCalendar />, name: 'FETS Calendar' },
-      'fets-calendar-demo': { component: isMithun ? <FetsCalendarDemo /> : <CommandCentre onNavigate={setActiveTab} onAiQuery={(q: string) => { setAiQuery(q); setActiveTab('fets-intelligence'); }} />, name: 'CELPIP Calendar' },
+      'fets-calendar-demo': { component: isMithun ? <FetsCalendar /> : <CommandCentre onNavigate={setActiveTab} onAiQuery={(q: string) => { setAiQuery(q); setActiveTab('fets-intelligence'); }} />, name: 'CELPIP Calendar' },
       'client-portal': { component: isMithun ? <ClientPortal /> : <CommandCentre onNavigate={setActiveTab} onAiQuery={(q: string) => { setAiQuery(q); setActiveTab('fets-intelligence'); }} />, name: 'Client Portal' },
       'my-desk': { component: isMithun ? <MithunWorkbench onNavigate={setActiveTab} /> : <CommandCentre onNavigate={setActiveTab} onAiQuery={(q: string) => { setAiQuery(q); setActiveTab('fets-intelligence'); }} />, name: 'My Desk' },
       'staff-management': { component: <StaffManagement />, name: 'Staff Management' },

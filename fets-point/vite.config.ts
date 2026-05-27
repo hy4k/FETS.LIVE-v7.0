@@ -1,11 +1,22 @@
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
+
+// Silence Chrome DevTools' automatic /.well-known probe (returns 404 noise otherwise)
+const devtoolsProbe = (): Plugin => ({
+  name: 'devtools-probe-noop',
+  configureServer(server) {
+    server.middlewares.use('/.well-known/appspecific/com.chrome.devtools.json', (_req, res) => {
+      res.setHeader('Content-Type', 'application/json')
+      res.end('{}')
+    })
+  },
+})
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   return {
-    plugins: [react()],
+    plugins: [react(), devtoolsProbe()],
     base: '/',
     resolve: {
       alias: {

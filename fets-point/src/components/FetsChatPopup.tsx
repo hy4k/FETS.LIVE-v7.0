@@ -12,7 +12,7 @@ import { format } from 'date-fns'
 import { toast } from 'react-hot-toast'
 import { StaffProfile } from '../types/shared'
 import { CallOverlay } from './CallOverlay'
-import { IncomingCallModal } from './IncomingCallModal'
+import { IncomingCallModal } from './Chat/IncomingCallModal'
 
 interface Message {
     id: string
@@ -283,9 +283,9 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({ targetUser, onClos
                 {incomingCall && (
                     <IncomingCallModal
                         callerName={incomingCall.fromName}
-                        isVideo={incomingCall.isVideo}
+                        callType={incomingCall.isVideo ? 'video' : 'audio'}
                         onAccept={acceptCall}
-                        onReject={rejectCall}
+                        onDecline={rejectCall}
                     />
                 )}
             </AnimatePresence>
