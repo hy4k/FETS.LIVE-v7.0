@@ -57,6 +57,7 @@ export async function loadLiveData(F: any) {
         const d = new Date(`${s.date}T00:00:00`);
         if (isNaN(d.getTime())) return;
         (byKey[keyOf(d)] ||= []).push({
+          id: s.id,
           vendor: clientToSlug(s.client_name || s.exam_name),
           exam: s.exam_name || s.client_name || "Exam session",
           count: Number(s.candidate_count) || 0,
@@ -70,19 +71,26 @@ export async function loadLiveData(F: any) {
     }
   } catch (e) { /* keep seed */ }
 
-  /* ---- staff pool (for roster grid + quick-add) ---- */
+  /* ---- current user (for write-back: profile_id / user_id) ---- */
+  try { const { data: au } = await supabase.auth.getUser(); F._meUserId = au?.user?.id || null; } catch (e) { F._meUserId = null; }
+
+  /* ---- staff pool (for roster grid + quick-add) + name→id map ---- */
   let profileBranch: Record<string, string> = {};
   try {
     const { data, error } = await supabase
-      .from("staff_profiles").select("id, full_name, role, branch_assigned").order("full_name");
+      .from("staff_profiles").select("id, user_id, full_name, role, branch_assigned").order("full_name");
     if (!error && data && data.length) {
       const pool: Record<string, string[]> = { calicut: [], cochin: [] };
+      const idByName: Record<string, any> = {};
       data.forEach((p: any) => {
         const b = branchOf(p.branch_assigned);
         const list = pool[b] || (pool[b] = []);
         if (p.full_name) list.push(p.full_name);
         if (p.id) profileBranch[p.id] = b;
+        if (p.full_name && p.id) idByName[p.full_name] = p.id;
+        if (F._meUserId && p.user_id === F._meUserId) { F._meId = p.id; F._meName = p.full_name; F._meBranch = b; }
       });
+      F._staffIdByName = idByName;
       if (pool.calicut.length || pool.cochin.length) {
         F.STAFF = { calicut: pool.calicut.length ? pool.calicut : F.STAFF.calicut, cochin: pool.cochin.length ? pool.cochin : F.STAFF.cochin };
       }
@@ -141,6 +149,7 @@ export async function loadLiveData(F: any) {
       .from("lost_found_items").select("*").order("created_at", { ascending: false });
     if (!error && data && data.length) {
       F._lostFound = data.map((i: any) => ({
+        id: i.id,
         item: i.item_name || i.name || i.description || "Item",
         where: i.location || i.found_location || "—",
         when: i.created_at ? new Date(i.created_at).toLocaleDateString() : "",
@@ -159,6 +168,7 @@ export async function loadLiveData(F: any) {
       const mapStatus = (s: string) => { s = lc(s); if (s.includes("resolv") || s.includes("close") || s.includes("done")) return "resolved"; if (s.includes("progress")) return "progress"; return "open"; };
       const mapPrio = (p: string) => { p = lc(p); if (p.includes("urgent") || p.includes("critical")) return "Urgent"; if (p.includes("high")) return "High"; if (p.includes("low")) return "Low"; return "Medium"; };
       F.CASES = data.map((c: any, i: number) => ({
+        _dbId: c.id,
         id: c.case_id || c.ref || `FC-${c.id ?? i}`,
         subject: c.title || c.subject || c.summary || "Case",
         category: c.category || "Technical",
