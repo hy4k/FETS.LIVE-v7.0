@@ -152,5 +152,89 @@ export async function loadLiveData(F: any) {
     }
   } catch (e) { /* keep seed */ }
 
+  /* ---- cases (incidents) ---- */
+  try {
+    const { data, error } = await supabase.from("incidents").select("*").order("created_at", { ascending: false }).limit(60);
+    if (!error && data && data.length) {
+      const mapStatus = (s: string) => { s = lc(s); if (s.includes("resolv") || s.includes("close") || s.includes("done")) return "resolved"; if (s.includes("progress")) return "progress"; return "open"; };
+      const mapPrio = (p: string) => { p = lc(p); if (p.includes("urgent") || p.includes("critical")) return "Urgent"; if (p.includes("high")) return "High"; if (p.includes("low")) return "Low"; return "Medium"; };
+      F.CASES = data.map((c: any, i: number) => ({
+        id: c.case_id || c.ref || `FC-${c.id ?? i}`,
+        subject: c.title || c.subject || c.summary || "Case",
+        category: c.category || "Technical",
+        priority: mapPrio(c.priority || c.severity),
+        branch: branchOf(c.branch_location || c.branch),
+        vendor: c.vendor || null,
+        status: mapStatus(c.status),
+        assignee: c.assigned_to || c.assignee || "",
+        opened: c.created_at ? new Date(c.created_at).toLocaleString() : "",
+        age: "",
+        detail: c.description || c.details || "",
+        contact: null,
+        thread: [],
+      }));
+    }
+  } catch (e) { /* keep seed */ }
+
+  /* ---- my tasks (user_tasks) ---- */
+  try {
+    const { data, error } = await supabase.from("user_tasks").select("*").order("created_at", { ascending: false }).limit(80);
+    if (!error && data && data.length) {
+      const mapPrio = (p: string) => { p = lc(p); if (p.includes("critical") || p.includes("urgent")) return "Critical"; if (p.includes("high")) return "High"; if (p.includes("low")) return "Low"; return "Medium"; };
+      F.DESK_TASKS = data.map((t: any, i: number) => ({
+        id: t.id ? String(t.id) : "t" + i,
+        title: t.title || t.task || t.name || "Task",
+        source: (t.assigned_by || t.created_by) ? "Supervisor" : "Self",
+        by: t.assigned_by || t.created_by || "You",
+        due: t.due_date ? new Date(t.due_date).toLocaleDateString() : (t.due || "—"),
+        priority: mapPrio(t.priority),
+        status: (t.is_completed || lc(t.status) === "completed" || lc(t.status) === "done") ? "Completed" : (lc(t.status).includes("progress") ? "In Progress" : "Pending"),
+        comment: t.description || t.notes || "",
+        proof: false,
+      }));
+    }
+  } catch (e) { /* keep seed */ }
+
+  /* ---- leave requests (my leave) ---- */
+  try {
+    const { data, error } = await supabase.from("leave_requests").select("*").order("created_at", { ascending: false }).limit(40);
+    if (!error && data && data.length) {
+      F.MY_LEAVE = data.map((l: any, i: number) => ({
+        id: l.id ? String(l.id) : "l" + i,
+        type: l.leave_type || l.type || "Leave",
+        date: l.requested_date ? new Date(l.requested_date).toLocaleDateString() : (l.date || ""),
+        status: l.status || "Submitted",
+        comment: l.reason || l.comment || "",
+      }));
+    }
+  } catch (e) { /* keep seed */ }
+
+  /* ---- attendance → worked-hours log (best effort, current user) ---- */
+  try {
+    const { data: au } = await supabase.auth.getUser();
+    const uid = au?.user?.id;
+    if (uid) {
+      const { data: prof } = await supabase.from("staff_profiles").select("id").eq("user_id", uid).maybeSingle();
+      const sid = (prof as any)?.id;
+      if (sid) {
+        const fromA = new Date(today); fromA.setDate(fromA.getDate() - 30);
+        const { data, error } = await supabase.from("staff_attendance").select("*").eq("staff_id", sid).gte("date", ymd(fromA)).lte("date", ymd(today)).order("date", { ascending: false });
+        if (!error && data && data.length) {
+          const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+          const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+          const hm = (t: string) => { if (!t) return 0; const [h, m] = String(t).split(":").map(Number); return h * 60 + (m || 0); };
+          const mapped = data.map((r: any) => {
+            const d = new Date(`${r.date}T00:00:00`);
+            const inT = (r.check_in || "").slice(0, 5), outT = (r.check_out || "").slice(0, 5);
+            const worked = inT && outT ? Math.max(0, hm(outT) - hm(inT)) : 0;
+            const st = lc(r.status);
+            return { key: `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`, label: `${DOW[d.getDay()]}, ${MON[d.getMonth()]} ${d.getDate()}`, inT: inT || "—", outT: outT || "—", breakMins: 0, workedMins: worked, status: st.includes("late") ? "late" : st.includes("half") ? "half" : st.includes("absent") ? "leave" : "present" };
+          });
+          if (mapped.length) localStorage.setItem("fets-worklog-1", JSON.stringify(mapped));
+        }
+      }
+    }
+  } catch (e) { /* keep seed */ }
+
   F._liveLoaded = true;
 }

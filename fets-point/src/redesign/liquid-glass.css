@@ -443,4 +443,7 @@
 }
 @media (max-width: 480px) {
   .fets-redesign-root .fz-startbtn { --fs-size: 1.05em; }
+  .fets-redesign-root header.glass { gap: 8px !important; padding-left: 12px !important; padding-right: 8px !important; }
+  .fets-redesign-root .topnav-seg button { padding: 4px 8px !important; font-size: 11px !important; }
+  .fets-redesign-root .main-scroll { padding-left: 14px !important; padding-right: 14px !important; }
 }

@@ -113,7 +113,11 @@ function AppContent() {
 
   const renderContent = () => {
     if (isMobile) {
-      if (activeTab === 'command-center') return <MobileHome setActiveTab={setActiveTab} profile={profile} />;
+      if (activeTab === 'command-center') return (
+        <Suspense fallback={<PageLoadingFallback pageName="FETS · LIVE" />}>
+          <RedesignShell bridge={setActiveTab} />
+        </Suspense>
+      );
       if (activeTab === 'fets-calendar') return <MobileCalendar />;
       if (activeTab === 'fets-calendar-demo') return isMithun ? <FetsCalendar /> : <MobileHome setActiveTab={setActiveTab} profile={profile} />;
       if (activeTab === 'client-portal') return isMithun ? <ClientPortal /> : <MobileHome setActiveTab={setActiveTab} profile={profile} />;
@@ -168,7 +172,7 @@ function AppContent() {
     );
   }
 
-  const isFullscreenPage = activeTab === 'my-desk' || activeTab === 'fets-intelligence' || (!isMobile && activeTab === 'command-center');
+  const isFullscreenPage = activeTab === 'my-desk' || activeTab === 'fets-intelligence' || activeTab === 'command-center';
 
   return (
     <div className={`golden-theme min-h-screen h-screen flex flex-col overflow-hidden relative ${getBranchTheme(activeBranch)}`}>
