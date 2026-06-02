@@ -74,6 +74,28 @@
     <script type="module" src="/src/main.tsx"></script>
 
     <script>
+      // Self-heal: this app does NOT use a service worker. If an older deploy
+      // installed one, it can keep serving a stale cached app even after a
+      // fresh deploy. Unregister any leftover SW + caches once, then reload.
+      (function () {
+        try {
+          if ("serviceWorker" in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function (regs) {
+              if (regs && regs.length) {
+                regs.forEach(function (r) { r.unregister(); });
+                if (window.caches && caches.keys) {
+                  caches.keys().then(function (keys) { keys.forEach(function (k) { caches.delete(k); }); });
+                }
+                if (!sessionStorage.getItem("sw-purged")) {
+                  sessionStorage.setItem("sw-purged", "1");
+                  location.reload();
+                }
+              }
+            }).catch(function () {});
+          }
+        } catch (e) {}
+      })();
+
       // Connection status handling
       function updateConnectionStatus() {
         if (navigator.onLine) {
