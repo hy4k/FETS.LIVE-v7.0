@@ -120,3 +120,31 @@ export async function dbClaimLostFound(id: any) {
   if (id == null) return;
   try { await supabase.from("lost_found_items").update({ status: "claimed" }).eq("id", id); } catch (e) {}
 }
+
+/* ---------------- leave_requests ---------------- */
+export async function dbAddLeave(req: any) {
+  const typeMap: any = {
+    leave: req.leaveType || "Leave",
+    swap: `Shift swap${req.with ? ` with ${req.with}` : ""}`,
+    toil: `TOIL (${req.days || 1} day${(req.days || 1) > 1 ? "s" : ""})`,
+  };
+  const leave_type = typeMap[req.kind] || "Leave";
+  let requested_date: string | null = null;
+  const d = new Date(req.date);
+  if (!isNaN(d.getTime())) requested_date = ymd(d);
+
+  // confirmed-minimal payload, then progressively richer attempts
+  const minimal: any = { leave_type, reason: req.reason || "", status: "pending" };
+  const mid: any = { ...minimal };
+  if (requested_date) mid.requested_date = requested_date;
+  if (F()._meId) mid.profile_id = F()._meId;
+  const full: any = { ...mid, branch_location: req.branch === "global" ? "calicut" : req.branch };
+
+  try {
+    let res = await supabase.from("leave_requests").insert([full]).select().single();
+    if (res.error) res = await supabase.from("leave_requests").insert([mid]).select().single();
+    if (res.error) res = await supabase.from("leave_requests").insert([minimal]).select().single();
+    if (res.error) throw res.error;
+    return res.data; // component already shows its own success toast
+  } catch (e) { rtoast("Saved locally — DB sync failed", "alert"); return null; }
+}
