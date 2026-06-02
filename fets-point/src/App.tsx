@@ -47,6 +47,7 @@ import { StatusBar, Style } from '@capacitor/status-bar';
 const Dashboard = lazy(() => import('./components/iCloud/iCloudDashboard').then(module => ({ default: module.ICloudDashboard })))
 const AccessHubPage = lazy(() => import('./components/AccessHub').then(module => ({ default: module.AccessHub })))
 const CommandCentre = lazy(() => import('./components/CommandCentreFinal'))
+const RedesignShell = lazy(() => import('./redesign/RedesignShell'))
 const CandidateTracker = lazy(() => import('./components/CandidateTrackerPremium').then(module => ({ default: module.CandidateTrackerPremium })))
 const MithunWorkbench = lazy(() => import('./components/MithunWorkbench').then(module => ({ default: module.MithunWorkbench })))
 const StaffManagement = lazy(() => import('./components/StaffManagement').then(module => ({ default: module.StaffManagement })))
@@ -133,7 +134,8 @@ function AppContent() {
     }
 
     const routeComponents: { [key: string]: { component: JSX.Element; name: string } } = {
-      'command-center': { component: <CommandCentre onNavigate={setActiveTab} onAiQuery={(q: string) => { setAiQuery(q); setActiveTab('fets-intelligence'); }} />, name: 'FETS POINT' },
+      'command-center': { component: <RedesignShell bridge={setActiveTab} />, name: 'FETS · LIVE' },
+      'command-center-classic': { component: <CommandCentre onNavigate={setActiveTab} onAiQuery={(q: string) => { setAiQuery(q); setActiveTab('fets-intelligence'); }} />, name: 'FETS POINT' },
       'access-hub': { component: <AccessHubPage />, name: 'F-Vault' },
       'dashboard': { component: <Dashboard onNavigate={setActiveTab} />, name: 'Dashboard' },
       'candidate-tracker': { component: <CandidateTracker />, name: 'Candidate Tracker' },
@@ -166,7 +168,7 @@ function AppContent() {
     );
   }
 
-  const isFullscreenPage = activeTab === 'my-desk' || activeTab === 'fets-intelligence';
+  const isFullscreenPage = activeTab === 'my-desk' || activeTab === 'fets-intelligence' || (!isMobile && activeTab === 'command-center');
 
   return (
     <div className={`golden-theme min-h-screen h-screen flex flex-col overflow-hidden relative ${getBranchTheme(activeBranch)}`}>
