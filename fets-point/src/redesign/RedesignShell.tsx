@@ -3913,7 +3913,7 @@ function TimeOff() {
     if (mode === "leave") req = { id: "q" + Date.now(), kind: "leave", who: user.name, branch, leaveType, date: date.trim(), reason: reason.trim(), status: "Submitted" };
     else if (mode === "swap") { if (!withWho) { toast("Pick who to swap with", "alert"); return; } req = { id: "q" + Date.now(), kind: "swap", who: user.name, with: withWho, branch, date: date.trim(), reason: reason.trim(), status: "Submitted" }; }
     else { if (availToil < 1) { toast("No TOIL left to use", "alert"); return; } const days = Math.max(1, Math.min(toilDays, availToil)); req = { id: "q" + Date.now(), kind: "toil", who: user.name, branch, days, date: date.trim(), reason: reason.trim(), status: "Submitted" }; }
-    setReqs(F.staffReqAdd(req)); setDate(""); setReason(""); setWithWho(""); setToilDays(1); toast("Sent to super admin for approval", "check");
+    setReqs(F.staffReqAdd(req)); DB.dbAddLeave(req); setDate(""); setReason(""); setWithWho(""); setToilDays(1); toast("Sent to super admin for approval", "check");
   };
   const balances = [
     { n: totals.ot, suf: "h", label: "Overtime banked", icon: "clock" },
