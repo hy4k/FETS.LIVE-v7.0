@@ -10,6 +10,7 @@
 */
 import React from "react";
 import "./liquid-glass.css";
+import { loadLiveData } from "./live-data";
 
 /* ============================================================
    SOURCE: data.js
@@ -1072,7 +1073,7 @@ function Icon({ name, size = 18, stroke = 2, className = "", style = {} }) {
 }
 
 /* ---- segmented control (glass pill) ---- */
-function Segmented({ options, value, onChange, size = "md" }) {
+function Segmented({ options, value, onChange, size = "md", activeColor }) {
   const pad = size === "sm" ? "5px 11px" : "8px 16px";
   const fs = size === "sm" ? 12 : 13;
   return (
@@ -1085,8 +1086,8 @@ function Segmented({ options, value, onChange, size = "md" }) {
               border: "none", cursor: "pointer", padding: pad, fontSize: fs,
               fontWeight: active ? 650 : 550, letterSpacing: "-0.01em", borderRadius: 999,
               fontFamily: "var(--font)", display: "inline-flex", alignItems: "center", gap: 6,
-              color: active ? "var(--ink)" : "var(--ink-3)",
-              background: active ? "var(--glass-strong)" : "transparent",
+              color: active ? (activeColor || "var(--ink)") : "var(--ink-3)",
+              background: active ? (activeColor ? `color-mix(in oklch, ${activeColor} 22%, var(--glass-strong))` : "var(--glass-strong)") : "transparent",
               boxShadow: active ? "var(--shadow)" : "none",
             }}>
             {o.icon && <Icon name={o.icon} size={fs + 2} stroke={2.1} />}
@@ -1272,17 +1273,35 @@ function StatusRow({ branch }) {
 /* ---------- shelf (drawer front trigger) ---------- */
 function Shelf({ icon, title, sub, accent, spines, onClick, delay }) {
   return (
-    <button className="shelf rise" onClick={onClick} style={{ animationDelay: `${delay}ms` }}>
-      <span style={{ width: 50, height: 50, borderRadius: 15, display: "grid", placeItems: "center", flexShrink: 0,
-        color: accent, background: `color-mix(in oklch, ${accent} 15%, transparent)`, border: `1px solid color-mix(in oklch, ${accent} 32%, transparent)` }}>
-        <Icon name={icon} size={24} />
+    <button className="shelf rise" onClick={onClick} style={{
+      animationDelay: `${delay}ms`, position: "relative", overflow: "hidden", gap: 18,
+      padding: "calc(24px * var(--density)) 24px",
+      background: `linear-gradient(135deg, color-mix(in oklch, ${accent} 11%, var(--glass)) 0%, var(--glass) 58%)`,
+      borderColor: `color-mix(in oklch, ${accent} 26%, var(--glass-edge))`,
+    }}>
+      {/* soft corner glow */}
+      <span aria-hidden style={{ position: "absolute", top: -50, right: -36, width: 168, height: 168, borderRadius: "50%",
+        background: `radial-gradient(circle, color-mix(in oklch, ${accent} 34%, transparent) 0%, transparent 70%)`,
+        pointerEvents: "none", opacity: 0.65 }} />
+      {/* top accent tab */}
+      <span aria-hidden style={{ position: "absolute", left: 24, top: 0, width: 48, height: 3, borderRadius: "0 0 99px 99px",
+        background: accent, boxShadow: `0 0 14px ${accent}` }} />
+      {/* icon medallion */}
+      <span style={{ width: 56, height: 56, borderRadius: 17, display: "grid", placeItems: "center", flexShrink: 0, position: "relative",
+        color: "var(--accent-ink)",
+        background: `linear-gradient(150deg, ${accent}, color-mix(in oklch, ${accent} 68%, black))`,
+        boxShadow: `inset 0 1px 0 oklch(1 0 0 / .45), 0 8px 22px color-mix(in oklch, ${accent} 42%, transparent)` }}>
+        <Icon name={icon} size={26} />
       </span>
-      <span style={{ flex: 1, minWidth: 0 }}>
-        <span style={{ display: "block", fontSize: 17, fontWeight: 680, letterSpacing: "-0.02em", color: "var(--ink)" }}>{title}</span>
-        <span style={{ display: "block", fontSize: 13, color: "var(--ink-3)", fontWeight: 500, marginTop: 3 }}>{sub}</span>
+      <span style={{ flex: 1, minWidth: 0, position: "relative" }}>
+        <span style={{ display: "block", fontSize: 19, fontWeight: 760, letterSpacing: "-0.02em", color: "var(--ink)" }}>{title}</span>
+        <span style={{ display: "block", fontSize: 13, color: "var(--ink-3)", fontWeight: 500, marginTop: 4, lineHeight: 1.4 }}>{sub}</span>
       </span>
-      <span className="shelf-spines">{(spines || []).length ? spines.map((c, i) => <span key={i} className="shelf-spine" style={{ background: c }} />) : null}</span>
-      <span className="shelf-handle"><Icon name="chevronR" size={18} /></span>
+      <span className="shelf-handle" style={{ width: 40, height: 40, borderRadius: 12, flexShrink: 0,
+        color: "var(--accent-ink)", background: accent, border: "none",
+        boxShadow: `0 6px 16px color-mix(in oklch, ${accent} 45%, transparent)` }}>
+        <Icon name="arrowR" size={18} />
+      </span>
     </button>
   );
 }
@@ -1368,31 +1387,21 @@ const TYPE_ICON = { url: "link", login: "users", password: "key", code: "hash", 
 function VaultRow({ row }) {
   const [reveal, setReveal] = React.useState(false);
   const shown = row.secret && !reveal ? "•".repeat(10) : row.value;
-  const isUrl = row.type === "url";
   return (
-    <div className="glass-2" style={{ padding: "13px 15px", borderRadius: 14, display: "flex", alignItems: "center", gap: 13 }}>
-      <span style={{ width: 34, height: 34, borderRadius: 10, display: "grid", placeItems: "center", color: "var(--accent)", background: "var(--accent-soft)", flexShrink: 0 }}>
-        <Icon name={TYPE_ICON[row.type] || "key"} size={16} />
-      </span>
+    <div className="glass-2" style={{ padding: "12px 14px", borderRadius: 12, display: "flex", alignItems: "center", gap: 12 }}>
       <div style={{ minWidth: 0, flex: 1 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 11, fontWeight: 650, color: "var(--ink-3)" }}>{row.label}</span>
-          {row.updated && <span className="mono" style={{ fontSize: 9.5, color: "var(--ink-4)" }}>· upd. {row.updated}</span>}
-        </div>
-        <div style={{ fontSize: 13.5, fontWeight: 550, color: isUrl ? "var(--accent)" : "var(--ink)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{shown}</div>
+        <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--ink-4)" }}>{row.label}</div>
+        <div className="mono" style={{ fontSize: 13.5, fontWeight: 600, color: "var(--ink)", marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{shown}</div>
       </div>
-      <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-        {row.secret && (
-          <button onClick={() => setReveal((r) => !r)} title={reveal ? "Hide" : "Reveal"} className="tap"
-            style={{ width: 32, height: 32, borderRadius: 9, border: "none", cursor: "pointer", background: "transparent", color: "var(--ink-3)", display: "grid", placeItems: "center" }}>
-            <Icon name={reveal ? "eyeOff" : "eye"} size={16} />
-          </button>
-        )}
-        <button onClick={() => toast(`${row.label} copied`, "copy")} title="Copy" className="tap"
-          style={{ width: 32, height: 32, borderRadius: 9, border: "none", cursor: "pointer", background: "transparent", color: "var(--ink-3)", display: "grid", placeItems: "center" }}>
-          <Icon name="copy" size={16} />
+      {row.secret && (
+        <button onClick={() => setReveal((r) => !r)} title={reveal ? "Hide" : "Reveal"} className="tap"
+          style={{ width: 34, height: 34, borderRadius: 9, border: "none", cursor: "pointer", background: "transparent", color: "var(--ink-3)", display: "grid", placeItems: "center", flexShrink: 0 }}>
+          <Icon name={reveal ? "eyeOff" : "eye"} size={16} />
         </button>
-      </div>
+      )}
+      <button onClick={() => toast(`${row.label} copied`, "copy")} title="Copy" className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 7, height: 34, padding: "0 13px", borderRadius: 9, border: "none", cursor: "pointer", color: "var(--accent-ink)", background: "var(--accent)", fontFamily: "var(--font)", fontSize: 12, fontWeight: 750, flexShrink: 0 }}>
+        <Icon name="copy" size={14} /> Copy
+      </button>
     </div>
   );
 }
@@ -1401,6 +1410,8 @@ function VaultPanel() {
   const vendors = window.FETS.VENDORS;
   const [active, setActive] = React.useState("prometric");
   const rows = window.FETS.VAULT[active] || [];
+  const portal = rows.find((r) => r.type === "url");
+  const creds = rows.filter((r) => r.type !== "url");
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {/* vendor chips */}
@@ -1414,14 +1425,20 @@ function VaultPanel() {
                 background: isA ? "var(--accent-soft)" : "var(--inset)" }}>
               <span style={{ width: 24, height: 24, borderRadius: 7, display: "grid", placeItems: "center", fontSize: 9, fontWeight: 800, color: "#fff", background: vn.color }}>{vn.short}</span>
               <span style={{ fontSize: 12.5, fontWeight: isA ? 650 : 550, color: isA ? "var(--ink)" : "var(--ink-3)" }}>{vn.name}</span>
-              <span className="tabnum" style={{ fontSize: 10.5, fontWeight: 650, color: isA ? "var(--accent)" : "var(--ink-4)" }}>{(window.FETS.VAULT[vn.slug] || []).length}</span>
             </button>
           );
         })}
       </div>
-      {/* rows */}
+      {/* one-tap portal launch */}
+      {portal && (
+        <a href={portal.value} target="_blank" rel="noopener noreferrer" className="tap" style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", borderRadius: 14, textDecoration: "none", color: "var(--accent-ink)", background: "var(--accent)", fontWeight: 750 }}>
+          <Icon name="ext" size={18} /> <span style={{ flex: 1, fontSize: 14 }}>Open {VENDOR_BY_SLUG[active].name} portal</span> <Icon name="arrowR" size={16} />
+        </a>
+      )}
+      {/* credentials — label + value + one-tap copy */}
+      <SectionLabel>Credentials</SectionLabel>
       <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-        {rows.map((r, i) => <VaultRow key={active + i} row={r} />)}
+        {creds.map((r, i) => <VaultRow key={active + i} row={r} />)}
         <button onClick={() => toast("Add entry", "plus")} className="tap inset"
           style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px", borderRadius: 14, cursor: "pointer", color: "var(--ink-3)", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 600, borderStyle: "dashed" }}>
           <Icon name="plus" size={15} /> Add credential
@@ -1464,7 +1481,7 @@ const LOST_FOUND = [
 const LF_STATUS = { stored: { label: "In locker", color: "var(--v-ielts)" }, claimed: { label: "Claimed", color: "var(--ok)" } };
 
 function LostFoundPanel({ branch }) {
-  const [items, setItems] = React.useState(LOST_FOUND);
+  const [items, setItems] = React.useState(() => (window.FETS._lostFound && window.FETS._lostFound.length) ? window.FETS._lostFound : LOST_FOUND);
   const list = items.filter((i) => branch === "global" || i.branch === branch);
   const stored = list.filter((i) => i.status === "stored").length;
   const claim = (idx) => { setItems((arr) => arr.map((x, i) => x === list[idx] ? { ...x, status: "claimed" } : x)); toast("Marked as claimed", "check"); };
@@ -1503,7 +1520,7 @@ function LostFoundPanel({ branch }) {
   );
 }
 
-Object.assign(window, { StatusRow, Shelf, ExamOutlookPanel, VaultPanel, HelpDeskPanel, LostFoundPanel, weekTotals, branchSessions, VENDOR_BY_SLUG });
+Object.assign(window, { StatusRow, Shelf, ExamOutlookPanel, VaultPanel, HelpDeskPanel, LostFoundPanel, weekTotals, branchSessions, branchRoster, VENDOR_BY_SLUG });
 
 /* ============================================================
    SOURCE: pages.jsx
@@ -1544,7 +1561,7 @@ function PageHeader({ eyebrow, title, accentWord, sub }) {
         <span className="eyebrow" style={{ color: "var(--accent)" }}>{eyebrow}</span>
       </div>
       <h1 style={{ margin: 0, fontFamily: '"Archivo Expanded", var(--font)', fontWeight: 800,
-        fontSize: "clamp(40px,6.5vw,76px)", lineHeight: 0.9, letterSpacing: "-0.03em", color: "var(--ink)" }}>
+        fontSize: "clamp(40px,6.5vw,76px)", lineHeight: 0.9, letterSpacing: "-0.03em", color: "var(--accent)" }}>
         {title} {accentWord && <span style={{ color: "var(--accent)" }}>{accentWord}</span>}
       </h1>
       {sub && <p style={{ margin: "16px 0 0", fontSize: 15, color: "var(--ink-3)", fontWeight: 500, maxWidth: 620 }}>{sub}</p>}
@@ -1991,11 +2008,99 @@ function MonthGrid({ onPick, renderCell }) {
 }
 
 /* ---------- day-detail drawer body (sessions + roster) ---------- */
+/* ---- session overrides: add / edit / delete exam sessions on a day ---- */
+const SESS_OVR_KEY = "fets-sess-ovr-1";
+const sessKey = (d) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+const sessSig = (s) => `${s.vendor}|${s.exam}|${s.start}`;
+function sessOvrAll() { try { return JSON.parse(localStorage.getItem(SESS_OVR_KEY)) || {}; } catch (e) { return {}; } }
+function sessOvrDay(d) { return sessOvrAll()[sessKey(d)] || { del: [], edit: {}, add: [] }; }
+function sessOvrSet(d, day) {
+  const all = sessOvrAll(); all[sessKey(d)] = day;
+  localStorage.setItem(SESS_OVR_KEY, JSON.stringify(all));
+  window.dispatchEvent(new Event("fets-sess-changed"));
+}
+(function patchSessions() {
+  const f = window.FETS; if (!f || f._sessPatched) return;
+  const base = f.sessionsOn.bind(f);
+  f.sessionsOn = function (d, branch) {
+    let list;
+    const live = f._liveSessions && f._liveSessions[sessKey(d)];
+    if (live) list = branch === "global" ? live : live.filter((s) => s.branch === branch);
+    else list = base(d, branch);
+    const day = sessOvrAll()[sessKey(d)];
+    if (!day) return list;
+    list = list.filter((s) => !(day.del || []).includes(sessSig(s)))
+               .map((s) => { const e = (day.edit || {})[sessSig(s)]; return e ? { ...s, ...e } : s; });
+    (day.add || []).forEach((s) => { if (branch === "global" || s.branch === branch) list = list.concat(s); });
+    return list;
+  };
+  f._sessPatched = true;
+})();
+
+function SessionEditRow({ s, vendors, onSave, onCancel }) {
+  const isNew = !s;
+  const [vendor, setVendor] = React.useState(s ? s.vendor : (vendors[0] && vendors[0].slug));
+  const [exam, setExam] = React.useState(s ? s.exam : "");
+  const [count, setCount] = React.useState(s ? s.count : 8);
+  const [start, setStart] = React.useState(s ? s.start : "09:00");
+  const inp = { background: "var(--inset)", border: "1px solid var(--hairline)", borderRadius: 8, color: "var(--ink)", fontFamily: "var(--font)", fontSize: 13, padding: "7px 9px", width: "100%" };
+  return (
+    <div className="inset" style={{ padding: 12, borderRadius: 12, display: "flex", flexDirection: "column", gap: 9 }}>
+      {isNew && (
+        <select value={vendor} onChange={(e) => setVendor(e.target.value)} style={inp}>
+          {vendors.map((v) => <option key={v.slug} value={v.slug}>{v.name}</option>)}
+        </select>
+      )}
+      {isNew && <input placeholder="Exam name" value={exam} onChange={(e) => setExam(e.target.value)} style={inp} />}
+      <div style={{ display: "flex", gap: 9 }}>
+        <label style={{ flex: 1, fontSize: 11, color: "var(--ink-3)" }}>Start<input type="time" value={start} onChange={(e) => setStart(e.target.value)} style={{ ...inp, marginTop: 3 }} /></label>
+        <label style={{ flex: 1, fontSize: 11, color: "var(--ink-3)" }}>Candidates<input type="number" min="0" value={count} onChange={(e) => setCount(+e.target.value)} style={{ ...inp, marginTop: 3 }} /></label>
+      </div>
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+        <button onClick={onCancel} className="tap glass-2" style={{ padding: "7px 13px", borderRadius: 9, cursor: "pointer", fontSize: 12.5, fontWeight: 650, color: "var(--ink-2)", border: "1px solid var(--hairline)" }}>Cancel</button>
+        <button onClick={() => onSave(isNew ? { vendor, exam: exam || "New session", count: +count || 0, start, end: start } : { count: +count || 0, start })}
+          className="tap" style={{ padding: "7px 14px", borderRadius: 9, cursor: "pointer", fontSize: 12.5, fontWeight: 750, color: "var(--accent-ink)", background: "var(--accent)", border: "none" }}>
+          {isNew ? "Add" : "Save"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function DayDetailPanel({ date, branch }) {
+  const [, force] = React.useReducer((x) => x + 1, 0);
+  React.useEffect(() => {
+    const h = () => force();
+    window.addEventListener("fets-sess-changed", h);
+    return () => window.removeEventListener("fets-sess-changed", h);
+  }, []);
   const sessions = F().sessionsOn(date, branch).slice().sort((a, b) => a.start.localeCompare(b.start));
   const roster = F().rosterOn(date, branch);
   const total = sessions.reduce((a, x) => a + x.count, 0);
   const showBranch = branch === "global";
+  const dayBranch = branch === "global" ? "calicut" : branch;
+  const [editing, setEditing] = React.useState(null); // sig string | "__new" | null
+
+  const delSession = (s) => {
+    const day = sessOvrDay(date);
+    if ((day.add || []).some((a) => sessSig(a) === sessSig(s))) day.add = day.add.filter((a) => sessSig(a) !== sessSig(s));
+    else day.del = [...(day.del || []), sessSig(s)];
+    if (day.edit) delete day.edit[sessSig(s)];
+    sessOvrSet(date, day);
+  };
+  const saveEdit = (s, patch) => {
+    const day = sessOvrDay(date);
+    const added = (day.add || []).find((a) => sessSig(a) === sessSig(s));
+    if (added) Object.assign(added, patch);
+    else day.edit = { ...(day.edit || {}), [sessSig(s)]: { ...((day.edit || {})[sessSig(s)]), ...patch } };
+    sessOvrSet(date, day); setEditing(null);
+  };
+  const addSession = (s) => {
+    const day = sessOvrDay(date);
+    day.add = [...(day.add || []), { ...s, branch: dayBranch }];
+    sessOvrSet(date, day); setEditing(null);
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", gap: 10 }}>
@@ -2003,12 +2108,27 @@ function DayDetailPanel({ date, branch }) {
         <StatPill value={total} label="Candidates" tone="var(--v-prometric)" />
         <StatPill value={roster.length} label="Staff rostered" tone="var(--v-cma)" />
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        <SectionLabel>Sessions</SectionLabel>
-        {sessions.length === 0
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <SectionLabel right={
+          <button onClick={() => setEditing("__new")} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 11px", borderRadius: 8, cursor: "pointer", fontSize: 11.5, fontWeight: 700, color: "var(--accent-ink)", background: "var(--accent)", border: "none" }}>
+            <Icon name="plus" size={13} /> Add session
+          </button>
+        }>Sessions</SectionLabel>
+        {editing === "__new" && <SessionEditRow vendors={F().VENDORS} onSave={addSession} onCancel={() => setEditing(null)} />}
+        {sessions.length === 0 && editing !== "__new"
           ? <div className="inset" style={{ padding: 18, borderRadius: 12, textAlign: "center", fontSize: 12.5, color: "var(--ink-4)", fontStyle: "italic" }}>No exams scheduled this day.</div>
-          : <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 10 }}>
-              {sessions.map((s, i) => <CalSessionCard key={i} s={s} showBranch={showBranch} />)}
+          : <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {sessions.map((s, i) => (
+                editing === sessSig(s)
+                  ? <SessionEditRow key={i} s={s} vendors={F().VENDORS} onSave={(patch) => saveEdit(s, patch)} onCancel={() => setEditing(null)} />
+                  : <div key={i} style={{ display: "flex", alignItems: "stretch", gap: 8 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}><CalSessionCard s={s} showBranch={showBranch} /></div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        <button onClick={() => setEditing(sessSig(s))} title="Edit" className="tap glass-2" style={{ width: 34, height: 34, borderRadius: 9, display: "grid", placeItems: "center", cursor: "pointer", color: "var(--ink-2)", border: "1px solid var(--hairline)" }}><Icon name="settings" size={15} /></button>
+                        <button onClick={() => delSession(s)} title="Delete" className="tap glass-2" style={{ width: 34, height: 34, borderRadius: 9, display: "grid", placeItems: "center", cursor: "pointer", color: "var(--bad)", border: "1px solid var(--hairline)" }}><Icon name="trash" size={15} /></button>
+                      </div>
+                    </div>
+              ))}
             </div>}
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -2174,13 +2294,6 @@ function CalendarPage({ branch }) {
     <div style={{ maxWidth: 1180, margin: "0 auto", display: "flex", flexDirection: "column", gap }}>
       <PageHeader eyebrow={`Exam Schedule // ${capBranch(branch)}`} title="Calendar" />
 
-      <section style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-        <StatPill value={winS.sess} label={wide ? "Sessions this month" : "Sessions in view"} />
-        <StatPill value={winS.cand} label="Candidates booked" tone="var(--v-prometric)" />
-        <StatPill value={winS.vendors} label="Active vendors" tone="var(--v-cma)" />
-        <StatPill value={winS.busiest.n} unit={`· ${winS.busiest.label}`} label="Busiest day" tone="var(--v-ielts)" />
-      </section>
-
       <section style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {/* control bar */}
         <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
@@ -2190,7 +2303,7 @@ function CalendarPage({ branch }) {
           </div>
           <div style={{ flex: 1 }} />
           <Segmented value={view} onChange={setView} size="sm" options={[
-            { value: "days", label: "10 Days" }, { value: "agenda", label: "Agenda" }, { value: "month", label: "Month" }, { value: "analysis", label: "Analysis" },
+            { value: "days", label: "10 Days" }, { value: "agenda", label: "Day wise" }, { value: "month", label: "Month wise" }, { value: "analysis", label: "Overview" },
           ]} />
           {(view === "days" || view === "agenda") && <RangeNav win={win} />}
         </div>
@@ -2208,7 +2321,17 @@ function CalendarPage({ branch }) {
 
         {view === "days" && <CalendarStrip offsets={win.offsets} branch={branch} />}
         {view === "agenda" && <CalendarAgenda offsets={win.offsets} branch={branch} />}
-        {view === "analysis" && <CalendarAnalysis offsets={monthOffsets} branch={branch} />}
+        {view === "analysis" && (
+          <React.Fragment>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+              <StatPill value={winS.sess} label="Sessions this month" />
+              <StatPill value={winS.cand} label="Candidates booked" tone="var(--v-prometric)" />
+              <StatPill value={winS.vendors} label="Active vendors" tone="var(--v-cma)" />
+              <StatPill value={winS.busiest.n} unit={`· ${winS.busiest.label}`} label="Busiest day" tone="var(--v-ielts)" />
+            </div>
+            <CalendarAnalysis offsets={monthOffsets} branch={branch} />
+          </React.Fragment>
+        )}
         {view === "month" && (
           <MonthGrid onPick={(d) => setDayDrawer(d)} renderCell={(date) => {
             const ss = F().sessionsOn(date, branch);
@@ -2377,7 +2500,7 @@ function RosterCellDialog({ ctx, onApply, onClose }) {
 
         <div style={{ display: "flex", gap: 9 }}>
           <button onClick={save} className="tap" style={{ flex: 1, padding: "11px", borderRadius: 11, border: "none", cursor: "pointer", fontFamily: "var(--font)", fontSize: 13.5, fontWeight: 700, color: "var(--accent-ink)", background: "var(--accent)" }}>Save shift</button>
-          <button onClick={() => onApply(null)} className="tap glass-2" title="Reset to default" style={{ padding: "11px 15px", borderRadius: 11, cursor: "pointer", border: "1px solid var(--hairline)", fontFamily: "var(--font)", fontSize: 13.5, fontWeight: 650, color: "var(--ink-3)" }}>Reset</button>
+          <button onClick={() => onApply(null)} className="tap glass-2" title="Clear / delete this shift" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "11px 15px", borderRadius: 11, cursor: "pointer", border: "1px solid var(--hairline)", fontFamily: "var(--font)", fontSize: 13.5, fontWeight: 650, color: "var(--bad)" }}><Icon name="trash" size={15} /> Clear</button>
         </div>
       </div>
     </React.Fragment>
@@ -2593,10 +2716,63 @@ function RosterAnalysis({ offsets, branch }) {
   );
 }
 
+/* ---------- quick-add roster: 6 working + 1 rest, across a date range ---------- */
+function QuickAddRoster({ branch, onClose }) {
+  const pool = branch === "global" ? [...F().STAFF.calicut, ...F().STAFF.cochin] : F().STAFF[branch];
+  const isoToday = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })();
+  const [name, setName] = React.useState(pool[0]);
+  const [from, setFrom] = React.useState(isoToday);
+  const [to, setTo] = React.useState(isoToday);
+  React.useEffect(() => { const k = (e) => { if (e.key === "Escape") onClose(); }; window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, []);
+  const apply = () => {
+    const f = new Date(from + "T00:00:00"), t = new Date(to + "T00:00:00");
+    if (isNaN(f.getTime()) || isNaN(t.getTime()) || t < f) { toast("Pick a valid date range", "alert"); return; }
+    let n = 0, idx = 0;
+    for (let d = new Date(f); d <= t; d.setDate(d.getDate() + 1)) {
+      const off = F().offsetOf(new Date(d));
+      const code = (idx % 7) < 6 ? "D" : "RD";   // 6 working days + 1 rest day
+      F().rosterSet(name, off, { code, ot: 0 });
+      idx++; n++;
+    }
+    window.dispatchEvent(new Event("fets-roster-changed"));
+    toast(`Rostered ${name} · ${n} day${n === 1 ? "" : "s"} (6+1)`, "check");
+    setTimeout(onClose, 650);
+  };
+  const inp = { background: "var(--inset)", border: "1px solid var(--hairline)", borderRadius: 9, color: "var(--ink)", fontFamily: "var(--font)", fontSize: 13.5, padding: "9px 11px", width: "100%" };
+  return (
+    <React.Fragment>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "oklch(0.12 0.02 182 / 0.6)", backdropFilter: "blur(3px)", zIndex: 120 }} />
+      <div role="dialog" className="glass rise" style={{ position: "fixed", zIndex: 121, top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(420px,93vw)", borderRadius: "var(--radius)", padding: 22, boxShadow: "var(--shadow-lift)", display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ width: 42, height: 42, borderRadius: 12, display: "grid", placeItems: "center", color: "var(--accent-ink)", background: "var(--accent)" }}><Icon name="plus" size={20} /></div>
+          <div style={{ flex: 1 }}>
+            <h2 style={{ margin: 0, fontSize: 17, fontWeight: 760, color: "var(--ink)" }}>Quick add roster</h2>
+            <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>Auto-fills a 6-on / 1-off pattern</div>
+          </div>
+          <button onClick={onClose} className="tap glass-2" style={{ width: 34, height: 34, borderRadius: 999, display: "grid", placeItems: "center", cursor: "pointer", color: "var(--ink-2)", border: "1px solid var(--hairline)" }}><Icon name="x" size={16} /></button>
+        </div>
+        <label style={{ fontSize: 11.5, fontWeight: 700, color: "var(--ink-3)" }}>Staff member
+          <select value={name} onChange={(e) => setName(e.target.value)} style={{ ...inp, marginTop: 5 }}>
+            {pool.map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </label>
+        <div style={{ display: "flex", gap: 12 }}>
+          <label style={{ flex: 1, fontSize: 11.5, fontWeight: 700, color: "var(--ink-3)" }}>From<input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={{ ...inp, marginTop: 5 }} /></label>
+          <label style={{ flex: 1, fontSize: 11.5, fontWeight: 700, color: "var(--ink-3)" }}>To<input type="date" value={to} onChange={(e) => setTo(e.target.value)} style={{ ...inp, marginTop: 5 }} /></label>
+        </div>
+        <div className="inset" style={{ padding: "10px 13px", borderRadius: 10, fontSize: 12, color: "var(--ink-3)", display: "flex", alignItems: "center", gap: 8 }}>
+          <Icon name="refresh" size={14} style={{ color: "var(--accent)", flexShrink: 0 }} /> 6 day shifts (<b style={{ color: "var(--ink-2)" }}>D</b>), then 1 rest day (<b style={{ color: "var(--ink-2)" }}>RD</b>), repeating.
+        </div>
+        <button onClick={apply} className="tap" style={{ height: 44, borderRadius: 12, border: "none", cursor: "pointer", fontFamily: "var(--font)", fontSize: 14, fontWeight: 780, color: "var(--accent-ink)", background: "var(--accent)" }}>Add to roster</button>
+      </div>
+    </React.Fragment>
+  );
+}
+
 function RosterPage({ branch }) {
-  const [view, setView] = React.useState("days");   // days | month
+  const [view, setView] = React.useState("days");   // days | analysis
   const win = useWindow(10);
-  const [leaveOpen, setLeaveOpen] = React.useState(false);
+  const [quickOpen, setQuickOpen] = React.useState(false);
   const [dayDrawer, setDayDrawer] = React.useState(null);
   const mc = monthCtx();
   const isAdmin = F().user.role === "Super Admin";
@@ -2618,14 +2794,6 @@ function RosterPage({ branch }) {
     <div style={{ maxWidth: 1180, margin: "0 auto", display: "flex", flexDirection: "column", gap }}>
       <PageHeader eyebrow={`Staffing // ${capBranch(branch)}`} title="Roster" />
 
-      <section style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-        <StatPill value={onDutyToday} label="On duty today" />
-        <StatPill value={poolSize} label="Staff in pool" tone="var(--v-cma)" />
-        <StatPill value={avgCover} unit="/day" label={wide ? "Avg cover this month" : "Avg cover in view"} tone="var(--v-prometric)" />
-        <StatPill value={busy.n} unit={`· ${busy.label}`} label="Busiest day" tone="var(--v-ielts)" />
-        {isAdmin && <StatPill value={pending} label="Pending approvals" tone={pending ? "var(--warn)" : "var(--ok)"} />}
-      </section>
-
       <section style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
@@ -2634,16 +2802,14 @@ function RosterPage({ branch }) {
           </div>
           <div style={{ flex: 1 }} />
           {isAdmin && (
-            <button onClick={() => setLeaveOpen(true)} className="tap glass-2" title="Leave approvals"
-              style={{ display: "inline-flex", alignItems: "center", gap: 9, height: 38, padding: "0 14px", borderRadius: 11,
-                cursor: "pointer", border: "1px solid var(--hairline)", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 700, color: "var(--ink)" }}>
-              <Icon name="shield" size={15} style={{ color: "var(--accent)" }} /> Leave approvals
-              {pending > 0 && <span className="tabnum" style={{ minWidth: 18, height: 18, padding: "0 5px", borderRadius: 999, display: "grid", placeItems: "center",
-                fontSize: 10.5, fontWeight: 800, color: "var(--accent-ink)", background: "var(--accent)" }}>{pending}</span>}
+            <button onClick={() => setQuickOpen(true)} className="tap" title="Quick add roster (6+1 pattern)"
+              style={{ display: "inline-flex", alignItems: "center", gap: 9, height: 38, padding: "0 15px", borderRadius: 11,
+                cursor: "pointer", border: "none", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 750, color: "var(--accent-ink)", background: "var(--accent)" }}>
+              <Icon name="plus" size={15} /> Quick add
             </button>
           )}
           <Segmented value={view} onChange={setView} size="sm" options={[
-            { value: "days", label: "10 Days" }, { value: "month", label: "Month" }, { value: "analysis", label: "Analysis" },
+            { value: "days", label: "10 Days" }, { value: "analysis", label: "Overview" },
           ]} />
           {view === "days" && <RangeNav win={win} />}
         </div>
@@ -2651,29 +2817,21 @@ function RosterPage({ branch }) {
         {view === "days" && <RosterLegend />}
 
         {view === "days" && <RosterGrid key={branch} offsets={win.offsets} branch={branch} />}
-        {view === "analysis" && <RosterAnalysis offsets={offs} branch={branch} />}
-        {view === "month" && <MonthGrid onPick={(d) => setDayDrawer(d)} renderCell={(date) => {
-              const r = F().rosterOn(date, branch);
-              const ex = F().sessionsOn(date, branch).length;
-              return (
-                <React.Fragment>
-                  <div style={{ marginTop: "auto", display: "inline-flex", alignItems: "center", gap: 5,
-                    fontSize: 13, fontWeight: 800, color: r.length ? "var(--ink)" : "var(--ink-4)" }}>
-                    <Icon name="users" size={13} style={{ color: r.length ? "var(--accent)" : "var(--ink-4)" }} /> {r.length}
-                  </div>
-                  {ex > 0 && <div className="mono" style={{ fontSize: 10, color: "var(--ink-4)" }}>{ex} exam{ex > 1 ? "s" : ""}</div>}
-                </React.Fragment>
-              );
-            }} />}
-        {view === "days" && <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)", alignSelf: "flex-end" }}>tap a cell to change shift</span>}
+        {view === "analysis" && (
+          <React.Fragment>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+              <StatPill value={onDutyToday} label="On duty today" />
+              <StatPill value={poolSize} label="Staff in pool" tone="var(--v-cma)" />
+              <StatPill value={avgCover} unit="/day" label="Avg cover this month" tone="var(--v-prometric)" />
+              <StatPill value={busy.n} unit={`· ${busy.label}`} label="Busiest day" tone="var(--v-ielts)" />
+            </div>
+            <RosterAnalysis offsets={offs} branch={branch} />
+          </React.Fragment>
+        )}
+        {view === "days" && <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)", alignSelf: "flex-end" }}>tap a cell to change shift · use Quick add for a 6+1 block</span>}
       </section>
 
-      {isAdmin && (
-        <Drawer open={leaveOpen} onClose={() => setLeaveOpen(false)} icon="shield"
-          title="Leave approvals" sub={`${capBranch(branch)} · super-admin only`}>
-          <LeaveApprovalsPanel branch={branch} />
-        </Drawer>
-      )}
+      {isAdmin && quickOpen && <QuickAddRoster branch={branch} onClose={() => setQuickOpen(false)} />}
       <Drawer open={!!dayDrawer} onClose={() => setDayDrawer(null)} icon="users"
         title={dayDrawer ? `${window.P_WDL[dayDrawer.getDay()]}, ${window.P_MO[dayDrawer.getMonth()]} ${dayDrawer.getDate()}` : ""}
         sub={`${capBranch(branch)} · coverage detail`}>
@@ -4325,6 +4483,7 @@ function ordinal(n) {
 
 /* ---------- top navigation ---------- */
 function TopNav({ active, onNavigate, branch, setBranch, t, setTweak, onTools, onBurger }) {
+  const candToday = branchSessions(0, branch).reduce((a, s) => a + s.count, 0);
   return (
     <header className="glass" style={{
       position: "sticky", top: 0, zIndex: 60, flexShrink: 0,
@@ -4332,8 +4491,6 @@ function TopNav({ active, onNavigate, branch, setBranch, t, setTweak, onTools, o
       padding: "11px 11px 11px 18px", display: "flex", alignItems: "center", gap: "clamp(14px,2.4vw,30px)",
       boxShadow: "var(--shadow)", "--branch": BRANCH_TINT[branch] || "var(--accent)",
     }}>
-      {/* branch-reactive accent strip */}
-      <span className="branch-strip" />
       {/* brand mark */}
       <button onClick={() => onNavigate({ id: "live" })} className="tap" style={{
         display: "flex", alignItems: "center", gap: 13, border: "none", background: "transparent",
@@ -4342,13 +4499,8 @@ function TopNav({ active, onNavigate, branch, setBranch, t, setTweak, onTools, o
         <span style={{ width: 34, height: 34, borderRadius: 9, display: "grid", placeItems: "center",
           background: "var(--accent)", color: "var(--accent-ink)", fontWeight: 900, fontSize: 20,
           fontFamily: '"Archivo Expanded", var(--font)', letterSpacing: "-0.04em", lineHeight: 1 }}>F</span>
-        <span style={{ width: 1, height: 26, background: "var(--branch)", transition: "background .5s ease" }} />
+        <span style={{ width: 1, height: 26, background: "var(--accent)" }} />
       </button>
-
-      {/* branch chip — subtle, reacts to the toggle */}
-      <span className="branch-chip topnav-branch" title={`Viewing ${BRANCH_NAME[branch]}`}>
-        <span className="branch-dot" />{BRANCH_NAME[branch]}
-      </span>
 
       {/* primary links */}
       <nav className="topnav-links" style={{ display: "flex", alignItems: "center", gap: "clamp(18px,2.4vw,32px)" }}>
@@ -4362,20 +4514,26 @@ function TopNav({ active, onNavigate, branch, setBranch, t, setTweak, onTools, o
       <div style={{ flex: 1 }} />
 
       {/* right controls */}
-      <div className="topnav-branch">
-        <Segmented value={branch} onChange={setBranch} size="sm" options={[
+      {/* candidates today — compact, reacts to the branch toggle */}
+      <span title={`${candToday} candidates booked today · ${BRANCH_NAME[branch]}`} className="tap glass-2 topnav-count" style={{
+        display: "inline-flex", alignItems: "center", gap: 8, height: 36, padding: "0 13px", borderRadius: 10, flexShrink: 0,
+        color: "var(--ink-2)", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 650 }}>
+        <Icon name="users" size={15} style={{ color: "var(--accent)" }} />
+        <span className="tabnum" style={{ fontSize: 13.5, fontWeight: 750, color: "var(--ink)" }}>{candToday}</span>
+        <span className="topnav-branch">today</span>
+      </span>
+      <div className="topnav-seg">
+        <Segmented value={branch} onChange={setBranch} size="sm" activeColor={BRANCH_TINT[branch]} options={[
           { value: "calicut", label: "Calicut" },
           { value: "cochin", label: "Cochin" },
           { value: "global", label: "All" },
         ]} />
       </div>
-      <button onClick={onTools} title="Tools" className="tap glass-2" style={{
-        display: "inline-flex", alignItems: "center", gap: 8, height: 36, padding: "0 13px", borderRadius: 10,
+      <button onClick={onTools} title="All modules" className="tap glass-2" style={{
+        display: "inline-flex", alignItems: "center", gap: 8, height: 36, padding: "0 14px", borderRadius: 10,
         cursor: "pointer", color: "var(--ink-2)", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 650 }}>
-        <Icon name="grid" size={15} /> <span className="topnav-branch">Tools</span>
+        <Icon name="grid" size={15} /> <span className="topnav-branch">Modules</span>
       </button>
-      <IconButton name={t.dark ? "sun" : "moon"} title="Toggle theme" size={36} onClick={() => setTweak("dark", !t.dark)} />
-      <IconButton name="bell" title="Notifications" size={36} className="topnav-bell" onClick={() => toast("3 new notifications", "bell")} />
       <button onClick={() => toast("Mithun Raj · Super Admin", "settings")} className="tap" title={window.FETS.user.name}
         style={{ border: "none", background: "transparent", cursor: "pointer", padding: 0, flexShrink: 0 }}>
         <Avatar name={window.FETS.user.name} size={36} />
@@ -4408,7 +4566,7 @@ function Masthead({ branch }) {
         <span style={{ display: "inline-flex", alignItems: "flex-end", gap: "0.18em" }}>
           LIVE
           <span className="mono" style={{ fontSize: "clamp(11px,1.1vw,15px)", fontWeight: 700, letterSpacing: "0.1em",
-            color: "var(--ink-4)", paddingBottom: "0.7em" }}>V5.0</span>
+            color: "var(--ink-4)", paddingBottom: "0.7em" }}>V7.0</span>
         </span>
       </h1>
       <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 22 }}>
@@ -4422,44 +4580,177 @@ function Masthead({ branch }) {
   );
 }
 
-/* ---------- LIVE page ---------- */
-function LivePage({ branch, setDrawer, setActive }) {
+/* ---------- front-page feature cards (ported designs) ---------- */
+const _MONS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/* Next 7 Days — boarding-pass ticket */
+function TicketCard({ branch, onClick }) {
   const wk = weekTotals(branch);
-  const branchLabel = branch === "global" ? "All centres" : branch.charAt(0).toUpperCase() + branch.slice(1);
-  const V = window.VENDOR_BY_SLUG;
+  const s = window.FETS.ISO(0), e = window.FETS.ISO(6);
+  const fd = (d) => `${_MONS[d.getMonth()]} ${d.getDate()}`;
+  return (
+    <div className="fz-ticket-wrap">
+      <div className="fz-ticket" role="button" onClick={onClick} title="Next 7 days — tap for the client breakdown">
+        <div className="fz-barcode" />
+        <div className="fz-sep"><span /></div>
+        <div className="fz-content">
+          <div className="fz-cdata">
+            <div className="fz-dest">
+              <div><p className="c">From</p><p className="ac">{fd(s)}</p><p className="h"><Icon name="calendar" size={10} /> Today</p></div>
+              <Icon name="arrowR" size={20} style={{ color: "#aeaeae", flexShrink: 0 }} />
+              <div style={{ textAlign: "right" }}><p className="c">To</p><p className="ac">{fd(e)}</p><p className="h" style={{ justifyContent: "flex-end" }}>+7 days</p></div>
+            </div>
+            <div style={{ borderBottom: "2px solid #e8e8e8" }} />
+            <div className="fz-row">
+              <div className="fz-d"><p className="t">Sessions</p><p className="s">{wk.sess}</p></div>
+              <div className="fz-d"><p className="t">Candidates</p><p className="s">{wk.cand}</p></div>
+              <div className="fz-d"><p className="t">Branch</p><p className="s">{branch === "global" ? "All" : capBranch(branch)}</p></div>
+            </div>
+          </div>
+          <div className="fz-icons">
+            <span className="ic"><Icon name="calendar" size={22} /></span>
+            <span className="ic"><Icon name="users" size={18} /></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* Raise a Case — retro TV */
+function CaseTvCard({ onClick }) {
+  return (
+    <div className="fz-tv" role="button" onClick={onClick} title="Raise a case">
+      <div className="main_wrapper">
+        <div className="main">
+          <div className="antenna">
+            <div className="antenna_shadow" /><div className="a1" /><div className="a1d" /><div className="a2" /><div className="a2d" /><div className="a_base" />
+          </div>
+          <div className="tv">
+            <div className="cruve">
+              <svg className="curve_svg" version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 189.929 189.929"><path d="M70.343,70.343c-30.554,30.553-44.806,72.7-39.102,115.635l-29.738,3.951C-5.442,137.659,11.917,86.34,49.129,49.13C86.34,11.918,137.664-5.445,189.928,1.502l-3.95,29.738C143.041,25.54,100.895,39.789,70.343,70.343z" /></svg>
+            </div>
+            <div className="display_div"><div className="screen_out"><div className="screen_out1"><div className="screen"><span className="notfound_text">RAISE A CASE</span></div></div></div></div>
+            <div className="lines"><div className="line1" /><div className="line2" /><div className="line3" /></div>
+            <div className="buttons_div">
+              <div className="b1"><div /></div><div className="b2" />
+              <div className="speakers"><div className="g1"><div className="g11" /><div className="g12" /><div className="g13" /></div><div className="g" /><div className="g" /></div>
+            </div>
+          </div>
+          <div className="bottom"><div className="base1" /><div className="base2" /><div className="base3" /></div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* Quick Access / Help Desk / Lost & Found — animated outline button */
+function StartButton({ label, onClick }) {
+  return (
+    <button onClick={onClick} className="fz-startbtn" data-text={label}>
+      <span className="actual-text">&nbsp;{label}&nbsp;</span>
+      <span className="hover-text" aria-hidden="true">&nbsp;{label}&nbsp;</span>
+    </button>
+  );
+}
+
+/* minimal Next-7-Days drawer — just client → candidate count */
+function OutlookMiniPanel({ branch }) {
+  const totals = {};
+  for (let o = 0; o < 7; o++) branchSessions(o, branch).forEach((x) => { totals[x.vendor] = (totals[x.vendor] || 0) + x.count; });
+  const rows = Object.entries(totals).map(([slug, n]) => ({ v: window.VENDOR_BY_SLUG[slug], n })).filter((r) => r.v).sort((a, b) => b.n - a.n);
+  const grand = rows.reduce((a, r) => a + r.n, 0);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div className="glass" style={{ padding: "16px 18px", borderRadius: "var(--radius)", display: "flex", alignItems: "baseline", gap: 10 }}>
+        <span className="tabnum mono" style={{ fontSize: 34, fontWeight: 700, color: "var(--accent)", letterSpacing: "-0.04em" }}>{grand}</span>
+        <span style={{ fontSize: 13, color: "var(--ink-3)", fontWeight: 600 }}>candidates · next 7 days</span>
+      </div>
+      <SectionLabel>By client</SectionLabel>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {rows.length === 0
+          ? <div className="inset" style={{ padding: 16, borderRadius: 12, textAlign: "center", fontSize: 13, color: "var(--ink-4)", fontStyle: "italic" }}>No sessions in the next 7 days.</div>
+          : rows.map((r) => (
+            <div key={r.v.slug} className="glass-2" style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 15px", borderRadius: 12 }}>
+              <span style={{ width: 10, height: 10, borderRadius: 3, background: r.v.color, flexShrink: 0 }} />
+              <span style={{ flex: 1, fontSize: 14, fontWeight: 650, color: "var(--ink)" }}>{r.v.name}</span>
+              <span className="tabnum mono" style={{ fontSize: 16, fontWeight: 700, color: "var(--ink)" }}>{r.n}</span>
+            </div>
+          ))}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- LIVE page — outline-button menu ---------- */
+function MenuRow({ items }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "calc(16px * var(--density))" }}>
+      {items.map((q) => (
+        <div key={q.label} className="glass" style={{ borderRadius: "var(--radius)", padding: "30px 22px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14, minHeight: 140, textAlign: "center" }}>
+          <StartButton label={q.label} onClick={q.on} />
+          <span style={{ fontSize: 12.5, color: "var(--ink-3)", fontWeight: 500 }}>{q.sub}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function LivePage({ branch, setDrawer, setActive, bridge }) {
   const gap = "calc(34px * var(--density))";
-  const caseAccent = "oklch(0.74 0.15 55)"; // warm amber — close to the gold theme
+  const ops = [
+    { label: "Raise a Case", sub: "Log a technical, candidate or facility issue", on: () => setActive("case") },
+    { label: "Next 7 Days", sub: "Candidates by client over the next week", on: () => setDrawer("outlook") },
+    { label: "News Manager", sub: "Post & manage staff announcements", on: () => setActive("news") },
+  ];
+  const support = [
+    { label: "Quick Access", sub: "Vendor credentials, portals & site codes", on: () => setDrawer("vault") },
+    { label: "Help Desk", sub: "Live vendor support portals & helplines", on: () => setDrawer("help") },
+    { label: "Lost & Found", sub: "Items handed in, logged & waiting to be claimed", on: () => setDrawer("lostfound") },
+  ];
   return (
     <div style={{ maxWidth: 1180, margin: "0 auto", display: "flex", flexDirection: "column", gap }}>
       <Masthead branch={branch} />
-      <section><StatusRow branch={branch} /></section>
-
-      <section style={{ display: "flex", flexDirection: "column", gap: "calc(13px * var(--density))" }}>
-        <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>{branchLabel}</span>}>Quick access</SectionLabel>
-        <div className="shelf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(430px, 1fr))", gap: "calc(13px * var(--density))" }}>
-          <Shelf icon="pulse" title="Raise a Case" accent={caseAccent} delay={0}
-            sub="Log a technical, candidate or facility issue — opens the full case desk"
-            onClick={() => setActive("case")} />
-          <Shelf icon="calendar" title="Next 7 Days" accent="var(--accent)" delay={80}
-            sub={`${wk.sess} sessions · ${wk.cand} candidates over the next 7 days`}
-            onClick={() => setDrawer("outlook")} />
-          <Shelf icon="key" title="Quick Access" accent={V.prometric.color} delay={160}
-            sub="Vendor credentials, portals & site codes"
-            onClick={() => setDrawer("vault")} />
-        </div>
+      <section style={{ display: "flex", flexDirection: "column", gap: "calc(16px * var(--density))" }}>
+        <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>operations</span>}>Operations</SectionLabel>
+        <MenuRow items={ops} />
       </section>
-
-      <section style={{ display: "flex", flexDirection: "column", gap: "calc(13px * var(--density))" }}>
-        <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>support</span>}>Help &amp; support</SectionLabel>
-        <div className="shelf-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(430px, 1fr))", gap: "calc(13px * var(--density))" }}>
-          <Shelf icon="headset" title="Help Desk" accent={V.cma.color} delay={0}
-            sub="Live vendor support portals & helplines"
-            onClick={() => setDrawer("help")} />
-          <Shelf icon="package" title="Lost & Found" accent={V.ielts.color} delay={80}
-            sub="Items handed in, logged & waiting to be claimed"
-            onClick={() => setDrawer("lostfound")} />
-        </div>
+      <section style={{ display: "flex", flexDirection: "column", gap: "calc(16px * var(--density))" }}>
+        <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>support</span>}>Quick access &amp; support</SectionLabel>
+        <MenuRow items={support} />
       </section>
+    </div>
+  );
+}
+
+/* ---------- News page (redesigned to match the other pages) ---------- */
+function NewsPage({ branch }) {
+  const news = (window.FETS._news || []).filter((n) => n.active !== false);
+  const prioColor = (p) => (p === "high" || p === "urgent") ? "var(--bad)" : p === "low" ? "var(--ink-4)" : "var(--accent)";
+  return (
+    <div style={{ maxWidth: 900, margin: "0 auto", display: "flex", flexDirection: "column", gap: "calc(28px * var(--density))" }}>
+      <PageHeader eyebrow={`Announcements // ${capBranch(branch)}`} title="News" />
+      {news.length === 0 ? (
+        <div className="glass" style={{ borderRadius: "var(--radius)", padding: 48, textAlign: "center", color: "var(--ink-4)", fontSize: 14 }}>
+          No announcements right now.
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {news.map((n, i) => (
+            <article key={n.id || i} className="glass rise" style={{ borderRadius: "var(--radius)", padding: "18px 20px", display: "flex", gap: 14, alignItems: "flex-start", animationDelay: `${i * 40}ms` }}>
+              <span style={{ width: 6, alignSelf: "stretch", borderRadius: 99, background: prioColor(n.priority), flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 15, fontWeight: 600, color: "var(--ink)", lineHeight: 1.5 }}>{n.body}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
+                  {n.priority && n.priority !== "normal" && <span className="eyebrow" style={{ fontSize: 9, color: prioColor(n.priority) }}>{n.priority}</span>}
+                  {n.when && <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>{n.when}</span>}
+                </div>
+              </div>
+              <Icon name="message" size={18} style={{ color: "var(--ink-4)", flexShrink: 0 }} />
+            </article>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -4552,18 +4843,19 @@ function App({ bridge }) {
         t={t} setTweak={setTweak} onTools={() => setTools(true)} onBurger={() => setBurger(true)} />
 
       <main className="scroll-soft main-scroll" style={{ flex: 1, overflowY: "auto", padding: "clamp(22px,3.2vw,40px) clamp(14px,3vw,30px) 80px" }}>
-        {active === "live" && <LivePage branch={branch} setDrawer={setDrawer} setActive={setActive} />}
+        {active === "live" && <LivePage branch={branch} setDrawer={setDrawer} setActive={setActive} bridge={bridge} />}
         {active === "calendar" && <CalendarPage branch={branch} />}
         {active === "roster" && <RosterPage branch={branch} />}
         {active === "case" && <RaiseCasePage branch={branch} setActive={setActive} />}
         {active === "desk" && <MyDeskPage branch={branch} setActive={setActive} setDrawer={setDrawer} />}
         {active === "business" && <BusinessPage branch={branch} />}
+        {active === "news" && <NewsPage branch={branch} />}
       </main>
 
       {/* drawers */}
       <Drawer open={drawer === "outlook"} onClose={() => setDrawer(null)}
-        icon="calendar" title="Next 7 Days" sub={`${branchLabel} · next seven days, India time`}>
-        <ExamOutlookPanel branch={branch} />
+        icon="calendar" title="Next 7 Days" sub={`${branchLabel} · candidates by client`}>
+        <OutlookMiniPanel branch={branch} />
       </Drawer>
       <Drawer open={drawer === "vault"} onClose={() => setDrawer(null)}
         icon="key" title="Quick Access Vault" sub="Credentials, portals & site codes by vendor" accentColor={V.prometric.color}>
@@ -4595,10 +4887,13 @@ function App({ bridge }) {
 }
 
 function RedesignShell({ bridge }) {
+  const [ready, setReady] = React.useState(false);
   React.useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = prev; };
+    let mounted = true;
+    Promise.resolve(loadLiveData(window.FETS)).catch(() => {}).finally(() => { if (mounted) setReady(true); });
+    return () => { mounted = false; document.body.style.overflow = prev; };
   }, []);
   return (
     <div id="fets-redesign-root" className="fets-redesign-root" data-theme="dark"
@@ -4606,7 +4901,14 @@ function RedesignShell({ bridge }) {
       <div className="wallpaper" />
       <div className="grain" />
       <div style={{ position: "relative", zIndex: 2, height: "100%" }}>
-        <App bridge={bridge} />
+        {ready ? <App bridge={bridge} /> : (
+          <div style={{ height: "100%", display: "grid", placeItems: "center" }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
+              <span style={{ width: 54, height: 54, borderRadius: 14, display: "grid", placeItems: "center", background: "var(--accent)", color: "var(--accent-ink)", fontWeight: 900, fontSize: 30, fontFamily: '"Archivo Expanded", var(--font)' }}>F</span>
+              <span className="eyebrow" style={{ color: "var(--ink-3)" }}>Loading FETS · LIVE…</span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
