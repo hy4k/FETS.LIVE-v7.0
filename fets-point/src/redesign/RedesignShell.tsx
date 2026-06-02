@@ -11,6 +11,7 @@
 import React from "react";
 import "./liquid-glass.css";
 import { loadLiveData } from "./live-data";
+import * as DB from "./write-data";
 
 /* ============================================================
    SOURCE: data.js
@@ -1484,7 +1485,7 @@ function LostFoundPanel({ branch }) {
   const [items, setItems] = React.useState(() => (window.FETS._lostFound && window.FETS._lostFound.length) ? window.FETS._lostFound : LOST_FOUND);
   const list = items.filter((i) => branch === "global" || i.branch === branch);
   const stored = list.filter((i) => i.status === "stored").length;
-  const claim = (idx) => { setItems((arr) => arr.map((x, i) => x === list[idx] ? { ...x, status: "claimed" } : x)); toast("Marked as claimed", "check"); };
+  const claim = (idx) => { const it = list[idx]; if (it && it.id != null) DB.dbClaimLostFound(it.id); setItems((arr) => arr.map((x) => x === it ? { ...x, status: "claimed" } : x)); toast("Marked as claimed", "check"); };
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -2081,7 +2082,14 @@ function DayDetailPanel({ date, branch }) {
   const dayBranch = branch === "global" ? "calicut" : branch;
   const [editing, setEditing] = React.useState(null); // sig string | "__new" | null
 
+  const liveKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
   const delSession = (s) => {
+    if (window.FETS._liveSessions && window.FETS._liveSessions[liveKey] && s.id != null) {
+      window.FETS._liveSessions[liveKey] = window.FETS._liveSessions[liveKey].filter((x) => x !== s && x.id !== s.id);
+      DB.dbDeleteSession(s.id);
+      window.dispatchEvent(new Event("fets-sess-changed"));
+      return;
+    }
     const day = sessOvrDay(date);
     if ((day.add || []).some((a) => sessSig(a) === sessSig(s))) day.add = day.add.filter((a) => sessSig(a) !== sessSig(s));
     else day.del = [...(day.del || []), sessSig(s)];
@@ -2089,6 +2097,12 @@ function DayDetailPanel({ date, branch }) {
     sessOvrSet(date, day);
   };
   const saveEdit = (s, patch) => {
+    if (window.FETS._liveSessions && s.id != null) {
+      Object.assign(s, patch);
+      DB.dbUpdateSession(s.id, patch);
+      window.dispatchEvent(new Event("fets-sess-changed")); setEditing(null);
+      return;
+    }
     const day = sessOvrDay(date);
     const added = (day.add || []).find((a) => sessSig(a) === sessSig(s));
     if (added) Object.assign(added, patch);
@@ -2096,6 +2110,13 @@ function DayDetailPanel({ date, branch }) {
     sessOvrSet(date, day); setEditing(null);
   };
   const addSession = (s) => {
+    if (window.FETS._liveSessions) {
+      const entry = { id: undefined, vendor: s.vendor, exam: s.exam, count: s.count, start: s.start, end: s.end || s.start, branch: dayBranch };
+      (window.FETS._liveSessions[liveKey] ||= []).push(entry);
+      window.dispatchEvent(new Event("fets-sess-changed")); setEditing(null);
+      DB.dbAddSession(date, s, dayBranch).then((row) => { if (row && row.id != null) entry.id = row.id; });
+      return;
+    }
     const day = sessOvrDay(date);
     day.add = [...(day.add || []), { ...s, branch: dayBranch }];
     sessOvrSet(date, day); setEditing(null);
@@ -2537,6 +2558,8 @@ function RosterGrid({ offsets, branch }) {
 
   const apply = (name, off, cell) => {
     F().rosterSet(name, off, cell);
+    const _d = F().ISO(off);
+    if (cell) DB.dbSetRoster(name, _d, cell.code); else DB.dbClearRoster(name, _d);
     setGrid((g) => {
       const dflt = g[name][off].dflt;
       const nc = cell ? { code: cell.code, ot: +cell.ot || 0, dflt, override: true } : { code: dflt, ot: 0, dflt, override: false };
@@ -2734,6 +2757,7 @@ function QuickAddRoster({ branch, onClose }) {
       F().rosterSet(name, off, { code, ot: 0 });
       idx++; n++;
     }
+    DB.dbQuickAddRoster(name, from, to);
     window.dispatchEvent(new Event("fets-roster-changed"));
     toast(`Rostered ${name} · ${n} day${n === 1 ? "" : "s"} (6+1)`, "check");
     setTimeout(onClose, 650);
@@ -3348,11 +3372,15 @@ function RaiseCasePage({ branch, setActive }) {
   }, [branch, cat, statusF, cases.length]);
   const selected = cases.find((c) => c.id === selectedId) || filtered[0] || null;
 
-  const setStatus = (id, s) => setCases((cs) => cs.map((c) => c.id === id ? { ...c, status: s,
-    thread: [...c.thread, { id: "s" + Date.now(), kind: "status", role: "system", author: window.FETS.user.name, text: `marked the case ${STATUS_META[s].label}`, when: caseNow() }] } : c));
+  const setStatus = (id, s) => {
+    const c0 = cases.find((c) => c.id === id);
+    if (c0 && c0._dbId != null) DB.dbSetCaseStatus(c0._dbId, s);
+    setCases((cs) => cs.map((c) => c.id === id ? { ...c, status: s,
+      thread: [...c.thread, { id: "s" + Date.now(), kind: "status", role: "system", author: window.FETS.user.name, text: `marked the case ${STATUS_META[s].label}`, when: caseNow() }] } : c));
+  };
   const post = (id, msg) => setCases((cs) => cs.map((c) => c.id === id ? { ...c, thread: [...c.thread, msg] } : c));
   const setContact = (id, ct) => setCases((cs) => cs.map((c) => c.id === id ? { ...c, contact: ct } : c));
-  const addCase = (c) => { setCases((cs) => [c, ...cs]); setSelectedId(c.id); setCat("all"); setStatusF("all"); setView("cases"); setRaiseOpen(false); };
+  const addCase = (c) => { DB.dbAddCase(c).then((row) => { if (row && row.id != null) c._dbId = row.id; }); setCases((cs) => [c, ...cs]); setSelectedId(c.id); setCat("all"); setStatusF("all"); setView("cases"); setRaiseOpen(false); };
 
   const idx = filtered.findIndex((c) => selected && c.id === selected.id);
   const go = (delta) => { const ni = idx + delta; if (ni >= 0 && ni < filtered.length) setSelectedId(filtered[ni].id); };
@@ -3552,11 +3580,13 @@ function TasksModule() {
   const [prio, setPrio] = React.useState("Medium");
   const [sourceF, setSourceF] = React.useState("all");
 
-  const cycle = (id) => setTasks((ts) => ts.map((t) => t.id === id ? { ...t, status: t.status === "Completed" ? "Pending" : "Completed" } : t));
-  const del = (id) => setTasks((ts) => ts.filter((t) => t.id !== id));
+  const cycle = (id) => setTasks((ts) => ts.map((t) => { if (t.id !== id) return t; const ns = t.status === "Completed" ? "Pending" : "Completed"; DB.dbToggleTask(id, ns === "Completed"); return { ...t, status: ns }; }));
+  const del = (id) => { DB.dbDeleteTask(id); setTasks((ts) => ts.filter((t) => t.id !== id)); };
   const add = () => {
     if (!draft.trim()) { setAdding(false); return; }
-    setTasks((ts) => [{ id: "t" + Date.now(), title: draft.trim(), source: "Self", by: "You", due: "Today", priority: prio, status: "Pending", comment: "", proof: false }, ...ts]);
+    const _title = draft.trim();
+    DB.dbAddTask(_title, prio).then((row) => { if (row && row.id != null) setTasks((ts) => ts.map((t) => t.title === _title && t.id.indexOf("t") === 0 ? { ...t, id: String(row.id) } : t)); });
+    setTasks((ts) => [{ id: "t" + Date.now(), title: _title, source: "Self", by: "You", due: "Today", priority: prio, status: "Pending", comment: "", proof: false }, ...ts]);
     setDraft(""); setPrio("Medium"); setAdding(false); toast("Task added", "check");
   };
   const sourceOf = (t) => t.source === "Self" ? "self" : "assigned";
