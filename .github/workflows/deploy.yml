@@ -1,0 +1,44 @@
+name: Deploy to VPS (fets.live)
+
+# Permanent deploy: on every push to main, SSH into the VPS and run deploy.sh
+# (build + rsync into the nginx web root). The host nginx serves fets.live
+# from a static root, so this — not Coolify — is what publishes the site.
+#
+# One-time setup — add these repo secrets (Settings → Secrets → Actions):
+#   VPS_HOST     e.g. 72.61.171.192   (or coolify.fets.in)
+#   VPS_USER     e.g. root
+#   VPS_SSH_KEY  a private SSH key whose public key is in the server's
+#                ~/.ssh/authorized_keys
+#
+# Until those secrets exist, the deploy step is skipped (workflow stays green).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check deploy secrets are configured
+        id: cfg
+        run: echo "ready=${{ secrets.VPS_HOST != '' && secrets.VPS_SSH_KEY != '' }}" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy over SSH
+        if: steps.cfg.outputs.ready == 'true'
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          command_timeout: 15m
+          script: |
+            set -e
+            cd ~/FETS.LIVE-v6.0 || git clone https://github.com/hy4k/FETS.LIVE-v6.0.git ~/FETS.LIVE-v6.0
+            cd ~/FETS.LIVE-v6.0
+            bash deploy.sh
+
+      - name: Note when skipped
+        if: steps.cfg.outputs.ready != 'true'
+        run: echo "VPS_HOST / VPS_SSH_KEY secrets not set — skipping deploy. Add them to enable auto-deploy."
