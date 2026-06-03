@@ -246,5 +246,18 @@ export async function loadLiveData(F: any) {
     }
   } catch (e) { /* keep seed */ }
 
+  /* ---- vault (fets_vault, current user) ---- */
+  try {
+    if (F._meUserId) {
+      const { data, error } = await supabase.from("fets_vault").select("*").eq("user_id", F._meUserId).order("created_at", { ascending: false });
+      if (!error && data) {
+        F._vault = data.map((v: any) => ({
+          id: v.id, title: v.title || "Entry", category: v.category || "General",
+          username: v.username || "", password: v.password || "", url: v.url || "", notes: v.notes || "",
+        }));
+      }
+    }
+  } catch (e) { /* keep empty */ }
+
   F._liveLoaded = true;
 }

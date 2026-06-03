@@ -121,6 +121,63 @@ export async function dbClaimLostFound(id: any) {
   try { await supabase.from("lost_found_items").update({ status: "claimed" }).eq("id", id); } catch (e) {}
 }
 
+/* tries each payload in order, returns the first that inserts cleanly */
+async function tryInsert(table: string, payloads: any[]) {
+  for (const p of payloads) {
+    try { const { data, error } = await supabase.from(table).insert([p]).select().single(); if (!error) return data; } catch (e) {}
+  }
+  return null;
+}
+
+/* ---------------- news_ticker ---------------- */
+export async function dbAddNews(text: string, priority: string) {
+  const pr = (priority || "normal").toLowerCase();
+  const data = await tryInsert("news_ticker", [
+    { content: text, priority: pr, is_active: true },
+    { message: text, priority: pr, is_active: true },
+    { content: text, is_active: true },
+    { content: text },
+  ]);
+  rtoast(data ? "Announcement posted" : "Saved locally — DB sync failed", data ? "check" : "alert");
+  return data;
+}
+export async function dbDeleteNews(id: any) {
+  if (id == null) return;
+  try { await supabase.from("news_ticker").delete().eq("id", id); rtoast("Announcement removed"); } catch (e) { rtoast("DB delete failed", "alert"); }
+}
+
+/* ---------------- lost_found_items ---------------- */
+export async function dbAddLostFound(item: any) {
+  const data = await tryInsert("lost_found_items", [
+    { item_name: item.item, location: item.where, branch: item.branch, status: "stored" },
+    { name: item.item, location: item.where, branch: item.branch, status: "stored" },
+    { description: item.item, location: item.where, branch: item.branch, status: "stored" },
+    { description: item.item, status: "stored" },
+  ]);
+  rtoast(data ? "Item logged" : "Saved locally — DB sync failed", data ? "check" : "alert");
+  return data;
+}
+export async function dbDeleteLostFound(id: any) {
+  if (id == null) return;
+  try { await supabase.from("lost_found_items").delete().eq("id", id); rtoast("Item removed"); } catch (e) { rtoast("DB delete failed", "alert"); }
+}
+
+/* ---------------- fets_vault ---------------- */
+export async function dbAddVault(entry: any) {
+  const row: any = { title: entry.title || "Entry", category: entry.category || "General", username: entry.username || "", password: entry.password || "", url: entry.url || "", notes: entry.notes || "" };
+  if (F()._meUserId) row.user_id = F()._meUserId;
+  try { const { data, error } = await supabase.from("fets_vault").insert([row]).select().single(); if (error) throw error; rtoast("Saved to vault"); return data; }
+  catch (e) { rtoast("Saved locally — DB sync failed", "alert"); return null; }
+}
+export async function dbUpdateVault(id: any, patch: any) {
+  if (id == null) return;
+  try { await supabase.from("fets_vault").update(patch).eq("id", id); rtoast("Vault updated"); } catch (e) { rtoast("DB update failed", "alert"); }
+}
+export async function dbDeleteVault(id: any) {
+  if (id == null) return;
+  try { await supabase.from("fets_vault").delete().eq("id", id); rtoast("Removed from vault"); } catch (e) { rtoast("DB delete failed", "alert"); }
+}
+
 /* ---------------- leave_requests ---------------- */
 export async function dbAddLeave(req: any) {
   const typeMap: any = {
