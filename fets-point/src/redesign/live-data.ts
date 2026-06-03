@@ -46,30 +46,7 @@ export async function loadLiveData(F: any) {
   const from = new Date(today); from.setDate(from.getDate() - 35);
   const to = new Date(today); to.setDate(to.getDate() + 70);
 
-  /* ---- calendar sessions ---- */
-  try {
-    const { data, error } = await supabase
-      .from("calendar_sessions").select("*")
-      .gte("date", ymd(from)).lte("date", ymd(to));
-    if (!error && data && data.length) {
-      const byKey: Record<string, any[]> = {};
-      data.forEach((s: any) => {
-        const d = new Date(`${s.date}T00:00:00`);
-        if (isNaN(d.getTime())) return;
-        (byKey[keyOf(d)] ||= []).push({
-          id: s.id,
-          vendor: clientToSlug(s.client_name || s.exam_name),
-          exam: s.exam_name || s.client_name || "Exam session",
-          count: Number(s.candidate_count) || 0,
-          start: (s.start_time || "09:00").slice(0, 5),
-          end: (s.end_time || s.start_time || "").slice(0, 5),
-          branch: branchOf(s.branch_location || s.branch),
-        });
-      });
-      Object.values(byKey).forEach((a) => a.sort((x, y) => x.start.localeCompare(y.start)));
-      F._liveSessions = byKey;
-    }
-  } catch (e) { /* keep seed */ }
+  /* ---- calendar + roster load per-month on demand — see ensureMonth() below ---- */
 
   /* ---- current user (for write-back: profile_id / user_id) ---- */
   try { const { data: au } = await supabase.auth.getUser(); F._meUserId = au?.user?.id || null; } catch (e) { F._meUserId = null; }
@@ -97,36 +74,20 @@ export async function loadLiveData(F: any) {
     }
   } catch (e) { /* keep seed */ }
 
-  /* ---- roster schedules ---- */
-  try {
-    const { data, error } = await supabase
-      .from("roster_schedules")
-      .select("date, shift_code, profile_id, staff_profiles(full_name, branch_assigned)")
-      .gte("date", ymd(from)).lte("date", ymd(to));
-    if (!error && data && data.length) {
-      const byKey: Record<string, { calicut: string[]; cochin: string[] }> = {};
-      data.forEach((r: any) => {
-        if (REST_CODES.has(lc(r.shift_code))) return;
-        const sp = r.staff_profiles || {};
-        const name = sp.full_name;
-        if (!name) return;
-        const d = new Date(`${r.date}T00:00:00`);
-        if (isNaN(d.getTime())) return;
-        const b = branchOf(sp.branch_assigned || profileBranch[r.profile_id]);
-        const cell = (byKey[keyOf(d)] ||= { calicut: [], cochin: [] });
-        if (b === "cochin") { if (!cell.cochin.includes(name)) cell.cochin.push(name); }
-        else { if (!cell.calicut.includes(name)) cell.calicut.push(name); }
-      });
-      F._liveRoster = byKey;
-      const baseRosterOn = F.rosterOn.bind(F);
-      F.rosterOn = (d: Date, branch: string) => {
-        const cell = F._liveRoster && F._liveRoster[keyOf(d)];
-        if (!cell) return baseRosterOn(d, branch);
-        if (branch === "global") return [...cell.calicut, ...cell.cochin];
-        return cell[branch] || [];
-      };
-    }
-  } catch (e) { /* keep seed */ }
+  /* ---- install live roster override, then load nearby months ---- */
+  if (!F._rosterPatched) {
+    const baseRosterOn = F.rosterOn.bind(F);
+    F.rosterOn = (d: Date, branch: string) => {
+      const cell = F._liveRoster && F._liveRoster[keyOf(d)];
+      if (!cell) return baseRosterOn(d, branch);
+      if (branch === "global") return [...cell.calicut, ...cell.cochin];
+      return cell[branch] || [];
+    };
+    F._rosterPatched = true;
+  }
+  await ensureMonth(today);
+  ensureMonth(new Date(today.getFullYear(), today.getMonth() - 1, 1));
+  ensureMonth(new Date(today.getFullYear(), today.getMonth() + 1, 1));
 
   /* ---- news ticker (powers the redesigned News page) ---- */
   try {
@@ -163,7 +124,7 @@ export async function loadLiveData(F: any) {
 
   /* ---- cases (incidents) ---- */
   try {
-    const { data, error } = await supabase.from("incidents").select("*").order("created_at", { ascending: false }).limit(60);
+    const { data, error } = await supabase.from("incidents").select("*").order("created_at", { ascending: false }).limit(1000);
     if (!error && data && data.length) {
       const mapStatus = (s: string) => { s = lc(s); if (s.includes("resolv") || s.includes("close") || s.includes("done")) return "resolved"; if (s.includes("progress")) return "progress"; return "open"; };
       const mapPrio = (p: string) => { p = lc(p); if (p.includes("urgent") || p.includes("critical")) return "Urgent"; if (p.includes("high")) return "High"; if (p.includes("low")) return "Low"; return "Medium"; };
@@ -188,7 +149,7 @@ export async function loadLiveData(F: any) {
 
   /* ---- my tasks (user_tasks) ---- */
   try {
-    const { data, error } = await supabase.from("user_tasks").select("*").order("created_at", { ascending: false }).limit(80);
+    const { data, error } = await supabase.from("user_tasks").select("*").order("created_at", { ascending: false }).limit(1000);
     if (!error && data && data.length) {
       const mapPrio = (p: string) => { p = lc(p); if (p.includes("critical") || p.includes("urgent")) return "Critical"; if (p.includes("high")) return "High"; if (p.includes("low")) return "Low"; return "Medium"; };
       F.DESK_TASKS = data.map((t: any, i: number) => ({
@@ -207,7 +168,7 @@ export async function loadLiveData(F: any) {
 
   /* ---- leave requests (my leave) ---- */
   try {
-    const { data, error } = await supabase.from("leave_requests").select("*").order("created_at", { ascending: false }).limit(40);
+    const { data, error } = await supabase.from("leave_requests").select("*").order("created_at", { ascending: false }).limit(500);
     if (!error && data && data.length) {
       F.MY_LEAVE = data.map((l: any, i: number) => ({
         id: l.id ? String(l.id) : "l" + i,
@@ -227,7 +188,7 @@ export async function loadLiveData(F: any) {
       const { data: prof } = await supabase.from("staff_profiles").select("id").eq("user_id", uid).maybeSingle();
       const sid = (prof as any)?.id;
       if (sid) {
-        const fromA = new Date(today); fromA.setDate(fromA.getDate() - 30);
+        const fromA = new Date(today); fromA.setDate(fromA.getDate() - 365);
         const { data, error } = await supabase.from("staff_attendance").select("*").eq("staff_id", sid).gte("date", ymd(fromA)).lte("date", ymd(today)).order("date", { ascending: false });
         if (!error && data && data.length) {
           const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -260,4 +221,71 @@ export async function loadLiveData(F: any) {
   } catch (e) { /* keep empty */ }
 
   F._liveLoaded = true;
+}
+
+/* =====================================================================
+   ON-DEMAND MONTH LOADER — fetches calendar_sessions + roster_schedules
+   for ONE month (keeps each query well under Supabase's 1000-row cap) and
+   merges into the live caches. Pages call this for whatever month they show,
+   so the calendar/roster cover any range — past or future, not just today.
+   ===================================================================== */
+const _loadedMonths = new Set<string>();
+export async function ensureMonth(d: Date) {
+  const F = window.FETS; if (!F) return false;
+  const y = d.getFullYear(), m = d.getMonth();
+  const mkey = `${y}-${m}`;
+  if (_loadedMonths.has(mkey)) return false;
+  _loadedMonths.add(mkey);
+  const first = new Date(y, m, 1), last = new Date(y, m + 1, 0);
+  F._liveSessions = F._liveSessions || {};
+  F._liveRoster = F._liveRoster || {};
+  // mark every day in the month as "live, empty" so loaded-but-empty days
+  // don't fall back to generated sample data
+  for (let dd = 1; dd <= last.getDate(); dd++) {
+    const k = `${y}-${m}-${dd}`;
+    if (!(k in F._liveSessions)) F._liveSessions[k] = [];
+    if (!(k in F._liveRoster)) F._liveRoster[k] = { calicut: [], cochin: [] };
+  }
+  let ok = false;
+  try {
+    const { data, error } = await supabase.from("calendar_sessions").select("*")
+      .gte("date", ymd(first)).lte("date", ymd(last));
+    if (!error && data) {
+      data.forEach((s: any) => {
+        const dt = new Date(`${s.date}T00:00:00`); if (isNaN(dt.getTime())) return;
+        const k = `${dt.getFullYear()}-${dt.getMonth()}-${dt.getDate()}`;
+        (F._liveSessions[k] || (F._liveSessions[k] = [])).push({
+          id: s.id, vendor: clientToSlug(s.client_name || s.exam_name),
+          exam: s.exam_name || s.client_name || "Exam session", count: Number(s.candidate_count) || 0,
+          start: (s.start_time || "09:00").slice(0, 5), end: (s.end_time || s.start_time || "").slice(0, 5),
+          branch: branchOf(s.branch_location || s.branch),
+        });
+      });
+      Object.keys(F._liveSessions).forEach((k) => { const a = F._liveSessions[k]; if (Array.isArray(a)) a.sort((x: any, z: any) => x.start.localeCompare(z.start)); });
+      ok = true;
+    }
+  } catch (e) {}
+  try {
+    const { data, error } = await supabase.from("roster_schedules")
+      .select("date, shift_code, profile_id, staff_profiles(full_name, branch_assigned)")
+      .gte("date", ymd(first)).lte("date", ymd(last));
+    if (!error && data) {
+      data.forEach((r: any) => {
+        if (REST_CODES.has(lc(r.shift_code))) return;
+        const sp = r.staff_profiles || {}; const name = sp.full_name; if (!name) return;
+        const dt = new Date(`${r.date}T00:00:00`); if (isNaN(dt.getTime())) return;
+        const k = `${dt.getFullYear()}-${dt.getMonth()}-${dt.getDate()}`;
+        const b = branchOf(sp.branch_assigned);
+        const cell = F._liveRoster[k] || (F._liveRoster[k] = { calicut: [], cochin: [] });
+        if (b === "cochin") { if (!cell.cochin.includes(name)) cell.cochin.push(name); }
+        else { if (!cell.calicut.includes(name)) cell.calicut.push(name); }
+      });
+      ok = true;
+    }
+  } catch (e) {}
+  if (!ok) { _loadedMonths.delete(mkey); return false; } // allow retry on hard failure
+  window.dispatchEvent(new Event("fets-data-loaded"));
+  window.dispatchEvent(new Event("fets-roster-changed"));
+  window.dispatchEvent(new Event("fets-sess-changed"));
+  return true;
 }
