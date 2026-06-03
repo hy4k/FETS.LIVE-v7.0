@@ -10,7 +10,7 @@
 */
 import React from "react";
 import "./liquid-glass.css";
-import { loadLiveData } from "./live-data";
+import { loadLiveData, ensureMonth } from "./live-data";
 import * as DB from "./write-data";
 
 /* ============================================================
@@ -2374,6 +2374,21 @@ function CalendarAnalysis({ offsets, branch }) {
   );
 }
 
+/* loads the live data for whatever months are on screen, and re-renders when it arrives */
+function useLiveSync(dates) {
+  const [, force] = React.useReducer((x) => x + 1, 0);
+  React.useEffect(() => {
+    const h = () => force();
+    window.addEventListener("fets-data-loaded", h);
+    return () => window.removeEventListener("fets-data-loaded", h);
+  }, []);
+  const key = dates.map((d) => `${d.getFullYear()}-${d.getMonth()}`).join("|");
+  React.useEffect(() => {
+    const seen = {};
+    dates.forEach((d) => { const k = `${d.getFullYear()}-${d.getMonth()}`; if (!seen[k]) { seen[k] = 1; ensureMonth(d); } });
+  }, [key]);
+}
+
 /* centered day editor (sessions add/edit/delete + roster) */
 function DayModal({ date, branch, onClose }) {
   React.useEffect(() => {
@@ -2409,6 +2424,7 @@ function CalendarPage({ branch }) {
   const monthOffsets = Array.from({ length: mc.totalDays }, (_, i) => i);
   const winS = windowStats(view === "analysis" ? monthOffsets : win.offsets, branch);
   const gap = "calc(28px * var(--density))";
+  useLiveSync(view === "month" ? [new Date(mi.y, mi.m, 1)] : win.offsets.map((o) => F().ISO(o)));
 
   return (
     <div style={{ maxWidth: 1180, margin: "0 auto", display: "flex", flexDirection: "column", gap }}>
@@ -2919,6 +2935,7 @@ function RosterPage({ branch }) {
   const busy = windowStats(offs, branch).busiest;
   const wide = view === "month" || view === "analysis";
   const gap = "calc(28px * var(--density))";
+  useLiveSync(win.offsets.map((o) => F().ISO(o)));
 
   return (
     <div style={{ maxWidth: 1180, margin: "0 auto", display: "flex", flexDirection: "column", gap }}>
