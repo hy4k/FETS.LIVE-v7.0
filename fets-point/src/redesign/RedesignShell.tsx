@@ -12,6 +12,7 @@ import React from "react";
 import "./liquid-glass.css";
 import { loadLiveData, ensureMonth } from "./live-data";
 import * as DB from "./write-data";
+import * as LAB from "./lab-data";
 
 /* ============================================================
    SOURCE: data.js
@@ -4857,7 +4858,7 @@ function LivePage({ branch, setDrawer, setActive, bridge }) {
   const ops = [
     { label: "Raise a Case", sub: "Log a technical, candidate or facility issue", on: () => setActive("case") },
     { label: "Next 7 Days", sub: "Candidates by client over the next week", on: () => setDrawer("outlook") },
-    { label: "News Manager", sub: "Post & manage staff announcements", on: () => setActive("news") },
+    { label: "The Lab", sub: "Team wall — handovers, shoutouts, questions & notices", on: () => setActive("news") },
   ];
   const support = [
     { label: "Quick Access", sub: "Vendor credentials, portals & site codes", on: () => setDrawer("vault") },
@@ -4880,50 +4881,218 @@ function LivePage({ branch, setDrawer, setActive, bridge }) {
 }
 
 /* ---------- News page (redesigned to match the other pages) ---------- */
-function NewsPage({ branch }) {
-  const [news, setNews] = React.useState(() => (window.FETS._news || []).filter((n) => n.active !== false));
-  const [text, setText] = React.useState("");
-  const [prio, setPrio] = React.useState("normal");
-  const prioColor = (p) => (p === "high" || p === "urgent") ? "var(--bad)" : p === "low" ? "var(--ink-4)" : "var(--accent)";
-  const inp = { background: "var(--inset)", border: "1px solid var(--hairline)", borderRadius: 10, color: "var(--ink)", fontFamily: "var(--font)", fontSize: 14, padding: "11px 13px" };
-  const post = () => {
-    const body = text.trim(); if (!body) return;
-    const tmp = { id: "tmp" + Date.now(), _tmp: true, body, priority: prio, active: true, when: new Date().toLocaleDateString() };
-    setNews((xs) => [tmp, ...xs]);
-    DB.dbAddNews(body, prio).then((row) => { if (row && row.id != null) setNews((xs) => xs.map((n) => n === tmp ? { ...n, id: row.id, _tmp: false } : n)); });
-    setText(""); setPrio("normal");
-  };
-  const del = (n) => { if (!window.confirm("Delete this announcement?")) return; if (n.id != null && !n._tmp) DB.dbDeleteNews(n.id); setNews((xs) => xs.filter((x) => x !== n)); };
+/* ============================================================ THE LAB ============================================================ */
+const LAB_TYPES = {
+  announcement: { label: "Announcement", color: "var(--accent)", icon: "alert" },
+  handover: { label: "Handover", color: "var(--v-prometric)", icon: "clipboard" },
+  shoutout: { label: "Shoutout", color: "var(--v-cma)", icon: "star" },
+  question: { label: "Question", color: "var(--v-ielts)", icon: "message" },
+  general: { label: "General", color: "var(--ink-3)", icon: "users" },
+};
+const LAB_CENTERS = ["all", "calicut", "cochin", "kannur"];
+const LAB_CLABEL = { all: "All centres", calicut: "Calicut", cochin: "Cochin", kannur: "Kannur" };
+function labCanAnnounce() {
+  const e = (window.FETS.user.email || "").toLowerCase();
+  return ["mithun@fets.in", "mithun@fets.live", "niyas@fets.in", "niyas@fets.live"].includes(e);
+}
+function timeAgo(d) {
+  const s = Math.floor((Date.now() - new Date(d).getTime()) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  if (s < 604800) return `${Math.floor(s / 86400)}d ago`;
+  return new Date(d).toLocaleDateString();
+}
+
+function LabPostCard({ p, onChange, onDelete, canMod }) {
+  const t = LAB_TYPES[p.type] || LAB_TYPES.general;
+  const v = p.exam && window.VENDOR_BY_SLUG[p.exam];
+  const [open, setOpen] = React.useState(false);
+  const [draft, setDraft] = React.useState("");
+  const me = window.FETS._meUserId;
+  const acked = (p.acks || []).includes(me);
+  const like = () => { const liked = p.likedByMe; LAB.labToggleLike(p.id, liked); onChange({ ...p, likedByMe: !liked, likeCount: p.likeCount + (liked ? -1 : 1) }); };
+  const comment = () => { const txt = draft.trim(); if (!txt) return; LAB.labAddComment(p.id, txt); onChange({ ...p, comments: [...p.comments, { id: "t" + Date.now(), text: txt, name: window.FETS.user.name, at: new Date().toISOString() }] }); setDraft(""); };
+  const ack = () => { const next = acked ? p.acks.filter((x) => x !== me) : [...p.acks, me]; const np = { ...p, acks: next }; LAB.labSaveMeta(np); onChange(np); };
+  const pin = () => { const np = { ...p, pinned: !p.pinned }; LAB.labSaveMeta(np); onChange(np); };
   return (
-    <div style={{ maxWidth: 900, margin: "0 auto", display: "flex", flexDirection: "column", gap: "calc(24px * var(--density))" }}>
-      <PageHeader eyebrow={`Announcements // ${capBranch(branch)}`} title="News" />
-      <div className="glass" style={{ borderRadius: "var(--radius)", padding: 18, display: "flex", flexDirection: "column", gap: 11 }}>
-        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} placeholder="Write an announcement for all staff…" style={{ ...inp, resize: "vertical", lineHeight: 1.5, width: "100%" }} />
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <select value={prio} onChange={(e) => setPrio(e.target.value)} style={{ ...inp }}>
-            <option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option>
-          </select>
+    <article className="glass" style={{ borderRadius: "var(--radius)", padding: 0, display: "flex", overflow: "hidden" }}>
+      <span style={{ width: 5, background: t.color, flexShrink: 0 }} />
+      <div style={{ flex: 1, minWidth: 0, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 11 }}>
+        {/* header */}
+        <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+          <Avatar name={p.authorName} size={36} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--ink)" }}>{p.authorName}</span>
+              {p.pinned && <span title="Pinned" style={{ color: "var(--accent)" }}><Icon name="pin" size={13} /></span>}
+            </div>
+            <span className="mono" style={{ fontSize: 10.5, color: "var(--ink-4)" }}>{timeAgo(p.when)}{p.role ? ` · ${p.role}` : ""}</span>
+          </div>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 10.5, fontWeight: 700, padding: "4px 10px", borderRadius: 999, color: t.color, background: `color-mix(in oklch, ${t.color} 15%, transparent)`, border: `1px solid color-mix(in oklch, ${t.color} 30%, transparent)` }}>
+            <Icon name={t.icon} size={12} /> {t.label}
+          </span>
+        </div>
+        {/* tags */}
+        <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", padding: "3px 9px", borderRadius: 999, color: "var(--ink-3)", background: "var(--inset)" }}>{LAB_CLABEL[p.center] || "All centres"}</span>
+          {v && <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10, fontWeight: 700, padding: "3px 9px", borderRadius: 999, color: v.color, background: `color-mix(in oklch, ${v.color} 15%, transparent)` }}><span style={{ width: 6, height: 6, borderRadius: 2, background: v.color }} />{v.name}</span>}
+          {p.compliance && <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10, fontWeight: 800, padding: "3px 9px", borderRadius: 999, color: "var(--bad)", background: "color-mix(in oklch, var(--bad) 15%, transparent)" }}><Icon name="shield" size={11} /> Compliance</span>}
+        </div>
+        {/* body */}
+        {p.text && <div style={{ fontSize: 14.5, color: "var(--ink)", lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{p.text}</div>}
+        {p.image && <a href={p.image} target="_blank" rel="noopener noreferrer"><img src={p.image} alt="" style={{ maxWidth: "100%", borderRadius: 12, border: "1px solid var(--hairline)" }} /></a>}
+        {(p.attachments || []).map((a, i) => (
+          <a key={i} href={a.url} target="_blank" rel="noopener noreferrer" className="tap glass-2" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 10, textDecoration: "none", color: "var(--ink-2)", fontSize: 12.5, alignSelf: "flex-start" }}><Icon name="package" size={14} /> {a.name || "Attachment"}</a>
+        ))}
+        {/* footer */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", paddingTop: 4, borderTop: "1px solid var(--hairline)", marginTop: 2 }}>
+          <button onClick={like} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 12px", borderRadius: 999, cursor: "pointer", border: "1px solid var(--hairline)", background: p.likedByMe ? "var(--accent-soft)" : "transparent", color: p.likedByMe ? "var(--accent)" : "var(--ink-3)", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 650 }}>👏 {p.likeCount || 0}</button>
+          <button onClick={() => setOpen((o) => !o)} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 12px", borderRadius: 999, cursor: "pointer", border: "1px solid var(--hairline)", background: "transparent", color: "var(--ink-3)", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 650 }}><Icon name="message" size={14} /> {p.comments.length}</button>
+          {p.type === "announcement" && <button onClick={ack} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 12px", borderRadius: 999, cursor: "pointer", border: "1px solid var(--hairline)", background: acked ? "color-mix(in oklch, var(--ok) 16%, transparent)" : "transparent", color: acked ? "var(--ok)" : "var(--ink-3)", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 650 }}><Icon name="check" size={13} stroke={3} /> {acked ? "Acknowledged" : "Acknowledge"} · {(p.acks || []).length}</button>}
           <div style={{ flex: 1 }} />
-          <button onClick={post} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 18px", borderRadius: 11, border: "none", cursor: "pointer", fontFamily: "var(--font)", fontSize: 13.5, fontWeight: 750, color: "var(--accent-ink)", background: "var(--accent)" }}><Icon name="plus" size={16} /> Post</button>
+          {canMod && <button onClick={pin} title={p.pinned ? "Unpin" : "Pin"} className="tap glass-2" style={{ width: 32, height: 32, borderRadius: 8, display: "grid", placeItems: "center", cursor: "pointer", color: p.pinned ? "var(--accent)" : "var(--ink-3)", border: "1px solid var(--hairline)" }}><Icon name="pin" size={14} /></button>}
+          {(p.mine || canMod) && <button onClick={() => onDelete(p)} title="Delete" className="tap glass-2" style={{ width: 32, height: 32, borderRadius: 8, display: "grid", placeItems: "center", cursor: "pointer", color: "var(--bad)", border: "1px solid var(--hairline)" }}><Icon name="trash" size={14} /></button>}
+        </div>
+        {/* comments */}
+        {open && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 4 }}>
+            {p.comments.map((c) => (
+              <div key={c.id} style={{ display: "flex", gap: 9, alignItems: "flex-start" }}>
+                <Avatar name={c.name} size={26} />
+                <div className="inset" style={{ flex: 1, padding: "8px 11px", borderRadius: 10 }}>
+                  <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--ink-2)" }}>{c.name}</div>
+                  <div style={{ fontSize: 13, color: "var(--ink)", marginTop: 2, whiteSpace: "pre-wrap" }}>{c.text}</div>
+                </div>
+              </div>
+            ))}
+            <div style={{ display: "flex", gap: 8 }}>
+              <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && comment()} placeholder="Write a comment…" style={{ flex: 1, background: "var(--inset)", border: "1px solid var(--hairline)", borderRadius: 10, color: "var(--ink)", fontFamily: "var(--font)", fontSize: 13, padding: "9px 12px" }} />
+              <button onClick={comment} className="tap" style={{ padding: "0 16px", borderRadius: 10, border: "none", cursor: "pointer", color: "var(--accent-ink)", background: "var(--accent)", fontWeight: 700, fontSize: 12.5 }}>Send</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function TheLabPage({ branch }) {
+  const canAnnounce = labCanAnnounce();
+  const [posts, setPosts] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [type, setType] = React.useState("handover");
+  const [text, setText] = React.useState("");
+  const [center, setCenter] = React.useState(window.FETS.user.shift && window.FETS.user.shift.branch ? window.FETS.user.shift.branch : "all");
+  const [exam, setExam] = React.useState(null);
+  const [compliance, setCompliance] = React.useState(false);
+  const [attachments, setAttachments] = React.useState([]);
+  const [image, setImage] = React.useState(null);
+  const [busy, setBusy] = React.useState(false);
+  const [fCenter, setFCenter] = React.useState("all");
+  const [fType, setFType] = React.useState("all");
+  const [q, setQ] = React.useState("");
+  const fileRef = React.useRef(null);
+
+  const reload = () => { LAB.labFetch().then((ps) => { setPosts(ps); setLoading(false); }); };
+  React.useEffect(() => { reload(); }, []);
+
+  const onFile = async (e) => {
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    setBusy(true);
+    const up = await LAB.labUpload(f);
+    setBusy(false);
+    if (!up || !up.url) { toast("Upload failed", "alert"); return; }
+    if ((f.type || "").startsWith("image/")) setImage(up.url);
+    else setAttachments((a) => [...a, up]);
+  };
+  const submit = async () => {
+    if (!text.trim() && !image && attachments.length === 0) return;
+    setBusy(true);
+    const created = await LAB.labCreate({ type, text: text.trim(), center, exam, compliance, image, attachments });
+    setBusy(false);
+    if (created) setPosts((ps) => [created, ...ps]);
+    else toast("Couldn't post — try again", "alert");
+    setText(""); setExam(null); setCompliance(false); setAttachments([]); setImage(null);
+  };
+  const updatePost = (np) => setPosts((ps) => ps.map((x) => x.id === np.id ? np : x));
+  const removePost = (p) => { if (!window.confirm("Delete this post?")) return; LAB.labDelete(p.id); setPosts((ps) => ps.filter((x) => x.id !== p.id)); };
+
+  const match = (p) => (fCenter === "all" || p.center === fCenter || p.center === "all")
+    && (fType === "all" || (fType === "compliance" ? p.compliance : p.type === fType))
+    && (!q.trim() || (p.text + " " + p.authorName).toLowerCase().includes(q.toLowerCase()));
+  const shown = posts.filter(match);
+  const pinned = shown.filter((p) => p.pinned);
+  const rest = shown.filter((p) => !p.pinned);
+
+  const inp = { background: "var(--inset)", border: "1px solid var(--hairline)", borderRadius: 10, color: "var(--ink)", fontFamily: "var(--font)", fontSize: 14, padding: "10px 12px" };
+  const typeKeys = Object.keys(LAB_TYPES).filter((k) => k !== "announcement" || canAnnounce);
+
+  return (
+    <div style={{ maxWidth: 880, margin: "0 auto", display: "flex", flexDirection: "column", gap: "calc(22px * var(--density))" }}>
+      <PageHeader eyebrow="Coordination wall // FETS" title="The Lab" />
+
+      {/* composer */}
+      <div className="glass" style={{ borderRadius: "var(--radius)", padding: 18, display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+          {typeKeys.map((k) => { const tt = LAB_TYPES[k]; const on = type === k; return (
+            <button key={k} onClick={() => setType(k)} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "7px 13px", borderRadius: 999, cursor: "pointer", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: on ? 750 : 600, border: `1px solid ${on ? `color-mix(in oklch, ${tt.color} 50%, transparent)` : "var(--hairline)"}`, background: on ? `color-mix(in oklch, ${tt.color} 16%, transparent)` : "transparent", color: on ? tt.color : "var(--ink-3)" }}><Icon name={tt.icon} size={13} /> {tt.label}</button>
+          ); })}
+        </div>
+        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} placeholder={type === "handover" ? "End-of-shift note — what should the next shift know?" : type === "question" ? "Ask the team…" : type === "shoutout" ? "Give someone a shoutout 👏" : "Share with the team…"} style={{ ...inp, resize: "vertical", lineHeight: 1.5, width: "100%" }} />
+        {/* exam tags */}
+        <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
+          <span className="eyebrow" style={{ fontSize: 9, color: "var(--ink-4)" }}>Exam</span>
+          {window.FETS.VENDORS.map((vn) => { const on = exam === vn.slug; return (
+            <button key={vn.slug} onClick={() => setExam(on ? null : vn.slug)} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 10px", borderRadius: 999, cursor: "pointer", fontSize: 11, fontWeight: on ? 750 : 600, border: `1px solid ${on ? vn.color : "var(--hairline)"}`, background: on ? `color-mix(in oklch, ${vn.color} 18%, transparent)` : "transparent", color: on ? vn.color : "var(--ink-3)" }}><span style={{ width: 7, height: 7, borderRadius: 2, background: vn.color }} />{vn.short}</button>
+          ); })}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <select value={center} onChange={(e) => setCenter(e.target.value)} style={inp}>
+            {LAB_CENTERS.map((c) => <option key={c} value={c}>{LAB_CLABEL[c]}</option>)}
+          </select>
+          <button onClick={() => setCompliance((v) => !v)} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 12px", borderRadius: 10, cursor: "pointer", border: `1px solid ${compliance ? "color-mix(in oklch, var(--bad) 45%, transparent)" : "var(--hairline)"}`, background: compliance ? "color-mix(in oklch, var(--bad) 14%, transparent)" : "transparent", color: compliance ? "var(--bad)" : "var(--ink-3)", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 650 }}><Icon name="shield" size={14} /> Compliance</button>
+          <button onClick={() => fileRef.current && fileRef.current.click()} className="tap glass-2" style={{ display: "inline-flex", alignItems: "center", gap: 7, height: 38, padding: "0 13px", borderRadius: 10, cursor: "pointer", color: "var(--ink-2)", border: "1px solid var(--hairline)", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 650 }}><Icon name="camera" size={15} /> Attach</button>
+          <input ref={fileRef} type="file" accept="image/*,application/pdf" onChange={onFile} style={{ display: "none" }} />
+          <div style={{ flex: 1 }} />
+          <button onClick={submit} disabled={busy} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 20px", borderRadius: 11, border: "none", cursor: busy ? "wait" : "pointer", opacity: busy ? 0.6 : 1, fontFamily: "var(--font)", fontSize: 13.5, fontWeight: 750, color: "var(--accent-ink)", background: "var(--accent)" }}><Icon name="arrowR" size={16} /> Post</button>
+        </div>
+        {(image || attachments.length > 0) && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {image && <span className="inset" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 10px", borderRadius: 9, fontSize: 11.5, color: "var(--ink-2)" }}><Icon name="camera" size={13} /> image <button onClick={() => setImage(null)} style={{ border: "none", background: "transparent", color: "var(--bad)", cursor: "pointer" }}>×</button></span>}
+            {attachments.map((a, i) => <span key={i} className="inset" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 10px", borderRadius: 9, fontSize: 11.5, color: "var(--ink-2)" }}>{a.name} <button onClick={() => setAttachments((x) => x.filter((_, j) => j !== i))} style={{ border: "none", background: "transparent", color: "var(--bad)", cursor: "pointer" }}>×</button></span>)}
+          </div>
+        )}
+      </div>
+
+      {/* filters */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <Segmented value={fCenter} onChange={setFCenter} size="sm" options={LAB_CENTERS.map((c) => ({ value: c, label: c === "all" ? "All" : LAB_CLABEL[c] }))} />
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {["all", ...Object.keys(LAB_TYPES), "compliance"].map((k) => { const on = fType === k; const lab = k === "all" ? "All" : k === "compliance" ? "Compliance" : LAB_TYPES[k].label; return (
+            <button key={k} onClick={() => setFType(k)} className="tap" style={{ padding: "5px 11px", borderRadius: 999, cursor: "pointer", fontSize: 11.5, fontWeight: on ? 750 : 600, border: `1px solid ${on ? "var(--accent-line)" : "var(--hairline)"}`, background: on ? "var(--accent-soft)" : "transparent", color: on ? "var(--accent)" : "var(--ink-3)", fontFamily: "var(--font)" }}>{lab}</button>
+          ); })}
+        </div>
+        <div style={{ flex: 1, minWidth: 150, position: "relative" }}>
+          <Icon name="search" size={14} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "var(--ink-4)" }} />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search the wall…" style={{ ...inp, width: "100%", paddingLeft: 32, fontSize: 13 }} />
         </div>
       </div>
-      {news.length === 0
-        ? <div className="glass" style={{ borderRadius: "var(--radius)", padding: 40, textAlign: "center", color: "var(--ink-4)", fontSize: 14 }}>No announcements yet.</div>
-        : <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {news.map((n, i) => (
-              <article key={n.id || i} className="glass" style={{ borderRadius: "var(--radius)", padding: "18px 20px", display: "flex", gap: 14, alignItems: "flex-start" }}>
-                <span style={{ width: 6, alignSelf: "stretch", borderRadius: 99, background: prioColor(n.priority), flexShrink: 0 }} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 15, fontWeight: 600, color: "var(--ink)", lineHeight: 1.5 }}>{n.body}</div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
-                    {n.priority && n.priority !== "normal" && <span className="eyebrow" style={{ fontSize: 9, color: prioColor(n.priority) }}>{n.priority}</span>}
-                    {n.when && <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>{n.when}</span>}
-                  </div>
-                </div>
-                <button onClick={() => del(n)} title="Delete" className="tap glass-2" style={{ width: 34, height: 34, borderRadius: 9, display: "grid", placeItems: "center", cursor: "pointer", color: "var(--bad)", border: "1px solid var(--hairline)", flexShrink: 0 }}><Icon name="trash" size={15} /></button>
-              </article>
-            ))}
-          </div>}
+
+      {loading ? <div className="glass" style={{ borderRadius: "var(--radius)", padding: 40, textAlign: "center", color: "var(--ink-4)" }}>Loading the wall…</div>
+        : shown.length === 0 ? <div className="glass" style={{ borderRadius: "var(--radius)", padding: 40, textAlign: "center", color: "var(--ink-4)", fontSize: 14 }}>Nothing here yet — be the first to post.</div>
+        : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {pinned.length > 0 && (
+              <React.Fragment>
+                <SectionLabel right={<Icon name="pin" size={13} style={{ color: "var(--accent)" }} />}>Pinned</SectionLabel>
+                {pinned.map((p) => <LabPostCard key={p.id} p={p} onChange={updatePost} onDelete={removePost} canMod={canAnnounce} />)}
+                <SectionLabel>Latest</SectionLabel>
+              </React.Fragment>
+            )}
+            {rest.map((p) => <LabPostCard key={p.id} p={p} onChange={updatePost} onDelete={removePost} canMod={canAnnounce} />)}
+          </div>
+        )}
     </div>
   );
 }
@@ -5024,7 +5193,7 @@ function App({ bridge, onLogout }) {
         {active === "case" && <RaiseCasePage branch={branch} setActive={setActive} />}
         {active === "desk" && <MyDeskPage branch={branch} setActive={setActive} setDrawer={setDrawer} />}
         {active === "business" && <BusinessPage branch={branch} />}
-        {active === "news" && <NewsPage branch={branch} />}
+        {active === "news" && <TheLabPage branch={branch} />}
       </main>
 
       {/* drawers */}
