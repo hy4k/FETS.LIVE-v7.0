@@ -1475,7 +1475,7 @@ function VaultPanel() {
     }
     setEditing(null);
   };
-  const del = (it) => { if (it.id != null && String(it.id).indexOf("tmp") !== 0) DB.dbDeleteVault(it.id); setItems((xs) => xs.filter((x) => x !== it)); };
+  const del = (it) => { if (!window.confirm("Delete this credential?")) return; if (it.id != null && String(it.id).indexOf("tmp") !== 0) DB.dbDeleteVault(it.id); setItems((xs) => xs.filter((x) => x !== it)); };
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {editing !== "__new" && <button onClick={() => setEditing("__new")} className="tap" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px", borderRadius: 12, cursor: "pointer", border: "none", color: "var(--accent-ink)", background: "var(--accent)", fontFamily: "var(--font)", fontSize: 13, fontWeight: 750 }}><Icon name="plus" size={16} /> Add credential</button>}
@@ -1529,7 +1529,7 @@ function LostFoundPanel({ branch }) {
   const stored = list.filter((i) => i.status === "stored").length;
   const branchForNew = branch === "global" ? "calicut" : branch;
   const claim = (it) => { if (it && it.id != null) DB.dbClaimLostFound(it.id); setItems((arr) => arr.map((x) => x === it ? { ...x, status: "claimed" } : x)); toast("Marked as claimed", "check"); };
-  const del = (it) => { if (it && it.id != null) DB.dbDeleteLostFound(it.id); setItems((arr) => arr.filter((x) => x !== it)); };
+  const del = (it) => { if (!window.confirm("Remove this item?")) return; if (it && it.id != null) DB.dbDeleteLostFound(it.id); setItems((arr) => arr.filter((x) => x !== it)); };
   const add = () => {
     if (!dItem.trim()) return;
     const entry = { item: dItem.trim(), where: dWhere.trim() || "—", when: new Date().toLocaleDateString(), branch: branchForNew, locker: "", status: "stored", by: window.FETS.user.name };
@@ -1967,19 +1967,29 @@ function monthCtx() {
 }
 
 /* ---------- 10-day sliding window over the rest of the month ---------- */
+/* ---------- month context for an arbitrary month (offset from current) ---------- */
+function monthInfo(monthOffset) {
+  const today = F().ISO(0);
+  const base = new Date(today.getFullYear(), today.getMonth() + (monthOffset || 0), 1);
+  const y = base.getFullYear(), m = base.getMonth();
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
+  const firstWeekday = new Date(y, m, 1).getDay();
+  return { today, y, m, daysInMonth, firstWeekday, monthName: MOA[m] };
+}
+
+/* ---------- sliding window: starts at the 1st of the current month, pages freely (past & future) ---------- */
 function useWindow(size) {
-  const { totalDays } = monthCtx();
-  const [start, setStart] = React.useState(0);
-  const maxStart = Math.max(0, totalDays - size);
-  const s = Math.min(start, maxStart);
-  const end = Math.min(s + size, totalDays);
+  const today = F().ISO(0);
+  const firstOffset = F().offsetOf(new Date(today.getFullYear(), today.getMonth(), 1));
+  const [start, setStart] = React.useState(firstOffset);
   const offsets = [];
-  for (let o = s; o < end; o++) offsets.push(o);
+  for (let o = start; o < start + size; o++) offsets.push(o);
   return {
-    offsets, start: s, totalDays, maxStart,
-    canPrev: s > 0, canNext: s < maxStart,
-    prev: () => setStart((v) => Math.max(0, v - size)),
-    next: () => setStart((v) => Math.min(maxStart, v + size)),
+    offsets, start,
+    canPrev: true, canNext: true,
+    prev: () => setStart((v) => v - size),
+    next: () => setStart((v) => v + size),
+    reset: () => setStart(firstOffset),
   };
 }
 
@@ -2032,33 +2042,33 @@ function windowStats(offsets, branch) {
 /* =====================================================================
    MONTH AT-A-GLANCE GRID (shared) — renderCell(date, isToday, isPast)
    ===================================================================== */
-function MonthGrid({ onPick, renderCell }) {
-  const { y, m, daysInMonth, firstWeekday, today } = monthCtx();
+function MonthGrid({ onPick, renderCell, monthOffset }) {
+  const { y, m, daysInMonth, firstWeekday, today } = monthInfo(monthOffset);
   const cells = [];
   for (let i = 0; i < firstWeekday; i++) cells.push(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(y, m, d));
-  const tKey = today.getDate();
+  const sameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
   return (
     <div className="glass" style={{ padding: "16px 16px 18px", borderRadius: "var(--radius)" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 7, marginBottom: 9 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 8, marginBottom: 10 }}>
         {window.P_WD.map((w, i) => (
           <div key={i} className="eyebrow" style={{ textAlign: "center", fontSize: 9.5,
             color: i === 0 || i === 6 ? "var(--ink-4)" : "var(--ink-3)" }}>{w}</div>
         ))}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 7 }}>
+      <div className="month-grid" style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 8 }}>
         {cells.map((date, i) => {
           if (!date) return <div key={i} />;
-          const isToday = date.getDate() === tKey;
-          const isPast = date < today;
+          const isToday = sameDay(date, today);
+          const isPast = date < today && !isToday;
           return (
-            <button key={i} onClick={() => !isPast && onPick(date)} disabled={isPast} className="tap"
-              style={{ minHeight: 92, padding: "8px 9px", borderRadius: 12, textAlign: "left", cursor: isPast ? "default" : "pointer",
-                display: "flex", flexDirection: "column", gap: 6, fontFamily: "var(--font)",
+            <button key={i} onClick={() => onPick(date)} className="tap"
+              style={{ minHeight: 122, padding: "9px 10px", borderRadius: 12, textAlign: "left", cursor: "pointer",
+                display: "flex", flexDirection: "column", gap: 5, fontFamily: "var(--font)",
                 background: isToday ? "var(--accent-soft)" : "var(--inset)",
                 border: isToday ? "1px solid var(--accent-line)" : "1px solid var(--glass-edge-lo)",
-                opacity: isPast ? 0.4 : 1 }}>
-              <span className="tabnum" style={{ fontSize: 14, fontWeight: 800, lineHeight: 1,
+                opacity: isPast ? 0.66 : 1 }}>
+              <span className="tabnum" style={{ fontSize: 15, fontWeight: 800, lineHeight: 1,
                 color: isToday ? "var(--accent)" : "var(--ink-2)" }}>{date.getDate()}</span>
               {renderCell(date, isToday, isPast)}
             </button>
@@ -2145,6 +2155,7 @@ function DayDetailPanel({ date, branch }) {
 
   const liveKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
   const delSession = (s) => {
+    if (!window.confirm("Delete this exam session?")) return;
     if (window.FETS._liveSessions && window.FETS._liveSessions[liveKey] && s.id != null) {
       window.FETS._liveSessions[liveKey] = window.FETS._liveSessions[liveKey].filter((x) => x !== s && x.id !== s.id);
       DB.dbDeleteSession(s.id);
@@ -2243,8 +2254,8 @@ function CalendarStrip({ offsets, branch, onPick }) {
           const sessions = window.branchSessions(o, branch).slice().sort((a, b) => a.start.localeCompare(b.start));
           const total = sessions.reduce((s, x) => s + x.count, 0);
           return (
-            <div key={o} className="cal-col rise" style={{ display: "flex", flexDirection: "column", gap: 10, padding: 10, borderRadius: 16, minHeight: 180,
-              animationDelay: `${idx * 35}ms`,
+            <div key={o} onClick={() => onPick && onPick(d)} className="cal-col rise" style={{ display: "flex", flexDirection: "column", gap: 10, padding: 10, borderRadius: 16, minHeight: 180,
+              cursor: onPick ? "pointer" : "default", animationDelay: `${idx * 35}ms`,
               background: isToday ? "color-mix(in oklch, var(--branch) 12%, var(--glass))" : "var(--glass)",
               border: "1px solid " + (isToday ? "color-mix(in oklch, var(--branch) 45%, transparent)" : "var(--glass-edge)"),
               boxShadow: isToday ? "0 10px 28px color-mix(in oklch, var(--branch) 16%, transparent), var(--shadow)" : "var(--shadow)" }}>
@@ -2363,16 +2374,40 @@ function CalendarAnalysis({ offsets, branch }) {
   );
 }
 
+/* centered day editor (sessions add/edit/delete + roster) */
+function DayModal({ date, branch, onClose }) {
+  React.useEffect(() => {
+    const k = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", k);
+    return () => window.removeEventListener("keydown", k);
+  }, []);
+  return (
+    <React.Fragment>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "oklch(0.12 0.02 182 / 0.62)", backdropFilter: "blur(4px)", zIndex: 130 }} />
+      <div role="dialog" className="glass rise" style={{ position: "fixed", zIndex: 131, top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(680px, 94vw)", maxHeight: "86vh", overflowY: "auto", borderRadius: "var(--radius)", padding: 22, boxShadow: "var(--shadow-lift)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+          <div style={{ width: 44, height: 44, borderRadius: 13, display: "grid", placeItems: "center", color: "var(--accent)", background: "var(--accent-soft)", border: "1px solid var(--accent-line)", flexShrink: 0 }}><Icon name="calendar" size={21} /></div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 720, color: "var(--ink)" }}>{window.P_WDL[date.getDay()]}, {window.P_MO[date.getMonth()]} {date.getDate()}</h2>
+            <p style={{ margin: "2px 0 0", fontSize: 12.5, color: "var(--ink-3)" }}>{capBranch(branch)} · day detail</p>
+          </div>
+          <button onClick={onClose} className="tap glass-2" style={{ width: 38, height: 38, borderRadius: 999, display: "grid", placeItems: "center", cursor: "pointer", color: "var(--ink-2)", border: "1px solid var(--hairline)", flexShrink: 0 }}><Icon name="x" size={18} /></button>
+        </div>
+        <DayDetailPanel date={date} branch={branch} />
+      </div>
+    </React.Fragment>
+  );
+}
+
 function CalendarPage({ branch }) {
   const [view, setView] = React.useState("days");   // days | agenda | month | analysis
   const win = useWindow(10);
   const [dayDrawer, setDayDrawer] = React.useState(null);
+  const [monthOff, setMonthOff] = React.useState(0);
+  const mi = monthInfo(monthOff);
   const mc = monthCtx();
   const monthOffsets = Array.from({ length: mc.totalDays }, (_, i) => i);
-  const wide = view === "month" || view === "analysis";
-
-  // analysis: window vs whole remaining month
-  const winS = windowStats(wide ? monthOffsets : win.offsets, branch);
+  const winS = windowStats(view === "analysis" ? monthOffsets : win.offsets, branch);
   const gap = "calc(28px * var(--density))";
 
   return (
@@ -2382,9 +2417,16 @@ function CalendarPage({ branch }) {
       <section style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {/* control bar */}
         <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
             <span style={{ width: 22, height: 2, background: "var(--accent)", borderRadius: 99 }} />
-            <span className="eyebrow">{wide ? `${mc.monthName} ${mc.y}` : rangeLabel(win.offsets)}</span>
+            {view === "month" ? (
+              <React.Fragment>
+                <button onClick={() => setMonthOff((v) => v - 1)} className="tap glass-2" title="Previous month" style={{ width: 32, height: 32, borderRadius: 9, display: "grid", placeItems: "center", cursor: "pointer", color: "var(--ink-2)", border: "1px solid var(--hairline)" }}><Icon name="chevronR" size={16} style={{ transform: "rotate(180deg)" }} /></button>
+                <span className="eyebrow" style={{ minWidth: 116, textAlign: "center" }}>{mi.monthName} {mi.y}</span>
+                <button onClick={() => setMonthOff((v) => v + 1)} className="tap glass-2" title="Next month" style={{ width: 32, height: 32, borderRadius: 9, display: "grid", placeItems: "center", cursor: "pointer", color: "var(--ink-2)", border: "1px solid var(--hairline)" }}><Icon name="chevronR" size={16} /></button>
+                {monthOff !== 0 && <button onClick={() => setMonthOff(0)} className="tap" style={{ fontSize: 11, fontWeight: 700, color: "var(--accent)", background: "transparent", border: "none", cursor: "pointer" }}>This month</button>}
+              </React.Fragment>
+            ) : <span className="eyebrow">{view === "analysis" ? `${mc.monthName} ${mc.y}` : rangeLabel(win.offsets)}</span>}
           </div>
           <div style={{ flex: 1 }} />
           <Segmented value={view} onChange={setView} size="sm" options={[
@@ -2418,27 +2460,33 @@ function CalendarPage({ branch }) {
           </React.Fragment>
         )}
         {view === "month" && (
-          <MonthGrid onPick={(d) => setDayDrawer(d)} renderCell={(date) => {
+          <MonthGrid monthOffset={monthOff} onPick={(d) => setDayDrawer(d)} renderCell={(date) => {
             const ss = F().sessionsOn(date, branch);
+            if (!ss.length) return null;
             const total = ss.reduce((a, x) => a + x.count, 0);
-            const vends = [...new Set(ss.map((s) => s.vendor))].slice(0, 5);
             return (
               <React.Fragment>
-                <div style={{ marginTop: "auto", display: "flex", gap: 3, flexWrap: "wrap" }}>
-                  {vends.map((slug) => <span key={slug} style={{ width: 7, height: 7, borderRadius: 2, background: window.VENDOR_BY_SLUG[slug].color }} />)}
+                <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 1, minWidth: 0 }}>
+                  {ss.slice(0, 3).map((s, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 9.5, color: "var(--ink-3)", minWidth: 0 }}>
+                      <span style={{ width: 6, height: 6, borderRadius: 2, background: window.VENDOR_BY_SLUG[s.vendor].color, flexShrink: 0 }} />
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{window.VENDOR_BY_SLUG[s.vendor].short} · {s.count}</span>
+                    </div>
+                  ))}
+                  {ss.length > 3 && <span style={{ fontSize: 9, color: "var(--ink-4)" }}>+{ss.length - 3} more</span>}
                 </div>
-                {total > 0 && <div className="mono" style={{ fontSize: 10.5, fontWeight: 700, color: "var(--ink-3)" }}>{total} cand</div>}
+                <div style={{ marginTop: "auto", display: "flex", alignItems: "center", gap: 5, paddingTop: 4, borderTop: "1px solid var(--hairline)" }}>
+                  <Icon name="users" size={11} style={{ color: "var(--ink-4)" }} />
+                  <span className="mono" style={{ fontSize: 10.5, fontWeight: 700, color: "var(--ink-3)" }}>{total}</span>
+                  <span style={{ fontSize: 9, color: "var(--ink-4)" }}>· {ss.length} sess</span>
+                </div>
               </React.Fragment>
             );
           }} />
         )}
       </section>
 
-      <Drawer open={!!dayDrawer} onClose={() => setDayDrawer(null)} icon="calendar"
-        title={dayDrawer ? `${window.P_WDL[dayDrawer.getDay()]}, ${window.P_MO[dayDrawer.getMonth()]} ${dayDrawer.getDate()}` : ""}
-        sub={`${capBranch(branch)} · day detail`}>
-        {dayDrawer && <DayDetailPanel date={dayDrawer} branch={branch} />}
-      </Drawer>
+      {dayDrawer && <DayModal date={dayDrawer} branch={branch} onClose={() => setDayDrawer(null)} />}
     </div>
   );
 }
@@ -2514,9 +2562,9 @@ function RosterCellDialog({ ctx, onApply, onClose }) {
     const k = (e) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k);
   }, []);
-  // working a rest day is logged as TOIL
-  const effective = (isRest && WORK_CODES.includes(code)) ? "TOIL" : code;
-  const otAllowed = WORK_CODES.includes(code) || effective === "TOIL";
+  // any cell (including a rest day) can be set to any shift directly
+  const effective = code;
+  const otAllowed = WORK_CODES.includes(code);
   const save = () => onApply({ code: effective, ot: (otOn && otAllowed) ? (+hours || 1) : 0 });
   const d = ctx.date;
 
@@ -2550,11 +2598,6 @@ function RosterCellDialog({ ctx, onApply, onClose }) {
           })}
         </div>
 
-        {isRest && WORK_CODES.includes(code) && (
-          <div style={{ display: "flex", alignItems: "flex-start", gap: 9, fontSize: 12, color: "var(--v-cma)", fontWeight: 600, lineHeight: 1.4 }}>
-            <Icon name="refresh" size={14} style={{ marginTop: 1, flexShrink: 0 }} /> Working a rest day — logged as <b>TOIL</b>.
-          </div>
-        )}
 
         {/* OT add-on, clubbed with the shift */}
         <div className="inset" style={{ padding: "12px 14px", borderRadius: 12, display: "flex", flexDirection: "column", gap: otOn ? 11 : 0, opacity: otAllowed ? 1 : 0.45, pointerEvents: otAllowed ? "auto" : "none" }}>
@@ -2599,25 +2642,24 @@ function RosterGrid({ offsets, branch }) {
 
   const build = () => {
     const g = {};
-    const total = monthCtx().totalDays;
     pool.forEach(({ n }) => {
       g[n] = {};
       const ov = F().rosterGet(n);
-      for (let o = 0; o < total; o++) {
+      offsets.forEach((o) => {
         const dflt = initRosterCode(n, o, new Set(window.branchRoster(o, branch)).has(n));
         g[n][o] = { code: dflt, ot: 0, dflt, override: !!ov[o] };
         if (ov[o]) g[n][o] = { ...g[n][o], code: cellCode(ov[o]), ot: cellOT(ov[o]), override: true };
-      }
+      });
     });
     return g;
   };
   const [grid, setGrid] = React.useState(build);
-  React.useEffect(() => { setGrid(build()); }, [branch]);
+  React.useEffect(() => { setGrid(build()); }, [branch, offsets[0]]);
   React.useEffect(() => {
     const h = () => setGrid(build());
     window.addEventListener("fets-roster-changed", h);
     return () => window.removeEventListener("fets-roster-changed", h);
-  }, [branch]);
+  }, [branch, offsets[0]]);
   const [dialog, setDialog] = React.useState(null);   // { name, off, date, cell, defaultCode }
 
   const apply = (name, off, cell) => {
@@ -4834,7 +4876,7 @@ function NewsPage({ branch }) {
     DB.dbAddNews(body, prio).then((row) => { if (row && row.id != null) setNews((xs) => xs.map((n) => n === tmp ? { ...n, id: row.id, _tmp: false } : n)); });
     setText(""); setPrio("normal");
   };
-  const del = (n) => { if (n.id != null && !n._tmp) DB.dbDeleteNews(n.id); setNews((xs) => xs.filter((x) => x !== n)); };
+  const del = (n) => { if (!window.confirm("Delete this announcement?")) return; if (n.id != null && !n._tmp) DB.dbDeleteNews(n.id); setNews((xs) => xs.filter((x) => x !== n)); };
   return (
     <div style={{ maxWidth: 900, margin: "0 auto", display: "flex", flexDirection: "column", gap: "calc(24px * var(--density))" }}>
       <PageHeader eyebrow={`Announcements // ${capBranch(branch)}`} title="News" />
