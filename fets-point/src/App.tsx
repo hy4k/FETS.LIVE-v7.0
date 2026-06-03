@@ -85,6 +85,8 @@ function AppContent() {
   const [isRecovering, setIsRecovering] = useState(false)
   const [aiQuery, setAiQuery] = useState<string | undefined>(undefined)
   const isMithun = isMithunEmail(profile?.email)
+  const userName = profile?.full_name || profile?.name || (profile?.email || user?.email || '').split('@')[0] || 'User'
+  const userEmail = profile?.email || user?.email || ''
 
 
 
@@ -115,7 +117,7 @@ function AppContent() {
     if (isMobile) {
       if (activeTab === 'command-center') return (
         <Suspense fallback={<PageLoadingFallback pageName="FETS · LIVE" />}>
-          <RedesignShell bridge={setActiveTab} />
+          <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isMithun} />
         </Suspense>
       );
       if (activeTab === 'fets-calendar') return <MobileCalendar />;
@@ -138,7 +140,7 @@ function AppContent() {
     }
 
     const routeComponents: { [key: string]: { component: JSX.Element; name: string } } = {
-      'command-center': { component: <RedesignShell bridge={setActiveTab} />, name: 'FETS · LIVE' },
+      'command-center': { component: <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isMithun} />, name: 'FETS · LIVE' },
       'command-center-classic': { component: <CommandCentre onNavigate={setActiveTab} onAiQuery={(q: string) => { setAiQuery(q); setActiveTab('fets-intelligence'); }} />, name: 'FETS POINT' },
       'access-hub': { component: <AccessHubPage />, name: 'F-Vault' },
       'dashboard': { component: <Dashboard onNavigate={setActiveTab} />, name: 'Dashboard' },

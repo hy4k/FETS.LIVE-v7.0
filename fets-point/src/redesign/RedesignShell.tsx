@@ -2606,7 +2606,7 @@ function RosterGrid({ offsets, branch }) {
               const main = ot > 0 ? `${code}+OT` : code;
               const d = F().ISO(o);
               return (
-                <button key={o} onClick={() => setDialog({ name: n, off: o, date: d, cell, defaultCode: cell.dflt || "RD" })} className="tap" title={`${m.label}${ot > 0 ? ` + OT ${ot}h` : ""} — tap to change`}
+                <button key={o} onClick={() => { if (!window.FETS.isAdmin) { toast("Roster editing is restricted to the super admin", "alert"); return; } setDialog({ name: n, off: o, date: d, cell, defaultCode: cell.dflt || "RD" }); }} className="tap" title={window.FETS.isAdmin ? `${m.label}${ot > 0 ? ` + OT ${ot}h` : ""} — tap to change` : m.label}
                   style={{ height: 40, borderRadius: 8, cursor: "pointer", border: m.solid ? "1px solid transparent" : "1px solid var(--glass-edge-lo)",
                     background: m.solid ? m.color : "var(--panel-3)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 0,
                     color: m.ink, fontFamily: "var(--font)", fontWeight: 800, letterSpacing: "0.01em",
@@ -2852,7 +2852,7 @@ function RosterPage({ branch }) {
             <RosterAnalysis offsets={offs} branch={branch} />
           </React.Fragment>
         )}
-        {view === "days" && <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)", alignSelf: "flex-end" }}>tap a cell to change shift · use Quick add for a 6+1 block</span>}
+        {view === "days" && <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)", alignSelf: "flex-end" }}>{window.FETS.isAdmin ? "tap a cell to change shift · use Quick add for a 6+1 block" : "viewing roster · editing is restricted to the super admin"}</span>}
       </section>
 
       {isAdmin && quickOpen && <QuickAddRoster branch={branch} onClose={() => setQuickOpen(false)} />}
@@ -4559,11 +4559,13 @@ function TopNav({ active, onNavigate, branch, setBranch, t, setTweak, onTools, o
           { value: "global", label: "All" },
         ]} />
       </div>
-      <button onClick={onTools} title="All modules" className="tap glass-2" style={{
-        display: "inline-flex", alignItems: "center", gap: 8, height: 36, padding: "0 14px", borderRadius: 10,
-        cursor: "pointer", color: "var(--ink-2)", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 650 }}>
-        <Icon name="grid" size={15} /> <span className="topnav-branch">Modules</span>
-      </button>
+      {window.FETS.isAdmin && (
+        <button onClick={onTools} title="All modules" className="tap glass-2" style={{
+          display: "inline-flex", alignItems: "center", gap: 8, height: 36, padding: "0 14px", borderRadius: 10,
+          cursor: "pointer", color: "var(--ink-2)", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 650 }}>
+          <Icon name="grid" size={15} /> <span className="topnav-branch">Modules</span>
+        </button>
+      )}
       <button onClick={() => toast("Mithun Raj · Super Admin", "settings")} className="tap" title={window.FETS.user.name}
         style={{ border: "none", background: "transparent", cursor: "pointer", padding: 0, flexShrink: 0 }}>
         <Avatar name={window.FETS.user.name} size={36} />
@@ -4787,7 +4789,9 @@ function NewsPage({ branch }) {
 
 /* ---------- tools sheet (overflow) ---------- */
 function ToolsSheet({ open, onClose, onPick, includeNav }) {
-  const items = includeNav ? [...NAV.map((n) => ({ ...n, nav: true })), ...TOOLS] : TOOLS;
+  const isAdmin = !!window.FETS.isAdmin;
+  const tools = isAdmin ? TOOLS : [];
+  const items = includeNav ? [...NAV.map((n) => ({ ...n, nav: true })), ...tools] : tools;
   return (
     <React.Fragment>
       <div className={`drawer-backdrop ${open ? "open" : ""}`} onClick={onClose} />
@@ -4916,7 +4920,12 @@ function App({ bridge }) {
   );
 }
 
-function RedesignShell({ bridge }) {
+function RedesignShell({ bridge, userName, userEmail, isAdmin }) {
+  // Identity + access from the real authenticated profile (replaces mock user)
+  if (window.FETS) {
+    if (userName) window.FETS.user = { ...window.FETS.user, name: userName, email: userEmail || "", role: isAdmin ? "Super Admin" : "Staff" };
+    window.FETS.isAdmin = !!isAdmin;
+  }
   const [ready, setReady] = React.useState(false);
   React.useEffect(() => {
     const prev = document.body.style.overflow;
