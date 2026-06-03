@@ -78,7 +78,7 @@ const queryClient = new QueryClient({
 })
 
 function AppContent() {
-  const { user, loading, profile } = useAuth()
+  const { user, loading, profile, signOut } = useAuth()
   const { activeBranch, getBranchTheme } = useBranch()
   const [activeTab, setActiveTab] = useState('command-center')
   const isMobile = useIsMobile()
@@ -87,6 +87,30 @@ function AppContent() {
   const isMithun = isMithunEmail(profile?.email)
   const userName = profile?.full_name || profile?.name || (profile?.email || user?.email || '').split('@')[0] || 'User'
   const userEmail = profile?.email || user?.email || ''
+
+  const handleLogout = async () => {
+    try { localStorage.removeItem('fets-session-start') } catch {}
+    try { await signOut() } catch {}
+    setActiveTab('command-center')
+  }
+
+  // Auto sign-out after a fixed session length (security: no indefinite sessions)
+  useEffect(() => {
+    const KEY = 'fets-session-start'
+    if (!user) { try { localStorage.removeItem(KEY) } catch {}; return }
+    if (!localStorage.getItem(KEY)) localStorage.setItem(KEY, String(Date.now()))
+    const MAX_MS = 4 * 60 * 60 * 1000 // 4 hours
+    const check = () => {
+      const start = Number(localStorage.getItem(KEY) || Date.now())
+      if (Date.now() - start > MAX_MS) {
+        try { localStorage.removeItem(KEY) } catch {}
+        signOut()
+      }
+    }
+    const id = setInterval(check, 60 * 1000)
+    check()
+    return () => clearInterval(id)
+  }, [user, signOut])
 
 
 
@@ -117,7 +141,7 @@ function AppContent() {
     if (isMobile) {
       if (activeTab === 'command-center') return (
         <Suspense fallback={<PageLoadingFallback pageName="FETS · LIVE" />}>
-          <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isMithun} />
+          <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isMithun} onLogout={handleLogout} />
         </Suspense>
       );
       if (activeTab === 'fets-calendar') return <MobileCalendar />;
@@ -140,7 +164,7 @@ function AppContent() {
     }
 
     const routeComponents: { [key: string]: { component: JSX.Element; name: string } } = {
-      'command-center': { component: <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isMithun} />, name: 'FETS · LIVE' },
+      'command-center': { component: <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isMithun} onLogout={handleLogout} />, name: 'FETS · LIVE' },
       'command-center-classic': { component: <CommandCentre onNavigate={setActiveTab} onAiQuery={(q: string) => { setAiQuery(q); setActiveTab('fets-intelligence'); }} />, name: 'FETS POINT' },
       'access-hub': { component: <AccessHubPage />, name: 'F-Vault' },
       'dashboard': { component: <Dashboard onNavigate={setActiveTab} />, name: 'Dashboard' },

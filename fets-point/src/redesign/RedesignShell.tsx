@@ -1407,44 +1407,83 @@ function VaultRow({ row }) {
   );
 }
 
-function VaultPanel() {
-  const vendors = window.FETS.VENDORS;
-  const [active, setActive] = React.useState("prometric");
-  const rows = window.FETS.VAULT[active] || [];
-  const portal = rows.find((r) => r.type === "url");
-  const creds = rows.filter((r) => r.type !== "url");
+function VaultEditForm({ initial, onSave, onCancel }) {
+  const [f, setF] = React.useState({ title: initial.title || "", category: initial.category || "General", username: initial.username || "", password: initial.password || "", url: initial.url || "", notes: initial.notes || "" });
+  const set = (k) => (e) => setF((p) => ({ ...p, [k]: e.target.value }));
+  const inp = { background: "var(--inset)", border: "1px solid var(--hairline)", borderRadius: 9, color: "var(--ink)", fontFamily: "var(--font)", fontSize: 13, padding: "9px 11px", width: "100%" };
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* vendor chips */}
-      <div className="scroll-soft no-scrollbar" style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 2 }}>
-        {vendors.map((vn) => {
-          const isA = vn.slug === active;
-          return (
-            <button key={vn.slug} onClick={() => setActive(vn.slug)} className="tap"
-              style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 12, cursor: "pointer", fontFamily: "var(--font)",
-                border: `1px solid ${isA ? "var(--accent-line)" : "var(--hairline)"}`,
-                background: isA ? "var(--accent-soft)" : "var(--inset)" }}>
-              <span style={{ width: 24, height: 24, borderRadius: 7, display: "grid", placeItems: "center", fontSize: 9, fontWeight: 800, color: "#fff", background: vn.color }}>{vn.short}</span>
-              <span style={{ fontSize: 12.5, fontWeight: isA ? 650 : 550, color: isA ? "var(--ink)" : "var(--ink-3)" }}>{vn.name}</span>
-            </button>
-          );
-        })}
+    <div className="glass-2" style={{ padding: 14, borderRadius: 14, display: "flex", flexDirection: "column", gap: 9 }}>
+      <input autoFocus value={f.title} onChange={set("title")} placeholder="Title (e.g. Prometric Admin Portal)" style={{ ...inp, fontWeight: 650 }} />
+      <div style={{ display: "flex", gap: 9 }}>
+        <input value={f.category} onChange={set("category")} placeholder="Category" style={inp} />
+        <input value={f.url} onChange={set("url")} placeholder="URL" style={inp} />
       </div>
-      {/* one-tap portal launch */}
-      {portal && (
-        <a href={portal.value} target="_blank" rel="noopener noreferrer" className="tap" style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", borderRadius: 14, textDecoration: "none", color: "var(--accent-ink)", background: "var(--accent)", fontWeight: 750 }}>
-          <Icon name="ext" size={18} /> <span style={{ flex: 1, fontSize: 14 }}>Open {VENDOR_BY_SLUG[active].name} portal</span> <Icon name="arrowR" size={16} />
-        </a>
-      )}
-      {/* credentials — label + value + one-tap copy */}
-      <SectionLabel>Credentials</SectionLabel>
-      <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-        {creds.map((r, i) => <VaultRow key={active + i} row={r} />)}
-        <button onClick={() => toast("Add entry", "plus")} className="tap inset"
-          style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px", borderRadius: 14, cursor: "pointer", color: "var(--ink-3)", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 600, borderStyle: "dashed" }}>
-          <Icon name="plus" size={15} /> Add credential
-        </button>
+      <div style={{ display: "flex", gap: 9 }}>
+        <input value={f.username} onChange={set("username")} placeholder="Username / ID" style={inp} />
+        <input value={f.password} onChange={set("password")} placeholder="Password" style={inp} />
       </div>
+      <input value={f.notes} onChange={set("notes")} placeholder="Notes (optional)" style={inp} />
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+        <button onClick={onCancel} className="tap glass-2" style={{ padding: "8px 14px", borderRadius: 9, cursor: "pointer", border: "1px solid var(--hairline)", color: "var(--ink-2)", fontSize: 12.5, fontWeight: 650 }}>Cancel</button>
+        <button onClick={() => f.title.trim() && onSave(f)} className="tap" style={{ padding: "8px 16px", borderRadius: 9, cursor: "pointer", border: "none", color: "var(--accent-ink)", background: "var(--accent)", fontSize: 12.5, fontWeight: 750 }}>Save</button>
+      </div>
+    </div>
+  );
+}
+
+function VaultCard({ it, onEdit, onDelete }) {
+  const [reveal, setReveal] = React.useState(false);
+  const Field = ({ label, value, secret }) => value ? (
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--ink-4)" }}>{label}</div>
+        <div className="mono" style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{secret && !reveal ? "•".repeat(10) : value}</div>
+      </div>
+      {secret && <button onClick={() => setReveal((r) => !r)} className="tap" title={reveal ? "Hide" : "Reveal"} style={{ width: 30, height: 30, borderRadius: 8, border: "none", background: "transparent", color: "var(--ink-3)", cursor: "pointer", display: "grid", placeItems: "center" }}><Icon name={reveal ? "eyeOff" : "eye"} size={15} /></button>}
+      <button onClick={() => toast(`${label} copied`, "copy")} className="tap" title="Copy" style={{ width: 30, height: 30, borderRadius: 8, border: "none", background: "transparent", color: "var(--ink-3)", cursor: "pointer", display: "grid", placeItems: "center" }}><Icon name="copy" size={15} /></button>
+    </div>
+  ) : null;
+  return (
+    <div className="glass-2" style={{ padding: "14px 16px", borderRadius: 14, display: "flex", flexDirection: "column", gap: 11 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 14.5, fontWeight: 700, color: "var(--ink)" }}>{it.title}</div>
+          <div className="eyebrow" style={{ fontSize: 9, color: "var(--ink-4)", marginTop: 2 }}>{it.category}</div>
+        </div>
+        <button onClick={onEdit} title="Edit" className="tap glass-2" style={{ width: 32, height: 32, borderRadius: 8, display: "grid", placeItems: "center", cursor: "pointer", color: "var(--ink-2)", border: "1px solid var(--hairline)" }}><Icon name="settings" size={14} /></button>
+        <button onClick={onDelete} title="Delete" className="tap glass-2" style={{ width: 32, height: 32, borderRadius: 8, display: "grid", placeItems: "center", cursor: "pointer", color: "var(--bad)", border: "1px solid var(--hairline)" }}><Icon name="trash" size={14} /></button>
+      </div>
+      {it.url ? <a href={it.url} target="_blank" rel="noopener noreferrer" className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 9, textDecoration: "none", color: "var(--accent-ink)", background: "var(--accent)", fontWeight: 700, fontSize: 12.5, alignSelf: "flex-start" }}><Icon name="ext" size={14} /> Open portal</a> : null}
+      <Field label="Username" value={it.username} />
+      <Field label="Password" value={it.password} secret />
+      {it.notes ? <div style={{ fontSize: 12, color: "var(--ink-3)" }}>{it.notes}</div> : null}
+    </div>
+  );
+}
+
+function VaultPanel() {
+  const [items, setItems] = React.useState(() => (window.FETS._vault ? [...window.FETS._vault] : []));
+  const [editing, setEditing] = React.useState(null); // id | "__new" | null
+  const save = (entry) => {
+    if (editing === "__new") {
+      const tmp = { ...entry, id: "tmp" + Date.now() };
+      setItems((xs) => [tmp, ...xs]);
+      DB.dbAddVault(entry).then((row) => { if (row && row.id != null) setItems((xs) => xs.map((x) => x === tmp ? { ...x, id: row.id } : x)); });
+    } else {
+      DB.dbUpdateVault(editing, entry);
+      setItems((xs) => xs.map((x) => x.id === editing ? { ...x, ...entry } : x));
+    }
+    setEditing(null);
+  };
+  const del = (it) => { if (it.id != null && String(it.id).indexOf("tmp") !== 0) DB.dbDeleteVault(it.id); setItems((xs) => xs.filter((x) => x !== it)); };
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {editing !== "__new" && <button onClick={() => setEditing("__new")} className="tap" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px", borderRadius: 12, cursor: "pointer", border: "none", color: "var(--accent-ink)", background: "var(--accent)", fontFamily: "var(--font)", fontSize: 13, fontWeight: 750 }}><Icon name="plus" size={16} /> Add credential</button>}
+      {editing === "__new" && <VaultEditForm initial={{}} onSave={save} onCancel={() => setEditing(null)} />}
+      {items.length === 0 && editing !== "__new" && <div className="inset" style={{ padding: 22, borderRadius: 14, textAlign: "center", color: "var(--ink-4)", fontSize: 13 }}>No credentials saved yet. Add your portals & logins here.</div>}
+      {items.map((it) => editing === it.id
+        ? <VaultEditForm key={it.id} initial={it} onSave={save} onCancel={() => setEditing(null)} />
+        : <VaultCard key={it.id} it={it} onEdit={() => setEditing(it.id)} onDelete={() => del(it)} />)}
     </div>
   );
 }
@@ -1482,25 +1521,46 @@ const LOST_FOUND = [
 const LF_STATUS = { stored: { label: "In locker", color: "var(--v-ielts)" }, claimed: { label: "Claimed", color: "var(--ok)" } };
 
 function LostFoundPanel({ branch }) {
-  const [items, setItems] = React.useState(() => (window.FETS._lostFound && window.FETS._lostFound.length) ? window.FETS._lostFound : LOST_FOUND);
+  const [items, setItems] = React.useState(() => (window.FETS._lostFound && window.FETS._lostFound.length) ? [...window.FETS._lostFound] : [...LOST_FOUND]);
+  const [adding, setAdding] = React.useState(false);
+  const [dItem, setDItem] = React.useState("");
+  const [dWhere, setDWhere] = React.useState("");
   const list = items.filter((i) => branch === "global" || i.branch === branch);
   const stored = list.filter((i) => i.status === "stored").length;
-  const claim = (idx) => { const it = list[idx]; if (it && it.id != null) DB.dbClaimLostFound(it.id); setItems((arr) => arr.map((x) => x === it ? { ...x, status: "claimed" } : x)); toast("Marked as claimed", "check"); };
+  const branchForNew = branch === "global" ? "calicut" : branch;
+  const claim = (it) => { if (it && it.id != null) DB.dbClaimLostFound(it.id); setItems((arr) => arr.map((x) => x === it ? { ...x, status: "claimed" } : x)); toast("Marked as claimed", "check"); };
+  const del = (it) => { if (it && it.id != null) DB.dbDeleteLostFound(it.id); setItems((arr) => arr.filter((x) => x !== it)); };
+  const add = () => {
+    if (!dItem.trim()) return;
+    const entry = { item: dItem.trim(), where: dWhere.trim() || "—", when: new Date().toLocaleDateString(), branch: branchForNew, locker: "", status: "stored", by: window.FETS.user.name };
+    setItems((arr) => [entry, ...arr]);
+    DB.dbAddLostFound(entry).then((row) => { if (row && row.id != null) setItems((arr) => arr.map((x) => x === entry ? { ...x, id: row.id } : x)); });
+    setDItem(""); setDWhere(""); setAdding(false);
+  };
+  const inp = { background: "var(--inset)", border: "1px solid var(--hairline)", borderRadius: 9, color: "var(--ink)", fontFamily: "var(--font)", fontSize: 13, padding: "9px 11px", width: "100%" };
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         <StatPill value={stored} label="Awaiting claim" tone={stored ? "var(--v-ielts)" : "var(--ok)"} />
         <StatPill value={list.length} label="Items logged" />
       </div>
-      <button onClick={() => toast("Log a found item", "plus")} className="tap inset"
-        style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px", borderRadius: 14, cursor: "pointer", color: "var(--ink-2)", fontFamily: "var(--font)", fontSize: 13, fontWeight: 650, borderStyle: "dashed" }}>
-        <Icon name="plus" size={16} /> Log a found item
-      </button>
+      {adding ? (
+        <div className="glass-2" style={{ padding: 14, borderRadius: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+          <input autoFocus value={dItem} onChange={(e) => setDItem(e.target.value)} placeholder="Item (e.g. Black umbrella)" style={inp} />
+          <input value={dWhere} onChange={(e) => setDWhere(e.target.value)} placeholder="Where found (e.g. Hall B)" style={inp} />
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button onClick={() => setAdding(false)} className="tap glass-2" style={{ padding: "8px 14px", borderRadius: 9, cursor: "pointer", border: "1px solid var(--hairline)", color: "var(--ink-2)", fontSize: 12.5, fontWeight: 650 }}>Cancel</button>
+            <button onClick={add} className="tap" style={{ padding: "8px 16px", borderRadius: 9, cursor: "pointer", border: "none", color: "var(--accent-ink)", background: "var(--accent)", fontSize: 12.5, fontWeight: 750 }}>Log item</button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setAdding(true)} className="tap inset" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px", borderRadius: 14, cursor: "pointer", color: "var(--ink-2)", fontFamily: "var(--font)", fontSize: 13, fontWeight: 650, borderStyle: "dashed" }}><Icon name="plus" size={16} /> Log a found item</button>
+      )}
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {list.length === 0
           ? <div className="inset" style={{ padding: 22, borderRadius: 14, textAlign: "center", color: "var(--ink-4)", fontSize: 13 }}>Nothing logged for this centre.</div>
           : list.map((it, i) => {
-            const sm = LF_STATUS[it.status];
+            const sm = LF_STATUS[it.status] || LF_STATUS.stored;
             return (
               <div key={i} className="glass-2" style={{ padding: 15, borderRadius: 14, display: "flex", alignItems: "center", gap: 13 }}>
                 <span style={{ width: 40, height: 40, borderRadius: 11, display: "grid", placeItems: "center", flexShrink: 0, color: sm.color, background: `color-mix(in oklch, ${sm.color} 14%, transparent)`, border: `1px solid color-mix(in oklch, ${sm.color} 28%, transparent)` }}>
@@ -1508,11 +1568,12 @@ function LostFoundPanel({ branch }) {
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.item}</div>
-                  <div className="mono" style={{ fontSize: 10.5, color: "var(--ink-4)", marginTop: 3 }}>{it.where} · {it.when} · {it.locker}</div>
+                  <div className="mono" style={{ fontSize: 10.5, color: "var(--ink-4)", marginTop: 3 }}>{it.where} · {it.when}{it.locker ? ` · ${it.locker}` : ""}</div>
                 </div>
                 {it.status === "stored"
-                  ? <button onClick={() => claim(i)} className="tap" style={{ flexShrink: 0, padding: "8px 13px", borderRadius: 10, border: "none", cursor: "pointer", fontFamily: "var(--font)", fontSize: 12, fontWeight: 700, color: "var(--accent-ink)", background: "var(--accent)" }}>Mark claimed</button>
+                  ? <button onClick={() => claim(it)} className="tap" style={{ flexShrink: 0, padding: "8px 13px", borderRadius: 10, border: "none", cursor: "pointer", fontFamily: "var(--font)", fontSize: 12, fontWeight: 700, color: "var(--accent-ink)", background: "var(--accent)" }}>Claim</button>
                   : <span style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 6, fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", padding: "5px 10px", borderRadius: 99, color: sm.color, background: `color-mix(in oklch, ${sm.color} 16%, transparent)` }}><Icon name="check" size={12} stroke={3} /> {sm.label}</span>}
+                <button onClick={() => del(it)} title="Delete" className="tap glass-2" style={{ width: 34, height: 34, borderRadius: 9, display: "grid", placeItems: "center", cursor: "pointer", color: "var(--bad)", border: "1px solid var(--hairline)", flexShrink: 0 }}><Icon name="trash" size={15} /></button>
               </div>
             );
           })}
@@ -2171,7 +2232,7 @@ function DayDetailPanel({ date, branch }) {
 /* =====================================================================
    CALENDAR PAGE
    ===================================================================== */
-function CalendarStrip({ offsets, branch }) {
+function CalendarStrip({ offsets, branch, onPick }) {
   const showBranch = branch === "global";
   return (
     <div className="scroll-soft" style={{ overflowX: "auto", paddingBottom: 8 }}>
@@ -2193,11 +2254,14 @@ function CalendarStrip({ offsets, branch }) {
                   <span className="tabnum" style={{ fontSize: 27, fontWeight: 800, fontFamily: '"Archivo Expanded", var(--font)', letterSpacing: "-0.03em", lineHeight: 1, color: isToday ? "var(--branch)" : "var(--ink)" }}>{d.getDate()}</span>
                   <span className="eyebrow" style={{ fontSize: 9.5, color: isToday ? "var(--branch)" : (isWeekend ? "var(--ink-4)" : "var(--ink-3)"), letterSpacing: "0.12em" }}>{window.P_WD[d.getDay()]}</span>
                 </div>
-                {isToday
-                  ? <span style={{ fontSize: 8.5, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", padding: "3px 8px", borderRadius: 999, color: "var(--accent-ink)", background: "var(--branch)" }}>Today</span>
-                  : total > 0 && <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 8px", borderRadius: 999, flexShrink: 0, background: "var(--inset)", color: "var(--ink-3)" }} title={`${total} candidates`}>
-                      <Icon name="users" size={12} stroke={2.2} /><span className="tabnum mono" style={{ fontSize: 11.5, fontWeight: 700 }}>{total}</span>
-                    </span>}
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  {isToday
+                    ? <span style={{ fontSize: 8.5, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", padding: "3px 8px", borderRadius: 999, color: "var(--accent-ink)", background: "var(--branch)" }}>Today</span>
+                    : total > 0 && <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 8px", borderRadius: 999, flexShrink: 0, background: "var(--inset)", color: "var(--ink-3)" }} title={`${total} candidates`}>
+                        <Icon name="users" size={12} stroke={2.2} /><span className="tabnum mono" style={{ fontSize: 11.5, fontWeight: 700 }}>{total}</span>
+                      </span>}
+                  {onPick && <button onClick={() => onPick(d)} title="Add / edit sessions" className="tap" style={{ width: 24, height: 24, borderRadius: 7, display: "grid", placeItems: "center", border: "1px solid var(--hairline)", background: "var(--inset)", color: "var(--ink-3)", cursor: "pointer", flexShrink: 0 }}><Icon name="plus" size={13} /></button>}
+                </div>
               </div>
               {isToday && total > 0 && (
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: -3, fontSize: 11, fontWeight: 600, color: "var(--branch)" }}>
@@ -2340,7 +2404,7 @@ function CalendarPage({ branch }) {
           </div>
         )}
 
-        {view === "days" && <CalendarStrip offsets={win.offsets} branch={branch} />}
+        {view === "days" && <CalendarStrip offsets={win.offsets} branch={branch} onPick={(dd) => setDayDrawer(dd)} />}
         {view === "agenda" && <CalendarAgenda offsets={win.offsets} branch={branch} />}
         {view === "analysis" && (
           <React.Fragment>
@@ -4512,7 +4576,7 @@ function ordinal(n) {
 }
 
 /* ---------- top navigation ---------- */
-function TopNav({ active, onNavigate, branch, setBranch, t, setTweak, onTools, onBurger }) {
+function TopNav({ active, onNavigate, branch, setBranch, t, setTweak, onTools, onBurger, onLogout }) {
   const candToday = branchSessions(0, branch).reduce((a, s) => a + s.count, 0);
   return (
     <header className="glass" style={{
@@ -4566,9 +4630,10 @@ function TopNav({ active, onNavigate, branch, setBranch, t, setTweak, onTools, o
           <Icon name="grid" size={15} /> <span className="topnav-branch">Modules</span>
         </button>
       )}
-      <button onClick={() => toast("Mithun Raj · Super Admin", "settings")} className="tap" title={window.FETS.user.name}
-        style={{ border: "none", background: "transparent", cursor: "pointer", padding: 0, flexShrink: 0 }}>
-        <Avatar name={window.FETS.user.name} size={36} />
+      <button onClick={onLogout} title="Log out" className="tap glass-2" style={{
+        display: "inline-flex", alignItems: "center", gap: 8, height: 36, padding: "0 13px", borderRadius: 10,
+        cursor: "pointer", color: "var(--ink-2)", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 650, flexShrink: 0 }}>
+        <Icon name="power" size={15} /> <span className="topnav-branch">Log out</span>
       </button>
       <button onClick={onBurger} className="tap glass-2 topnav-burger" title="Menu" style={{
         display: "none", width: 36, height: 36, borderRadius: 10, placeItems: "center", cursor: "pointer", color: "var(--ink-2)" }}>
@@ -4757,32 +4822,49 @@ function LivePage({ branch, setDrawer, setActive, bridge }) {
 
 /* ---------- News page (redesigned to match the other pages) ---------- */
 function NewsPage({ branch }) {
-  const news = (window.FETS._news || []).filter((n) => n.active !== false);
+  const [news, setNews] = React.useState(() => (window.FETS._news || []).filter((n) => n.active !== false));
+  const [text, setText] = React.useState("");
+  const [prio, setPrio] = React.useState("normal");
   const prioColor = (p) => (p === "high" || p === "urgent") ? "var(--bad)" : p === "low" ? "var(--ink-4)" : "var(--accent)";
+  const inp = { background: "var(--inset)", border: "1px solid var(--hairline)", borderRadius: 10, color: "var(--ink)", fontFamily: "var(--font)", fontSize: 14, padding: "11px 13px" };
+  const post = () => {
+    const body = text.trim(); if (!body) return;
+    const tmp = { id: "tmp" + Date.now(), _tmp: true, body, priority: prio, active: true, when: new Date().toLocaleDateString() };
+    setNews((xs) => [tmp, ...xs]);
+    DB.dbAddNews(body, prio).then((row) => { if (row && row.id != null) setNews((xs) => xs.map((n) => n === tmp ? { ...n, id: row.id, _tmp: false } : n)); });
+    setText(""); setPrio("normal");
+  };
+  const del = (n) => { if (n.id != null && !n._tmp) DB.dbDeleteNews(n.id); setNews((xs) => xs.filter((x) => x !== n)); };
   return (
-    <div style={{ maxWidth: 900, margin: "0 auto", display: "flex", flexDirection: "column", gap: "calc(28px * var(--density))" }}>
+    <div style={{ maxWidth: 900, margin: "0 auto", display: "flex", flexDirection: "column", gap: "calc(24px * var(--density))" }}>
       <PageHeader eyebrow={`Announcements // ${capBranch(branch)}`} title="News" />
-      {news.length === 0 ? (
-        <div className="glass" style={{ borderRadius: "var(--radius)", padding: 48, textAlign: "center", color: "var(--ink-4)", fontSize: 14 }}>
-          No announcements right now.
+      <div className="glass" style={{ borderRadius: "var(--radius)", padding: 18, display: "flex", flexDirection: "column", gap: 11 }}>
+        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} placeholder="Write an announcement for all staff…" style={{ ...inp, resize: "vertical", lineHeight: 1.5, width: "100%" }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <select value={prio} onChange={(e) => setPrio(e.target.value)} style={{ ...inp }}>
+            <option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option>
+          </select>
+          <div style={{ flex: 1 }} />
+          <button onClick={post} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 18px", borderRadius: 11, border: "none", cursor: "pointer", fontFamily: "var(--font)", fontSize: 13.5, fontWeight: 750, color: "var(--accent-ink)", background: "var(--accent)" }}><Icon name="plus" size={16} /> Post</button>
         </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {news.map((n, i) => (
-            <article key={n.id || i} className="glass rise" style={{ borderRadius: "var(--radius)", padding: "18px 20px", display: "flex", gap: 14, alignItems: "flex-start", animationDelay: `${i * 40}ms` }}>
-              <span style={{ width: 6, alignSelf: "stretch", borderRadius: 99, background: prioColor(n.priority), flexShrink: 0 }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 15, fontWeight: 600, color: "var(--ink)", lineHeight: 1.5 }}>{n.body}</div>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
-                  {n.priority && n.priority !== "normal" && <span className="eyebrow" style={{ fontSize: 9, color: prioColor(n.priority) }}>{n.priority}</span>}
-                  {n.when && <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>{n.when}</span>}
+      </div>
+      {news.length === 0
+        ? <div className="glass" style={{ borderRadius: "var(--radius)", padding: 40, textAlign: "center", color: "var(--ink-4)", fontSize: 14 }}>No announcements yet.</div>
+        : <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {news.map((n, i) => (
+              <article key={n.id || i} className="glass" style={{ borderRadius: "var(--radius)", padding: "18px 20px", display: "flex", gap: 14, alignItems: "flex-start" }}>
+                <span style={{ width: 6, alignSelf: "stretch", borderRadius: 99, background: prioColor(n.priority), flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: "var(--ink)", lineHeight: 1.5 }}>{n.body}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
+                    {n.priority && n.priority !== "normal" && <span className="eyebrow" style={{ fontSize: 9, color: prioColor(n.priority) }}>{n.priority}</span>}
+                    {n.when && <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>{n.when}</span>}
+                  </div>
                 </div>
-              </div>
-              <Icon name="message" size={18} style={{ color: "var(--ink-4)", flexShrink: 0 }} />
-            </article>
-          ))}
-        </div>
-      )}
+                <button onClick={() => del(n)} title="Delete" className="tap glass-2" style={{ width: 34, height: 34, borderRadius: 9, display: "grid", placeItems: "center", cursor: "pointer", color: "var(--bad)", border: "1px solid var(--hairline)", flexShrink: 0 }}><Icon name="trash" size={15} /></button>
+              </article>
+            ))}
+          </div>}
     </div>
   );
 }
@@ -4844,7 +4926,7 @@ function AccentSwatches({ value, onChange }) {
   );
 }
 
-function App({ bridge }) {
+function App({ bridge, onLogout }) {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [branch, setBranch] = React.useState("calicut");
   const [drawer, setDrawer] = React.useState(null);  // 'outlook' | 'vault' | 'help'
@@ -4874,7 +4956,7 @@ function App({ bridge }) {
   return (
     <div style={{ position: "relative", zIndex: 2, height: "100%", display: "flex", flexDirection: "column", "--branch": BRANCH_TINT[branch] || "var(--accent)" }}>
       <TopNav active={active} onNavigate={onNavigate} branch={branch} setBranch={setBranch}
-        t={t} setTweak={setTweak} onTools={() => setTools(true)} onBurger={() => setBurger(true)} />
+        t={t} setTweak={setTweak} onTools={() => setTools(true)} onBurger={() => setBurger(true)} onLogout={onLogout} />
 
       <main className="scroll-soft main-scroll" style={{ flex: 1, overflowY: "auto", padding: "clamp(22px,3.2vw,40px) clamp(14px,3vw,30px) 80px" }}>
         {active === "live" && <LivePage branch={branch} setDrawer={setDrawer} setActive={setActive} bridge={bridge} />}
@@ -4920,7 +5002,7 @@ function App({ bridge }) {
   );
 }
 
-function RedesignShell({ bridge, userName, userEmail, isAdmin }) {
+function RedesignShell({ bridge, userName, userEmail, isAdmin, onLogout }) {
   // Identity + access from the real authenticated profile (replaces mock user)
   if (window.FETS) {
     if (userName) window.FETS.user = { ...window.FETS.user, name: userName, email: userEmail || "", role: isAdmin ? "Super Admin" : "Staff" };
@@ -4940,7 +5022,7 @@ function RedesignShell({ bridge, userName, userEmail, isAdmin }) {
       <div className="wallpaper" />
       <div className="grain" />
       <div style={{ position: "relative", zIndex: 2, height: "100%" }}>
-        {ready ? <App bridge={bridge} /> : (
+        {ready ? <App bridge={bridge} onLogout={onLogout} /> : (
           <div style={{ height: "100%", display: "grid", placeItems: "center" }}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
               <span style={{ width: 54, height: 54, borderRadius: 14, display: "grid", placeItems: "center", background: "var(--accent)", color: "var(--accent-ink)", fontWeight: 900, fontSize: 30, fontFamily: '"Archivo Expanded", var(--font)' }}>F</span>
