@@ -13,6 +13,7 @@ import "./liquid-glass.css";
 import { loadLiveData, ensureMonth } from "./live-data";
 import * as DB from "./write-data";
 import * as LAB from "./lab-data";
+import * as ATT from "./attendance-data";
 
 /* ============================================================
    SOURCE: data.js
@@ -2678,11 +2679,13 @@ function RosterGrid({ offsets, branch }) {
     return () => window.removeEventListener("fets-roster-changed", h);
   }, [branch, offsets[0]]);
   const [dialog, setDialog] = React.useState(null);   // { name, off, date, cell, defaultCode }
+  const [reqCtx, setReqCtx] = React.useState(null);   // non-admin request on own cell
 
   const apply = (name, off, cell) => {
     F().rosterSet(name, off, cell);
     const _d = F().ISO(off);
     if (cell) DB.dbSetRoster(name, _d, cell.code); else DB.dbClearRoster(name, _d);
+    setReqMark(name, off, null);   // acting on a cell clears any pending request marker
     setGrid((g) => {
       const dflt = g[name][off].dflt;
       const nc = cell ? { code: cell.code, ot: +cell.ot || 0, dflt, override: true } : { code: dflt, ot: 0, dflt, override: false };
@@ -2729,13 +2732,14 @@ function RosterGrid({ offsets, branch }) {
               const main = ot > 0 ? `${code}+OT` : code;
               const d = F().ISO(o);
               return (
-                <button key={o} onClick={() => { if (!window.FETS.isAdmin) { toast("Roster editing is restricted to the super admin", "alert"); return; } setDialog({ name: n, off: o, date: d, cell, defaultCode: cell.dflt || "RD" }); }} className="tap" title={window.FETS.isAdmin ? `${m.label}${ot > 0 ? ` + OT ${ot}h` : ""} — tap to change` : m.label}
-                  style={{ height: 40, borderRadius: 8, cursor: "pointer", border: m.solid ? "1px solid transparent" : "1px solid var(--glass-edge-lo)",
+                <button key={o} onClick={() => { if (window.FETS.isAdmin) { setDialog({ name: n, off: o, date: d, cell, defaultCode: cell.dflt || "RD" }); } else if (n === window.FETS.user.name) { setReqCtx({ name: n, off: o, date: d }); } else { toast("Tap your own day to request leave / swap / TOIL", "alert"); } }} className="tap" title={window.FETS.isAdmin ? `${m.label}${ot > 0 ? ` + OT ${ot}h` : ""} — tap to change` : (n === window.FETS.user.name ? "Tap to request leave / swap / TOIL" : m.label)}
+                  style={{ position: "relative", height: 40, borderRadius: 8, cursor: "pointer", border: m.solid ? "1px solid transparent" : "1px solid var(--glass-edge-lo)",
                     background: m.solid ? m.color : "var(--panel-3)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 0,
                     color: m.ink, fontFamily: "var(--font)", fontWeight: 800, letterSpacing: "0.01em",
                     boxShadow: ot > 0 ? `inset 0 -3px 0 ${OT_COLOR}` : "none" }}>
                   <span style={{ fontSize: main.length > 2 ? 9.5 : 12, lineHeight: 1 }}>{main}</span>
                   {ot > 0 && <span className="mono" style={{ fontSize: 8, fontWeight: 700, lineHeight: 1.1, opacity: 0.92 }}>{ot}h</span>}
+                  {reqMarkOf(n, o) && <span title="Request pending — Mithun to action" style={{ position: "absolute", top: 3, right: 3, width: 7, height: 7, borderRadius: 999, background: "var(--warn)", boxShadow: "0 0 6px var(--warn)" }} />}
                 </button>
               );
             })}
@@ -2744,6 +2748,7 @@ function RosterGrid({ offsets, branch }) {
       </div>
     </div>
     {dialog && <RosterCellDialog ctx={dialog} onClose={() => setDialog(null)} onApply={(cell) => apply(dialog.name, dialog.off, cell)} />}
+    {reqCtx && <RosterRequestDialog name={reqCtx.name} off={reqCtx.off} date={reqCtx.date} branch={branch} onClose={() => setReqCtx(null)} />}
     </React.Fragment>
   );
 }
@@ -2862,6 +2867,156 @@ function RosterAnalysis({ offsets, branch }) {
   );
 }
 
+/* ---------- attendance: check in / step out / back / check out (DB-persisted) ---------- */
+function AttendanceConsole({ branch }) {
+  const [row, setRow] = React.useState(undefined);   // undefined=loading, null=none
+  const [, force] = React.useReducer((x) => x + 1, 0);
+  const load = () => ATT.attToday().then((r) => setRow(r || null));
+  React.useEffect(() => { load(); const t = setInterval(() => force(), 60000); return () => clearInterval(t); }, []);
+  const act = async (fn, ok) => { const r = await fn(); if (r && r.error) toast(r.error, "alert"); else { toast(ok, "check"); load(); } };
+  const onBreak = row && ATT.attOnBreak(row);
+  const checkedIn = row && row.check_in && !row.check_out;
+  const done = !!(row && row.check_out);
+  const worked = row ? ATT.attWorked(row) : 0;
+  const hasNfc = typeof window !== "undefined" && "NDEFReader" in window;
+  const tapCard = async () => {
+    try { const r = new window.NDEFReader(); await r.scan(); toast("Tap your ID card to the phone…", "key"); r.onreading = () => act(() => ATT.attCheckIn(branch), "Checked in via card"); }
+    catch (e) { toast("NFC not available on this device", "alert"); }
+  };
+  const Btn = ({ on, label, icon, primary }) => (
+    <button onClick={on} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 17px", borderRadius: 12, border: primary ? "none" : "1px solid var(--hairline)", cursor: "pointer", fontFamily: "var(--font)", fontSize: 13.5, fontWeight: 750, color: primary ? "var(--accent-ink)" : "var(--ink)", background: primary ? "var(--accent)" : "var(--glass-2)" }}><Icon name={icon} size={16} /> {label}</button>
+  );
+  const txt = row === undefined ? "Loading…" : done ? "Checked out" : onBreak ? "On break" : checkedIn ? "On shift" : "Not checked in";
+  const col = done ? "var(--ink-3)" : onBreak ? "var(--warn)" : checkedIn ? "var(--ok)" : "var(--ink-4)";
+  return (
+    <div className="glass" style={{ borderRadius: "var(--radius)", padding: "18px 20px", display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 13, flex: "1 1 240px", minWidth: 0 }}>
+        <span style={{ width: 12, height: 12, borderRadius: 999, background: col, boxShadow: `0 0 10px ${col}`, flexShrink: 0 }} />
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 16, fontWeight: 750, color: "var(--ink)" }}>{txt}</div>
+          <div className="mono" style={{ fontSize: 11.5, color: "var(--ink-3)", marginTop: 2 }}>
+            {row && row.check_in ? `In ${row.check_in}` : "—"}{row && row.check_out ? ` · Out ${row.check_out}` : ""}{row && row.check_in ? ` · ${ATT.attFmtMins(worked)} worked` : ""}{row && ATT.attBreakMins(row) ? ` · ${ATT.attBreakMins(row)}m break` : ""}
+          </div>
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 9, flexWrap: "wrap", alignItems: "center" }}>
+        {row !== undefined && !row && <Btn on={() => act(() => ATT.attCheckIn(branch), "Checked in")} label="Check in" icon="power" primary />}
+        {checkedIn && !onBreak && <React.Fragment><Btn on={() => act(ATT.attStepOut, "Stepped out")} label="Step out" icon="coffee" /><Btn on={() => act(ATT.attCheckOut, "Checked out")} label="Check out" icon="power" primary /></React.Fragment>}
+        {onBreak && <Btn on={() => act(ATT.attBack, "Back on shift")} label="I'm back" icon="arrowR" primary />}
+        {done && <span className="mono" style={{ fontSize: 13, color: "var(--ok)", fontWeight: 700 }}>✓ {ATT.attFmtMins(worked)} today</span>}
+        {hasNfc && row !== undefined && !done && <button onClick={tapCard} title="Check in by tapping your NFC ID card" className="tap glass-2" style={{ display: "inline-flex", alignItems: "center", gap: 7, height: 42, padding: "0 13px", borderRadius: 12, cursor: "pointer", color: "var(--ink-2)", border: "1px solid var(--hairline)", fontSize: 12.5, fontWeight: 650 }}><Icon name="key" size={15} /> Tap card</button>}
+      </div>
+    </div>
+  );
+}
+
+function ShiftHistory() {
+  const [rows, setRows] = React.useState(null);
+  React.useEffect(() => { ATT.attHistory(45).then(setRows); }, []);
+  return (
+    <div className="glass" style={{ borderRadius: "var(--radius)", padding: "16px 18px" }}>
+      <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>last 45 days</span>}>My shift hours</SectionLabel>
+      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr 0.9fr 1fr", gap: 7, marginTop: 12, alignItems: "center" }}>
+        {["Date", "In", "Out", "Break", "Worked"].map((h) => <div key={h} className="eyebrow" style={{ fontSize: 9, color: "var(--ink-4)" }}>{h}</div>)}
+        {!rows ? <div style={{ gridColumn: "1 / -1", color: "var(--ink-4)", padding: 10, fontSize: 13 }}>Loading…</div>
+          : rows.length === 0 ? <div style={{ gridColumn: "1 / -1", color: "var(--ink-4)", padding: 10, fontSize: 13 }}>No shifts recorded yet.</div>
+          : rows.map((r, i) => (
+            <React.Fragment key={i}>
+              <div style={{ fontSize: 12.5, color: "var(--ink-2)" }}>{r.date}</div>
+              <div className="mono" style={{ fontSize: 12.5 }}>{r.check_in || "—"}</div>
+              <div className="mono" style={{ fontSize: 12.5 }}>{r.check_out || "—"}</div>
+              <div className="mono" style={{ fontSize: 12, color: "var(--ink-3)" }}>{r.breakMins ? r.breakMins + "m" : "—"}</div>
+              <div className="mono" style={{ fontSize: 12.5, color: "var(--accent)", fontWeight: 700 }}>{r.worked ? ATT.attFmtMins(r.worked) : "—"}</div>
+            </React.Fragment>
+          ))}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- roster request markers (staff request → Mithun acts) ---------- */
+function reqMarksAll() { try { return JSON.parse(localStorage.getItem("fets-reqmarks") || "{}"); } catch (e) { return {}; } }
+function reqMarkOf(name, off) { return reqMarksAll()[`${name}|${off}`]; }
+function setReqMark(name, off, val) { const a = reqMarksAll(); if (val) a[`${name}|${off}`] = val; else delete a[`${name}|${off}`]; localStorage.setItem("fets-reqmarks", JSON.stringify(a)); window.dispatchEvent(new Event("fets-roster-changed")); }
+
+function RosterRequestDialog({ name, off, date, branch, onClose }) {
+  const [kind, setKind] = React.useState("leave");
+  const [withWho, setWithWho] = React.useState("");
+  const [reason, setReason] = React.useState("");
+  const dstr = `${window.P_WDL[date.getDay()]}, ${window.P_MO[date.getMonth()]} ${date.getDate()}`;
+  const mates = (window.FETS.STAFF[branch] || []).filter((n) => n !== name);
+  React.useEffect(() => { const k = (e) => { if (e.key === "Escape") onClose(); }; window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, []);
+  const submit = () => {
+    const iso = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    const req = kind === "swap" ? { id: "q" + Date.now(), kind: "swap", who: name, with: withWho, branch, date: iso, reason, status: "Submitted" }
+      : kind === "toil" ? { id: "q" + Date.now(), kind: "toil", who: name, branch, days: 1, date: iso, reason, status: "Submitted" }
+      : { id: "q" + Date.now(), kind: "leave", who: name, branch, leaveType: "Full-day leave", date: iso, reason, status: "Submitted" };
+    try { window.FETS.staffReqAdd(req); } catch (e) {}
+    DB.dbAddLeave(req);
+    setReqMark(name, off, { kind, reason });
+    toast("Sent to Mithun — he'll update your roster", "check");
+    onClose();
+  };
+  const inp = { background: "var(--inset)", border: "1px solid var(--hairline)", borderRadius: 9, color: "var(--ink)", fontFamily: "var(--font)", fontSize: 13, padding: "9px 11px", width: "100%" };
+  return (
+    <React.Fragment>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "oklch(0.12 0.02 182 / 0.6)", backdropFilter: "blur(3px)", zIndex: 130 }} />
+      <div role="dialog" className="glass rise" style={{ position: "fixed", zIndex: 131, top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(400px,93vw)", borderRadius: "var(--radius)", padding: 22, boxShadow: "var(--shadow-lift)", display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ width: 40, height: 40, borderRadius: 11, display: "grid", placeItems: "center", color: "var(--accent-ink)", background: "var(--accent)" }}><Icon name="calendar" size={19} /></div>
+          <div style={{ flex: 1 }}><h2 style={{ margin: 0, fontSize: 16, fontWeight: 750, color: "var(--ink)" }}>Request for {dstr}</h2><div style={{ fontSize: 12, color: "var(--ink-3)" }}>Mithun is notified — no approval queue.</div></div>
+          <button onClick={onClose} className="tap glass-2" style={{ width: 34, height: 34, borderRadius: 999, display: "grid", placeItems: "center", cursor: "pointer", color: "var(--ink-2)", border: "1px solid var(--hairline)" }}><Icon name="x" size={16} /></button>
+        </div>
+        <div className="inset" style={{ display: "flex", padding: 4, gap: 3, borderRadius: 999 }}>
+          {[{ k: "leave", l: "Leave" }, { k: "swap", l: "Swap" }, { k: "toil", l: "TOIL" }].map((o) => { const on = kind === o.k; return <button key={o.k} onClick={() => setKind(o.k)} className="tap" style={{ flex: 1, border: "none", cursor: "pointer", padding: "8px", borderRadius: 999, fontFamily: "var(--font)", fontSize: 12.5, fontWeight: on ? 750 : 600, color: on ? "var(--accent-ink)" : "var(--ink-3)", background: on ? "var(--accent)" : "transparent" }}>{o.l}</button>; })}
+        </div>
+        {kind === "swap" && <select value={withWho} onChange={(e) => setWithWho(e.target.value)} style={inp}><option value="">Swap with…</option>{mates.map((n) => <option key={n} value={n}>{n}</option>)}</select>}
+        <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} placeholder="Reason (optional)" style={{ ...inp, resize: "vertical" }} />
+        <button onClick={submit} className="tap" style={{ height: 44, borderRadius: 12, border: "none", cursor: "pointer", fontFamily: "var(--font)", fontSize: 14, fontWeight: 780, color: "var(--accent-ink)", background: "var(--accent)" }}>Send request</button>
+      </div>
+    </React.Fragment>
+  );
+}
+
+/* ---------- admin: everyone's attendance for a day (Mithun only) ---------- */
+function AttendanceAdminPage({ branch }) {
+  const [date, setDate] = React.useState(ATT.attDateStr());
+  const [rows, setRows] = React.useState(null);
+  React.useEffect(() => { setRows(null); ATT.attAllForDate(date).then(setRows); }, [date]);
+  const totalWorked = (rows || []).reduce((a, r) => a + (r.worked || 0), 0);
+  const SCOL = { present: "var(--ok)", late: "var(--warn)", half_day: "var(--v-ielts)", absent: "var(--bad)" };
+  return (
+    <div style={{ maxWidth: 1000, margin: "0 auto", display: "flex", flexDirection: "column", gap: "calc(24px * var(--density))" }}>
+      <PageHeader eyebrow="Admin // attendance" title="Daily Attendance" />
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ background: "var(--inset)", border: "1px solid var(--hairline)", borderRadius: 10, color: "var(--ink)", fontFamily: "var(--font)", fontSize: 14, padding: "10px 12px" }} />
+        <div style={{ flex: 1 }} />
+        <StatPill value={(rows || []).length} label="Records" />
+        <StatPill value={ATT.attFmtMins(totalWorked)} label="Total worked" tone="var(--accent)" />
+      </div>
+      <div className="glass" style={{ borderRadius: "var(--radius)", padding: "8px 4px", overflow: "auto" }}>
+        <div style={{ minWidth: 640 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr 0.9fr 0.9fr 0.8fr 1fr", gap: 8, padding: "8px 14px" }}>
+            {["Staff", "Branch", "In", "Out", "Break", "Worked"].map((h) => <div key={h} className="eyebrow" style={{ fontSize: 9, color: "var(--ink-4)" }}>{h}</div>)}
+          </div>
+          {!rows ? <div style={{ padding: 20, color: "var(--ink-4)" }}>Loading…</div>
+            : rows.length === 0 ? <div style={{ padding: 20, color: "var(--ink-4)" }}>No attendance recorded for this day.</div>
+            : rows.map((r, i) => (
+              <div key={i} style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr 0.9fr 0.9fr 0.8fr 1fr", gap: 8, padding: "11px 14px", borderTop: "1px solid var(--hairline)", alignItems: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 9 }}><Avatar name={r.name} size={26} /><span style={{ fontSize: 13, fontWeight: 650, color: "var(--ink)" }}>{r.name}</span></div>
+                <div style={{ fontSize: 12, color: "var(--ink-3)", textTransform: "capitalize" }}>{r.branch || "—"}</div>
+                <div className="mono" style={{ fontSize: 12.5 }}>{r.check_in || "—"}</div>
+                <div className="mono" style={{ fontSize: 12.5 }}>{r.check_out || "—"}</div>
+                <div className="mono" style={{ fontSize: 12, color: "var(--ink-3)" }}>{r.breakMins ? r.breakMins + "m" : "—"}</div>
+                <div className="mono" style={{ fontSize: 12.5, color: "var(--accent)", fontWeight: 700 }}>{r.worked ? ATT.attFmtMins(r.worked) : "—"}</div>
+              </div>
+            ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ---------- quick-add roster: 6 working + 1 rest, across a date range ---------- */
 function QuickAddRoster({ branch, onClose }) {
   const pool = branch === "global" ? [...F().STAFF.calicut, ...F().STAFF.cochin] : F().STAFF[branch];
@@ -2921,6 +3076,7 @@ function RosterPage({ branch }) {
   const win = useWindow(10);
   const [quickOpen, setQuickOpen] = React.useState(false);
   const [dayDrawer, setDayDrawer] = React.useState(null);
+  const [showHours, setShowHours] = React.useState(false);
   const mc = monthCtx();
   const isAdmin = F().user.role === "Super Admin";
 
@@ -2941,6 +3097,17 @@ function RosterPage({ branch }) {
   return (
     <div style={{ maxWidth: 1180, margin: "0 auto", display: "flex", flexDirection: "column", gap }}>
       <PageHeader eyebrow={`Staffing // ${capBranch(branch)}`} title="Roster" />
+
+      {/* attendance — check in / step out / back / check out (persisted) */}
+      <section style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <SectionLabel right={
+          <button onClick={() => setShowHours((v) => !v)} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 11px", borderRadius: 999, cursor: "pointer", border: "1px solid var(--hairline)", background: "transparent", color: "var(--ink-3)", fontFamily: "var(--font)", fontSize: 11.5, fontWeight: 650 }}>
+            <Icon name="clock" size={13} /> My shift hours {showHours ? "▴" : "▾"}
+          </button>
+        }>My attendance</SectionLabel>
+        <AttendanceConsole branch={branch} />
+        {showHours && <ShiftHistory />}
+      </section>
 
       <section style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
@@ -4489,7 +4656,6 @@ const DESK_TABS = [
   { id: "tasks", icon: "check", color: "var(--accent)", label: "My Task" },
   { id: "checklist", icon: "clipboard", color: "var(--v-prometric)", label: "Checklist" },
   { id: "certs", icon: "shield", color: "var(--ok)", label: "Certificates" },
-  { id: "leave", icon: "clock", color: "var(--v-ielts)", label: "Attendance" },
   { id: "readiness", icon: "trend", color: "var(--v-cma)", label: "Readiness" },
 ];
 
@@ -4550,8 +4716,8 @@ function MyDeskPage({ branch, setActive, setDrawer }) {
           fontSize: "clamp(30px,4vw,48px)", lineHeight: 1, letterSpacing: "-0.03em", color: "var(--ink)" }}>{u.name}</h1>
       </header>
 
-      {/* attendance console — always visible centrepiece */}
-      <AttendanceCard shift={u.shift} />
+      {/* attendance — DB-persisted check in / out (also lives on the Roster page) */}
+      <AttendanceConsole branch={u.shift.branch} />
 
       {/* workspace presets */}
       <section style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -4604,6 +4770,7 @@ const NAV = [
 
 /* secondary tools (Lost & Found now lives on the LIVE page under Help & support) */
 const TOOLS = [
+  { id: "attn-admin", icon: "clock", label: "Daily Attendance", sub: "All staff check-in / out · admin" },
   { id: "business", icon: "star", label: "Google Business", sub: "Reviews, ratings & reach", page: true },
   { id: "fets-intelligence", icon: "spark", label: "FETS AI", sub: "Ops copilot", legacy: true },
   { id: "candidate-tracker", icon: "users", label: "Candidate Tracker", sub: "Registrations & sessions", legacy: true },
@@ -5211,6 +5378,7 @@ function App({ bridge, onLogout }) {
   const handlePick = (it) => {
     if (it.nav) { setActive(it.id); return; }
     if (it.id === "business") { setActive("business"); return; }
+    if (it.id === "attn-admin") { setActive("attn-admin"); return; }
     if (it.id === "vault") { setDrawer("vault"); return; }
     if (it.legacy && bridge) { bridge(it.id); return; }
     toast(it.label, "arrowR");
@@ -5232,6 +5400,7 @@ function App({ bridge, onLogout }) {
         {active === "desk" && <MyDeskPage branch={branch} setActive={setActive} setDrawer={setDrawer} />}
         {active === "business" && <BusinessPage branch={branch} />}
         {active === "news" && <TheLabPage branch={branch} />}
+        {active === "attn-admin" && <AttendanceAdminPage branch={branch} />}
       </main>
 
       {/* drawers */}
