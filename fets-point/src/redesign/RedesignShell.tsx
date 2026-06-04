@@ -4844,7 +4844,8 @@ function MenuRow({ items }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "calc(16px * var(--density))" }}>
       {items.map((q) => (
-        <div key={q.label} className="glass" style={{ borderRadius: "var(--radius)", padding: "30px 22px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14, minHeight: 140, textAlign: "center" }}>
+        <div key={q.label} className="glass" style={{ position: "relative", borderRadius: "var(--radius)", padding: "30px 22px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14, minHeight: 140, textAlign: "center" }}>
+          {q.badge ? <span title={`${q.badge} new`} style={{ position: "absolute", top: 12, right: 12, minWidth: 22, height: 22, padding: "0 6px", borderRadius: 999, display: "grid", placeItems: "center", fontSize: 11, fontWeight: 800, color: "var(--accent-ink)", background: "var(--accent)", boxShadow: "0 0 12px color-mix(in oklch, var(--accent) 60%, transparent)" }}>{q.badge > 99 ? "99+" : q.badge}</span> : null}
           <StartButton label={q.label} onClick={q.on} />
           <span style={{ fontSize: 12.5, color: "var(--ink-3)", fontWeight: 500 }}>{q.sub}</span>
         </div>
@@ -4855,10 +4856,12 @@ function MenuRow({ items }) {
 
 function LivePage({ branch, setDrawer, setActive, bridge }) {
   const gap = "calc(34px * var(--density))";
+  const [labUnread, setLabUnread] = React.useState(0);
+  React.useEffect(() => { LAB.labUnread().then(setLabUnread); }, []);
   const ops = [
     { label: "Raise a Case", sub: "Log a technical, candidate or facility issue", on: () => setActive("case") },
     { label: "Next 7 Days", sub: "Candidates by client over the next week", on: () => setDrawer("outlook") },
-    { label: "The Lab", sub: "Team wall — handovers, shoutouts, questions & notices", on: () => setActive("news") },
+    { label: "The Lab", sub: "Team wall — handovers, shoutouts, questions & notices", on: () => setActive("news"), badge: labUnread },
   ];
   const support = [
     { label: "Quick Access", sub: "Vendor credentials, portals & site codes", on: () => setDrawer("vault") },
@@ -4904,6 +4907,22 @@ function timeAgo(d) {
   return new Date(d).toLocaleDateString();
 }
 
+function labRich(text) {
+  if (!text) return null;
+  const out = []; const re = /@([\w][\w'.\-]*(?:\s[\w'.\-]+)?)/g; let last = 0, m, k = 0;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) out.push(text.slice(last, m.index));
+    out.push(<span key={k++} style={{ color: "var(--accent)", fontWeight: 700 }}>{m[0]}</span>);
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+function labMentionsMe(text) {
+  const fn = (window.FETS.user.name || "").split(" ")[0].toLowerCase();
+  return !!fn && (text || "").toLowerCase().includes("@" + fn);
+}
+
 function LabPostCard({ p, onChange, onDelete, canMod }) {
   const t = LAB_TYPES[p.type] || LAB_TYPES.general;
   const v = p.exam && window.VENDOR_BY_SLUG[p.exam];
@@ -4911,7 +4930,15 @@ function LabPostCard({ p, onChange, onDelete, canMod }) {
   const [draft, setDraft] = React.useState("");
   const me = window.FETS._meUserId;
   const acked = (p.acks || []).includes(me);
-  const like = () => { const liked = p.likedByMe; LAB.labToggleLike(p.id, liked); onChange({ ...p, likedByMe: !liked, likeCount: p.likeCount + (liked ? -1 : 1) }); };
+  const reacts = p.reactions || {};
+  const [picker, setPicker] = React.useState(false);
+  const react = (emoji) => {
+    const arr = reacts[emoji] || []; const mine = arr.includes(me);
+    LAB.labReact(p.id, emoji, mine);
+    const next = { ...reacts }; next[emoji] = mine ? arr.filter((x) => x !== me) : [...arr, me];
+    if (!next[emoji].length) delete next[emoji];
+    onChange({ ...p, reactions: next }); setPicker(false);
+  };
   const comment = () => { const txt = draft.trim(); if (!txt) return; LAB.labAddComment(p.id, txt); onChange({ ...p, comments: [...p.comments, { id: "t" + Date.now(), text: txt, name: window.FETS.user.name, at: new Date().toISOString() }] }); setDraft(""); };
   const ack = () => { const next = acked ? p.acks.filter((x) => x !== me) : [...p.acks, me]; const np = { ...p, acks: next }; LAB.labSaveMeta(np); onChange(np); };
   const pin = () => { const np = { ...p, pinned: !p.pinned }; LAB.labSaveMeta(np); onChange(np); };
@@ -4938,16 +4965,23 @@ function LabPostCard({ p, onChange, onDelete, canMod }) {
           <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", padding: "3px 9px", borderRadius: 999, color: "var(--ink-3)", background: "var(--inset)" }}>{LAB_CLABEL[p.center] || "All centres"}</span>
           {v && <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10, fontWeight: 700, padding: "3px 9px", borderRadius: 999, color: v.color, background: `color-mix(in oklch, ${v.color} 15%, transparent)` }}><span style={{ width: 6, height: 6, borderRadius: 2, background: v.color }} />{v.name}</span>}
           {p.compliance && <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10, fontWeight: 800, padding: "3px 9px", borderRadius: 999, color: "var(--bad)", background: "color-mix(in oklch, var(--bad) 15%, transparent)" }}><Icon name="shield" size={11} /> Compliance</span>}
+          {labMentionsMe(p.text) && <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10, fontWeight: 800, padding: "3px 9px", borderRadius: 999, color: "var(--accent)", background: "var(--accent-soft)" }}><Icon name="at" size={11} /> Mentions you</span>}
         </div>
         {/* body */}
-        {p.text && <div style={{ fontSize: 14.5, color: "var(--ink)", lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{p.text}</div>}
+        {p.text && <div style={{ fontSize: 14.5, color: "var(--ink)", lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{labRich(p.text)}</div>}
         {p.image && <a href={p.image} target="_blank" rel="noopener noreferrer"><img src={p.image} alt="" style={{ maxWidth: "100%", borderRadius: 12, border: "1px solid var(--hairline)" }} /></a>}
         {(p.attachments || []).map((a, i) => (
           <a key={i} href={a.url} target="_blank" rel="noopener noreferrer" className="tap glass-2" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 10, textDecoration: "none", color: "var(--ink-2)", fontSize: 12.5, alignSelf: "flex-start" }}><Icon name="package" size={14} /> {a.name || "Attachment"}</a>
         ))}
         {/* footer */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", paddingTop: 4, borderTop: "1px solid var(--hairline)", marginTop: 2 }}>
-          <button onClick={like} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 12px", borderRadius: 999, cursor: "pointer", border: "1px solid var(--hairline)", background: p.likedByMe ? "var(--accent-soft)" : "transparent", color: p.likedByMe ? "var(--accent)" : "var(--ink-3)", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 650 }}>👏 {p.likeCount || 0}</button>
+          {Object.keys(reacts).filter((e) => reacts[e] && reacts[e].length).map((e) => { const mine = reacts[e].includes(me); return (
+            <button key={e} onClick={() => react(e)} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 999, cursor: "pointer", border: `1px solid ${mine ? "var(--accent-line)" : "var(--hairline)"}`, background: mine ? "var(--accent-soft)" : "transparent", color: mine ? "var(--accent)" : "var(--ink-2)", fontSize: 12.5, fontWeight: 650 }}>{e} {reacts[e].length}</button>
+          ); })}
+          <div style={{ position: "relative" }}>
+            <button onClick={() => setPicker((v) => !v)} className="tap" title="React" style={{ display: "grid", placeItems: "center", width: 30, height: 30, borderRadius: 999, cursor: "pointer", border: "1px solid var(--hairline)", background: "transparent", color: "var(--ink-3)", fontSize: 16, lineHeight: 1 }}>＋</button>
+            {picker && <div className="glass" style={{ position: "absolute", bottom: 36, left: 0, zIndex: 8, display: "flex", gap: 4, padding: 6, borderRadius: 12, boxShadow: "var(--shadow-lift)" }}>{LAB.LAB_EMOJIS.map((e) => <button key={e} onClick={() => react(e)} className="tap" style={{ fontSize: 18, border: "none", background: "transparent", cursor: "pointer", padding: 4, borderRadius: 8 }}>{e}</button>)}</div>}
+          </div>
           <button onClick={() => setOpen((o) => !o)} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 12px", borderRadius: 999, cursor: "pointer", border: "1px solid var(--hairline)", background: "transparent", color: "var(--ink-3)", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 650 }}><Icon name="message" size={14} /> {p.comments.length}</button>
           {p.type === "announcement" && <button onClick={ack} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 12px", borderRadius: 999, cursor: "pointer", border: "1px solid var(--hairline)", background: acked ? "color-mix(in oklch, var(--ok) 16%, transparent)" : "transparent", color: acked ? "var(--ok)" : "var(--ink-3)", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 650 }}><Icon name="check" size={13} stroke={3} /> {acked ? "Acknowledged" : "Acknowledge"} · {(p.acks || []).length}</button>}
           <div style={{ flex: 1 }} />
@@ -4962,7 +4996,7 @@ function LabPostCard({ p, onChange, onDelete, canMod }) {
                 <Avatar name={c.name} size={26} />
                 <div className="inset" style={{ flex: 1, padding: "8px 11px", borderRadius: 10 }}>
                   <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--ink-2)" }}>{c.name}</div>
-                  <div style={{ fontSize: 13, color: "var(--ink)", marginTop: 2, whiteSpace: "pre-wrap" }}>{c.text}</div>
+                  <div style={{ fontSize: 13, color: "var(--ink)", marginTop: 2, whiteSpace: "pre-wrap" }}>{labRich(c.text)}</div>
                 </div>
               </div>
             ))}
@@ -4995,7 +5029,7 @@ function TheLabPage({ branch }) {
   const fileRef = React.useRef(null);
 
   const reload = () => { LAB.labFetch().then((ps) => { setPosts(ps); setLoading(false); }); };
-  React.useEffect(() => { reload(); }, []);
+  React.useEffect(() => { reload(); LAB.labMarkRead(); }, []);
 
   const onFile = async (e) => {
     const f = e.target.files && e.target.files[0]; if (!f) return;
@@ -5054,6 +5088,10 @@ function TheLabPage({ branch }) {
           <button onClick={() => setCompliance((v) => !v)} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 12px", borderRadius: 10, cursor: "pointer", border: `1px solid ${compliance ? "color-mix(in oklch, var(--bad) 45%, transparent)" : "var(--hairline)"}`, background: compliance ? "color-mix(in oklch, var(--bad) 14%, transparent)" : "transparent", color: compliance ? "var(--bad)" : "var(--ink-3)", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 650 }}><Icon name="shield" size={14} /> Compliance</button>
           <button onClick={() => fileRef.current && fileRef.current.click()} className="tap glass-2" style={{ display: "inline-flex", alignItems: "center", gap: 7, height: 38, padding: "0 13px", borderRadius: 10, cursor: "pointer", color: "var(--ink-2)", border: "1px solid var(--hairline)", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 650 }}><Icon name="camera" size={15} /> Attach</button>
           <input ref={fileRef} type="file" accept="image/*,application/pdf" onChange={onFile} style={{ display: "none" }} />
+          <select onChange={(e) => { if (e.target.value) { setText((tx) => tx + (tx && !tx.endsWith(" ") ? " " : "") + "@" + e.target.value + " "); e.target.value = ""; } }} defaultValue="" style={inp} title="Mention a teammate">
+            <option value="">@ mention…</option>
+            {[...(window.FETS.STAFF.calicut || []), ...(window.FETS.STAFF.cochin || [])].map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
           <div style={{ flex: 1 }} />
           <button onClick={submit} disabled={busy} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 20px", borderRadius: 11, border: "none", cursor: busy ? "wait" : "pointer", opacity: busy ? 0.6 : 1, fontFamily: "var(--font)", fontSize: 13.5, fontWeight: 750, color: "var(--accent-ink)", background: "var(--accent)" }}><Icon name="arrowR" size={16} /> Post</button>
         </div>
