@@ -42,6 +42,8 @@ function rowToPost(r) {
     when: r.created_at ? new Date(r.created_at) : new Date(),
     likeCount: likes.length,
     likedByMe: likes.some((l) => l.user_id === me),
+    _likes: likes.map((l) => l.user_id),
+    reactions: { "👏": likes.map((l) => l.user_id) },
     comments: (r.comments || []).map((c) => ({ id: c.id, text: c.content, name: (c.author && c.author.full_name) || "Staff", at: c.created_at })).sort((a, b) => new Date(a.at) - new Date(b.at)),
     _meta: meta,
   };
@@ -52,21 +54,75 @@ const SELECT = `*,
   likes:social_post_likes(user_id),
   comments:social_post_comments(id, author_id, content, created_at, author:staff_profiles!social_post_comments_author_id_fkey(full_name, avatar_url))`;
 
+export const LAB_EMOJIS = ["👏", "❤️", "🔥", "✅", "🎉", "👀"];
+
 export async function labFetch() {
+  let posts = [];
   try {
     const { data, error } = await supabase.from("social_posts").select(SELECT)
       .or("is_archived.is.null,is_archived.eq.false")
       .order("created_at", { ascending: false }).limit(300);
     if (error) throw error;
-    return (data || []).map(rowToPost);
+    posts = (data || []).map(rowToPost);
   } catch (e) {
     try {
       const { data } = await supabase.from("social_posts").select("*")
         .or("is_archived.is.null,is_archived.eq.false")
         .order("created_at", { ascending: false }).limit(300);
-      return (data || []).map(rowToPost);
-    } catch (e2) { return []; }
+      posts = (data || []).map(rowToPost);
+    } catch (e2) { posts = []; }
   }
+  // phase-2 overlays — multi-emoji reactions + comments (graceful if tables absent)
+  try {
+    const { data, error } = await supabase.from("lab_reactions").select("*");
+    if (!error && data) {
+      F()._labReactions = true;
+      const byPost = {};
+      data.forEach((r) => { (byPost[r.post_id] = byPost[r.post_id] || {}); (byPost[r.post_id][r.emoji] = byPost[r.post_id][r.emoji] || []).push(r.user_id); });
+      posts.forEach((p) => { p.reactions = byPost[String(p.id)] || {}; });
+    }
+  } catch (e) {}
+  try {
+    const { data, error } = await supabase.from("lab_comments").select("*").order("created_at", { ascending: true });
+    if (!error && data) {
+      F()._labComments = true;
+      const byPost = {};
+      data.forEach((c) => { (byPost[c.post_id] = byPost[c.post_id] || []).push({ id: c.id, text: c.content, name: c.author_name || "Staff", at: c.created_at, uid: c.user_id }); });
+      posts.forEach((p) => { if (byPost[String(p.id)]) p.comments = byPost[String(p.id)]; });
+    }
+  } catch (e) {}
+  return posts;
+}
+
+export async function labReact(postId, emoji, mine) {
+  const uid = F()._meUserId; if (!uid) return;
+  if (F()._labReactions) {
+    try {
+      if (mine) await supabase.from("lab_reactions").delete().eq("post_id", String(postId)).eq("user_id", uid).eq("emoji", emoji);
+      else await supabase.from("lab_reactions").insert([{ post_id: String(postId), user_id: uid, emoji }]);
+    } catch (e) {}
+  } else {
+    try {
+      if (mine) await supabase.from("social_post_likes").delete().eq("post_id", postId).eq("user_id", uid);
+      else await supabase.from("social_post_likes").insert([{ post_id: postId, user_id: uid }]);
+    } catch (e) {}
+  }
+}
+
+export async function labMarkRead() {
+  const uid = F()._meUserId; if (!uid) return;
+  try { await supabase.from("lab_reads").upsert([{ user_id: uid, last_seen_at: new Date().toISOString(), updated_at: new Date().toISOString() }], { onConflict: "user_id" }); } catch (e) {}
+}
+
+export async function labUnread() {
+  const uid = F()._meUserId; if (!uid) return 0;
+  try {
+    const { data: rd } = await supabase.from("lab_reads").select("last_seen_at").eq("user_id", uid).maybeSingle();
+    const since = (rd && rd.last_seen_at) || new Date(Date.now() - 7 * 864e5).toISOString();
+    const { count } = await supabase.from("social_posts").select("id", { count: "exact", head: true })
+      .gt("created_at", since).or("is_archived.is.null,is_archived.eq.false");
+    return count || 0;
+  } catch (e) { return 0; }
 }
 
 export async function labCreate(p) {
@@ -106,7 +162,11 @@ export async function labToggleLike(postId, liked) {
   } catch (e) {}
 }
 
-export async function labAddComment(postId, text) {
+export async function labAddComment(postId, text, mentions) {
+  if (F()._labComments) {
+    try { await supabase.from("lab_comments").insert([{ post_id: String(postId), user_id: F()._meUserId, author_name: F().user.name, content: text, mentions: mentions || [] }]); return true; }
+    catch (e) { return false; }
+  }
   try { await supabase.from("social_post_comments").insert([{ post_id: postId, author_id: F()._meId || F()._meUserId, content: text }]); return true; }
   catch (e) { return false; }
 }
