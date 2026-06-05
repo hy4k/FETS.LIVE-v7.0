@@ -55,7 +55,7 @@ export async function loadLiveData(F: any) {
   let profileBranch: Record<string, string> = {};
   try {
     const { data, error } = await supabase
-      .from("staff_profiles").select("id, user_id, full_name, role, branch_assigned").order("full_name");
+      .from("staff_profiles").select("id, user_id, full_name, role, branch_assigned, is_active").order("full_name");
     if (!error && data && data.length) {
       const pool: Record<string, string[]> = { calicut: [], cochin: [] };
       const idByName: Record<string, any> = {};
@@ -68,6 +68,10 @@ export async function loadLiveData(F: any) {
         if (F._meUserId && p.user_id === F._meUserId) { F._meId = p.id; F._meName = p.full_name; F._meBranch = b; }
       });
       F._staffIdByName = idByName;
+      const activeStaff = data
+        .filter((p: any) => p.is_active !== false && p.full_name)
+        .map((p: any) => p.full_name.trim());
+      F.PEOPLE = Array.from(new Set(activeStaff)).sort((x, y) => x.localeCompare(y));
       if (pool.calicut.length || pool.cochin.length) {
         F.STAFF = { calicut: pool.calicut.length ? pool.calicut : F.STAFF.calicut, cochin: pool.cochin.length ? pool.cochin : F.STAFF.cochin };
       }
