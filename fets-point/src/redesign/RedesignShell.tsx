@@ -5257,7 +5257,7 @@ function TheLabPage({ branch }) {
           <input ref={fileRef} type="file" accept="image/*,application/pdf" onChange={onFile} style={{ display: "none" }} />
           <select onChange={(e) => { if (e.target.value) { setText((tx) => tx + (tx && !tx.endsWith(" ") ? " " : "") + "@" + e.target.value + " "); e.target.value = ""; } }} defaultValue="" style={inp} title="Mention a teammate">
             <option value="">@ mention…</option>
-            {[...(window.FETS.STAFF.calicut || []), ...(window.FETS.STAFF.cochin || [])].map((n) => <option key={n} value={n}>{n}</option>)}
+            {(window.FETS.PEOPLE || [...(window.FETS.STAFF.calicut || []), ...(window.FETS.STAFF.cochin || [])]).map((n) => <option key={n} value={n}>{n}</option>)}
           </select>
           <div style={{ flex: 1 }} />
           <button onClick={submit} disabled={busy} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 20px", borderRadius: 11, border: "none", cursor: busy ? "wait" : "pointer", opacity: busy ? 0.6 : 1, fontFamily: "var(--font)", fontSize: 13.5, fontWeight: 750, color: "var(--accent-ink)", background: "var(--accent)" }}><Icon name="arrowR" size={16} /> Post</button>
