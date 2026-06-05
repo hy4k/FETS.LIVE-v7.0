@@ -2514,16 +2514,16 @@ function CalendarPage({ branch }) {
    ===================================================================== */
 /* shift codes shown in every roster cell (OT is an add-on, not a base code) */
 const ROSTER_CODES = {
-  D:    { label: "Day shift",        color: "var(--accent)",      ink: "var(--accent-ink)", solid: true },
-  E:    { label: "Evening shift",    color: "var(--v-prometric)", ink: "#fff",              solid: true },
-  HD:   { label: "Half day",         color: "var(--warn)",        ink: "var(--accent-ink)", solid: true },
-  RD:   { label: "Rest day",         color: "var(--ink-4)",       ink: "var(--ink-3)",      solid: false },
-  L:    { label: "Leave",            color: "var(--bad)",         ink: "#fff",              solid: true },
-  TOIL: { label: "Time off in lieu", color: "var(--v-cma)",       ink: "var(--accent-ink)", solid: true },
-  TO:   { label: "TOIL taken",       color: "var(--accent-2)",    ink: "var(--accent-ink)", solid: true },
-  SW:   { label: "Shift swapped",    color: "var(--v-ielts)",     ink: "#fff",              solid: true },
+  D:    { label: "Day shift",        color: "color-mix(in oklch, var(--accent) 18%, var(--panel-3))",      ink: "var(--accent)",      solid: true },
+  E:    { label: "Evening shift",    color: "color-mix(in oklch, var(--v-prometric) 20%, var(--panel-3))", ink: "var(--v-prometric)", solid: true },
+  HD:   { label: "Half day",         color: "color-mix(in oklch, var(--warn) 20%, var(--panel-3))",        ink: "var(--warn)",        solid: true },
+  RD:   { label: "Rest day",         color: "var(--panel-3)",                                              ink: "var(--ink-4)",       solid: false },
+  L:    { label: "Leave",            color: "color-mix(in oklch, var(--bad) 20%, var(--panel-3))",         ink: "var(--bad)",         solid: true },
+  TOIL: { label: "TOIL Earned",      color: "color-mix(in oklch, var(--v-cma) 20%, var(--panel-3))",       ink: "var(--v-cma)",       solid: true },
+  TR:   { label: "TOIL Redeemed",    color: "color-mix(in oklch, var(--v-ielts) 20%, var(--panel-3))",     ink: "var(--v-ielts)",     solid: true },
+  SW:   { label: "Shift swapped",    color: "color-mix(in oklch, var(--v-prometric) 30%, var(--panel-3))",  ink: "var(--v-prometric)", solid: true },
 };
-const RC_LIST = ["D", "E", "HD", "RD", "L", "TOIL"];
+const RC_LIST = ["D", "E", "HD", "RD", "L", "TOIL", "TR", "SW"];
 const WORK_CODES = ["D", "E", "HD"];
 const OT_COLOR = "var(--v-ielts)";
 
@@ -2533,11 +2533,19 @@ function reflectOnRoster(r) {
   let off;
   try { off = F().offsetOf(new Date(r.date)); } catch (e) { return; }
   if (off == null || isNaN(off)) return;
-  if (r.kind === "leave") F().rosterSet(r.who, off, { code: "L", ot: 0 });
-  else if (r.kind === "toil") F().rosterSet(r.who, off, { code: "TO", ot: 0 });
-  else if (r.kind === "swap") {
-    F().rosterSet(r.who, off, { code: "SW", ot: 0 });
-    if (r.with) F().rosterSet(r.with, off, { code: "SW", ot: 0 });
+  if (r.kind === "leave") {
+    F().rosterSet(r.who, off, { code: "L", ot: 0 });
+  } else if (r.kind === "toil") {
+    F().rosterSet(r.who, off, { code: "TR", ot: 0 });
+  } else if (r.kind === "swap") {
+    let swapOff;
+    try { swapOff = F().offsetOf(new Date(r.swapDate || r.date)); } catch(e) {}
+    if (swapOff != null && !isNaN(swapOff)) {
+      const cellA = F().rosterGet(r.who)[off] || { code: "D", ot: 0 };
+      const cellB = F().rosterGet(r.with)[swapOff] || { code: "D", ot: 0 };
+      F().rosterSet(r.who, off, { code: cellB.code || "D", ot: cellB.ot || 0 });
+      F().rosterSet(r.with, swapOff, { code: cellA.code || "D", ot: cellA.ot || 0 });
+    }
   }
   window.dispatchEvent(new Event("fets-roster-changed"));
 }
@@ -2557,7 +2565,7 @@ function RosterLegend() {
         return (
           <span key={k} style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 11.5, color: "var(--ink-3)", fontWeight: 600 }}>
             <span style={{ minWidth: 26, height: 20, padding: "0 6px", borderRadius: 6, display: "grid", placeItems: "center", fontSize: 10, fontWeight: 800, fontFamily: "var(--font)",
-              color: m.ink, background: m.solid ? m.color : "var(--inset)", border: m.solid ? "none" : "1px solid var(--hairline)" }}>{k}</span>
+              color: m.ink, background: m.color, border: "1px solid var(--hairline)" }}>{k}</span>
             {m.label}
           </span>
         );
@@ -2608,7 +2616,7 @@ function RosterCellDialog({ ctx, onApply, onClose }) {
               <button key={k} onClick={() => setCode(k)} className="tap" style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 11px", borderRadius: 11, cursor: "pointer",
                 textAlign: "left", fontFamily: "var(--font)", border: "1px solid " + (on ? "var(--accent-line)" : "var(--hairline)"), background: on ? "var(--accent-soft)" : "var(--inset)" }}>
                 <span style={{ minWidth: 34, height: 28, padding: "0 7px", borderRadius: 8, display: "grid", placeItems: "center", flexShrink: 0, fontSize: 12, fontWeight: 800,
-                  color: m.ink, background: m.solid ? m.color : "var(--panel-3)", border: m.solid ? "none" : "1px solid var(--hairline)" }}>{k}</span>
+                  color: m.ink, background: m.color, border: "1px solid var(--hairline)" }}>{k}</span>
                 <span style={{ flex: 1, fontSize: 13.5, fontWeight: on ? 700 : 600, color: on ? "var(--ink)" : "var(--ink-2)" }}>{m.label}</span>
                 {on && <Icon name="check" size={16} stroke={2.6} style={{ color: "var(--accent)" }} />}
               </button>
@@ -2638,7 +2646,7 @@ function RosterCellDialog({ ctx, onApply, onClose }) {
         <div style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 12.5, color: "var(--ink-3)", fontWeight: 600 }}>
           <span>This cell:</span>
           <span style={{ minWidth: 34, height: 26, padding: "0 9px", borderRadius: 7, display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 800,
-            color: ROSTER_CODES[effective].ink, background: ROSTER_CODES[effective].solid ? ROSTER_CODES[effective].color : "var(--panel-3)",
+            color: ROSTER_CODES[effective].ink, background: ROSTER_CODES[effective].color,
             boxShadow: (otOn && otAllowed) ? `inset 0 -3px 0 ${OT_COLOR}` : "none" }}>
             {(otOn && otAllowed) ? `${effective}+OT` : effective}{(otOn && otAllowed) ? <span style={{ fontSize: 9, opacity: 0.9 }}>{hours}h</span> : null}
           </span>
@@ -2679,13 +2687,11 @@ function RosterGrid({ offsets, branch }) {
     return () => window.removeEventListener("fets-roster-changed", h);
   }, [branch, offsets[0]]);
   const [dialog, setDialog] = React.useState(null);   // { name, off, date, cell, defaultCode }
-  const [reqCtx, setReqCtx] = React.useState(null);   // non-admin request on own cell
 
   const apply = (name, off, cell) => {
     F().rosterSet(name, off, cell);
     const _d = F().ISO(off);
     if (cell) DB.dbSetRoster(name, _d, cell.code); else DB.dbClearRoster(name, _d);
-    setReqMark(name, off, null);   // acting on a cell clears any pending request marker
     setGrid((g) => {
       const dflt = g[name][off].dflt;
       const nc = cell ? { code: cell.code, ot: +cell.ot || 0, dflt, override: true } : { code: dflt, ot: 0, dflt, override: false };
@@ -2694,6 +2700,13 @@ function RosterGrid({ offsets, branch }) {
     setDialog(null);
   };
   const cols = `190px repeat(${offsets.length}, minmax(56px,1fr))`;
+
+  const ymdFormat = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const reqMarkOf = (name, off) => {
+    if (!F()._staffRequests) return false;
+    const dstr = ymdFormat(F().ISO(off));
+    return F()._staffRequests.some(r => r.who === name && r.date === dstr && r.status === "Submitted");
+  };
 
   return (
     <React.Fragment>
@@ -2731,15 +2744,16 @@ function RosterGrid({ offsets, branch }) {
               const ot = +cell.ot || 0;
               const main = ot > 0 ? `${code}+OT` : code;
               const d = F().ISO(o);
+              const pending = reqMarkOf(n, o);
               return (
-                <button key={o} onClick={() => { if (window.FETS.isAdmin) { setDialog({ name: n, off: o, date: d, cell, defaultCode: cell.dflt || "RD" }); } else if (n === window.FETS.user.name) { setReqCtx({ name: n, off: o, date: d }); } else { toast("Tap your own day to request leave / swap / TOIL", "alert"); } }} className="tap" title={window.FETS.isAdmin ? `${m.label}${ot > 0 ? ` + OT ${ot}h` : ""} — tap to change` : (n === window.FETS.user.name ? "Tap to request leave / swap / TOIL" : m.label)}
-                  style={{ position: "relative", height: 40, borderRadius: 8, cursor: "pointer", border: m.solid ? "1px solid transparent" : "1px solid var(--glass-edge-lo)",
+                <button key={o} onClick={() => { if (window.FETS.isAdmin) { setDialog({ name: n, off: o, date: d, cell, defaultCode: cell.dflt || "RD" }); } }} className="tap" title={window.FETS.isAdmin ? `${m.label}${ot > 0 ? ` + OT ${ot}h` : ""} — tap to change` : m.label}
+                  style={{ position: "relative", height: 40, borderRadius: 8, cursor: window.FETS.isAdmin ? "pointer" : "default", border: m.solid ? "1px solid transparent" : "1px solid var(--glass-edge-lo)",
                     background: m.solid ? m.color : "var(--panel-3)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 0,
                     color: m.ink, fontFamily: "var(--font)", fontWeight: 800, letterSpacing: "0.01em",
                     boxShadow: ot > 0 ? `inset 0 -3px 0 ${OT_COLOR}` : "none" }}>
                   <span style={{ fontSize: main.length > 2 ? 9.5 : 12, lineHeight: 1 }}>{main}</span>
                   {ot > 0 && <span className="mono" style={{ fontSize: 8, fontWeight: 700, lineHeight: 1.1, opacity: 0.92 }}>{ot}h</span>}
-                  {reqMarkOf(n, o) && <span title="Request pending — Mithun to action" style={{ position: "absolute", top: 3, right: 3, width: 7, height: 7, borderRadius: 999, background: "var(--warn)", boxShadow: "0 0 6px var(--warn)" }} />}
+                  {pending && <span title="Request pending — Mithun to action" style={{ position: "absolute", top: 3, right: 3, width: 7, height: 7, borderRadius: 999, background: "var(--warn)", boxShadow: "0 0 6px var(--warn)" }} />}
                 </button>
               );
             })}
@@ -2748,7 +2762,6 @@ function RosterGrid({ offsets, branch }) {
       </div>
     </div>
     {dialog && <RosterCellDialog ctx={dialog} onClose={() => setDialog(null)} onApply={(cell) => apply(dialog.name, dialog.off, cell)} />}
-    {reqCtx && <RosterRequestDialog name={reqCtx.name} off={reqCtx.off} date={reqCtx.date} branch={branch} onClose={() => setReqCtx(null)} />}
     </React.Fragment>
   );
 }
@@ -2829,7 +2842,7 @@ function RosterAnalysis({ offsets, branch }) {
   const pool = branch === "global"
     ? [...F().STAFF.calicut, ...F().STAFF.cochin]
     : F().STAFF[branch];
-  const perStaff = {}; const codeCount = { D: 0, E: 0, HD: 0, RD: 0, L: 0, TOIL: 0 };
+  const perStaff = {}; const codeCount = { D: 0, E: 0, HD: 0, RD: 0, L: 0, TOIL: 0, TR: 0 };
   let otHours = 0;
   const workSet = ["D", "E", "HD", "TOIL"];
   pool.forEach((n) => {
@@ -2846,7 +2859,7 @@ function RosterAnalysis({ offsets, branch }) {
   const staffRows = pool.map((n) => [n, perStaff[n] || 0]).sort((a, b) => b[1] - a[1]);
   const staffMax = Math.max(1, ...staffRows.map((r) => r[1]));
   const working = codeCount.D + codeCount.E + codeCount.HD + codeCount.TOIL;
-  const mixSeg = RC_LIST.map((k) => ({ label: ROSTER_CODES[k].label, color: k === "RD" ? "var(--ink-4)" : ROSTER_CODES[k].color, n: codeCount[k] }));
+  const mixSeg = ["D", "E", "HD", "RD", "L", "TOIL", "TR"].map((k) => ({ label: ROSTER_CODES[k].label, color: k === "RD" ? "var(--ink-4)" : ROSTER_CODES[k].color, n: codeCount[k] || 0 }));
   const mixTotal = mixSeg.reduce((a, s) => a + s.n, 0);
 
   return (
@@ -2939,42 +2952,212 @@ function reqMarksAll() { try { return JSON.parse(localStorage.getItem("fets-reqm
 function reqMarkOf(name, off) { return reqMarksAll()[`${name}|${off}`]; }
 function setReqMark(name, off, val) { const a = reqMarksAll(); if (val) a[`${name}|${off}`] = val; else delete a[`${name}|${off}`]; localStorage.setItem("fets-reqmarks", JSON.stringify(a)); window.dispatchEvent(new Event("fets-roster-changed")); }
 
-function RosterRequestDialog({ name, off, date, branch, onClose }) {
+/* ---------- personalized stats card for roster ---------- */
+function PersonalizedRosterOverview({ branch }) {
+  const F = window.FETS;
+  const meName = F.user.name;
+  
+  // Calculate this month's stats for current user
+  const monthlyOffsets = Array.from({ length: 30 }, (_, i) => i - 5); // scan nearby 30 days
+  let workedDays = 0;
+  let restDays = 0;
+  let leaveDays = 0;
+  
+  const ov = F.rosterGet(meName) || {};
+  monthlyOffsets.forEach((o) => {
+    const c = ov[o];
+    const code = c ? (typeof c === "string" ? c : c.code) : F.rosterOn(F.ISO(o), branch).includes(meName) ? "D" : "RD";
+    if (["D", "E", "HD"].includes(code)) workedDays++;
+    if (code === "RD") restDays++;
+    if (code === "L") leaveDays++;
+  });
+  
+  const toilBalance = F._meToilBalance || 0;
+  const toilEarned = F._meToilEarned || 0;
+  const toilRedeemed = F._meToilRedeemed || 0;
+
+  return (
+    <div className="glass rise" style={{ borderRadius: "var(--radius)", padding: "20px 22px", display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <Avatar name={meName} size={42} />
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 750, color: "var(--accent)" }}>Hello, {meName.split(" ")[0]}!</div>
+          <div style={{ fontSize: 12.5, color: "var(--ink-3)", marginTop: 1 }}>Here is your personalized roster summary for this month:</div>
+        </div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 12 }}>
+        <div className="inset" style={{ padding: "12px 14px", borderRadius: 12 }}>
+          <div className="eyebrow" style={{ fontSize: 9.5, color: "var(--ink-4)" }}>Days Worked</div>
+          <div className="tabnum" style={{ fontSize: 22, fontWeight: 800, color: "var(--ink)", marginTop: 4 }}>{workedDays}</div>
+        </div>
+        <div className="inset" style={{ padding: "12px 14px", borderRadius: 12 }}>
+          <div className="eyebrow" style={{ fontSize: 9.5, color: "var(--ink-4)" }}>Rest Days</div>
+          <div className="tabnum" style={{ fontSize: 22, fontWeight: 800, color: "var(--ink-2)", marginTop: 4 }}>{restDays}</div>
+        </div>
+        <div className="inset" style={{ padding: "12px 14px", borderRadius: 12 }}>
+          <div className="eyebrow" style={{ fontSize: 9.5, color: "var(--ink-4)" }}>Leave Days</div>
+          <div className="tabnum" style={{ fontSize: 22, fontWeight: 800, color: "var(--bad)", marginTop: 4 }}>{leaveDays}</div>
+        </div>
+        <div className="inset" style={{ padding: "12px 14px", borderRadius: 12, border: "1px dashed var(--accent)" }}>
+          <div className="eyebrow" style={{ fontSize: 9.5, color: "var(--accent)" }}>TOIL Balance</div>
+          <div className="tabnum" style={{ fontSize: 22, fontWeight: 800, color: "var(--accent)", marginTop: 4 }}>
+            {toilBalance} <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-3)" }}>days</span>
+          </div>
+          <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", marginTop: 2 }}>
+            {toilEarned} earned · {toilRedeemed} redeemed
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- roster request tabbed form ---------- */
+function RosterRequestForm({ branch }) {
   const [kind, setKind] = React.useState("leave");
+  const [leaveType, setLeaveType] = React.useState("Full-day leave");
+  const [reqDate, setReqDate] = React.useState("");
+  const [swapDate, setSwapDate] = React.useState("");
   const [withWho, setWithWho] = React.useState("");
   const [reason, setReason] = React.useState("");
-  const dstr = `${window.P_WDL[date.getDay()]}, ${window.P_MO[date.getMonth()]} ${date.getDate()}`;
-  const mates = (window.FETS.STAFF[branch] || []).filter((n) => n !== name);
-  React.useEffect(() => { const k = (e) => { if (e.key === "Escape") onClose(); }; window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, []);
-  const submit = () => {
-    const iso = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-    const req = kind === "swap" ? { id: "q" + Date.now(), kind: "swap", who: name, with: withWho, branch, date: iso, reason, status: "Submitted" }
-      : kind === "toil" ? { id: "q" + Date.now(), kind: "toil", who: name, branch, days: 1, date: iso, reason, status: "Submitted" }
-      : { id: "q" + Date.now(), kind: "leave", who: name, branch, leaveType: "Full-day leave", date: iso, reason, status: "Submitted" };
-    try { window.FETS.staffReqAdd(req); } catch (e) {}
-    DB.dbAddLeave(req);
-    setReqMark(name, off, { kind, reason });
-    toast("Sent to Mithun — he'll update your roster", "check");
-    onClose();
+  const [submitting, setSubmitting] = React.useState(false);
+
+  const F = window.FETS;
+  const meName = F.user.name;
+
+  // list of colleagues for shift swap
+  const pool = branch === "global"
+    ? [...F.STAFF.calicut, ...F.STAFF.cochin]
+    : F.STAFF[branch] || [];
+  const colleagues = pool.filter((n) => n !== meName);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!reqDate) {
+      toast("Please select a date", "alert");
+      return;
+    }
+    if (kind === "swap" && !withWho) {
+      toast("Please select a staff member to swap with", "alert");
+      return;
+    }
+    if (kind === "swap" && !swapDate) {
+      toast("Please select the target swap date", "alert");
+      return;
+    }
+
+    setSubmitting(true);
+    const req = {
+      who: meName,
+      branch: branch === "global" ? (F._meBranch || "calicut") : branch,
+      kind,
+      date: reqDate,
+      reason,
+      ...(kind === "leave" && { leaveType }),
+      ...(kind === "swap" && { with: withWho, swapDate }),
+      ...(kind === "toil" && { days: 1 })
+    };
+
+    const res = await DB.dbAddStaffRequest(req);
+    setSubmitting(false);
+
+    if (res) {
+      setReqDate("");
+      setSwapDate("");
+      setWithWho("");
+      setReason("");
+    }
   };
-  const inp = { background: "var(--inset)", border: "1px solid var(--hairline)", borderRadius: 9, color: "var(--ink)", fontFamily: "var(--font)", fontSize: 13, padding: "9px 11px", width: "100%" };
+
+  const inpStyle = {
+    background: "var(--inset)",
+    border: "1px solid var(--hairline)",
+    borderRadius: 10,
+    color: "var(--ink)",
+    fontFamily: "var(--font)",
+    fontSize: 13.5,
+    padding: "10px 12px",
+    width: "100%",
+    outline: "none"
+  };
+
   return (
-    <React.Fragment>
-      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "oklch(0.12 0.02 182 / 0.6)", backdropFilter: "blur(3px)", zIndex: 130 }} />
-      <div role="dialog" className="glass rise" style={{ position: "fixed", zIndex: 131, top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(400px,93vw)", borderRadius: "var(--radius)", padding: 22, boxShadow: "var(--shadow-lift)", display: "flex", flexDirection: "column", gap: 14 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 40, height: 40, borderRadius: 11, display: "grid", placeItems: "center", color: "var(--accent-ink)", background: "var(--accent)" }}><Icon name="calendar" size={19} /></div>
-          <div style={{ flex: 1 }}><h2 style={{ margin: 0, fontSize: 16, fontWeight: 750, color: "var(--ink)" }}>Request for {dstr}</h2><div style={{ fontSize: 12, color: "var(--ink-3)" }}>Mithun is notified — no approval queue.</div></div>
-          <button onClick={onClose} className="tap glass-2" style={{ width: 34, height: 34, borderRadius: 999, display: "grid", placeItems: "center", cursor: "pointer", color: "var(--ink-2)", border: "1px solid var(--hairline)" }}><Icon name="x" size={16} /></button>
-        </div>
-        <div className="inset" style={{ display: "flex", padding: 4, gap: 3, borderRadius: 999 }}>
-          {[{ k: "leave", l: "Leave" }, { k: "swap", l: "Swap" }, { k: "toil", l: "TOIL" }].map((o) => { const on = kind === o.k; return <button key={o.k} onClick={() => setKind(o.k)} className="tap" style={{ flex: 1, border: "none", cursor: "pointer", padding: "8px", borderRadius: 999, fontFamily: "var(--font)", fontSize: 12.5, fontWeight: on ? 750 : 600, color: on ? "var(--accent-ink)" : "var(--ink-3)", background: on ? "var(--accent)" : "transparent" }}>{o.l}</button>; })}
-        </div>
-        {kind === "swap" && <select value={withWho} onChange={(e) => setWithWho(e.target.value)} style={inp}><option value="">Swap with…</option>{mates.map((n) => <option key={n} value={n}>{n}</option>)}</select>}
-        <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} placeholder="Reason (optional)" style={{ ...inp, resize: "vertical" }} />
-        <button onClick={submit} className="tap" style={{ height: 44, borderRadius: 12, border: "none", cursor: "pointer", fontFamily: "var(--font)", fontSize: 14, fontWeight: 780, color: "var(--accent-ink)", background: "var(--accent)" }}>Send request</button>
+    <div className="glass" style={{ borderRadius: "var(--radius)", padding: 22, display: "flex", flexDirection: "column", gap: 16 }}>
+      <SectionLabel>Apply for Leave / Swap / TOIL</SectionLabel>
+      <div className="inset" style={{ display: "flex", padding: 4, gap: 4, borderRadius: 999, width: "fit-content", minWidth: 260 }}>
+        {[{ k: "leave", l: "Leave" }, { k: "swap", l: "Shift Swap" }, { k: "toil", l: "TOIL" }].map((o) => {
+          const on = kind === o.k;
+          return (
+            <button type="button" key={o.k} onClick={() => setKind(o.k)} className="tap" style={{
+              flex: 1, border: "none", cursor: "pointer", padding: "8px 16px", borderRadius: 999,
+              fontFamily: "var(--font)", fontSize: 13, fontWeight: on ? 750 : 600,
+              color: on ? "var(--accent-ink)" : "var(--ink-3)", background: on ? "var(--accent)" : "transparent"
+            }}>{o.l}</button>
+          );
+        })}
       </div>
-    </React.Fragment>
+
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {kind === "leave" && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }} className="case-2col">
+            <label style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
+              Leave Date
+              <input type="date" value={reqDate} onChange={(e) => setReqDate(e.target.value)} style={inpStyle} />
+            </label>
+            <label style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
+              Leave Type
+              <select value={leaveType} onChange={(e) => setLeaveType(e.target.value)} style={inpStyle}>
+                <option value="Full-day leave">Full-day leave</option>
+                <option value="Half day">Half day</option>
+              </select>
+            </label>
+          </div>
+        )}
+
+        {kind === "swap" && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }} className="case-cols">
+            <label style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
+              Your Shift Date
+              <input type="date" value={reqDate} onChange={(e) => setReqDate(e.target.value)} style={inpStyle} />
+            </label>
+            <label style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
+              Swap With
+              <select value={withWho} onChange={(e) => setWithWho(e.target.value)} style={inpStyle}>
+                <option value="">Select colleague…</option>
+                {colleagues.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </label>
+            <label style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
+              Their Shift Date
+              <input type="date" value={swapDate} onChange={(e) => setSwapDate(e.target.value)} style={inpStyle} />
+            </label>
+          </div>
+        )}
+
+        {kind === "toil" && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
+            <label style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
+              Date to Redeem TOIL
+              <input type="date" value={reqDate} onChange={(e) => setReqDate(e.target.value)} style={inpStyle} />
+            </label>
+          </div>
+        )}
+
+        <label style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
+          Reason / Comments
+          <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} placeholder="Explain briefly (optional)…" style={{ ...inpStyle, resize: "vertical" }} />
+        </label>
+
+        <button type="submit" disabled={submitting} className="tap" style={{
+          height: 42, borderRadius: 10, border: "none", cursor: "pointer", fontFamily: "var(--font)",
+          fontSize: 13.5, fontWeight: 780, color: "var(--accent-ink)", background: "var(--accent)",
+          alignSelf: "flex-end", padding: "0 24px", display: "inline-flex", alignItems: "center", gap: 8
+        }}>
+          <Icon name="check" size={15} stroke={2.5} />
+          {submitting ? "Submitting…" : "Submit Request"}
+        </button>
+      </form>
+    </div>
   );
 }
 
@@ -3013,6 +3196,135 @@ function AttendanceAdminPage({ branch }) {
             ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ---------- Roster Approvals Hub page (recreation of staff management) ---------- */
+function RosterApprovalsHub({ branch }) {
+  const [reqs, setReqs] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [tab, setTab] = React.useState("pending");
+
+  const F = window.FETS;
+
+  const load = () => {
+    setLoading(true);
+    loadLiveData(F).then(() => {
+      setReqs(F.staffReqList() || []);
+      setLoading(false);
+    });
+  };
+
+  React.useEffect(() => {
+    load();
+    window.addEventListener("fets-roster-changed", load);
+    return () => window.removeEventListener("fets-roster-changed", load);
+  }, []);
+
+  const resolve = async (id, status) => {
+    const adminId = F._meId || "00000000-0000-0000-0000-000000000000";
+    await DB.dbResolveStaffRequest(id, status, adminId);
+    load();
+  };
+
+  const filtered = reqs.filter((r) => {
+    const matchesBranch = branch === "global" || r.branch === branch;
+    if (tab === "pending") return matchesBranch && r.status === "Submitted";
+    return matchesBranch && r.status !== "Submitted";
+  });
+
+  const SCOL = { Submitted: "var(--warn)", Approved: "var(--ok)", Rejected: "var(--bad)" };
+
+  return (
+    <div style={{ maxWidth: 1000, margin: "0 auto", display: "flex", flexDirection: "column", gap: 20 }}>
+      <PageHeader eyebrow="Modules // Admin" title="Roster Approvals Hub" />
+
+      <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+        <Segmented value={tab} onChange={setTab} size="sm" options={[
+          { value: "pending", label: "Pending Requests" },
+          { value: "history", label: "History" }
+        ]} />
+        <div style={{ flex: 1 }} />
+        <button onClick={load} className="tap glass-2" style={{ width: 36, height: 36, borderRadius: 10, display: "grid", placeItems: "center", border: "1px solid var(--hairline)", cursor: "pointer", color: "var(--ink-2)" }}>
+          <Icon name="refresh" size={15} />
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="glass" style={{ padding: 40, borderRadius: "var(--radius)", textAlign: "center", color: "var(--ink-4)" }}>
+          Loading requests…
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="glass" style={{ padding: 40, borderRadius: "var(--radius)", textAlign: "center", color: "var(--ink-4)" }}>
+          No {tab === "pending" ? "pending" : "resolved"} requests found.
+        </div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
+          {filtered.map((r) => {
+            const isSwap = r.kind === "swap";
+            const isToil = r.kind === "toil";
+            const kindMeta = isSwap ? { label: "Shift Swap", color: "var(--v-prometric)" }
+              : isToil ? { label: "TOIL", color: "var(--v-cma)" }
+              : { label: "Leave", color: "var(--v-ielts)" };
+              
+            return (
+              <div key={r.id} className="glass rise" style={{ padding: 20, borderRadius: "var(--radius)", display: "flex", flexDirection: "column", gap: 14 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <Avatar name={r.who} size={36} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14.5, fontWeight: 700, color: "var(--ink)" }}>{r.who}</div>
+                    <div style={{ fontSize: 11.5, color: "var(--ink-4)", marginTop: 1 }}>
+                      {r.branch} center
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", padding: "4px 10px", borderRadius: 99,
+                    color: kindMeta.color, background: `color-mix(in oklch, ${kindMeta.color} 15%, transparent)` }}>
+                    {kindMeta.label}
+                  </span>
+                </div>
+
+                <div style={{ fontSize: 13.5, color: "var(--ink-2)", fontWeight: 600 }}>
+                  {isSwap ? (
+                    <span>
+                      Swap shift on <b style={{ color: "var(--ink)" }}>{r.date}</b> with <b style={{ color: "var(--ink)" }}>{r.with}</b> (their shift on <b style={{ color: "var(--ink)" }}>{r.swapDate || r.date}</b>)
+                    </span>
+                  ) : isToil ? (
+                    <span>
+                      Redeem TOIL day on <b style={{ color: "var(--ink)" }}>{r.date}</b>
+                    </span>
+                  ) : (
+                    <span>
+                      Take leave on <b style={{ color: "var(--ink)" }}>{r.date}</b> ({r.leaveType})
+                    </span>
+                  )}
+                </div>
+
+                {r.reason && (
+                  <p style={{ margin: 0, padding: "10px 12px", borderRadius: 8, background: "var(--inset)", fontSize: 12.5, color: "var(--ink-3)", fontStyle: "italic", fontFamily: "var(--font-serif)", lineHeight: 1.4 }}>
+                    “{r.reason}”
+                  </p>
+                )}
+
+                {r.status === "Submitted" ? (
+                  <div style={{ display: "flex", gap: 9, alignSelf: "flex-end", marginTop: 4 }}>
+                    <button onClick={() => resolve(r.id, "Approved")} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 34, padding: "0 16px", borderRadius: 8, border: "none", cursor: "pointer", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 750, color: "var(--accent-ink)", background: "var(--accent)" }}>
+                      <Icon name="check" size={14} stroke={2.6} /> Approve
+                    </button>
+                    <button onClick={() => resolve(r.id, "Rejected")} className="tap glass-2" style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 34, padding: "0 16px", borderRadius: 8, border: "1px solid var(--hairline)", cursor: "pointer", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 650, color: "var(--ink-2)" }}>
+                      <Icon name="x" size={14} stroke={2.6} /> Reject
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ alignSelf: "flex-end", fontSize: 12.5, fontWeight: 700, color: SCOL[r.status], display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+                    <Icon name={r.status === "Approved" ? "check" : "x"} size={14} stroke={2.6} /> {r.status}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -3098,6 +3410,9 @@ function RosterPage({ branch }) {
     <div style={{ maxWidth: 1180, margin: "0 auto", display: "flex", flexDirection: "column", gap }}>
       <PageHeader eyebrow={`Staffing // ${capBranch(branch)}`} title="Roster" />
 
+      {/* Roster Overview / TOIL Balance summary for current logged in user */}
+      <PersonalizedRosterOverview branch={branch} />
+
       {/* attendance — check in / step out / back / check out (persisted) */}
       <section style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <SectionLabel right={
@@ -3145,6 +3460,9 @@ function RosterPage({ branch }) {
         )}
         {view === "days" && <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)", alignSelf: "flex-end" }}>{window.FETS.isAdmin ? "tap a cell to change shift · use Quick add for a 6+1 block" : "viewing roster · editing is restricted to the super admin"}</span>}
       </section>
+
+      {/* Roster request form (leave, swap, toil) at the bottom */}
+      <RosterRequestForm branch={branch} />
 
       {isAdmin && quickOpen && <QuickAddRoster branch={branch} onClose={() => setQuickOpen(false)} />}
       <Drawer open={!!dayDrawer} onClose={() => setDayDrawer(null)} icon="users"
@@ -4775,7 +5093,7 @@ const TOOLS = [
   { id: "fets-intelligence", icon: "spark", label: "FETS AI", sub: "Ops copilot", legacy: true },
   { id: "candidate-tracker", icon: "users", label: "Candidate Tracker", sub: "Registrations & sessions", legacy: true },
   { id: "access-hub", icon: "key", label: "F-Vault / Access Hub", sub: "Credentials & access", legacy: true },
-  { id: "staff-management", icon: "user", label: "Staff Management", sub: "Team & profiles", legacy: true },
+  { id: "staff-requests", icon: "user", label: "Roster Approvals Hub", sub: "Manage staff requests, leaves & swaps" },
   { id: "dashboard", icon: "grid", label: "Dashboard", sub: "iCloud overview", legacy: true },
   { id: "news-manager", icon: "message", label: "News Manager", sub: "Announcements", legacy: true },
   { id: "system-manager", icon: "settings", label: "System Manager", sub: "Admin & config", legacy: true },
@@ -5377,8 +5695,7 @@ function App({ bridge, onLogout }) {
 
   const handlePick = (it) => {
     if (it.nav) { setActive(it.id); return; }
-    if (it.id === "business") { setActive("business"); return; }
-    if (it.id === "attn-admin") { setActive("attn-admin"); return; }
+    if (["business", "attn-admin", "staff-requests"].includes(it.id)) { setActive(it.id); return; }
     if (it.id === "vault") { setDrawer("vault"); return; }
     if (it.legacy && bridge) { bridge(it.id); return; }
     toast(it.label, "arrowR");
@@ -5401,6 +5718,7 @@ function App({ bridge, onLogout }) {
         {active === "business" && <BusinessPage branch={branch} />}
         {active === "news" && <TheLabPage branch={branch} />}
         {active === "attn-admin" && <AttendanceAdminPage branch={branch} />}
+        {active === "staff-requests" && <RosterApprovalsHub branch={branch} />}
       </main>
 
       {/* drawers */}

@@ -185,30 +185,125 @@ export async function dbDeleteVault(id: any) {
   try { await supabase.from("fets_vault").delete().eq("id", id); rtoast("Removed from vault"); } catch (e) { rtoast("DB delete failed", "alert"); }
 }
 
-/* ---------------- leave_requests ---------------- */
-export async function dbAddLeave(req: any) {
-  const typeMap: any = {
-    leave: req.leaveType || "Leave",
-    swap: `Shift swap${req.with ? ` with ${req.with}` : ""}`,
-    toil: `TOIL (${req.days || 1} day${(req.days || 1) > 1 ? "s" : ""})`,
-  };
-  const leave_type = typeMap[req.kind] || "Leave";
-  let requested_date: string | null = null;
-  const d = new Date(req.date);
-  if (!isNaN(d.getTime())) requested_date = ymd(d);
+/* ---------------- leave_requests (staff requests) ---------------- */
+export async function dbSetRosterById(pid: string, date: string, shiftCode: string) {
+  try {
+    const { data: ex } = await supabase.from("roster_schedules").select("id").eq("profile_id", pid).eq("date", date).maybeSingle();
+    if (ex && (ex as any).id) {
+      await supabase.from("roster_schedules").update({ shift_code: shiftCode }).eq("id", (ex as any).id);
+    } else {
+      await supabase.from("roster_schedules").insert([{ profile_id: pid, date: date, shift_code: shiftCode, status: 'confirmed' }]);
+    }
+  } catch (e) {
+    console.error("dbSetRosterById error:", e);
+  }
+}
 
-  // confirmed-minimal payload, then progressively richer attempts
-  const minimal: any = { leave_type, reason: req.reason || "", status: "pending" };
-  const mid: any = { ...minimal };
-  if (requested_date) mid.requested_date = requested_date;
-  if (F()._meId) mid.profile_id = F()._meId;
-  const full: any = { ...mid, branch_location: req.branch === "global" ? "calicut" : req.branch };
+export async function dbAddStaffRequest(req: any) {
+  const row: any = {
+    user_id: F()._meId || req.profile_id || (F()._staffIdByName ? F()._staffIdByName[req.who] : null),
+    request_type: req.kind === "swap" ? "shift_swap" : req.kind,
+    requested_date: req.date,
+    reason: req.reason || null,
+    status: "pending",
+  };
+
+  if (req.kind === "swap") {
+    row.swap_with_user_id = F()._staffIdByName ? F()._staffIdByName[req.with] : null;
+    row.swap_date = req.swapDate || req.date;
+  } else if (req.kind === "leave") {
+    row.leave_type = req.leaveType || "Full-day leave";
+  } else if (req.kind === "toil") {
+    row.leave_type = "TOIL Redeemed";
+  }
 
   try {
-    let res = await supabase.from("leave_requests").insert([full]).select().single();
-    if (res.error) res = await supabase.from("leave_requests").insert([mid]).select().single();
-    if (res.error) res = await supabase.from("leave_requests").insert([minimal]).select().single();
-    if (res.error) throw res.error;
-    return res.data; // component already shows its own success toast
-  } catch (e) { rtoast("Saved locally — DB sync failed", "alert"); return null; }
+    const { data, error } = await supabase.from("leave_requests").insert([row]).select().single();
+    if (error) throw error;
+    
+    const newReq = {
+      id: String(data.id),
+      kind: req.kind,
+      who: req.who || F().user.name,
+      with: req.with || "",
+      branch: req.branch || F()._meBranch || "calicut",
+      leaveType: row.leave_type || "",
+      days: req.kind === "toil" ? 1 : undefined,
+      date: data.requested_date || "",
+      swapDate: data.swap_date || "",
+      reason: data.reason || "",
+      status: "Submitted",
+      user_id: data.user_id,
+      swap_with_user_id: data.swap_with_user_id
+    };
+    
+    F().staffReqAdd(newReq);
+    rtoast("Request submitted");
+    return data;
+  } catch (e) {
+    console.error("dbAddStaffRequest error:", e);
+    rtoast("Sync failed — saved locally", "alert");
+    return null;
+  }
+}
+
+export const dbAddLeave = dbAddStaffRequest;
+
+export async function dbResolveStaffRequest(reqId: string, status: "Approved" | "Rejected", adminProfileId: string) {
+  const dbStatus = status === "Approved" ? "approved" : "rejected";
+  try {
+    const { data, error } = await supabase
+      .from("leave_requests")
+      .update({
+        status: dbStatus,
+        approved_by: adminProfileId,
+        approved_at: new Date().toISOString()
+      })
+      .eq("id", reqId)
+      .select("*")
+      .single();
+
+    if (error) throw error;
+
+    if (status === "Approved" && data) {
+      const pid = data.user_id;
+      const date = data.requested_date;
+      const rtype = data.request_type;
+
+      if (rtype === "leave") {
+        await dbSetRosterById(pid, date, "L");
+      } else if (rtype === "toil") {
+        await dbSetRosterById(pid, date, "TR");
+      } else if (rtype === "shift_swap" && data.swap_with_user_id) {
+        const pidA = pid;
+        const pidB = data.swap_with_user_id;
+        const dateA = date;
+        const dateB = data.swap_date || date;
+
+        const { data: currentShifts } = await supabase
+          .from("roster_schedules")
+          .select("*")
+          .in("profile_id", [pidA, pidB])
+          .in("date", [dateA, dateB]);
+
+        const shiftA = currentShifts?.find(s => s.profile_id === pidA && s.date === dateA);
+        const shiftB = currentShifts?.find(s => s.profile_id === pidB && s.date === dateB);
+
+        const codeA = shiftA ? shiftA.shift_code : "D";
+        const codeB = shiftB ? shiftB.shift_code : "D";
+
+        await dbSetRosterById(pidA, dateA, codeB);
+        await dbSetRosterById(pidB, dateB, codeA);
+      }
+    }
+
+    F().staffReqResolve(reqId, status);
+    window.dispatchEvent(new Event("fets-roster-changed"));
+    rtoast(status === "Approved" ? "Request approved" : "Request rejected");
+    return data;
+  } catch (e) {
+    console.error("dbResolveStaffRequest error:", e);
+    rtoast("Failed to resolve request", "alert");
+    return null;
+  }
 }

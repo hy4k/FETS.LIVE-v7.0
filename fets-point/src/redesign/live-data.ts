@@ -38,7 +38,7 @@ const branchOf = (v: string) => {
   return b || "calicut";
 };
 // shift codes that mean "not on duty"
-const REST_CODES = new Set(["rd", "off", "wo", "l", "leave", "lv", "h", "holiday", "to", "toil"]);
+const REST_CODES = new Set(["rd", "off", "wo", "l", "leave", "lv", "h", "holiday", "to", "toil", "tr"]);
 
 export async function loadLiveData(F: any) {
   if (!F || F._liveLoaded) return;
@@ -96,6 +96,26 @@ export async function loadLiveData(F: any) {
     };
     F._rosterPatched = true;
   }
+
+  if (!F._reqPatched) {
+    F.staffReqList = () => {
+      return F._staffRequests || [];
+    };
+    F.staffReqAdd = (req: any) => {
+      F._staffRequests = [req, ...(F._staffRequests || [])];
+      window.dispatchEvent(new Event("fets-roster-changed"));
+      return F._staffRequests;
+    };
+    F.staffReqResolve = (id: string, status: string) => {
+      F._staffRequests = (F._staffRequests || []).map((r: any) =>
+        r.id === id ? { ...r, status } : r
+      );
+      window.dispatchEvent(new Event("fets-roster-changed"));
+      return F._staffRequests;
+    };
+    F._reqPatched = true;
+  }
+
   await ensureMonth(today);
   ensureMonth(new Date(today.getFullYear(), today.getMonth() - 1, 1));
   ensureMonth(new Date(today.getFullYear(), today.getMonth() + 1, 1));
@@ -179,17 +199,74 @@ export async function loadLiveData(F: any) {
 
   /* ---- leave requests (my leave) ---- */
   try {
-    const { data, error } = await supabase.from("leave_requests").select("*").order("created_at", { ascending: false }).limit(500);
+    const { data, error } = await supabase
+      .from("leave_requests")
+      .select(`
+        *,
+        requestor:staff_profiles!leave_requests_user_id_fkey(full_name, branch_assigned),
+        target:staff_profiles!leave_requests_swap_with_user_id_fkey(full_name)
+      `)
+      .order("created_at", { ascending: false });
+
     if (!error && data) {
-      F.MY_LEAVE = data.map((l: any, i: number) => ({
-        id: l.id ? String(l.id) : "l" + i,
-        type: l.leave_type || l.type || "Leave",
-        date: l.requested_date ? new Date(l.requested_date).toLocaleDateString() : (l.date || ""),
-        status: l.status || "Submitted",
-        comment: l.reason || l.comment || "",
-      }));
+      F._staffRequests = data.map((r: any) => {
+        const who = r.requestor?.full_name || "Unknown";
+        const branch = branchOf(r.requestor?.branch_assigned);
+        const withWho = r.target?.full_name || "";
+        
+        let status = "Submitted";
+        if (r.status === "approved" || r.status === "Approved") status = "Approved";
+        if (r.status === "rejected" || r.status === "Rejected") status = "Rejected";
+
+        let kind = "leave";
+        if (r.request_type === "shift_swap" || r.request_type === "swap") kind = "swap";
+        if (r.request_type === "toil") kind = "toil";
+
+        return {
+          id: String(r.id),
+          kind,
+          who,
+          with: withWho,
+          branch,
+          leaveType: r.leave_type || (kind === "leave" ? "Full-day leave" : (kind === "toil" ? "TOIL Redeemed" : "")),
+          days: r.request_type === "toil" ? 1 : undefined,
+          date: r.requested_date || "",
+          swapDate: r.swap_date || "",
+          reason: r.reason || "",
+          status,
+          user_id: r.user_id,
+          swap_with_user_id: r.swap_with_user_id
+        };
+      });
+
+      F.MY_LEAVE = F._staffRequests
+        .filter((r: any) => r.user_id === F._meId || r.who === F.user.name)
+        .map((r: any) => ({
+          id: r.id,
+          type: r.leaveType || (r.kind === "swap" ? "Shift swap" : "Leave"),
+          date: r.date,
+          status: r.status,
+          comment: r.reason,
+        }));
     }
   } catch (e) { /* keep seed */ }
+
+  /* ---- current user toil balance ---- */
+  try {
+    if (F._meId) {
+      const { data, error } = await supabase
+        .from("roster_schedules")
+        .select("shift_code")
+        .eq("profile_id", F._meId);
+      if (!error && data) {
+        const toilEarned = data.filter((r: any) => String(r.shift_code).toUpperCase() === "TOIL").length;
+        const toilRedeemed = data.filter((r: any) => String(r.shift_code).toUpperCase() === "TR").length;
+        F._meToilBalance = toilEarned - toilRedeemed;
+        F._meToilEarned = toilEarned;
+        F._meToilRedeemed = toilRedeemed;
+      }
+    }
+  } catch (e) { /* ignore */ }
 
   /* ---- attendance → worked-hours log (best effort, current user) ---- */
   try {
