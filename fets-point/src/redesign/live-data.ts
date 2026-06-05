@@ -43,6 +43,10 @@ const REST_CODES = new Set(["rd", "off", "wo", "l", "leave", "lv", "h", "holiday
 export async function loadLiveData(F: any) {
   if (!F || F._liveLoaded) return;
   F._dbRoster = F._dbRoster || {};
+  F._staffIdByName = F._staffIdByName || {};
+  F._staffUserIdByName = F._staffUserIdByName || {};
+  F._userIdToProfileId = F._userIdToProfileId || {};
+  F._profileIdToUserId = F._profileIdToUserId || {};
   const today = new Date();
   const from = new Date(today); from.setDate(from.getDate() - 35);
   const to = new Date(today); to.setDate(to.getDate() + 70);
@@ -60,15 +64,26 @@ export async function loadLiveData(F: any) {
     if (!error && data && data.length) {
       const pool: Record<string, string[]> = { calicut: [], cochin: [] };
       const idByName: Record<string, any> = {};
+      const userIdByName: Record<string, any> = {};
+      const userIdToProfileId: Record<string, string> = {};
+      const profileIdToUserId: Record<string, string> = {};
       data.forEach((p: any) => {
         const b = branchOf(p.branch_assigned);
         const list = pool[b] || (pool[b] = []);
         if (p.full_name) list.push(p.full_name);
         if (p.id) profileBranch[p.id] = b;
         if (p.full_name && p.id) idByName[p.full_name] = p.id;
+        if (p.full_name && p.user_id) userIdByName[p.full_name] = p.user_id;
+        if (p.id && p.user_id) {
+          userIdToProfileId[p.user_id] = p.id;
+          profileIdToUserId[p.id] = p.user_id;
+        }
         if (F._meUserId && p.user_id === F._meUserId) { F._meId = p.id; F._meName = p.full_name; F._meBranch = b; }
       });
       F._staffIdByName = idByName;
+      F._staffUserIdByName = userIdByName;
+      F._userIdToProfileId = userIdToProfileId;
+      F._profileIdToUserId = profileIdToUserId;
       const activeStaff = data
         .filter((p: any) => p.is_active !== false && p.full_name)
         .map((p: any) => p.full_name.trim());

@@ -205,8 +205,9 @@ export async function dbAddStaffRequest(req: any) {
     finalReason = `[${req.leaveType}] ${req.reason || ""}`.trim();
   }
 
+  // We need to resolve to the auth user ID (user_id field in staff_profiles) for leave_requests.user_id and swap_with_user_id
   const row: any = {
-    user_id: F()._meId || req.profile_id || (F()._staffIdByName ? F()._staffIdByName[req.who] : null),
+    user_id: F()._meUserId || (F()._staffUserIdByName ? F()._staffUserIdByName[req.who] : null) || (F()._staffIdByName ? F()._staffIdByName[req.who] : null) || req.profile_id,
     request_type: req.kind === "swap" ? "shift_swap" : req.kind,
     requested_date: req.date,
     reason: finalReason || null,
@@ -214,7 +215,7 @@ export async function dbAddStaffRequest(req: any) {
   };
 
   if (req.kind === "swap") {
-    row.swap_with_user_id = F()._staffIdByName ? F()._staffIdByName[req.with] : null;
+    row.swap_with_user_id = F()._staffUserIdByName ? F()._staffUserIdByName[req.with] : (F()._staffIdByName ? F()._staffIdByName[req.with] : null);
     row.swap_date = req.swapDate || req.date;
   }
 
@@ -267,17 +268,18 @@ export async function dbResolveStaffRequest(reqId: string, status: "Approved" | 
     if (error) throw error;
 
     if (status === "Approved" && data) {
-      const pid = data.user_id;
+      // Map the auth user ID to profile.id for roster_schedules
+      const profileId = F()._userIdToProfileId ? F()._userIdToProfileId[data.user_id] : data.user_id;
       const date = data.requested_date;
       const rtype = data.request_type;
 
       if (rtype === "leave") {
-        await dbSetRosterById(pid, date, "L");
+        await dbSetRosterById(profileId, date, "L");
       } else if (rtype === "toil") {
-        await dbSetRosterById(pid, date, "TR");
+        await dbSetRosterById(profileId, date, "TR");
       } else if (rtype === "shift_swap" && data.swap_with_user_id) {
-        const pidA = pid;
-        const pidB = data.swap_with_user_id;
+        const pidA = profileId;
+        const pidB = F()._userIdToProfileId ? F()._userIdToProfileId[data.swap_with_user_id] : data.swap_with_user_id;
         const dateA = date;
         const dateB = data.swap_date || date;
 
