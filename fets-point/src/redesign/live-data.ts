@@ -222,17 +222,31 @@ export async function loadLiveData(F: any) {
         if (r.request_type === "shift_swap" || r.request_type === "swap") kind = "swap";
         if (r.request_type === "toil") kind = "toil";
 
+        let leaveType = "";
+        let reason = r.reason || "";
+        if (kind === "leave") {
+          const m = reason.match(/^\[(.*?)\]\s*(.*)/);
+          if (m) {
+            leaveType = m[1];
+            reason = m[2];
+          } else {
+            leaveType = "Full-day leave";
+          }
+        } else if (kind === "toil") {
+          leaveType = "TOIL Redeemed";
+        }
+
         return {
           id: String(r.id),
           kind,
           who,
           with: withWho,
           branch,
-          leaveType: r.leave_type || (kind === "leave" ? "Full-day leave" : (kind === "toil" ? "TOIL Redeemed" : "")),
+          leaveType,
           days: r.request_type === "toil" ? 1 : undefined,
           date: r.requested_date || "",
           swapDate: r.swap_date || "",
-          reason: r.reason || "",
+          reason,
           status,
           user_id: r.user_id,
           swap_with_user_id: r.swap_with_user_id

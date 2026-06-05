@@ -200,21 +200,22 @@ export async function dbSetRosterById(pid: string, date: string, shiftCode: stri
 }
 
 export async function dbAddStaffRequest(req: any) {
+  let finalReason = req.reason || "";
+  if (req.kind === "leave" && req.leaveType) {
+    finalReason = `[${req.leaveType}] ${req.reason || ""}`.trim();
+  }
+
   const row: any = {
     user_id: F()._meId || req.profile_id || (F()._staffIdByName ? F()._staffIdByName[req.who] : null),
     request_type: req.kind === "swap" ? "shift_swap" : req.kind,
     requested_date: req.date,
-    reason: req.reason || null,
+    reason: finalReason || null,
     status: "pending",
   };
 
   if (req.kind === "swap") {
     row.swap_with_user_id = F()._staffIdByName ? F()._staffIdByName[req.with] : null;
     row.swap_date = req.swapDate || req.date;
-  } else if (req.kind === "leave") {
-    row.leave_type = req.leaveType || "Full-day leave";
-  } else if (req.kind === "toil") {
-    row.leave_type = "TOIL Redeemed";
   }
 
   try {
@@ -227,11 +228,11 @@ export async function dbAddStaffRequest(req: any) {
       who: req.who || F().user.name,
       with: req.with || "",
       branch: req.branch || F()._meBranch || "calicut",
-      leaveType: row.leave_type || "",
+      leaveType: req.kind === "leave" ? (req.leaveType || "Full-day leave") : (req.kind === "toil" ? "TOIL Redeemed" : ""),
       days: req.kind === "toil" ? 1 : undefined,
       date: data.requested_date || "",
       swapDate: data.swap_date || "",
-      reason: data.reason || "",
+      reason: req.reason || "",
       status: "Submitted",
       user_id: data.user_id,
       swap_with_user_id: data.swap_with_user_id
