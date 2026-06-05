@@ -42,6 +42,7 @@ const REST_CODES = new Set(["rd", "off", "wo", "l", "leave", "lv", "h", "holiday
 
 export async function loadLiveData(F: any) {
   if (!F || F._liveLoaded) return;
+  F._dbRoster = F._dbRoster || {};
   const today = new Date();
   const from = new Date(today); from.setDate(from.getDate() - 35);
   const to = new Date(today); to.setDate(to.getDate() + 70);
@@ -87,6 +88,12 @@ export async function loadLiveData(F: any) {
       if (branch === "global") return [...cell.calicut, ...cell.cochin];
       return cell[branch] || [];
     };
+    const baseRosterGet = F.rosterGet.bind(F);
+    F.rosterGet = (name: string) => {
+      const local = baseRosterGet(name) || {};
+      const db = (F._dbRoster && F._dbRoster[name]) || {};
+      return { ...db, ...local };
+    };
     F._rosterPatched = true;
   }
   await ensureMonth(today);
@@ -112,7 +119,7 @@ export async function loadLiveData(F: any) {
   try {
     const { data, error } = await supabase
       .from("lost_found_items").select("*").order("created_at", { ascending: false });
-    if (!error && data && data.length) {
+    if (!error && data) {
       F._lostFound = data.map((i: any) => ({
         id: i.id,
         item: i.item_name || i.name || i.description || "Item",
@@ -129,7 +136,7 @@ export async function loadLiveData(F: any) {
   /* ---- cases (incidents) ---- */
   try {
     const { data, error } = await supabase.from("incidents").select("*").order("created_at", { ascending: false }).limit(1000);
-    if (!error && data && data.length) {
+    if (!error && data) {
       const mapStatus = (s: string) => { s = lc(s); if (s.includes("resolv") || s.includes("close") || s.includes("done")) return "resolved"; if (s.includes("progress")) return "progress"; return "open"; };
       const mapPrio = (p: string) => { p = lc(p); if (p.includes("urgent") || p.includes("critical")) return "Urgent"; if (p.includes("high")) return "High"; if (p.includes("low")) return "Low"; return "Medium"; };
       F.CASES = data.map((c: any, i: number) => ({
@@ -154,7 +161,7 @@ export async function loadLiveData(F: any) {
   /* ---- my tasks (user_tasks) ---- */
   try {
     const { data, error } = await supabase.from("user_tasks").select("*").order("created_at", { ascending: false }).limit(1000);
-    if (!error && data && data.length) {
+    if (!error && data) {
       const mapPrio = (p: string) => { p = lc(p); if (p.includes("critical") || p.includes("urgent")) return "Critical"; if (p.includes("high")) return "High"; if (p.includes("low")) return "Low"; return "Medium"; };
       F.DESK_TASKS = data.map((t: any, i: number) => ({
         id: t.id ? String(t.id) : "t" + i,
@@ -173,7 +180,7 @@ export async function loadLiveData(F: any) {
   /* ---- leave requests (my leave) ---- */
   try {
     const { data, error } = await supabase.from("leave_requests").select("*").order("created_at", { ascending: false }).limit(500);
-    if (!error && data && data.length) {
+    if (!error && data) {
       F.MY_LEAVE = data.map((l: any, i: number) => ({
         id: l.id ? String(l.id) : "l" + i,
         type: l.leave_type || l.type || "Leave",
@@ -274,10 +281,19 @@ export async function ensureMonth(d: Date) {
       .select("date, shift_code, profile_id, staff_profiles(full_name, branch_assigned)")
       .gte("date", ymd(first)).lte("date", ymd(last));
     if (!error && data) {
+      F._dbRoster = F._dbRoster || {};
       data.forEach((r: any) => {
-        if (REST_CODES.has(lc(r.shift_code))) return;
         const sp = r.staff_profiles || {}; const name = sp.full_name; if (!name) return;
         const dt = new Date(`${r.date}T00:00:00`); if (isNaN(dt.getTime())) return;
+        
+        // Calculate offset and populate DB roster override cache
+        const off = F.offsetOf(dt);
+        if (off != null && !isNaN(off)) {
+          F._dbRoster[name] = F._dbRoster[name] || {};
+          F._dbRoster[name][off] = { code: r.shift_code, ot: 0 };
+        }
+
+        if (REST_CODES.has(lc(r.shift_code))) return;
         const k = `${dt.getFullYear()}-${dt.getMonth()}-${dt.getDate()}`;
         const b = branchOf(sp.branch_assigned);
         const cell = F._liveRoster[k] || (F._liveRoster[k] = { calicut: [], cochin: [] });

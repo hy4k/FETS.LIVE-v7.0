@@ -87,12 +87,19 @@ export async function dbSetCaseStatus(dbId: any, status: string) {
 }
 
 export async function dbAddCase(c: any) {
-  // only the columns confirmed to exist on `incidents` (title/description/category/status)
-  const map: any = { Urgent: "urgent", High: "high", Medium: "medium", Low: "low" };
-  const row: any = { title: c.subject || "Case", description: c.detail || "", category: c.category || "Technical", status: "open" };
+  const map: any = { Urgent: "critical", High: "major", Medium: "major", Low: "minor" };
+  const row: any = {
+    title: c.subject || "Case",
+    description: c.detail || "",
+    category: String(c.category || "").toLowerCase() || "other",
+    status: "open",
+    severity: map[c.priority] || "minor",
+    branch_location: c.branch === "global" ? "calicut" : c.branch,
+    reporter: F()._meName || F().user.name || "Unknown",
+    user_id: F()._meUserId || "00000000-0000-0000-0000-000000000000"
+  };
   try {
-    let { data, error } = await supabase.from("incidents").insert([{ ...row, priority: map[c.priority] || "medium", branch_location: c.branch === "global" ? "calicut" : c.branch }]).select().single();
-    if (error) { ({ data, error } = await supabase.from("incidents").insert([row]).select().single()); } // retry with minimal set
+    const { data, error } = await supabase.from("incidents").insert([row]).select().single();
     if (error) throw error;
     rtoast("Case raised");
     return data;
