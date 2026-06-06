@@ -73,9 +73,17 @@ export async function loadLiveData(F: any) {
       F._staffRatesByName = F._staffRatesByName || {};
 
       data.forEach((p: any) => {
+        if (p.is_active === false) return;
         const b = branchOf(p.branch_assigned);
-        const list = pool[b] || (pool[b] = []);
-        if (p.full_name) list.push(p.full_name);
+        if (p.branch_assigned === 'global') {
+          if (p.full_name) {
+            pool.calicut.push(p.full_name);
+            pool.cochin.push(p.full_name);
+          }
+        } else {
+          const list = pool[b] || (pool[b] = []);
+          if (p.full_name) list.push(p.full_name);
+        }
         if (p.id) {
           profileBranch[p.id] = b;
           F._staffRatesByProfileId[p.id] = { hourly_rate: Number(p.hourly_rate) || 0, daily_rate: Number(p.daily_rate) || 0, monthly_salary: Number(p.monthly_salary) || 0 };
@@ -106,6 +114,7 @@ export async function loadLiveData(F: any) {
       F._staffUserIdByName = userIdByName;
       F._userIdToProfileId = userIdToProfileId;
       F._profileIdToUserId = profileIdToUserId;
+      F._profileBranch = profileBranch;
       const activeStaff = data
         .filter((p: any) => p.is_active !== false && p.full_name)
         .map((p: any) => p.full_name.trim());
@@ -426,7 +435,7 @@ export async function ensureMonth(d: Date) {
   } catch (e) {}
   try {
     const { data, error } = await supabase.from("roster_schedules")
-      .select("date, shift_code, overtime_hours, profile_id, staff_profiles(full_name, branch_assigned)")
+      .select("date, shift_code, overtime_hours, profile_id, branch_location, staff_profiles(full_name, branch_assigned)")
       .gte("date", ymd(first)).lte("date", ymd(last));
     if (!error && data) {
       F._dbRoster = F._dbRoster || {};
@@ -443,7 +452,7 @@ export async function ensureMonth(d: Date) {
 
         if (REST_CODES.has(lc(r.shift_code))) return;
         const k = `${dt.getFullYear()}-${dt.getMonth()}-${dt.getDate()}`;
-        const b = branchOf(sp.branch_assigned);
+        const b = branchOf(r.branch_location || sp.branch_assigned);
         const cell = F._liveRoster[k] || (F._liveRoster[k] = { calicut: [], cochin: [] });
         if (b === "cochin") { if (!cell.cochin.includes(name)) cell.cochin.push(name); }
         else { if (!cell.calicut.includes(name)) cell.calicut.push(name); }

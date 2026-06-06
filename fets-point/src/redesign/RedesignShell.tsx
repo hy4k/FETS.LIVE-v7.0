@@ -2895,7 +2895,7 @@ function RosterGrid({ offsets, branch }) {
   const apply = (name, off, cell) => {
     F().rosterSet(name, off, cell);
     const _d = F().ISO(off);
-    if (cell) DB.dbSetRoster(name, _d, cell.code); else DB.dbClearRoster(name, _d);
+    if (cell) DB.dbSetRoster(name, _d, cell.code, branch); else DB.dbClearRoster(name, _d);
     setGrid((g) => {
       const dflt = g[name][off].dflt;
       const nc = cell ? { code: cell.code, ot: +cell.ot || 0, dflt, override: true } : { code: dflt, ot: 0, dflt, override: false };
@@ -4807,7 +4807,7 @@ function QuickAddRoster({ branch, onClose }) {
       F().rosterSet(name, off, { code, ot: 0 });
       idx++; n++;
     }
-    DB.dbQuickAddRoster(name, from, to);
+    DB.dbQuickAddRoster(name, from, to, branch);
     window.dispatchEvent(new Event("fets-roster-changed"));
     toast(`Rostered ${name} · ${n} day${n === 1 ? "" : "s"} (6+1)`, "check");
     setTimeout(onClose, 650);

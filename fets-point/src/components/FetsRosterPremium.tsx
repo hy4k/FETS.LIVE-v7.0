@@ -670,7 +670,7 @@ export function FetsRosterPremium() {
       const monthStartStr = startDate.toISOString().split('T')[0]
       const { data: scheduleData, error: scheduleError } = await supabase
         .from('roster_schedules')
-        .select('id, profile_id, date, shift_code, overtime_hours, status, created_at, updated_at')
+        .select('id, profile_id, date, shift_code, overtime_hours, status, created_at, updated_at, branch_location')
         .gte('date', startDate.toISOString().split('T')[0])
         .lte('date', endDate.toISOString().split('T')[0])
         .order('date')
@@ -683,10 +683,11 @@ export function FetsRosterPremium() {
         let branchOk = false
         if (activeBranch === 'global') branchOk = true
         else if (p.branch_assigned === activeBranch) branchOk = true
+        else if (p.branch_assigned === 'global') branchOk = true // Global admins show on all grids
         else {
           const isUnassigned = !p.branch_assigned || p.branch_assigned.trim() === '' || p.branch_assigned === 'inactive'
-          const hasShift = sData.some(s => s.profile_id === p.id)
-          branchOk = isUnassigned && hasShift
+          const hasShiftAtBranch = sData.some(s => s.profile_id === p.id && s.branch_location === activeBranch)
+          branchOk = (isUnassigned && sData.some(s => s.profile_id === p.id)) || hasShiftAtBranch
         }
         if (!branchOk) return false
 
@@ -760,10 +761,15 @@ export function FetsRosterPremium() {
       return
     }
 
+    const staffMember = staffProfiles.find(s => s.id === selectedCellData.profileId)
+    const scheduleBranch = activeBranch === 'global' ? (staffMember?.branch_assigned || 'calicut') : activeBranch
+    const scheduleBranchFinal = scheduleBranch === 'global' ? 'calicut' : scheduleBranch
+
     const scheduleData = {
       profile_id: selectedCellData.profileId, date: selectedCellData.date,
       shift_code: shiftData.shift_code, overtime_hours: shiftData.overtime_hours,
-      status: 'confirmed', updated_at: new Date().toISOString()
+      status: 'confirmed', updated_at: new Date().toISOString(),
+      branch_location: scheduleBranchFinal
     }
     const existingIndex = schedules.findIndex(s =>
       s.profile_id === selectedCellData.profileId && s.date === selectedCellData.date

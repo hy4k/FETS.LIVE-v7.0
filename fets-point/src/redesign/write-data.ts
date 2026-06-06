@@ -51,31 +51,35 @@ export async function dbDeleteSession(id: any) {
 
 /* ---------------- roster_schedules ---------------- */
 function staffId(name: string) { return F()._staffIdByName ? F()._staffIdByName[name] : null; }
-export async function dbSetRoster(name: string, dateObj: Date, shiftCode: string) {
+export async function dbSetRoster(name: string, dateObj: Date, shiftCode: string, branch?: string) {
   const pid = staffId(name); if (!pid) return;
   const date = ymd(dateObj);
+  const staff = F()._staffRatesByName && F()._staffRatesByName[name];
+  const scheduleBranch = branch && branch !== "global" ? branch : (F()._profileBranch && F()._profileBranch[pid]) || (staff?.branch_assigned || "calicut");
   try {
     const { data: ex } = await supabase.from("roster_schedules").select("id").eq("profile_id", pid).eq("date", date).maybeSingle();
-    if (ex && (ex as any).id) await supabase.from("roster_schedules").update({ shift_code: shiftCode }).eq("id", (ex as any).id);
-    else await supabase.from("roster_schedules").insert([{ profile_id: pid, date, shift_code: shiftCode }]);
+    if (ex && (ex as any).id) await supabase.from("roster_schedules").update({ shift_code: shiftCode, branch_location: scheduleBranch }).eq("id", (ex as any).id);
+    else await supabase.from("roster_schedules").insert([{ profile_id: pid, date, shift_code: shiftCode, branch_location: scheduleBranch }]);
   } catch (e) { /* local already applied */ }
 }
 export async function dbClearRoster(name: string, dateObj: Date) {
   const pid = staffId(name); if (!pid) return;
   try { await supabase.from("roster_schedules").delete().eq("profile_id", pid).eq("date", ymd(dateObj)); } catch (e) {}
 }
-export async function dbQuickAddRoster(name: string, fromYmd: string, toYmd: string) {
+export async function dbQuickAddRoster(name: string, fromYmd: string, toYmd: string, branch?: string) {
   const pid = staffId(name);
   if (!pid) { rtoast("Saved locally — staff not matched in DB", "alert"); return; }
   const f = new Date(fromYmd + "T00:00:00"), t = new Date(toYmd + "T00:00:00");
+  const staff = F()._staffRatesByName && F()._staffRatesByName[name];
+  const scheduleBranch = branch && branch !== "global" ? branch : (F()._profileBranch && F()._profileBranch[pid]) || (staff?.branch_assigned || "calicut");
   const rows: any[] = []; let idx = 0;
   for (let d = new Date(f); d <= t; d.setDate(d.getDate() + 1)) {
-    rows.push({ profile_id: pid, date: ymd(new Date(d)), shift_code: (idx % 7) < 6 ? "D" : "RD" }); idx++;
+    rows.push({ profile_id: pid, date: ymd(new Date(d)), shift_code: (idx % 7) < 6 ? "D" : "RD", branch_location: scheduleBranch }); idx++;
   }
   try { const { error } = await supabase.from("roster_schedules").upsert(rows, { onConflict: "profile_id,date" }); if (error) throw error; rtoast(`Roster saved · ${rows.length} days`); }
   catch (e) {
     // fall back to row-by-row set/insert if no unique constraint for upsert
-    try { for (const r of rows) await dbSetRoster(name, new Date(r.date + "T00:00:00"), r.shift_code); rtoast(`Roster saved · ${rows.length} days`); }
+    try { for (const r of rows) await dbSetRoster(name, new Date(r.date + "T00:00:00"), r.shift_code, branch); rtoast(`Roster saved · ${rows.length} days`); }
     catch (e2) { rtoast("Saved locally — DB sync failed", "alert"); }
   }
 }
@@ -187,13 +191,24 @@ export async function dbDeleteVault(id: any) {
 }
 
 /* ---------------- leave_requests (staff requests) ---------------- */
-export async function dbSetRosterById(pid: string, date: string, shiftCode: string) {
+export async function dbSetRosterById(pid: string, date: string, shiftCode: string, branch?: string) {
   try {
     const { data: ex } = await supabase.from("roster_schedules").select("id").eq("profile_id", pid).eq("date", date).maybeSingle();
+    let scheduleBranch = branch;
+    if (!scheduleBranch) {
+      if (F() && F()._profileBranch && F()._profileBranch[pid]) {
+        scheduleBranch = F()._profileBranch[pid];
+      } else {
+        const { data: p } = await supabase.from("staff_profiles").select("branch_assigned").eq("id", pid).maybeSingle();
+        scheduleBranch = p ? p.branch_assigned : "calicut";
+      }
+    }
+    if (scheduleBranch === "global") scheduleBranch = "calicut";
+
     if (ex && (ex as any).id) {
-      await supabase.from("roster_schedules").update({ shift_code: shiftCode }).eq("id", (ex as any).id);
+      await supabase.from("roster_schedules").update({ shift_code: shiftCode, branch_location: scheduleBranch }).eq("id", (ex as any).id);
     } else {
-      await supabase.from("roster_schedules").insert([{ profile_id: pid, date: date, shift_code: shiftCode, status: 'confirmed' }]);
+      await supabase.from("roster_schedules").insert([{ profile_id: pid, date: date, shift_code: shiftCode, status: 'confirmed', branch_location: scheduleBranch }]);
     }
   } catch (e) {
     console.error("dbSetRosterById error:", e);
@@ -298,8 +313,11 @@ export async function dbResolveStaffRequest(reqId: string, status: "Approved" | 
         const codeA = shiftA ? shiftA.shift_code : "D";
         const codeB = shiftB ? shiftB.shift_code : "D";
 
-        await dbSetRosterById(pidA, dateA, codeB);
-        await dbSetRosterById(pidB, dateB, codeA);
+        const branchA = shiftA ? shiftA.branch_location : (F()._profileBranch && F()._profileBranch[pidA]) || "calicut";
+        const branchB = shiftB ? shiftB.branch_location : (F()._profileBranch && F()._profileBranch[pidB]) || "calicut";
+
+        await dbSetRosterById(pidA, dateA, codeB, branchB);
+        await dbSetRosterById(pidB, dateB, codeA, branchA);
       }
     }
 
@@ -317,10 +335,17 @@ export async function dbResolveStaffRequest(reqId: string, status: "Approved" | 
 export async function dbSetRosterOtById(pid: string, date: string, ot: number) {
   try {
     const { data: ex } = await supabase.from("roster_schedules").select("id").eq("profile_id", pid).eq("date", date).maybeSingle();
+    let scheduleBranch = (F() && F()._profileBranch && F()._profileBranch[pid]);
+    if (!scheduleBranch) {
+      const { data: p } = await supabase.from("staff_profiles").select("branch_assigned").eq("id", pid).maybeSingle();
+      scheduleBranch = p ? p.branch_assigned : "calicut";
+    }
+    if (scheduleBranch === "global") scheduleBranch = "calicut";
+
     if (ex && (ex as any).id) {
       await supabase.from("roster_schedules").update({ overtime_hours: ot }).eq("id", (ex as any).id);
     } else {
-      await supabase.from("roster_schedules").insert([{ profile_id: pid, date: date, shift_code: 'D', overtime_hours: ot, status: 'confirmed' }]);
+      await supabase.from("roster_schedules").insert([{ profile_id: pid, date: date, shift_code: 'D', overtime_hours: ot, status: 'confirmed', branch_location: scheduleBranch }]);
     }
   } catch (e) {
     console.error("dbSetRosterOtById error:", e);
