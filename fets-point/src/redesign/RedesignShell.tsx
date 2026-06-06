@@ -42,8 +42,8 @@ import html2canvas from "html2canvas";
 
   // ---- staff roster pool ----
   const STAFF = {
-    calicut: ["Mithun Raj", "Niyas K", "Sandra Thomas", "Fathima R", "Arjun Menon", "Sneha P", "Vishnu Das"],
-    cochin:  ["Rahul Nair", "Anjana S", "Ashik M", "Divya Krishnan", "Tom Varghese", "Meera B"],
+    calicut: ["Anshitha K", "Aysha", "Bindu Rajan", "Lazeem", "Mithun", "Nilufer", "Niyas"],
+    cochin:  ["NIMMY M", "Shimna"],
   };
 
   // helper to make a session
@@ -53,63 +53,13 @@ import html2canvas from "html2canvas";
 
   // ---- 7 days of exam sessions, keyed by day offset (0 = today) ----
   // each branch gets its own list; "global" = both
-  const SCHEDULE = {
-    0: [ // today
-      S("prometric", "CMA Part 1 · Financial Planning", 14, "08:30", "12:30", "calicut"),
-      S("pearson",   "NCLEX-RN", 9, "09:00", "15:00", "calicut"),
-      S("psi",       "GRE General", 6, "10:00", "13:45", "cochin"),
-      S("ielts",     "IELTS Academic", 22, "08:00", "11:30", "cochin"),
-      S("celpip",    "CELPIP General", 8, "13:00", "16:00", "calicut"),
-    ],
-    1: [
-      S("prometric", "ABIM Internal Medicine", 5, "08:30", "17:00", "calicut"),
-      S("pearson",   "AWS Solutions Architect", 11, "09:30", "13:00", "cochin"),
-      S("cma",       "CMA US Part 2", 7, "09:00", "13:00", "calicut"),
-    ],
-    2: [
-      S("ielts",     "IELTS General Training", 18, "08:00", "11:30", "cochin"),
-      S("psi",       "Real Estate License", 4, "10:00", "12:30", "calicut"),
-      S("pearson",   "Microsoft AZ-900", 8, "11:00", "14:00", "cochin"),
-    ],
-    3: [
-      S("prometric", "NBCOT · Occupational Therapy", 6, "08:30", "13:30", "calicut"),
-      S("celpip",    "CELPIP General LS", 5, "13:00", "15:00", "cochin"),
-    ],
-    4: [
-      S("pearson",   "CompTIA Security+", 10, "09:00", "12:30", "calicut"),
-      S("cma",       "CMA US Part 1", 9, "09:00", "13:00", "cochin"),
-      S("ielts",     "IELTS Academic", 20, "08:00", "11:30", "calicut"),
-    ],
-    5: [
-      S("psi",       "PMP Certification", 7, "10:00", "14:00", "cochin"),
-    ],
-    6: [
-      S("prometric", "USMLE Step 1", 4, "08:00", "16:00", "calicut"),
-      S("pearson",   "NCLEX-PN", 6, "09:00", "14:00", "cochin"),
-      S("ielts",     "IELTS Academic", 16, "08:00", "11:30", "cochin"),
-    ],
-  };
+  const SCHEDULE = {};
 
   // roster staff per day (subset rostered)
-  const ROSTER = {
-    0: { calicut: ["Niyas K", "Sandra Thomas", "Fathima R"], cochin: ["Rahul Nair", "Anjana S"] },
-    1: { calicut: ["Arjun Menon", "Sneha P"], cochin: ["Ashik M", "Divya Krishnan", "Tom Varghese"] },
-    2: { calicut: ["Niyas K", "Vishnu Das"], cochin: ["Anjana S", "Meera B"] },
-    3: { calicut: ["Sandra Thomas", "Fathima R"], cochin: ["Rahul Nair"] },
-    4: { calicut: ["Niyas K", "Arjun Menon", "Sneha P"], cochin: ["Ashik M", "Tom Varghese"] },
-    5: { calicut: ["Vishnu Das"], cochin: ["Divya Krishnan", "Meera B"] },
-    6: { calicut: ["Sandra Thomas", "Niyas K"], cochin: ["Rahul Nair", "Anjana S"] },
-  };
+  const ROSTER = {};
 
   // ---- pending requests (manager view) ----
-  const REQUESTS = [
-    { id: 1, type: "leave", who: "Sneha P", branch: "calicut", date: ISO(3), reason: "Sister's wedding — need the full day off." },
-    { id: 2, type: "swap", who: "Ashik M", with: "Tom Varghese", branch: "cochin", date: ISO(2), reason: "Doctor's appointment in the morning slot." },
-    { id: 3, type: "leave", who: "Vishnu Das", branch: "calicut", date: ISO(5), reason: "Personal." },
-    { id: 4, type: "leave", who: "Anjana S", branch: "cochin", date: ISO(8), reason: "Family function out of town, returning the next morning." },
-    { id: 5, type: "swap", who: "Fathima R", with: "Arjun Menon", branch: "calicut", date: ISO(11), reason: "Prefer the afternoon IELTS slot that week." },
-    { id: 6, type: "leave", who: "Tom Varghese", branch: "cochin", date: ISO(15), reason: "Medical check-up, half day." },
-  ];
+  const REQUESTS = [];
 
   /* =====================================================================
      PROCEDURAL DAY GENERATOR — deterministic data for ANY date so the
@@ -143,18 +93,7 @@ import html2canvas from "html2canvas";
   const addH = (t, h) => { let [hh, mm] = t.split(":").map(Number); hh = Math.min(20, hh + h); return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`; };
 
   function genSessions(d) {
-    const wd = d.getDay(), r = rngFor(d, 1);
-    let n = wd === 0 ? Math.floor(r() * 2) : wd === 6 ? 1 + Math.floor(r() * 2) : 2 + Math.floor(r() * 3);
-    const out = [];
-    for (let i = 0; i < n; i++) {
-      const vendor = VSLUGS[Math.floor(r() * VSLUGS.length)];
-      const exam = EXAM_POOL[vendor][Math.floor(r() * EXAM_POOL[vendor].length)];
-      const count = 3 + Math.floor(r() * 20);
-      const start = START_TIMES[Math.floor(r() * START_TIMES.length)];
-      const branch = r() < 0.5 ? "calicut" : "cochin";
-      out.push(S(vendor, exam, count, start, addH(start, 3), branch));
-    }
-    return out.sort((a, b) => a.start.localeCompare(b.start));
+    return [];
   }
   function pickK(arr, k, r) {
     const a = arr.slice();
@@ -162,9 +101,7 @@ import html2canvas from "html2canvas";
     return a.slice(0, k);
   }
   function genRoster(d) {
-    const r = rngFor(d, 2);
-    const c = 2 + Math.floor(r() * 3), k = 1 + Math.floor(r() * 3);
-    return { calicut: pickK(STAFF.calicut, c, r), cochin: pickK(STAFF.cochin, k, r) };
+    return { calicut: [], cochin: [] };
   }
 
   const _sCache = {}, _rCache = {};
@@ -192,74 +129,13 @@ import html2canvas from "html2canvas";
   /* =====================================================================
      CASES — support / incident tickets (Raise a Case + My Desk)
      ===================================================================== */
-  const CASES = [
-    { id: "FC-2048", subject: "Prometric workstation #4 won't boot", category: "Technical", priority: "Urgent", branch: "calicut", vendor: "prometric", status: "open", assignee: "Mithun Raj", opened: "Today · 09:12", age: "2h",
-      detail: "Workstation #4 in Hall A shows a black screen on power-up. First candidate is at 10:00. Tried a hard reset twice, no POST beep.",
-      contact: { name: "Niyas K", role: "On-duty lead", phone: "+91 98470 11234", email: "niyas@fets.live", external: false },
-      thread: [
-        { id: "m1", kind: "msg", author: "Mithun Raj", role: "staff", text: "Logged this — workstation #4 won't POST. Pulled it from the seating plan for now.", when: "09:12" },
-        { id: "m2", kind: "status", author: "Mithun Raj", role: "system", text: "marked the case In progress", when: "09:18" },
-        { id: "m3", kind: "msg", author: "Prometric Support", role: "external", text: "Hi, this is Rakesh from Prometric L2. Please share the asset tag and try booting from the recovery USB.", when: "09:34", contact: "+1 800 853 6769" },
-        { id: "m4", kind: "msg", author: "Mithun Raj", role: "staff", text: "Asset tag PRM-CLT-0044. Recovery USB gives the same black screen — looks like a PSU fault.", when: "09:41" },
-      ] },
-    { id: "FC-2047", subject: "Candidate ID mismatch — IELTS morning slot", category: "Candidate", priority: "High", branch: "cochin", vendor: "ielts", status: "progress", assignee: "Anjana S", opened: "Today · 08:40", age: "3h",
-      detail: "Candidate's passport name doesn't match the booking spelling. Holding check-in until verified with the vendor.",
-      contact: { name: "Aiswarya Nair", role: "Candidate", phone: "+91 99461 88210", email: "aiswarya.n@gmail.com", external: true },
-      thread: [
-        { id: "m1", kind: "msg", author: "Anjana S", role: "staff", text: "Name on passport reads 'Aiswariya', booking says 'Aiswarya'. Asked candidate to wait.", when: "08:40" },
-        { id: "m2", kind: "msg", author: "Aiswarya Nair", role: "external", text: "The booking portal dropped the extra 'i'. I have my booking confirmation email as proof.", when: "08:52", contact: "+91 99461 88210" },
-        { id: "m3", kind: "status", author: "Anjana S", role: "system", text: "marked the case In progress", when: "08:55" },
-      ] },
-    { id: "FC-2046", subject: "AC unit noisy in Hall B during exam", category: "Facility", priority: "Medium", branch: "calicut", vendor: null, status: "open", assignee: "Mithun Raj", opened: "Today · 07:55", age: "4h",
-      detail: "Rattling noise from the Hall B split unit. Distracting for candidates seated in the back row.",
-      contact: null,
-      thread: [
-        { id: "m1", kind: "msg", author: "Fathima R", role: "staff", text: "Reported by two candidates yesterday too. Raising before today's afternoon slot.", when: "07:55" },
-      ] },
-    { id: "FC-2044", subject: "Pearson VUE check-in scanner intermittent", category: "Technical", priority: "High", branch: "cochin", vendor: "pearson", status: "progress", assignee: "Ashik M", opened: "Yesterday · 16:20", age: "19h",
-      detail: "Palm-vein scanner at desk 2 fails roughly 1 in 4 scans. Slows the check-in queue.",
-      contact: { name: "Pearson VUE Helpdesk", role: "Vendor support", phone: "1800 209 0469", email: "support@pearsonvue.com", external: true },
-      thread: [
-        { id: "m1", kind: "msg", author: "Ashik M", role: "staff", text: "Scanner at desk 2 intermittent. Swapped USB port, no change.", when: "Yesterday 16:20" },
-        { id: "m2", kind: "msg", author: "Pearson VUE Helpdesk", role: "external", text: "Please run the diagnostic from VUE Connect → Devices and send the log ID.", when: "Yesterday 17:02", contact: "1800 209 0469" },
-        { id: "m3", kind: "status", author: "Ashik M", role: "system", text: "marked the case In progress", when: "Yesterday 17:05" },
-      ] },
-    { id: "FC-2041", subject: "Lost & found — laptop charger handed in", category: "Lost & Found", priority: "Low", branch: "calicut", vendor: null, status: "resolved", assignee: "Fathima R", opened: "2 days ago", age: "2d",
-      detail: "65W USB-C charger found in the waiting area. Logged and stored at the front desk.",
-      contact: { name: "Arun P", role: "Owner (candidate)", phone: "+91 90370 55120", email: "", external: true },
-      thread: [
-        { id: "m1", kind: "msg", author: "Fathima R", role: "staff", text: "Charger handed in after the morning slot. Stored in locker LF-12.", when: "2 days ago" },
-        { id: "m2", kind: "msg", author: "Arun P", role: "external", text: "That's mine — I'll collect it tomorrow afternoon. Thank you!", when: "1 day ago", contact: "+91 90370 55120" },
-        { id: "m3", kind: "status", author: "Fathima R", role: "system", text: "marked the case Resolved", when: "1 day ago" },
-      ] },
-    { id: "FC-2039", subject: "CMA candidate requested accommodation setup", category: "Candidate", priority: "Medium", branch: "calicut", vendor: "cma", status: "resolved", assignee: "Niyas K", opened: "3 days ago", age: "3d",
-      detail: "Approved extra-time accommodation for a CMA candidate. Needed an isolated room and a separate proctor.",
-      contact: { name: "Sneha Varma", role: "Candidate", phone: "+91 98951 33027", email: "sneha.v@gmail.com", external: true },
-      thread: [
-        { id: "m1", kind: "msg", author: "Niyas K", role: "staff", text: "Accommodation letter verified. Setting up room 3 with a dedicated proctor.", when: "3 days ago" },
-        { id: "m2", kind: "status", author: "Niyas K", role: "system", text: "marked the case Resolved", when: "2 days ago" },
-      ] },
-    { id: "FC-2036", subject: "Network drop during PSI session", category: "Technical", priority: "Urgent", branch: "cochin", vendor: "psi", status: "resolved", assignee: "Ashik M", opened: "4 days ago", age: "4d",
-      detail: "ISP outage interrupted a live PSI session for 6 minutes. Failover to 4G restored connectivity.",
-      contact: null,
-      thread: [
-        { id: "m1", kind: "msg", author: "Ashik M", role: "staff", text: "Primary link dropped mid-session. Switched to 4G failover.", when: "4 days ago" },
-        { id: "m2", kind: "status", author: "Ashik M", role: "system", text: "marked the case Resolved", when: "4 days ago" },
-      ] },
-  ];
+  const CASES = [];
   const CASE_CATEGORIES = ["Technical", "Candidate", "Facility", "Vendor", "Security", "Lost & Found"];
   const CASE_PRIORITIES = ["Low", "Medium", "High", "Urgent"];
   const CASE_CAT_ICON = { Technical: "settings", Candidate: "user", Facility: "package", Vendor: "briefcase", Security: "shield", "Lost & Found": "package" };
 
   /* ---- activity feed (My Desk) ---- */
-  const ACTIVITY = [
-    { icon: "check",    text: "You approved Sandra Thomas's shift swap", when: "12m ago", tone: "ok" },
-    { icon: "alert",    text: "Case FC-2048 escalated to Urgent · Calicut", when: "1h ago", tone: "bad" },
-    { icon: "key",      text: "Vault credential updated · Pearson VUE", when: "1h ago", tone: "accent" },
-    { icon: "star",     text: "New 5★ Google review from Aiswarya Nair", when: "4h ago", tone: "accent" },
-    { icon: "calendar", text: "Roster published for the week of Jun 8", when: "Yesterday", tone: "ink" },
-    { icon: "users",    text: "Niyas K clocked in at Calicut", when: "Yesterday", tone: "ink" },
-  ];
+  const ACTIVITY = [];
 
   // ---- quick-access vault (masked secrets, with last-updated dates) ----
   const VAULT = {
@@ -302,15 +178,7 @@ import html2canvas from "html2canvas";
   /* =====================================================================
      MY DESK — staff cockpit datasets
      ===================================================================== */
-  const DESK_TASKS = [
-    { id: "t1", title: "Check biometric device before 8:30 AM", source: "Supervisor", by: "Niyas K", due: "Today · 08:30", priority: "Critical", status: "In Progress", comment: "Make sure firmware is updated before the first slot.", proof: false },
-    { id: "t2", title: "Verify lockers are empty", source: "Supervisor", by: "Niyas K", due: "Today · 09:00", priority: "High", status: "Pending", comment: "", proof: false },
-    { id: "t3", title: "Upload exam day photos", source: "Supervisor", by: "Sandra Thomas", due: "Today · 18:00", priority: "Medium", status: "Pending", comment: "Lab, signage and candidate waiting area.", proof: true },
-    { id: "t6", title: "Submit weekly incident summary", source: "Supervisor", by: "Niyas K", due: "Jun 6 · 17:00", priority: "Medium", status: "Pending", comment: "Use the new template shared on Friday.", proof: false },
-    { id: "t4", title: "Complete Prometric certification", source: "Self", by: "You", due: "Jun 6", priority: "High", status: "Pending", comment: "" },
-    { id: "t5", title: "Update candidate register", source: "Self", by: "You", due: "Today · 17:30", priority: "Low", status: "Completed", comment: "" },
-    { id: "t7", title: "Tidy the F-Vault credentials list", source: "Self", by: "You", due: "This week", priority: "Low", status: "Pending", comment: "" },
-  ];
+  const DESK_TASKS = [];
   const TASK_PRIORITIES = ["Low", "Medium", "High", "Critical"];
   const TASK_STATUSES = ["Pending", "In Progress", "Completed", "Blocked"];
 
@@ -331,11 +199,7 @@ import html2canvas from "html2canvas";
 
   const LEAVE_BALANCE = [ { label: "Casual", n: 8 }, { label: "Sick", n: 5 }, { label: "Earned", n: 12 } ];
   const LEAVE_TYPES = ["Full-day leave", "Half day", "Late arrival", "Early exit", "Emergency leave"];
-  const MY_LEAVE = [
-    { id: "l1", type: "Casual leave", date: "Jun 9, 2026", status: "Approved", comment: "Approved — enjoy the day." },
-    { id: "l2", type: "Late arrival", date: "Jun 2, 2026", status: "Submitted", comment: "" },
-    { id: "l3", type: "Half day", date: "Jun 4, 2026", status: "Need clarification", comment: "Morning or afternoon half?" },
-  ];
+  const MY_LEAVE = [];
 
   const PERFORMANCE = {
     readiness: 91,
@@ -436,19 +300,11 @@ import html2canvas from "html2canvas";
   function staffReqResolve(id, status) { const next = staffReqList().map((r) => r.id === id ? { ...r, status } : r); localStorage.setItem(QKEY, JSON.stringify(next)); return next; }
 
   // seed staff requests (leave + swap) awaiting super-admin action
-  const STAFF_REQ_SEED = [
-    { id: "r1", kind: "leave", who: "Mithun Raj", branch: "calicut", leaveType: "Full-day leave", date: "Jun 12, 2026", reason: "Family function out of town.", status: "Submitted" },
-    { id: "r2", kind: "swap", who: "Mithun Raj", with: "Niyas K", branch: "calicut", date: "Jun 9, 2026", reason: "Need the morning for a dentist appointment.", status: "Approved" },
-    { id: "r5", kind: "toil", who: "Mithun Raj", branch: "calicut", days: 1, date: "Jun 18, 2026", reason: "Long weekend with family.", status: "Submitted" },
-    { id: "r3", kind: "leave", who: "Sandra Thomas", branch: "calicut", leaveType: "Half day", date: "Jun 7, 2026", reason: "School event — afternoon half.", status: "Submitted" },
-    { id: "r4", kind: "swap", who: "Anjana S", with: "Ashik M", branch: "cochin", date: "Jun 10, 2026", reason: "Prefer the IELTS slot that day.", status: "Submitted" },
-  ];
+  const STAFF_REQ_SEED = [];
 
   // one-time seed of roster overrides for the signed-in user so OT / TOIL show
   if (localStorage.getItem(RKEY) === null) {
-    localStorage.setItem(RKEY, JSON.stringify({
-      "Mithun Raj": { 1: { code: "D", ot: 3 }, 4: { code: "D", ot: 2.5 }, 6: { code: "TOIL", ot: 0 }, 9: { code: "TOIL", ot: 0 }, 12: { code: "L", ot: 0 } },
-    }));
+    localStorage.setItem(RKEY, JSON.stringify({}));
   }
 
   window.FETS = {
@@ -459,7 +315,7 @@ import html2canvas from "html2canvas";
     LEAVE_BALANCE, LEAVE_TYPES, MY_LEAVE, PERFORMANCE,
     rosterGet, rosterSet, rosterTotals, staffReqList, staffReqAdd, staffReqResolve,
     workLogList, workLogUpsert, workLogTotals, wlKey, wlLabel,
-    user: { name: "Mithun Raj", role: "Super Admin", day: 412,
+    user: { name: "Mithun", role: "Super Admin", day: 412,
       shift: { start: "08:00", end: "17:00", branch: "calicut" } },
   };
 })();
@@ -1513,18 +1369,11 @@ function HelpDeskPanel() {
   );
 }
 
-/* ---------- lost & found drawer panel (moved from Tools) ---------- */
-const LOST_FOUND = [
-  { item: "65W USB-C laptop charger", where: "Waiting area", when: "Today · 09:40", branch: "calicut", locker: "LF-12", status: "stored", by: "Fathima R" },
-  { item: "Black folding umbrella", where: "Hall B", when: "Today · 08:15", branch: "calicut", locker: "LF-08", status: "stored", by: "Niyas K" },
-  { item: "Spectacles · brown case", where: "Reception desk", when: "Yesterday", branch: "cochin", locker: "LF-03", status: "claimed", by: "Anjana S" },
-  { item: "Car key · Maruti", where: "Parking lot", when: "2 days ago", branch: "cochin", locker: "LF-05", status: "stored", by: "Ashik M" },
-  { item: "Steel water bottle", where: "Hall A", when: "3 days ago", branch: "calicut", locker: "LF-11", status: "claimed", by: "Sandra Thomas" },
-];
+const LOST_FOUND = [];
 const LF_STATUS = { stored: { label: "In locker", color: "var(--v-ielts)" }, claimed: { label: "Claimed", color: "var(--ok)" } };
 
 function LostFoundPanel({ branch }) {
-  const [items, setItems] = React.useState(() => (window.FETS._lostFound && window.FETS._lostFound.length) ? [...window.FETS._lostFound] : [...LOST_FOUND]);
+  const [items, setItems] = React.useState(() => (window.FETS._lostFound && window.FETS._lostFound.length) ? [...window.FETS._lostFound] : []);
   const [adding, setAdding] = React.useState(false);
   const [dItem, setDItem] = React.useState("");
   const [dWhere, setDWhere] = React.useState("");
@@ -2096,12 +1945,11 @@ function sessOvrSet(d, day) {
 }
 (function patchSessions() {
   const f = window.FETS; if (!f || f._sessPatched) return;
-  const base = f.sessionsOn.bind(f);
   f.sessionsOn = function (d, branch) {
     let list;
     const live = f._liveSessions && f._liveSessions[sessKey(d)];
     if (live) list = branch === "global" ? live : live.filter((s) => s.branch === branch);
-    else list = base(d, branch);
+    else list = [];
     const day = sessOvrAll()[sessKey(d)];
     if (!day) return list;
     list = list.filter((s) => !(day.del || []).includes(sessSig(s)))

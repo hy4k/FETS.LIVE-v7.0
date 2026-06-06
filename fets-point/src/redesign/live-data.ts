@@ -35,6 +35,7 @@ const branchOf = (v: string) => {
   const b = lc(v);
   if (b.includes("cochin")) return "cochin";
   if (b.includes("calicut")) return "calicut";
+  if (b.includes("global")) return "calicut"; // map global (super admins) to calicut center roster
   return b || "calicut";
 };
 // shift codes that mean "not on duty"
@@ -88,7 +89,18 @@ export async function loadLiveData(F: any) {
           userIdToProfileId[p.user_id] = p.id;
           profileIdToUserId[p.id] = p.user_id;
         }
-        if (F._meUserId && p.user_id === F._meUserId) { F._meId = p.id; F._meName = p.full_name; F._meBranch = b; }
+        if (F._meUserId && p.user_id === F._meUserId) {
+          F._meId = p.id;
+          F._meName = p.full_name;
+          F._meBranch = b;
+          if (F.user) {
+            F.user.name = p.full_name;
+            F.user.role = p.role === 'super_admin' ? 'Super Admin' : 'Staff';
+            if (F.user.shift) {
+              F.user.shift.branch = b;
+            }
+          }
+        }
       });
       F._staffIdByName = idByName;
       F._staffUserIdByName = userIdByName;
@@ -106,18 +118,15 @@ export async function loadLiveData(F: any) {
 
   /* ---- install live roster override, then load nearby months ---- */
   if (!F._rosterPatched) {
-    const baseRosterOn = F.rosterOn.bind(F);
     F.rosterOn = (d: Date, branch: string) => {
       const cell = F._liveRoster && F._liveRoster[keyOf(d)];
-      if (!cell) return baseRosterOn(d, branch);
+      if (!cell) return [];
       if (branch === "global") return [...cell.calicut, ...cell.cochin];
       return cell[branch] || [];
     };
-    const baseRosterGet = F.rosterGet.bind(F);
     F.rosterGet = (name: string) => {
-      const local = baseRosterGet(name) || {};
       const db = (F._dbRoster && F._dbRoster[name]) || {};
-      return { ...db, ...local };
+      return db;
     };
     F._rosterPatched = true;
   }
