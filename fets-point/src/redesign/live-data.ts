@@ -61,7 +61,7 @@ export async function loadLiveData(F: any) {
   let profileBranch: Record<string, string> = {};
   try {
     const { data, error } = await supabase
-      .from("staff_profiles").select("id, user_id, full_name, role, branch_assigned, is_active, hourly_rate, daily_rate, monthly_salary").order("full_name");
+      .from("staff_profiles").select("id, user_id, full_name, role, branch_assigned, is_active, hourly_rate, daily_rate, permissions").order("full_name");
     if (!error && data && data.length) {
       const pool: Record<string, string[]> = { calicut: [], cochin: [] };
       const idByName: Record<string, any> = {};
@@ -84,13 +84,14 @@ export async function loadLiveData(F: any) {
           const list = pool[b] || (pool[b] = []);
           if (p.full_name) list.push(p.full_name);
         }
+        const calculatedSalary = Number(p.daily_rate) * 30 || 0;
         if (p.id) {
           profileBranch[p.id] = b;
-          F._staffRatesByProfileId[p.id] = { hourly_rate: Number(p.hourly_rate) || 0, daily_rate: Number(p.daily_rate) || 0, monthly_salary: Number(p.monthly_salary) || 0 };
+          F._staffRatesByProfileId[p.id] = { hourly_rate: Number(p.hourly_rate) || 0, daily_rate: Number(p.daily_rate) || 0, monthly_salary: calculatedSalary };
         }
         if (p.full_name && p.id) {
           idByName[p.full_name] = p.id;
-          F._staffRatesByName[p.full_name] = { id: p.id, user_id: p.user_id, role: p.role, hourly_rate: Number(p.hourly_rate) || 0, daily_rate: Number(p.daily_rate) || 0, monthly_salary: Number(p.monthly_salary) || 0, is_active: p.is_active };
+          F._staffRatesByName[p.full_name] = { id: p.id, user_id: p.user_id, role: p.role, hourly_rate: Number(p.hourly_rate) || 0, daily_rate: Number(p.daily_rate) || 0, monthly_salary: calculatedSalary, is_active: p.is_active };
         }
         if (p.full_name && p.user_id) userIdByName[p.full_name] = p.user_id;
         if (p.id && p.user_id) {
@@ -481,7 +482,6 @@ export async function loadOtClaims(F: any) {
         end_time,
         ot_hours,
         toil_payout,
-        toil_dates,
         status,
         notes,
         created_at,
@@ -496,6 +496,17 @@ export async function loadOtClaims(F: any) {
     if (!error && data) {
       F._otClaims = data.map((c: any) => {
         const sp = c.staff_profiles || {};
+        let userNotes = c.notes || "";
+        let toilDates = [];
+        if (c.notes && c.notes.trim().startsWith("{")) {
+          try {
+            const parsed = JSON.parse(c.notes);
+            userNotes = parsed.user_notes || "";
+            toilDates = parsed.toil_dates || [];
+          } catch (e) {
+            // ignore
+          }
+        }
         return {
           id: c.id,
           profile_id: c.profile_id,
@@ -506,9 +517,9 @@ export async function loadOtClaims(F: any) {
           end_time: c.end_time ? c.end_time.slice(0, 5) : "",
           ot_hours: Number(c.ot_hours) || 0,
           toil_payout: !!c.toil_payout,
-          toil_dates: c.toil_dates || [],
+          toil_dates: toilDates,
           status: c.status || "pending",
-          notes: c.notes || "",
+          notes: userNotes,
           hourly_rate: Number(sp.hourly_rate) || 0,
           daily_rate: Number(sp.daily_rate) || 0,
           created_at: c.created_at,
@@ -525,18 +536,21 @@ export async function loadMonthlyPayroll(F: any) {
   if (!F) return;
   try {
     const { data, error } = await supabase
-      .from("staff_monthly_payroll")
-      .select("*");
+      .from("staff_profiles")
+      .select("id, permissions");
     if (!error && data) {
       F._monthlyPayroll = {};
       data.forEach((row: any) => {
-        F._monthlyPayroll[row.profile_id] = F._monthlyPayroll[row.profile_id] || {};
-        F._monthlyPayroll[row.profile_id][row.month] = {
-          monthly_salary: Number(row.monthly_salary) || 0,
-          manual_addition: Number(row.manual_addition) || 0,
-          manual_deduction: Number(row.manual_deduction) || 0,
-          adjustment_notes: row.adjustment_notes || ""
-        };
+        const payroll = row.permissions?.monthly_payroll || {};
+        F._monthlyPayroll[row.id] = {};
+        Object.keys(payroll).forEach((month: string) => {
+          F._monthlyPayroll[row.id][month] = {
+            monthly_salary: Number(payroll[month].monthly_salary) || 0,
+            manual_addition: Number(payroll[month].manual_addition) || 0,
+            manual_deduction: Number(payroll[month].manual_deduction) || 0,
+            adjustment_notes: payroll[month].adjustment_notes || ""
+          };
+        });
       });
       window.dispatchEvent(new Event("fets-payroll-changed"));
     }

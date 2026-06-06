@@ -353,6 +353,13 @@ export async function dbSetRosterOtById(pid: string, date: string, ot: number) {
 }
 
 export async function dbAddOtClaim(claim: any) {
+  let notesValue = claim.notes || null;
+  if (claim.toil_payout && claim.toil_dates && claim.toil_dates.length) {
+    notesValue = JSON.stringify({
+      user_notes: claim.notes || "",
+      toil_dates: claim.toil_dates
+    });
+  }
   const row = {
     profile_id: claim.profile_id || F()._meId,
     date: claim.date,
@@ -360,8 +367,7 @@ export async function dbAddOtClaim(claim: any) {
     end_time: claim.end_time || null,
     ot_hours: Number(claim.ot_hours) || 0,
     toil_payout: !!claim.toil_payout,
-    toil_dates: claim.toil_dates || [],
-    notes: claim.notes || null,
+    notes: notesValue,
     status: "pending"
   };
   try {
@@ -394,9 +400,6 @@ export async function dbDeleteOtClaim(claimId: string) {
 export async function dbUpdateStaffRates(profileId: string, hourlyRate: number, dailyRate: number, monthlySalary?: number) {
   try {
     const updatePayload: any = { hourly_rate: hourlyRate, daily_rate: dailyRate };
-    if (monthlySalary !== undefined) {
-      updatePayload.monthly_salary = monthlySalary;
-    }
     const { error } = await supabase
       .from("staff_profiles")
       .update(updatePayload)
@@ -404,21 +407,20 @@ export async function dbUpdateStaffRates(profileId: string, hourlyRate: number, 
     
     if (error) throw error;
     
+    const calculatedSalary = monthlySalary !== undefined ? monthlySalary : (dailyRate * 30);
     if (F()._staffRatesByProfileId) {
       F()._staffRatesByProfileId[profileId] = { 
         ...F()._staffRatesByProfileId[profileId], 
         hourly_rate: hourlyRate, 
         daily_rate: dailyRate,
-        monthly_salary: monthlySalary !== undefined ? monthlySalary : F()._staffRatesByProfileId[profileId].monthly_salary
+        monthly_salary: calculatedSalary
       };
     }
     const name = Object.keys(F()._staffIdByName).find(k => F()._staffIdByName[k] === profileId);
     if (name && F()._staffRatesByName && F()._staffRatesByName[name]) {
       F()._staffRatesByName[name].hourly_rate = hourlyRate;
       F()._staffRatesByName[name].daily_rate = dailyRate;
-      if (monthlySalary !== undefined) {
-        F()._staffRatesByName[name].monthly_salary = monthlySalary;
-      }
+      F()._staffRatesByName[name].monthly_salary = calculatedSalary;
     }
     
     rtoast("Pay rates updated");
@@ -431,48 +433,44 @@ export async function dbUpdateStaffRates(profileId: string, hourlyRate: number, 
 }
 
 export async function dbUpdateMonthlyPayroll(profileId: string, month: string, data: any) {
-  const row = {
-    profile_id: profileId,
-    month,
-    monthly_salary: Number(data.monthly_salary) || 0,
-    manual_addition: Number(data.manual_addition) || 0,
-    manual_deduction: Number(data.manual_deduction) || 0,
-    adjustment_notes: data.adjustment_notes || null,
-    updated_at: new Date().toISOString()
-  };
   try {
-    const { data: ex } = await supabase
-      .from("staff_monthly_payroll")
-      .select("id")
-      .eq("profile_id", profileId)
-      .eq("month", month)
+    const { data: prof, error: getErr } = await supabase
+      .from("staff_profiles")
+      .select("permissions")
+      .eq("id", profileId)
       .maybeSingle();
+      
+    if (getErr) throw getErr;
     
-    let res;
-    if (ex && (ex as any).id) {
-      res = await supabase.from("staff_monthly_payroll").update(row).eq("id", (ex as any).id).select().single();
-    } else {
-      res = await supabase.from("staff_monthly_payroll").insert([row]).select().single();
-    }
+    const permissions = prof?.permissions || {};
+    permissions.monthly_payroll = permissions.monthly_payroll || {};
+    permissions.monthly_payroll[month] = {
+      monthly_salary: Number(data.monthly_salary) || 0,
+      manual_addition: Number(data.manual_addition) || 0,
+      manual_deduction: Number(data.manual_deduction) || 0,
+      adjustment_notes: data.adjustment_notes || null
+    };
     
-    if (res.error) throw res.error;
-    
-    // Also update staff_profiles.monthly_salary as the default baseline
-    await supabase.from("staff_profiles").update({ monthly_salary: row.monthly_salary }).eq("id", profileId);
+    const { error: updErr } = await supabase
+      .from("staff_profiles")
+      .update({ permissions })
+      .eq("id", profileId);
+      
+    if (updErr) throw updErr;
     
     // Update local cache baseline
     if (F()._staffRatesByProfileId && F()._staffRatesByProfileId[profileId]) {
-      F()._staffRatesByProfileId[profileId].monthly_salary = row.monthly_salary;
+      F()._staffRatesByProfileId[profileId].monthly_salary = Number(data.monthly_salary) || 0;
     }
     const name = Object.keys(F()._staffIdByName).find(k => F()._staffIdByName[k] === profileId);
     if (name && F()._staffRatesByName && F()._staffRatesByName[name]) {
-      F()._staffRatesByName[name].monthly_salary = row.monthly_salary;
+      F()._staffRatesByName[name].monthly_salary = Number(data.monthly_salary) || 0;
     }
 
     const { loadMonthlyPayroll } = await import("./live-data");
     await loadMonthlyPayroll(F());
     rtoast("Monthly payroll updated");
-    return res.data;
+    return { profile_id: profileId, month, ...permissions.monthly_payroll[month] };
   } catch (e) {
     console.error("dbUpdateMonthlyPayroll error:", e);
     rtoast("Failed to update payroll", "alert");
@@ -506,7 +504,15 @@ export async function dbResolveOtClaim(claimId: string, status: "Approved" | "Re
       const name = Object.keys(F()._staffIdByName).find(k => F()._staffIdByName[k] === pid);
       
       if (toilPayout) {
-        const tDates = typeof claim.toil_dates === 'string' ? JSON.parse(claim.toil_dates) : (claim.toil_dates || []);
+        let tDates = [];
+        if (claim.notes && claim.notes.trim().startsWith("{")) {
+          try {
+            const parsed = JSON.parse(claim.notes);
+            tDates = parsed.toil_dates || [];
+          } catch (e) {
+            // ignore
+          }
+        }
         for (const d of tDates) {
           await dbSetRosterById(pid, d, "TP");
           if (name) {
