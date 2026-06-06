@@ -11,6 +11,7 @@
   views reflect the change without a refetch.
 */
 import { supabase } from "../lib/supabase";
+import { loadOtClaims } from "./live-data";
 
 const F = () => window.FETS;
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -312,3 +313,132 @@ export async function dbResolveStaffRequest(reqId: string, status: "Approved" | 
     return null;
   }
 }
+
+export async function dbSetRosterOtById(pid: string, date: string, ot: number) {
+  try {
+    const { data: ex } = await supabase.from("roster_schedules").select("id").eq("profile_id", pid).eq("date", date).maybeSingle();
+    if (ex && (ex as any).id) {
+      await supabase.from("roster_schedules").update({ overtime_hours: ot }).eq("id", (ex as any).id);
+    } else {
+      await supabase.from("roster_schedules").insert([{ profile_id: pid, date: date, shift_code: 'D', overtime_hours: ot, status: 'confirmed' }]);
+    }
+  } catch (e) {
+    console.error("dbSetRosterOtById error:", e);
+  }
+}
+
+export async function dbAddOtClaim(claim: any) {
+  const row = {
+    profile_id: claim.profile_id || F()._meId,
+    date: claim.date,
+    start_time: claim.start_time || "17:00:00",
+    end_time: claim.end_time || null,
+    ot_hours: Number(claim.ot_hours) || 0,
+    toil_payout: !!claim.toil_payout,
+    notes: claim.notes || null,
+    status: "pending"
+  };
+  try {
+    const { data, error } = await supabase.from("staff_ot_claims").insert([row]).select().single();
+    if (error) throw error;
+    await loadOtClaims(F());
+    rtoast("OT/TOIL claim submitted");
+    return data;
+  } catch (e) {
+    console.error("dbAddOtClaim error:", e);
+    rtoast("Sync failed — saved locally", "alert");
+    return null;
+  }
+}
+
+export async function dbDeleteOtClaim(claimId: string) {
+  try {
+    const { error } = await supabase.from("staff_ot_claims").delete().eq("id", claimId);
+    if (error) throw error;
+    await loadOtClaims(F());
+    rtoast("Claim cancelled");
+    return true;
+  } catch (e) {
+    console.error("dbDeleteOtClaim error:", e);
+    rtoast("Failed to cancel claim", "alert");
+    return false;
+  }
+}
+
+export async function dbUpdateStaffRates(profileId: string, hourlyRate: number, dailyRate: number) {
+  try {
+    const { error } = await supabase
+      .from("staff_profiles")
+      .update({ hourly_rate: hourlyRate, daily_rate: dailyRate })
+      .eq("id", profileId);
+    
+    if (error) throw error;
+    
+    if (F()._staffRatesByProfileId) {
+      F()._staffRatesByProfileId[profileId] = { hourly_rate: hourlyRate, daily_rate: dailyRate };
+    }
+    const name = Object.keys(F()._staffIdByName).find(k => F()._staffIdByName[k] === profileId);
+    if (name && F()._staffRatesByName && F()._staffRatesByName[name]) {
+      F()._staffRatesByName[name].hourly_rate = hourlyRate;
+      F()._staffRatesByName[name].daily_rate = dailyRate;
+    }
+    
+    rtoast("Pay rates updated");
+    return true;
+  } catch (e) {
+    console.error("dbUpdateStaffRates error:", e);
+    rtoast("Failed to update rates", "alert");
+    return false;
+  }
+}
+
+export async function dbResolveOtClaim(claimId: string, status: "Approved" | "Rejected") {
+  const dbStatus = status === "Approved" ? "approved" : "rejected";
+  try {
+    const { data: claim, error } = await supabase
+      .from("staff_ot_claims")
+      .update({ status: dbStatus, updated_at: new Date().toISOString() })
+      .eq("id", claimId)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    
+    if (status === "Approved" && claim) {
+      const pid = claim.profile_id;
+      const date = claim.date;
+      const toilPayout = claim.toil_payout;
+      const otHours = claim.ot_hours;
+      
+      if (toilPayout) {
+        await dbSetRosterById(pid, date, "TP");
+      } else if (otHours > 0) {
+        await dbSetRosterOtById(pid, date, otHours);
+      }
+      
+      const name = Object.keys(F()._staffIdByName).find(k => F()._staffIdByName[k] === pid);
+      const dt = new Date(date + "T00:00:00");
+      const off = F().offsetOf ? F().offsetOf(dt) : null;
+      if (name && off != null && !isNaN(off)) {
+        F()._dbRoster = F()._dbRoster || {};
+        F()._dbRoster[name] = F()._dbRoster[name] || {};
+        const existing = F()._dbRoster[name][off] || { code: "D", ot: 0 };
+        if (toilPayout) {
+          F()._dbRoster[name][off] = { code: "TP", ot: 0 };
+        } else {
+          F()._dbRoster[name][off] = { code: existing.code, ot: otHours };
+        }
+      }
+    }
+    
+    await loadOtClaims(F());
+    window.dispatchEvent(new Event("fets-roster-changed"));
+    rtoast(status === "Approved" ? "Claim approved" : "Claim rejected");
+    return claim;
+  } catch (e) {
+    console.error("dbResolveOtClaim error:", e);
+    rtoast("Failed to resolve claim", "alert");
+    return null;
+  }
+}
+

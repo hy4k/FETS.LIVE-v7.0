@@ -38,7 +38,7 @@ const branchOf = (v: string) => {
   return b || "calicut";
 };
 // shift codes that mean "not on duty"
-const REST_CODES = new Set(["rd", "off", "wo", "l", "leave", "lv", "h", "holiday", "to", "toil", "tr"]);
+const REST_CODES = new Set(["rd", "off", "wo", "l", "leave", "lv", "h", "holiday", "to", "toil", "tr", "tp"]);
 
 export async function loadLiveData(F: any) {
   if (!F || F._liveLoaded) return;
@@ -60,19 +60,29 @@ export async function loadLiveData(F: any) {
   let profileBranch: Record<string, string> = {};
   try {
     const { data, error } = await supabase
-      .from("staff_profiles").select("id, user_id, full_name, role, branch_assigned, is_active").order("full_name");
+      .from("staff_profiles").select("id, user_id, full_name, role, branch_assigned, is_active, hourly_rate, daily_rate").order("full_name");
     if (!error && data && data.length) {
       const pool: Record<string, string[]> = { calicut: [], cochin: [] };
       const idByName: Record<string, any> = {};
       const userIdByName: Record<string, any> = {};
       const userIdToProfileId: Record<string, string> = {};
       const profileIdToUserId: Record<string, string> = {};
+      
+      F._staffRatesByProfileId = F._staffRatesByProfileId || {};
+      F._staffRatesByName = F._staffRatesByName || {};
+
       data.forEach((p: any) => {
         const b = branchOf(p.branch_assigned);
         const list = pool[b] || (pool[b] = []);
         if (p.full_name) list.push(p.full_name);
-        if (p.id) profileBranch[p.id] = b;
-        if (p.full_name && p.id) idByName[p.full_name] = p.id;
+        if (p.id) {
+          profileBranch[p.id] = b;
+          F._staffRatesByProfileId[p.id] = { hourly_rate: Number(p.hourly_rate) || 0, daily_rate: Number(p.daily_rate) || 0 };
+        }
+        if (p.full_name && p.id) {
+          idByName[p.full_name] = p.id;
+          F._staffRatesByName[p.full_name] = { id: p.id, user_id: p.user_id, role: p.role, hourly_rate: Number(p.hourly_rate) || 0, daily_rate: Number(p.daily_rate) || 0, is_active: p.is_active };
+        }
         if (p.full_name && p.user_id) userIdByName[p.full_name] = p.user_id;
         if (p.id && p.user_id) {
           userIdToProfileId[p.user_id] = p.id;
@@ -290,9 +300,11 @@ export async function loadLiveData(F: any) {
       if (!error && data) {
         const toilEarned = data.filter((r: any) => String(r.shift_code).toUpperCase() === "TOIL").length;
         const toilRedeemed = data.filter((r: any) => String(r.shift_code).toUpperCase() === "TR").length;
-        F._meToilBalance = toilEarned - toilRedeemed;
+        const toilPaid = data.filter((r: any) => String(r.shift_code).toUpperCase() === "TP").length;
+        F._meToilBalance = toilEarned - toilRedeemed - toilPaid;
         F._meToilEarned = toilEarned;
         F._meToilRedeemed = toilRedeemed;
+        F._meToilPaid = toilPaid;
       }
     }
   } catch (e) { /* ignore */ }
@@ -336,6 +348,12 @@ export async function loadLiveData(F: any) {
       }
     }
   } catch (e) { /* keep empty */ }
+
+  try {
+    await loadOtClaims(F);
+  } catch (e) {
+    console.error("Error loading OT claims on startup:", e);
+  }
 
   F._liveLoaded = true;
 }
@@ -384,7 +402,7 @@ export async function ensureMonth(d: Date) {
   } catch (e) {}
   try {
     const { data, error } = await supabase.from("roster_schedules")
-      .select("date, shift_code, profile_id, staff_profiles(full_name, branch_assigned)")
+      .select("date, shift_code, overtime_hours, profile_id, staff_profiles(full_name, branch_assigned)")
       .gte("date", ymd(first)).lte("date", ymd(last));
     if (!error && data) {
       F._dbRoster = F._dbRoster || {};
@@ -396,7 +414,7 @@ export async function ensureMonth(d: Date) {
         const off = F.offsetOf(dt);
         if (off != null && !isNaN(off)) {
           F._dbRoster[name] = F._dbRoster[name] || {};
-          F._dbRoster[name][off] = { code: r.shift_code, ot: 0 };
+          F._dbRoster[name][off] = { code: r.shift_code, ot: Number(r.overtime_hours) || 0 };
         }
 
         if (REST_CODES.has(lc(r.shift_code))) return;
@@ -415,3 +433,56 @@ export async function ensureMonth(d: Date) {
   window.dispatchEvent(new Event("fets-sess-changed"));
   return true;
 }
+
+export async function loadOtClaims(F: any) {
+  if (!F) return;
+  try {
+    const isAdmin = !!F.isAdmin;
+    let query = supabase
+      .from("staff_ot_claims")
+      .select(`
+        id,
+        profile_id,
+        date,
+        start_time,
+        end_time,
+        ot_hours,
+        toil_payout,
+        status,
+        notes,
+        created_at,
+        staff_profiles(full_name, branch_assigned, hourly_rate, daily_rate)
+      `);
+    
+    if (!isAdmin && F._meId) {
+      query = query.eq("profile_id", F._meId);
+    }
+    
+    const { data, error } = await query.order("date", { ascending: false });
+    if (!error && data) {
+      F._otClaims = data.map((c: any) => {
+        const sp = c.staff_profiles || {};
+        return {
+          id: c.id,
+          profile_id: c.profile_id,
+          name: sp.full_name || "Unknown",
+          branch: branchOf(sp.branch_assigned),
+          date: c.date,
+          start_time: c.start_time ? c.start_time.slice(0, 5) : "17:00",
+          end_time: c.end_time ? c.end_time.slice(0, 5) : "",
+          ot_hours: Number(c.ot_hours) || 0,
+          toil_payout: !!c.toil_payout,
+          status: c.status || "pending",
+          notes: c.notes || "",
+          hourly_rate: Number(sp.hourly_rate) || 0,
+          daily_rate: Number(sp.daily_rate) || 0,
+          created_at: c.created_at,
+        };
+      });
+      window.dispatchEvent(new Event("fets-ot-claims-changed"));
+    }
+  } catch (e) {
+    console.error("loadOtClaims error:", e);
+  }
+}
+

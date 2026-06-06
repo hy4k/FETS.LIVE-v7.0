@@ -2521,9 +2521,10 @@ const ROSTER_CODES = {
   L:    { label: "Leave",            color: "color-mix(in oklch, var(--bad) 20%, var(--panel-3))",         ink: "var(--bad)",         solid: true },
   TOIL: { label: "TOIL Earned",      color: "color-mix(in oklch, var(--v-cma) 20%, var(--panel-3))",       ink: "var(--v-cma)",       solid: true },
   TR:   { label: "TOIL Redeemed",    color: "color-mix(in oklch, var(--v-ielts) 20%, var(--panel-3))",     ink: "var(--v-ielts)",     solid: true },
+  TP:   { label: "TOIL Paid-out",   color: "color-mix(in oklch, var(--v-pearson) 20%, var(--panel-3))",   ink: "var(--v-pearson)",   solid: true },
   SW:   { label: "Shift swapped",    color: "color-mix(in oklch, var(--v-prometric) 30%, var(--panel-3))",  ink: "var(--v-prometric)", solid: true },
 };
-const RC_LIST = ["D", "E", "HD", "RD", "L", "TOIL", "TR", "SW"];
+const RC_LIST = ["D", "E", "HD", "RD", "L", "TOIL", "TR", "TP", "SW"];
 const WORK_CODES = ["D", "E", "HD"];
 const OT_COLOR = "var(--v-ielts)";
 
@@ -2661,6 +2662,239 @@ function RosterCellDialog({ ctx, onApply, onClose }) {
   );
 }
 
+/* ---------- OT & TOIL Claim Dialog ---------- */
+function OtToilClaimDialog({ ctx, onClose }) {
+  const F = () => window.FETS;
+  const d = ctx.date;
+  const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  
+  const profileId = F()._meId;
+  const rates = F()._staffRatesByProfileId?.[profileId] || { hourly_rate: 0, daily_rate: 0 };
+  
+  const existingClaim = F()._otClaims?.find(c => c.profile_id === profileId && c.date === dateStr);
+  
+  const [toilPayout, setToilPayout] = React.useState(existingClaim ? existingClaim.toil_payout : false);
+  const [startTime, setStartTime] = React.useState(existingClaim ? existingClaim.start_time : "17:00");
+  const [endTime, setEndTime] = React.useState(existingClaim ? existingClaim.end_time || "" : "");
+  const [otHours, setOtHours] = React.useState(existingClaim ? existingClaim.ot_hours : 0);
+  const [notes, setNotes] = React.useState(existingClaim ? existingClaim.notes : "");
+  const [loading, setLoading] = React.useState(false);
+  
+  React.useEffect(() => {
+    const k = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k);
+  }, []);
+  
+  React.useEffect(() => {
+    if (toilPayout) {
+      setOtHours(0);
+      return;
+    }
+    if (!startTime || !endTime) {
+      setOtHours(0);
+      return;
+    }
+    const [sh, sm] = startTime.split(":").map(Number);
+    const [eh, em] = endTime.split(":").map(Number);
+    let diff = (eh * 60 + em) - (sh * 60 + sm);
+    if (diff < 0) diff += 24 * 60;
+    const hrs = Math.max(0, +(diff / 60).toFixed(2));
+    setOtHours(hrs);
+  }, [startTime, endTime, toilPayout]);
+  
+  const handleSave = async () => {
+    if (!profileId) {
+      alert("Error: Profile not found. Cannot submit claim.");
+      return;
+    }
+    if (!toilPayout && otHours <= 0) {
+      alert("Please enter a valid duty finish time to calculate OT hours.");
+      return;
+    }
+    
+    setLoading(true);
+    const payload = {
+      profile_id: profileId,
+      date: dateStr,
+      start_time: startTime + ":00",
+      end_time: toilPayout ? null : (endTime + ":00"),
+      ot_hours: toilPayout ? 0 : otHours,
+      toil_payout: toilPayout,
+      notes: notes || null
+    };
+    
+    const result = await DB.dbAddOtClaim(payload);
+    setLoading(false);
+    if (result) {
+      onClose();
+    }
+  };
+  
+  const handleDelete = async () => {
+    if (!existingClaim) return;
+    if (existingClaim.status !== 'pending' && !F().isAdmin) {
+      alert("Only pending claims can be cancelled.");
+      return;
+    }
+    
+    if (confirm("Are you sure you want to cancel this claim?")) {
+      setLoading(true);
+      const ok = await DB.dbDeleteOtClaim(existingClaim.id);
+      setLoading(false);
+      if (ok) {
+        onClose();
+      }
+    }
+  };
+  
+  const showAdminOverride = () => {
+    onClose();
+    ctx.openAdminOverride();
+  };
+  
+  const displayStatus = existingClaim?.status || null;
+  const statusColors = { pending: "var(--warn)", approved: "var(--ok)", rejected: "var(--bad)" };
+  
+  return (
+    <React.Fragment>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "color-mix(in oklch, var(--shadow-base, #000) 55%, transparent)", backdropFilter: "blur(3px)", zIndex: 120 }} />
+      <div role="dialog" className="glass rise" style={{ position: "fixed", zIndex: 121, top: "50%", left: "50%", transform: "translate(-50%,-50%)",
+        width: "min(420px, 92vw)", maxHeight: "90vh", overflowY: "auto", borderRadius: "var(--radius)", padding: 24, boxShadow: "var(--shadow-lift)", display: "flex", flexDirection: "column", gap: 18 }}>
+        
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <Avatar name={ctx.name} size={40} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 16, fontWeight: 750, color: "var(--ink)", letterSpacing: "-0.01em" }}>Log OT & TOIL</div>
+            <div className="mono" style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>
+              {window.P_WDL[d.getDay()]}, {window.P_MO[d.getMonth()]} {d.getDate()}
+            </div>
+          </div>
+          <button onClick={onClose} className="tap glass-2" style={{ width: 34, height: 34, borderRadius: 999, display: "grid", placeItems: "center", cursor: "pointer", color: "var(--ink-2)", border: "1px solid var(--hairline)" }}>
+            <Icon name="x" size={16} />
+          </button>
+        </div>
+        
+        {displayStatus && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", borderRadius: 10, background: "var(--inset)", border: "1px solid var(--hairline)" }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-2)" }}>Claim Status:</span>
+            <span style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: statusColors[displayStatus] || "var(--ink)" }}>
+              {displayStatus}
+            </span>
+          </div>
+        )}
+        
+        {(!displayStatus || displayStatus === 'pending') ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div className="inset" style={{ padding: 14, borderRadius: 12, display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ minWidth: 32, height: 22, padding: "0 6px", borderRadius: 6, display: "grid", placeItems: "center", fontSize: 10, fontWeight: 800, color: "#fff", background: "var(--v-pearson)" }}>TOIL</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>TOIL Cash Payout</div>
+                <div style={{ fontSize: 11, color: "var(--ink-4)", fontWeight: 500 }}>Claim payout instead of a leave day</div>
+              </div>
+              <input 
+                type="checkbox" 
+                checked={toilPayout} 
+                onChange={(e) => setToilPayout(e.target.checked)}
+                style={{ width: 18, height: 18, accentColor: "var(--v-pearson)", cursor: "pointer" }}
+              />
+            </div>
+            
+            {!toilPayout ? (
+              <div className="inset" style={{ padding: 14, borderRadius: 12, display: "flex", flexDirection: "column", gap: 14 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ minWidth: 32, height: 22, padding: "0 6px", borderRadius: 6, display: "grid", placeItems: "center", fontSize: 10, fontWeight: 800, color: "#fff", background: "var(--v-ielts)" }}>OT</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>Overtime Hours Calculation</span>
+                </div>
+                
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <div>
+                    <label style={{ fontSize: 11, color: "var(--ink-3)", fontWeight: 600, display: "block", marginBottom: 5 }}>Duty Start Time</label>
+                    <input 
+                      type="time" 
+                      value={startTime} 
+                      onChange={(e) => setStartTime(e.target.value)}
+                      className="glass-2"
+                      style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid var(--hairline)", color: "var(--ink)", background: "transparent", fontSize: 13, outline: "none" }}
+                    />
+                  </div>
+                  
+                  <div>
+                    <label style={{ fontSize: 11, color: "var(--ink-3)", fontWeight: 600, display: "block", marginBottom: 5 }}>Duty Finish Time</label>
+                    <input 
+                      type="time" 
+                      value={endTime} 
+                      onChange={(e) => setEndTime(e.target.value)}
+                      className="glass-2"
+                      style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid var(--hairline)", color: "var(--ink)", background: "transparent", fontSize: 13, outline: "none" }}
+                      required
+                    />
+                  </div>
+                </div>
+                
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 8, borderTop: "1px solid var(--hairline)" }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-2)" }}>Calculated Overtime:</span>
+                  <span style={{ fontSize: 15, fontWeight: 800, color: "var(--v-ielts)" }}>{otHours.toFixed(2)} hours</span>
+                </div>
+              </div>
+            ) : null}
+            
+            <div>
+              <label style={{ fontSize: 11.5, color: "var(--ink-3)", fontWeight: 600, display: "block", marginBottom: 6 }}>Notes / Remarks</label>
+              <textarea 
+                value={notes} 
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Optional explanation for the claim..."
+                className="glass-2"
+                style={{ width: "100%", minHeight: 60, padding: 10, borderRadius: 10, border: "1px solid var(--hairline)", color: "var(--ink)", background: "transparent", fontSize: 13, outline: "none", resize: "none" }}
+              />
+            </div>
+            
+            <button 
+              onClick={handleSave} 
+              disabled={loading}
+              className="tap btn-accent"
+              style={{ padding: "11px 0", borderRadius: 12, border: "none", fontWeight: 700, fontSize: 14, cursor: "pointer", background: "var(--accent)", color: "#fff", transition: "opacity .2s", opacity: loading ? 0.6 : 1 }}
+            >
+              {loading ? "Submitting..." : existingClaim ? "Update Claim" : "Submit Claim"}
+            </button>
+            
+            {existingClaim && (
+              <button 
+                onClick={handleDelete} 
+                disabled={loading}
+                className="tap"
+                style={{ padding: "10px 0", borderRadius: 12, border: "1px solid var(--bad)", fontWeight: 700, fontSize: 13, cursor: "pointer", background: "transparent", color: "var(--bad)", transition: "opacity .2s", opacity: loading ? 0.6 : 1 }}
+              >
+                Cancel / Delete Claim
+              </button>
+            )}
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ fontSize: 13.5, color: "var(--ink-2)", fontWeight: 500, lineHeight: 1.5 }}>
+              This claim has already been <strong>{displayStatus}</strong> by management. Approved or rejected claims cannot be edited.
+            </div>
+            
+            <div className="inset" style={{ padding: 12, borderRadius: 10, display: "flex", flexDirection: "column", gap: 8, fontSize: 12 }}>
+              <div><strong>Type:</strong> {existingClaim.toil_payout ? "TOIL Cash Payout" : "Overtime Hours"}</div>
+              {!existingClaim.toil_payout && <div><strong>Hours:</strong> {existingClaim.ot_hours} hrs ({existingClaim.start_time} - {existingClaim.end_time})</div>}
+              {existingClaim.notes && <div><strong>Notes:</strong> {existingClaim.notes}</div>}
+            </div>
+          </div>
+        )}
+        
+        {window.FETS.isAdmin && (
+          <div style={{ borderTop: "1px solid var(--hairline)", paddingTop: 14, display: "flex", justifyContent: "center" }}>
+            <button onClick={showAdminOverride} className="tap" style={{ fontSize: 11.5, fontWeight: 700, color: "var(--accent)", background: "transparent", border: "none", cursor: "pointer" }}>
+              Admin: Shift Override Panel
+            </button>
+          </div>
+        )}
+      </div>
+    </React.Fragment>
+  );
+}
+
 function RosterGrid({ offsets, branch }) {
   const pool = branch === "global"
     ? [...F().STAFF.calicut.map((n) => ({ n, b: "calicut" })), ...F().STAFF.cochin.map((n) => ({ n, b: "cochin" }))]
@@ -2687,6 +2921,7 @@ function RosterGrid({ offsets, branch }) {
     return () => window.removeEventListener("fets-roster-changed", h);
   }, [branch, offsets[0]]);
   const [dialog, setDialog] = React.useState(null);   // { name, off, date, cell, defaultCode }
+  const [otDialog, setOtDialog] = React.useState(null); // { name, off, date, cell }
 
   const apply = (name, off, cell) => {
     F().rosterSet(name, off, cell);
@@ -2745,9 +2980,24 @@ function RosterGrid({ offsets, branch }) {
               const main = ot > 0 ? `${code}+OT` : code;
               const d = F().ISO(o);
               const pending = reqMarkOf(n, o);
+              const isSelf = n === F().user.name;
               return (
-                <button key={o} onClick={() => { if (window.FETS.isAdmin) { setDialog({ name: n, off: o, date: d, cell, defaultCode: cell.dflt || "RD" }); } }} className="tap" title={window.FETS.isAdmin ? `${m.label}${ot > 0 ? ` + OT ${ot}h` : ""} — tap to change` : m.label}
-                  style={{ position: "relative", height: 40, borderRadius: 8, cursor: window.FETS.isAdmin ? "pointer" : "default", border: m.solid ? "1px solid transparent" : "1px solid var(--glass-edge-lo)",
+                <button key={o} onClick={() => {
+                  if (isSelf) {
+                    setOtDialog({
+                      name: n,
+                      off: o,
+                      date: d,
+                      cell,
+                      openAdminOverride: () => {
+                        setDialog({ name: n, off: o, date: d, cell, defaultCode: cell.dflt || "RD" });
+                      }
+                    });
+                  } else if (window.FETS.isAdmin) {
+                    setDialog({ name: n, off: o, date: d, cell, defaultCode: cell.dflt || "RD" });
+                  }
+                }} className="tap" title={(window.FETS.isAdmin || isSelf) ? `${m.label}${ot > 0 ? ` + OT ${ot}h` : ""} — tap to change` : m.label}
+                  style={{ position: "relative", height: 40, borderRadius: 8, cursor: (window.FETS.isAdmin || isSelf) ? "pointer" : "default", border: m.solid ? "1px solid transparent" : "1px solid var(--glass-edge-lo)",
                     background: m.solid ? m.color : "var(--panel-3)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 0,
                     color: m.ink, fontFamily: "var(--font)", fontWeight: 800, letterSpacing: "0.01em",
                     boxShadow: ot > 0 ? `inset 0 -3px 0 ${OT_COLOR}` : "none" }}>
@@ -2762,6 +3012,7 @@ function RosterGrid({ offsets, branch }) {
       </div>
     </div>
     {dialog && <RosterCellDialog ctx={dialog} onClose={() => setDialog(null)} onApply={(cell) => apply(dialog.name, dialog.off, cell)} />}
+    {otDialog && <OtToilClaimDialog ctx={otDialog} onClose={() => setOtDialog(null)} />}
     </React.Fragment>
   );
 }
@@ -3328,6 +3579,382 @@ function RosterApprovalsHub({ branch }) {
     </div>
   );
 }
+
+/* ---------- OT & TOIL Claims Manager Hub Page ---------- */
+function OtToilClaimsHub({ branch }) {
+  const [claims, setClaims] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [tab, setTab] = React.useState("pending");
+  const [editingRates, setEditingRates] = React.useState({});
+  
+  const F = window.FETS;
+  
+  const load = async () => {
+    setLoading(true);
+    await loadLiveData(F);
+    setClaims(F._otClaims || []);
+    setLoading(false);
+  };
+  
+  React.useEffect(() => {
+    load();
+    const h = () => setClaims(F._otClaims || []);
+    window.addEventListener("fets-ot-claims-changed", h);
+    window.addEventListener("fets-roster-changed", load);
+    return () => {
+      window.removeEventListener("fets-ot-claims-changed", h);
+      window.removeEventListener("fets-roster-changed", load);
+    };
+  }, []);
+  
+  const resolve = async (id, status) => {
+    await DB.dbResolveOtClaim(id, status);
+    load();
+  };
+  
+  const handleRateChange = (profileId, field, val) => {
+    const numVal = parseFloat(val) || 0;
+    setEditingRates(prev => ({
+      ...prev,
+      [profileId]: {
+        ...prev[profileId],
+        [field]: numVal
+      }
+    }));
+  };
+  
+  const handleSaveRates = async (profileId) => {
+    const updated = editingRates[profileId];
+    if (!updated) return;
+    const ok = await DB.dbUpdateStaffRates(profileId, updated.hourly_rate, updated.daily_rate);
+    if (ok) {
+      setEditingRates(prev => {
+        const next = { ...prev };
+        delete next[profileId];
+        return next;
+      });
+      load();
+    }
+  };
+  
+  const filteredClaims = claims.filter(c => {
+    const matchesBranch = branch === "global" || c.branch === branch;
+    if (tab === "pending") return matchesBranch && c.status === "pending";
+    if (tab === "history") return matchesBranch && c.status !== "pending";
+    return false;
+  });
+  
+  const approvedClaims = claims.filter(c => c.status === "approved" && (branch === "global" || c.branch === branch));
+  const pendingClaims = claims.filter(c => c.status === "pending" && (branch === "global" || c.branch === branch));
+  
+  const calcClaimPayout = (c) => {
+    if (c.toil_payout) {
+      return c.daily_rate * 1.5;
+    }
+    return c.ot_hours * c.hourly_rate * 1.75;
+  };
+  
+  const totalApprovedPayout = approvedClaims.reduce((sum, c) => sum + calcClaimPayout(c), 0);
+  const totalPendingPayout = pendingClaims.reduce((sum, c) => sum + calcClaimPayout(c), 0);
+  const totalApprovedOtHours = approvedClaims.filter(c => !c.toil_payout).reduce((sum, c) => sum + c.ot_hours, 0);
+  const totalApprovedToilPaid = approvedClaims.filter(c => c.toil_payout).length;
+  
+  const staffOtTotals = {};
+  approvedClaims.forEach(c => {
+    if (!c.toil_payout) {
+      staffOtTotals[c.name] = (staffOtTotals[c.name] || 0) + c.ot_hours;
+    }
+  });
+  pendingClaims.forEach(c => {
+    if (!c.toil_payout) {
+      staffOtTotals[c.name] = (staffOtTotals[c.name] || 0) + c.ot_hours;
+    }
+  });
+  
+  const warnings = Object.entries(staffOtTotals)
+    .filter(([name, hours]) => hours > 15)
+    .map(([name, hours]) => ({
+      name,
+      hours,
+      msg: `High workload warning: ${name} has logged ${hours.toFixed(1)} OT hours this month.`
+    }));
+  
+  const dayOtTotals = { Mon: 0, Tue: 0, Wed: 0, Thu: 0, Fri: 0, Sat: 0, Sun: 0 };
+  approvedClaims.concat(pendingClaims).forEach(c => {
+    if (!c.toil_payout && c.date) {
+      const dayName = window.P_WD[new Date(c.date + "T00:00:00").getDay()];
+      if (dayOtTotals[dayName] !== undefined) {
+        dayOtTotals[dayName] += c.ot_hours;
+      }
+    }
+  });
+  
+  const maxDayOt = Math.max(...Object.values(dayOtTotals), 1);
+  const maxStaffOt = Math.max(...Object.values(staffOtTotals), 1);
+  
+  const staffRatesList = Object.entries(F._staffRatesByName || {}).map(([name, p]) => ({
+    name,
+    id: p.id,
+    role: p.role,
+    hourly_rate: editingRates[p.id]?.hourly_rate !== undefined ? editingRates[p.id].hourly_rate : p.hourly_rate,
+    daily_rate: editingRates[p.id]?.daily_rate !== undefined ? editingRates[p.id].daily_rate : p.daily_rate,
+    isEdited: editingRates[p.id] !== undefined
+  })).sort((a,b) => a.name.localeCompare(b.name));
+  
+  const SCOL = { pending: "var(--warn)", approved: "var(--ok)", rejected: "var(--bad)" };
+  
+  return (
+    <div style={{ maxWidth: 1100, margin: "0 auto", display: "flex", flexDirection: "column", gap: 24 }}>
+      <PageHeader eyebrow="Modules // Admin" title="OT & TOIL Claims Manager" />
+      
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
+        <div className="glass" style={{ padding: 20, borderRadius: 16, borderLeft: "4px solid var(--accent)", position: "relative" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--ink-4)", letterSpacing: "0.05em" }}>Total Approved Cost</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: "var(--ink)", marginTop: 8 }}>₹{totalApprovedPayout.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</div>
+          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 6 }}>From approved OT & TOIL payouts</div>
+        </div>
+        
+        <div className="glass" style={{ padding: 20, borderRadius: 16, borderLeft: "4px solid var(--warn)", position: "relative" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--ink-4)", letterSpacing: "0.05em" }}>Total Pending Cost</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: "var(--warn)", marginTop: 8 }}>₹{totalPendingPayout.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</div>
+          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 6 }}>Estimated payout upon approval</div>
+        </div>
+        
+        <div className="glass" style={{ padding: 20, borderRadius: 16, borderLeft: "4px solid var(--v-ielts)", position: "relative" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--ink-4)", letterSpacing: "0.05em" }}>Approved OT Hours</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: "var(--v-ielts)", marginTop: 8 }}>{totalApprovedOtHours.toFixed(1)} hrs</div>
+          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 6 }}>1.75x pay multiplier applied</div>
+        </div>
+        
+        <div className="glass" style={{ padding: 20, borderRadius: 16, borderLeft: "4px solid var(--v-pearson)", position: "relative" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--ink-4)", letterSpacing: "0.05em" }}>TOIL Paid Out</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: "var(--v-pearson)", marginTop: 8 }}>{totalApprovedToilPaid} days</div>
+          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 6 }}>1.5x daily rate paid out</div>
+        </div>
+      </div>
+      
+      {warnings.length > 0 && (
+        <div className="glass" style={{ borderLeft: "4px solid var(--bad)", padding: "16px 20px", borderRadius: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--bad)", fontWeight: 750, fontSize: 13.5 }}>
+            <Icon name="alert" size={16} /> Workload Warnings (Capacity Overdrive)
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {warnings.map((w, idx) => (
+              <div key={idx} style={{ fontSize: 12.5, color: "var(--ink-2)", fontWeight: 550 }}>
+                • {w.msg}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      
+      <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+        <Segmented value={tab} onChange={setTab} size="sm" options={[
+          { value: "pending", label: "Pending Claims" },
+          { value: "history", label: "History" },
+          { value: "rates", label: "Staff Rates Config" }
+        ]} />
+        <div style={{ flex: 1 }} />
+        <button onClick={load} className="tap glass-2" style={{ width: 36, height: 36, borderRadius: 10, display: "grid", placeItems: "center", border: "1px solid var(--hairline)", cursor: "pointer", color: "var(--ink-2)" }}>
+          <Icon name="refresh" size={15} />
+        </button>
+      </div>
+      
+      {loading ? (
+        <div className="glass" style={{ padding: 40, borderRadius: "var(--radius)", textAlign: "center", color: "var(--ink-4)" }}>
+          Loading OT/TOIL claims…
+        </div>
+      ) : tab === "rates" ? (
+        <div className="glass" style={{ padding: 24, borderRadius: "var(--radius)", display: "flex", flexDirection: "column", gap: 18 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 750, color: "var(--ink)" }}>Staff Rates Configuration</h3>
+            <p style={{ margin: 0, fontSize: 12, color: "var(--ink-4)" }}>Configure individual employee hourly rates (used for 1.75x OT) and daily rates (used for 1.5x TOIL cash payout).</p>
+          </div>
+          
+          <div className="scroll-soft" style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 600 }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid var(--hairline)" }}>
+                  <th style={{ textAlign: "left", padding: "10px 12px", fontSize: 11, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>Employee</th>
+                  <th style={{ textAlign: "left", padding: "10px 12px", fontSize: 11, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>Role</th>
+                  <th style={{ textAlign: "right", padding: "10px 12px", fontSize: 11, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>Hourly Rate (₹)</th>
+                  <th style={{ textAlign: "right", padding: "10px 12px", fontSize: 11, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>Daily Rate (₹)</th>
+                  <th style={{ textAlign: "center", padding: "10px 12px", fontSize: 11, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {staffRatesList.map((s) => (
+                  <tr key={s.id} style={{ borderBottom: "1px solid var(--hairline)" }}>
+                    <td style={{ padding: "12px", fontSize: 13.5, fontWeight: 650, color: "var(--ink)", display: "flex", alignItems: "center", gap: 10 }}>
+                      <Avatar name={s.name} size={28} />
+                      {s.name}
+                    </td>
+                    <td style={{ padding: "12px", fontSize: 12.5, color: "var(--ink-3)", fontWeight: 550 }}>
+                      {s.role || "Staff"}
+                    </td>
+                    <td style={{ padding: "12px", textAlign: "right" }}>
+                      <input 
+                        type="number"
+                        step="0.01"
+                        value={s.hourly_rate}
+                        onChange={(e) => handleRateChange(s.id, "hourly_rate", e.target.value)}
+                        className="glass-2 tabnum"
+                        style={{ width: 90, padding: "6px 8px", borderRadius: 6, border: "1px solid var(--hairline)", background: "transparent", color: "var(--ink)", textAlign: "right", fontSize: 13, outline: "none" }}
+                      />
+                    </td>
+                    <td style={{ padding: "12px", textAlign: "right" }}>
+                      <input 
+                        type="number"
+                        step="0.01"
+                        value={s.daily_rate}
+                        onChange={(e) => handleRateChange(s.id, "daily_rate", e.target.value)}
+                        className="glass-2 tabnum"
+                        style={{ width: 100, padding: "6px 8px", borderRadius: 6, border: "1px solid var(--hairline)", background: "transparent", color: "var(--ink)", textAlign: "right", fontSize: 13, outline: "none" }}
+                      />
+                    </td>
+                    <td style={{ padding: "12px", textAlign: "center" }}>
+                      <button 
+                        onClick={() => handleSaveRates(s.id)}
+                        disabled={!s.isEdited}
+                        className="tap"
+                        style={{ padding: "6px 12px", borderRadius: 6, border: "none", background: s.isEdited ? "var(--accent)" : "var(--inset)", color: s.isEdited ? "var(--accent-ink)" : "var(--ink-4)", fontWeight: 700, fontSize: 11.5, cursor: s.isEdited ? "pointer" : "default", opacity: s.isEdited ? 1 : 0.6 }}
+                      >
+                        Save
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : filteredClaims.length === 0 ? (
+        <div className="glass" style={{ padding: 40, borderRadius: "var(--radius)", textAlign: "center", color: "var(--ink-4)" }}>
+          No {tab === "pending" ? "pending" : "historical"} claims found.
+        </div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 24, alignItems: "start" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {filteredClaims.map((c) => {
+              const isToil = c.toil_payout;
+              const payout = calcClaimPayout(c);
+              const kindColor = isToil ? "var(--v-pearson)" : "var(--v-ielts)";
+              
+              return (
+                <div key={c.id} className="glass rise" style={{ padding: 20, borderRadius: "var(--radius)", display: "flex", flexDirection: "column", gap: 14 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <Avatar name={c.name} size={36} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 14.5, fontWeight: 700, color: "var(--ink)" }}>{c.name}</div>
+                      <div style={{ fontSize: 11.5, color: "var(--ink-4)", marginTop: 1 }}>
+                        {c.branch} center · Submitted on {new Date(c.created_at).toLocaleDateString()}
+                      </div>
+                    </div>
+                    <span style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", padding: "4px 10px", borderRadius: 99,
+                      color: kindColor, background: `color-mix(in oklch, ${kindColor} 15%, transparent)` }}>
+                      {isToil ? "TOIL Payout" : "Overtime"}
+                    </span>
+                  </div>
+                  
+                  <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 14, padding: "10px 14px", borderRadius: 10, background: "var(--inset)", border: "1px solid var(--hairline)" }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                      <span style={{ fontSize: 11, color: "var(--ink-4)", fontWeight: 600 }}>Date of Work</span>
+                      <span style={{ fontSize: 13, fontWeight: 750, color: "var(--ink)" }}>{c.date}</span>
+                    </div>
+                    
+                    {!isToil && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                        <span style={{ fontSize: 11, color: "var(--ink-4)", fontWeight: 600 }}>OT Hours</span>
+                        <span style={{ fontSize: 13, fontWeight: 750, color: "var(--ink)" }}>{c.ot_hours.toFixed(2)} hrs ({c.start_time} - {c.end_time})</span>
+                      </div>
+                    )}
+                    
+                    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                      <span style={{ fontSize: 11, color: "var(--ink-4)", fontWeight: 600 }}>Base Rate</span>
+                      <span style={{ fontSize: 13, fontWeight: 750, color: "var(--ink)" }}>₹{isToil ? `${c.daily_rate}/d` : `${c.hourly_rate}/h`}</span>
+                    </div>
+                    
+                    <div style={{ display: "flex", flexDirection: "column", gap: 3, alignItems: "flex-end" }}>
+                      <span style={{ fontSize: 11, color: "var(--ink-4)", fontWeight: 600 }}>Payout (Multiplier)</span>
+                      <span style={{ fontSize: 14, fontWeight: 800, color: "var(--ok)" }}>₹{payout.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
+                  
+                  {c.notes && (
+                    <p style={{ margin: 0, padding: "8px 12px", borderRadius: 8, background: "var(--inset)", fontSize: 12.5, color: "var(--ink-3)", fontStyle: "italic", fontFamily: "var(--font-serif)", lineHeight: 1.4 }}>
+                      “{c.notes}”
+                    </p>
+                  )}
+                  
+                  {c.status === "pending" ? (
+                    <div style={{ display: "flex", gap: 9, alignSelf: "flex-end", marginTop: 4 }}>
+                      <button onClick={() => resolve(c.id, "Approved")} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 34, padding: "0 16px", borderRadius: 8, border: "none", cursor: "pointer", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 750, color: "var(--accent-ink)", background: "var(--accent)" }}>
+                        <Icon name="check" size={14} stroke={2.6} /> Approve
+                      </button>
+                      <button onClick={() => resolve(c.id, "Rejected")} className="tap glass-2" style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 34, padding: "0 16px", borderRadius: 8, border: "1px solid var(--hairline)", cursor: "pointer", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 650, color: "var(--ink-2)" }}>
+                        <Icon name="x" size={14} stroke={2.6} /> Reject
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ alignSelf: "flex-end", fontSize: 12.5, fontWeight: 700, color: SCOL[c.status], display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+                      <Icon name={c.status === "approved" ? "check" : "x"} size={14} stroke={2.6} />
+                      <span style={{ textTransform: "capitalize" }}>{c.status}</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            <div className="glass" style={{ padding: 20, borderRadius: 16, display: "flex", flexDirection: "column", gap: 15 }}>
+              <div style={{ fontSize: 13, fontWeight: 750, color: "var(--ink)" }}>OT Day Distribution</div>
+              
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", height: 120, padding: "0 8px", paddingTop: 10 }}>
+                {Object.entries(dayOtTotals).map(([day, val]) => {
+                  const pct = Math.max(8, (val / maxDayOt) * 100);
+                  return (
+                    <div key={day} style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: 1, gap: 8 }}>
+                      <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", fontWeight: 650 }}>{val > 0 ? val.toFixed(0) : ""}</div>
+                      <div style={{ width: 12, height: `${pct}%`, borderRadius: "3px 3px 0 0", background: "var(--v-ielts)", transition: "height .4s" }} />
+                      <div style={{ fontSize: 10, fontWeight: 600, color: "var(--ink-3)" }}>{day}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            
+            <div className="glass" style={{ padding: 20, borderRadius: 16, display: "flex", flexDirection: "column", gap: 15 }}>
+              <div style={{ fontSize: 13, fontWeight: 750, color: "var(--ink)" }}>Staff Workload Breakdown</div>
+              
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {Object.keys(staffOtTotals).length === 0 ? (
+                  <div style={{ fontSize: 12.5, color: "var(--ink-4)", textAlign: "center", padding: "10px 0" }}>No workload data this month</div>
+                ) : (
+                  Object.entries(staffOtTotals).map(([name, hours]) => {
+                    const pct = (hours / maxStaffOt) * 100;
+                    return (
+                      <div key={name} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 600 }}>
+                          <span style={{ color: "var(--ink-2)" }}>{name}</span>
+                          <span style={{ color: "var(--ink)" }} className="mono">{hours.toFixed(1)} hrs</span>
+                        </div>
+                        <div style={{ height: 6, borderRadius: 3, background: "var(--inset)", overflow: "hidden" }}>
+                          <div style={{ width: `${pct}%`, height: "100%", background: hours > 15 ? "var(--bad)" : "var(--accent)", transition: "width .4s" }} />
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 /* ---------- quick-add roster: 6 working + 1 rest, across a date range ---------- */
 function QuickAddRoster({ branch, onClose }) {
@@ -5094,6 +5721,7 @@ const TOOLS = [
   { id: "candidate-tracker", icon: "users", label: "Candidate Tracker", sub: "Registrations & sessions", legacy: true },
   { id: "access-hub", icon: "key", label: "F-Vault / Access Hub", sub: "Credentials & access", legacy: true },
   { id: "staff-requests", icon: "user", label: "Roster Approvals Hub", sub: "Manage staff requests, leaves & swaps" },
+  { id: "staff-ot", icon: "clock", label: "OT & TOIL Manager", sub: "Overtime logging & TOIL cash payouts" },
   { id: "dashboard", icon: "grid", label: "Dashboard", sub: "iCloud overview", legacy: true },
   { id: "news-manager", icon: "message", label: "News Manager", sub: "Announcements", legacy: true },
   { id: "system-manager", icon: "settings", label: "System Manager", sub: "Admin & config", legacy: true },
@@ -5695,7 +6323,7 @@ function App({ bridge, onLogout }) {
 
   const handlePick = (it) => {
     if (it.nav) { setActive(it.id); return; }
-    if (["business", "attn-admin", "staff-requests"].includes(it.id)) { setActive(it.id); return; }
+    if (["business", "attn-admin", "staff-requests", "staff-ot"].includes(it.id)) { setActive(it.id); return; }
     if (it.id === "vault") { setDrawer("vault"); return; }
     if (it.legacy && bridge) { bridge(it.id); return; }
     toast(it.label, "arrowR");
@@ -5719,6 +6347,7 @@ function App({ bridge, onLogout }) {
         {active === "news" && <TheLabPage branch={branch} />}
         {active === "attn-admin" && <AttendanceAdminPage branch={branch} />}
         {active === "staff-requests" && <RosterApprovalsHub branch={branch} />}
+        {active === "staff-ot" && <OtToilClaimsHub branch={branch} />}
       </main>
 
       {/* drawers */}
