@@ -14,6 +14,7 @@
   confirmed against the live DB.
 */
 import { supabase } from "../lib/supabase";
+import { calculateDaysJoined } from "../utils/dateUtils";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -61,7 +62,7 @@ export async function loadLiveData(F: any) {
   let profileBranch: Record<string, string> = {};
   try {
     const { data, error } = await supabase
-      .from("staff_profiles").select("id, user_id, full_name, role, branch_assigned, is_active, hourly_rate, daily_rate, permissions").order("full_name");
+      .from("staff_profiles").select("id, user_id, full_name, role, branch_assigned, is_active, hourly_rate, daily_rate, permissions, joining_date, hire_date").order("full_name");
     if (!error && data && data.length) {
       const pool: Record<string, string[]> = { calicut: [], cochin: [] };
       const idByName: Record<string, any> = {};
@@ -71,6 +72,7 @@ export async function loadLiveData(F: any) {
       
       F._staffRatesByProfileId = F._staffRatesByProfileId || {};
       F._staffRatesByName = F._staffRatesByName || {};
+      F._staffDays = F._staffDays || {};
 
       data.forEach((p: any) => {
         if (p.is_active === false) return;
@@ -82,6 +84,10 @@ export async function loadLiveData(F: any) {
           if (p.full_name) list.push(p.full_name);
         }
         const calculatedSalary = Number(p.daily_rate) * 30 || 0;
+        const dayJoined = calculateDaysJoined(p.joining_date || p.hire_date);
+        if (p.full_name) {
+          F._staffDays[p.full_name] = dayJoined;
+        }
         if (p.id) {
           profileBranch[p.id] = b;
           F._staffRatesByProfileId[p.id] = { hourly_rate: Number(p.hourly_rate) || 0, daily_rate: Number(p.daily_rate) || 0, monthly_salary: calculatedSalary };
@@ -102,6 +108,7 @@ export async function loadLiveData(F: any) {
           if (F.user) {
             F.user.name = p.full_name;
             F.user.role = p.role === 'super_admin' ? 'Super Admin' : 'Staff';
+            F.user.day = dayJoined;
             if (F.user.shift) {
               F.user.shift.branch = b;
             }

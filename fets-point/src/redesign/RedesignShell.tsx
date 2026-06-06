@@ -2937,9 +2937,19 @@ function RosterGrid({ offsets, branch }) {
               <Avatar name={n} size={28} />
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 12.5, fontWeight: 650, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{n}</div>
-                {branch === "global"
-                  ? <div className="eyebrow" style={{ fontSize: 8.5, color: "var(--ink-4)" }}>{b}</div>
-                  : (n === F().user.name && <div className="eyebrow" style={{ fontSize: 8.5, color: "var(--accent)" }}>you</div>)}
+                <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap", marginTop: 1 }}>
+                  {branch === "global" ? (
+                    <span className="eyebrow" style={{ fontSize: 8.5, color: "var(--ink-4)" }}>{b}</span>
+                  ) : (
+                    n === F().user.name && <span className="eyebrow" style={{ fontSize: 8.5, color: "var(--accent)" }}>you</span>
+                  )}
+                  {((branch === "global") || (n === F().user.name)) && (
+                    <span style={{ fontSize: 8.5, color: "var(--ink-4)", opacity: 0.6 }}>·</span>
+                  )}
+                  <span className="mono" style={{ fontSize: 8.5, color: "var(--ink-4)", fontWeight: 500 }}>
+                    Day {F()._staffDays?.[n] || 1}
+                  </span>
+                </div>
               </div>
             </div>
             {offsets.map((o) => {
