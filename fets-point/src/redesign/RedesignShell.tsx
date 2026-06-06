@@ -6726,30 +6726,117 @@ function Masthead({ branch }) {
   const d = new Date();
   const branchLabel = branch === "global" ? "All Centres" : branch.charAt(0).toUpperCase() + branch.slice(1);
   const dateStr = `${["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][d.getDay()]}, ${["January","February","March","April","May","June","July","August","September","October","November","December"][d.getMonth()]} ${ordinal(d.getDate())}, ${d.getFullYear()}`;
+  const user = window.FETS?.user || { name: "User", day: 1, role: "Staff" };
+
   return (
-    <section className="rise" style={{ paddingTop: 4 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 18 }}>
-        <span style={{ width: 34, height: 2, background: "var(--accent)", borderRadius: 99 }} />
-        <span className="eyebrow" style={{ color: "var(--accent)" }}>Operational Intelligence // {branchLabel}</span>
+    <section className="rise" style={{
+      paddingTop: 4,
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "stretch",
+      gap: 24,
+      flexWrap: "wrap",
+    }}>
+      <div style={{ flex: "1 1 auto", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 18 }}>
+            <span style={{ width: 34, height: 2, background: "var(--accent)", borderRadius: 99 }} />
+            <span className="eyebrow" style={{ color: "var(--accent)" }}>Operational Intelligence // {branchLabel}</span>
+          </div>
+          <h1 style={{
+            margin: 0, fontFamily: '"Archivo Expanded", var(--font)', fontWeight: 900,
+            fontSize: "clamp(56px,11vw,128px)", lineHeight: 0.86, letterSpacing: "-0.03em",
+            color: "var(--accent)", display: "flex", alignItems: "flex-end", gap: "0.1em", flexWrap: "wrap",
+          }}>
+            <span>FETS</span>
+            <span style={{ display: "inline-flex", alignItems: "flex-end", gap: "0.18em" }}>
+              LIVE
+              <span className="mono" style={{ fontSize: "clamp(11px,1.1vw,15px)", fontWeight: 700, letterSpacing: "0.1em",
+                color: "var(--ink-4)", paddingBottom: "0.7em" }}>V7.0</span>
+            </span>
+          </h1>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 22 }}>
+          <span style={{ width: 28, height: 1.5, background: "var(--ink-4)", borderRadius: 99 }} />
+          <span className="serif-it" style={{ fontSize: "clamp(17px,2vw,23px)", color: "var(--accent)", fontWeight: 500 }}>{dateStr}</span>
+        </div>
       </div>
-      <h1 style={{
-        margin: 0, fontFamily: '"Archivo Expanded", var(--font)', fontWeight: 900,
-        fontSize: "clamp(56px,11vw,128px)", lineHeight: 0.86, letterSpacing: "-0.03em",
-        color: "var(--accent)", display: "flex", alignItems: "flex-end", gap: "0.1em", flexWrap: "wrap",
+      
+      {/* Right side: Premium Welcome Card */}
+      <div className="glass-2" style={{
+        padding: "20px 24px",
+        borderRadius: "var(--radius)",
+        display: "flex",
+        alignItems: "center",
+        gap: 18,
+        border: "1px solid var(--hairline)",
+        background: "var(--glass-2)",
+        flex: "0 1 360px",
+        minWidth: 300,
+        boxShadow: "var(--shadow-lift)",
+        position: "relative",
+        overflow: "hidden",
+        alignSelf: "flex-end",
       }}>
-        <span>FETS</span>
-        <span style={{ display: "inline-flex", alignItems: "flex-end", gap: "0.18em" }}>
-          LIVE
-          <span className="mono" style={{ fontSize: "clamp(11px,1.1vw,15px)", fontWeight: 700, letterSpacing: "0.1em",
-            color: "var(--ink-4)", paddingBottom: "0.7em" }}>V7.0</span>
-        </span>
-      </h1>
-      <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 22 }}>
-        <span style={{ width: 28, height: 1.5, background: "var(--ink-4)", borderRadius: 99 }} />
-        <span className="serif-it" style={{ fontSize: "clamp(17px,2vw,23px)", color: "var(--accent)", fontWeight: 500 }}>{dateStr}</span>
-        <span style={{ fontSize: 13.5, color: "var(--ink-3)", fontWeight: 500 }}>
-          · {greeting()}, {window.FETS.user.name.split(" ")[0]} · Day {window.FETS.user.day}
-        </span>
+        {/* Subtle accent vertical indicator */}
+        <div style={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: 4,
+          background: "linear-gradient(to bottom, var(--accent), var(--accent-2))",
+        }} />
+        
+        {/* Glowing background blob */}
+        <div style={{
+          position: "absolute",
+          top: -24,
+          right: -24,
+          width: 90,
+          height: 90,
+          borderRadius: "50%",
+          background: "var(--accent)",
+          filter: "blur(32px)",
+          opacity: 0.12,
+          pointerEvents: "none",
+        }} />
+        
+        <Avatar name={user.name} size={54} />
+        <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
+          <span className="mono" style={{
+            fontSize: 10,
+            fontWeight: 800,
+            color: "var(--accent)",
+            textTransform: "uppercase",
+            letterSpacing: "0.1em",
+          }}>
+            {greeting()}
+          </span>
+          <h2 style={{
+            margin: 0,
+            fontSize: "clamp(20px, 2.3vw, 26px)",
+            fontWeight: 850,
+            fontFamily: "var(--font)",
+            color: "var(--ink)",
+            lineHeight: 1.15,
+            letterSpacing: "-0.015em",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}>
+            {user.name}
+          </h2>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 2 }}>
+            <span className="mono" style={{ fontSize: 10.5, color: "var(--ink-3)", fontWeight: 650 }}>
+              Day {user.day}
+            </span>
+            <span style={{ width: 3, height: 3, borderRadius: "50%", background: "var(--ink-4)" }} />
+            <span className="mono" style={{ fontSize: 10.5, color: "var(--ink-4)" }}>
+              {user.role}
+            </span>
+          </div>
+        </div>
       </div>
     </section>
   );
