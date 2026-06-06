@@ -253,12 +253,14 @@ export const dbAddLeave = dbAddStaffRequest;
 
 export async function dbResolveStaffRequest(reqId: string, status: "Approved" | "Rejected", adminProfileId: string) {
   const dbStatus = status === "Approved" ? "approved" : "rejected";
+  // Map the admin's profile ID to their auth user ID (user_id field in staff_profiles)
+  const adminUserId = F()._profileIdToUserId ? F()._profileIdToUserId[adminProfileId] : (F()._meUserId || adminProfileId);
   try {
     const { data, error } = await supabase
       .from("leave_requests")
       .update({
         status: dbStatus,
-        approved_by: adminProfileId,
+        approved_by: adminUserId,
         approved_at: new Date().toISOString()
       })
       .eq("id", reqId)
