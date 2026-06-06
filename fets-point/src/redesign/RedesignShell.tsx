@@ -42,8 +42,8 @@ import html2canvas from "html2canvas";
 
   // ---- staff roster pool ----
   const STAFF = {
-    calicut: ["Anshitha K", "Aysha", "Bindu Rajan", "Lazeem", "Mithun", "Nilufer", "Niyas"],
-    cochin:  ["NIMMY M", "Shimna"],
+    calicut: ["Anshitha K", "Aysha", "Bindu Rajan", "Lazeem", "Nilufer"],
+    cochin:  ["Naima MM", "NIMMY M", "Shimna"],
   };
 
   // helper to make a session
@@ -2363,15 +2363,15 @@ function CalendarPage({ branch }) {
    ===================================================================== */
 /* shift codes shown in every roster cell (OT is an add-on, not a base code) */
 const ROSTER_CODES = {
-  D:    { label: "Day shift",        color: "color-mix(in oklch, var(--accent) 18%, var(--panel-3))",      ink: "var(--accent)",      solid: true },
-  E:    { label: "Evening shift",    color: "color-mix(in oklch, var(--v-prometric) 20%, var(--panel-3))", ink: "var(--v-prometric)", solid: true },
-  HD:   { label: "Half day",         color: "color-mix(in oklch, var(--warn) 20%, var(--panel-3))",        ink: "var(--warn)",        solid: true },
-  RD:   { label: "Rest day",         color: "var(--panel-3)",                                              ink: "var(--ink-4)",       solid: false },
-  L:    { label: "Leave",            color: "color-mix(in oklch, var(--bad) 20%, var(--panel-3))",         ink: "var(--bad)",         solid: true },
-  TOIL: { label: "TOIL Earned",      color: "color-mix(in oklch, var(--v-cma) 20%, var(--panel-3))",       ink: "var(--v-cma)",       solid: true },
-  TR:   { label: "TOIL Redeemed",    color: "color-mix(in oklch, var(--v-ielts) 20%, var(--panel-3))",     ink: "var(--v-ielts)",     solid: true },
-  TP:   { label: "TOIL Paid-out",   color: "color-mix(in oklch, var(--v-pearson) 20%, var(--panel-3))",   ink: "var(--v-pearson)",   solid: true },
-  SW:   { label: "Shift swapped",    color: "color-mix(in oklch, var(--v-prometric) 30%, var(--panel-3))",  ink: "var(--v-prometric)", solid: true },
+  D:    { label: "Day shift",        color: "color-mix(in oklch, var(--accent) 38%, var(--panel-3))",       ink: "var(--accent)",      solid: true },
+  E:    { label: "Evening shift",    color: "color-mix(in oklch, var(--v-prometric) 40%, var(--panel-3))",  ink: "var(--v-prometric)", solid: true },
+  HD:   { label: "Half day",         color: "color-mix(in oklch, var(--warn) 40%, var(--panel-3))",         ink: "var(--warn)",        solid: true },
+  RD:   { label: "Rest day",         color: "var(--panel-3)",                                               ink: "var(--ink-4)",       solid: false },
+  L:    { label: "Leave",            color: "color-mix(in oklch, var(--bad) 38%, var(--panel-3))",          ink: "var(--bad)",         solid: true },
+  TOIL: { label: "TOIL Earned",      color: "color-mix(in oklch, var(--v-cma) 42%, var(--panel-3))",        ink: "var(--v-cma)",       solid: true },
+  TR:   { label: "TOIL Redeemed",    color: "color-mix(in oklch, var(--v-ielts) 40%, var(--panel-3))",      ink: "var(--v-ielts)",     solid: true },
+  TP:   { label: "TOIL Paid-out",    color: "color-mix(in oklch, var(--v-pearson) 40%, var(--panel-3))",    ink: "var(--v-pearson)",   solid: true },
+  SW:   { label: "Shift swapped",    color: "color-mix(in oklch, var(--v-prometric) 50%, var(--panel-3))",  ink: "var(--v-prometric)", solid: true },
 };
 const RC_LIST = ["D", "E", "HD", "RD", "L", "TOIL", "TR", "TP", "SW"];
 const WORK_CODES = ["D", "E", "HD"];
@@ -3305,33 +3305,62 @@ function RosterRequestForm({ branch }) {
     fontSize: 13.5,
     padding: "10px 12px",
     width: "100%",
-    outline: "none"
+    outline: "none",
+    boxSizing: "border-box" as const
   };
 
+  const KIND_META = {
+    leave: { icon: "calendar", label: "Leave", desc: "Apply for a scheduled day off", color: "var(--bad)" },
+    swap:  { icon: "refresh",  label: "Shift Swap", desc: "Exchange shifts with a colleague", color: "var(--v-prometric)" },
+    toil:  { icon: "clock",    label: "Redeem TOIL", desc: "Use accrued time-off-in-lieu balance", color: "var(--v-cma)" },
+  };
+
+  const activeKind = KIND_META[kind];
+
   return (
-    <div className="glass" style={{ borderRadius: "var(--radius)", padding: 22, display: "flex", flexDirection: "column", gap: 16 }}>
-      <SectionLabel>Apply for Leave / Swap / TOIL</SectionLabel>
-      <div className="inset" style={{ display: "flex", padding: 4, gap: 4, borderRadius: 999, width: "fit-content", minWidth: 260 }}>
-        {[{ k: "leave", l: "Leave" }, { k: "swap", l: "Shift Swap" }, { k: "toil", l: "TOIL" }].map((o) => {
-          const on = kind === o.k;
+    <div className="glass" style={{ borderRadius: "var(--radius)", padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ width: 38, height: 38, borderRadius: 11, background: `color-mix(in oklch, ${activeKind.color} 16%, transparent)`, display: "grid", placeItems: "center", flexShrink: 0, border: `1px solid color-mix(in oklch, ${activeKind.color} 30%, transparent)` }}>
+          <Icon name={activeKind.icon} size={18} style={{ color: activeKind.color }} />
+        </div>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 750, color: "var(--ink)", letterSpacing: "-0.01em" }}>Apply for Leave / Swap / TOIL</div>
+          <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 1 }}>{activeKind.desc}</div>
+        </div>
+      </div>
+
+      {/* Type selector pills */}
+      <div className="inset" style={{ display: "flex", padding: 4, gap: 4, borderRadius: 14, width: "fit-content" }}>
+        {(Object.entries(KIND_META) as [string, any][]).map(([k, m]) => {
+          const on = kind === k;
           return (
-            <button type="button" key={o.k} onClick={() => setKind(o.k)} className="tap" style={{
-              flex: 1, border: "none", cursor: "pointer", padding: "8px 16px", borderRadius: 999,
+            <button type="button" key={k} onClick={() => setKind(k)} className="tap" style={{
+              display: "inline-flex", alignItems: "center", gap: 7,
+              border: on ? `1px solid color-mix(in oklch, ${m.color} 35%, transparent)` : "1px solid transparent",
+              cursor: "pointer", padding: "8px 15px", borderRadius: 10,
               fontFamily: "var(--font)", fontSize: 13, fontWeight: on ? 750 : 600,
-              color: on ? "var(--accent-ink)" : "var(--ink-3)", background: on ? "var(--accent)" : "transparent"
-            }}>{o.l}</button>
+              color: on ? m.color : "var(--ink-3)",
+              background: on ? `color-mix(in oklch, ${m.color} 14%, var(--panel-2))` : "transparent",
+              transition: "all .15s"
+            }}>
+              <Icon name={m.icon} size={14} />
+              {m.label}
+            </button>
           );
         })}
       </div>
 
-      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      {/* Form fields */}
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {/* Leave fields */}
         {kind === "leave" && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }} className="case-2col">
-            <label style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }} className="case-2col">
+            <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
               Leave Date
               <input type="date" value={reqDate} onChange={(e) => setReqDate(e.target.value)} style={inpStyle} />
             </label>
-            <label style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
+            <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
               Leave Type
               <select value={leaveType} onChange={(e) => setLeaveType(e.target.value)} style={inpStyle}>
                 <option value="Full-day leave">Full-day leave</option>
@@ -3341,48 +3370,67 @@ function RosterRequestForm({ branch }) {
           </div>
         )}
 
+        {/* Swap fields */}
         {kind === "swap" && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }} className="case-cols">
-            <label style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }} className="case-cols">
+            <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
               Your Shift Date
               <input type="date" value={reqDate} onChange={(e) => setReqDate(e.target.value)} style={inpStyle} />
             </label>
-            <label style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
+            <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
               Swap With
               <select value={withWho} onChange={(e) => setWithWho(e.target.value)} style={inpStyle}>
                 <option value="">Select colleague…</option>
                 {colleagues.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             </label>
-            <label style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
+            <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
               Their Shift Date
               <input type="date" value={swapDate} onChange={(e) => setSwapDate(e.target.value)} style={inpStyle} />
             </label>
           </div>
         )}
 
+        {/* TOIL fields */}
         {kind === "toil" && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
-            <label style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
               Date to Redeem TOIL
               <input type="date" value={reqDate} onChange={(e) => setReqDate(e.target.value)} style={inpStyle} />
             </label>
+            <div className="inset" style={{ borderRadius: 10, padding: "10px 14px", display: "flex", flexDirection: "column", gap: 4, justifyContent: "center" }}>
+              <div style={{ fontSize: 11, fontWeight: 650, color: "var(--ink-4)" }}>TOIL Balance</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: "var(--v-cma)" }}>
+                {(window.FETS._meToilBalance || 0)} <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-3)" }}>days</span>
+              </div>
+              <div className="mono" style={{ fontSize: 10, color: "var(--ink-4)" }}>
+                {(window.FETS._meToilEarned || 0)} earned · {(window.FETS._meToilRedeemed || 0)} used
+              </div>
+            </div>
           </div>
         )}
 
-        <label style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
+        {/* Reason field */}
+        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
           Reason / Comments
-          <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} placeholder="Explain briefly (optional)…" style={{ ...inpStyle, resize: "vertical" }} />
+          <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2}
+            placeholder="Briefly explain your request (optional)…"
+            style={{ ...inpStyle, resize: "vertical", lineHeight: 1.55 }} />
         </label>
 
-        <button type="submit" disabled={submitting} className="tap" style={{
-          height: 42, borderRadius: 10, border: "none", cursor: "pointer", fontFamily: "var(--font)",
-          fontSize: 13.5, fontWeight: 780, color: "var(--accent-ink)", background: "var(--accent)",
-          alignSelf: "flex-end", padding: "0 24px", display: "inline-flex", alignItems: "center", gap: 8
-        }}>
-          <Icon name="check" size={15} stroke={2.5} />
-          {submitting ? "Submitting…" : "Submit Request"}
-        </button>
+        {/* Submit */}
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <button type="submit" disabled={submitting} className="tap" style={{
+            height: 44, borderRadius: 11, border: "none", cursor: submitting ? "not-allowed" : "pointer",
+            fontFamily: "var(--font)", fontSize: 13.5, fontWeight: 780,
+            color: "var(--accent-ink)", background: submitting ? "var(--ink-4)" : "var(--accent)",
+            padding: "0 28px", display: "inline-flex", alignItems: "center", gap: 9,
+            transition: "background .2s", opacity: submitting ? 0.7 : 1
+          }}>
+            <Icon name={submitting ? "loader" : "check"} size={16} stroke={2.5} />
+            {submitting ? "Submitting…" : "Submit Request"}
+          </button>
+        </div>
       </form>
     </div>
   );
@@ -4858,7 +4906,6 @@ function RosterPage({ branch }) {
   const poolSize = branch === "global"
     ? F().STAFF.calicut.length + F().STAFF.cochin.length
     : F().STAFF[branch].length;
-  // avg coverage across window
   const offs = (view === "month" || view === "analysis") ? Array.from({ length: mc.totalDays }, (_, i) => i) : win.offsets;
   const avgCover = Math.round(offs.reduce((a, o) => a + window.branchRoster(o, branch).length, 0) / offs.length);
   const busy = windowStats(offs, branch).busiest;
@@ -4866,45 +4913,58 @@ function RosterPage({ branch }) {
   const gap = "calc(28px * var(--density))";
   useLiveSync(win.offsets.map((o) => F().ISO(o)));
 
+  const divider = (
+    <div style={{ height: 1, background: "var(--hairline)", margin: "4px 0" }} />
+  );
+
   return (
-    <div style={{ maxWidth: 1180, margin: "0 auto", display: "flex", flexDirection: "column", gap }}>
+    <div style={{ maxWidth: 1180, margin: "0 auto", display: "flex", flexDirection: "column", gap: "20px" }}>
       <PageHeader eyebrow={`Staffing // ${capBranch(branch)}`} title="Roster" />
 
-      {/* Roster Overview / TOIL Balance summary for current logged in user */}
-      <PersonalizedRosterOverview branch={branch} />
+      {/* ─── Section 1: Personal Stats Overview ─── */}
+      <section>
+        <PersonalizedRosterOverview branch={branch} />
+      </section>
 
-      {/* attendance — check in / step out / back / check out (persisted) */}
+      {divider}
+
+      {/* ─── Section 2: My Attendance ─── */}
       <section style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <SectionLabel right={
-          <button onClick={() => setShowHours((v) => !v)} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 11px", borderRadius: 999, cursor: "pointer", border: "1px solid var(--hairline)", background: "transparent", color: "var(--ink-3)", fontFamily: "var(--font)", fontSize: 11.5, fontWeight: 650 }}>
-            <Icon name="clock" size={13} /> My shift hours {showHours ? "▴" : "▾"}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+          <SectionLabel style={{ margin: 0 }}>My Attendance</SectionLabel>
+          <button onClick={() => setShowHours((v) => !v)} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 13px", borderRadius: 999, cursor: "pointer", border: "1px solid var(--hairline)", background: showHours ? "var(--accent-soft)" : "transparent", color: showHours ? "var(--accent)" : "var(--ink-3)", fontFamily: "var(--font)", fontSize: 11.5, fontWeight: 650 }}>
+            <Icon name="clock" size={13} /> Shift hours {showHours ? "▴" : "▾"}
           </button>
-        }>My attendance</SectionLabel>
+        </div>
         <AttendanceConsole branch={branch} />
         {showHours && <ShiftHistory />}
       </section>
 
-      <section style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-            <span style={{ width: 22, height: 2, background: "var(--accent)", borderRadius: 99 }} />
-            <span className="eyebrow">{wide ? `${mc.monthName} ${mc.y}` : rangeLabel(win.offsets)}</span>
+      {divider}
+
+      {/* ─── Section 3: Roster Calendar ─── */}
+      <section style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+            <span style={{ width: 22, height: 3, background: "var(--accent)", borderRadius: 99 }} />
+            <SectionLabel style={{ margin: 0 }}>{wide ? `Roster — ${mc.monthName} ${mc.y}` : `Roster — ${rangeLabel(win.offsets)}`}</SectionLabel>
           </div>
           <div style={{ flex: 1 }} />
-          {isAdmin && (
-            <button onClick={() => setQuickOpen(true)} className="tap" title="Quick add roster (6+1 pattern)"
-              style={{ display: "inline-flex", alignItems: "center", gap: 9, height: 38, padding: "0 15px", borderRadius: 11,
-                cursor: "pointer", border: "none", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 750, color: "var(--accent-ink)", background: "var(--accent)" }}>
-              <Icon name="plus" size={15} /> Quick add
-            </button>
-          )}
-          <Segmented value={view} onChange={setView} size="sm" options={[
-            { value: "days", label: "10 Days" }, { value: "analysis", label: "Overview" },
-          ]} />
-          {view === "days" && <RangeNav win={win} />}
+          {/* Action buttons grouped neatly on the right */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            {view === "days" && <RangeNav win={win} />}
+            <Segmented value={view} onChange={setView} size="sm" options={[
+              { value: "days", label: "10 Days" }, { value: "analysis", label: "Overview" },
+            ]} />
+            {isAdmin && (
+              <button onClick={() => setQuickOpen(true)} className="tap" title="Quick add roster (6+1 pattern)"
+                style={{ display: "inline-flex", alignItems: "center", gap: 7, height: 36, padding: "0 14px", borderRadius: 10,
+                  cursor: "pointer", border: "none", fontFamily: "var(--font)", fontSize: 12, fontWeight: 750, color: "var(--accent-ink)", background: "var(--accent)" }}>
+                <Icon name="plus" size={14} /> Quick add
+              </button>
+            )}
+          </div>
         </div>
-
-        {view === "days" && <RosterLegend />}
 
         {view === "days" && <RosterGrid key={branch} offsets={win.offsets} branch={branch} />}
         {view === "analysis" && (
@@ -4918,11 +4978,23 @@ function RosterPage({ branch }) {
             <RosterAnalysis offsets={offs} branch={branch} />
           </React.Fragment>
         )}
-        {view === "days" && <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)", alignSelf: "flex-end" }}>{window.FETS.isAdmin ? "tap a cell to change shift · use Quick add for a 6+1 block" : "viewing roster · editing is restricted to the super admin"}</span>}
+        {view === "days" && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>
+              {window.FETS.isAdmin
+                ? "Tap any cell to change shift · Quick add fills a 6+1 week block"
+                : "Your shift schedule — editing is restricted to the administrator"}
+            </span>
+          </div>
+        )}
       </section>
 
-      {/* Roster request form (leave, swap, toil) at the bottom */}
-      <RosterRequestForm branch={branch} />
+      {divider}
+
+      {/* ─── Section 4: Apply for Leave / Swap / TOIL ─── */}
+      <section>
+        <RosterRequestForm branch={branch} />
+      </section>
 
       {isAdmin && quickOpen && <QuickAddRoster branch={branch} onClose={() => setQuickOpen(false)} />}
       <Drawer open={!!dayDrawer} onClose={() => setDayDrawer(null)} icon="users"

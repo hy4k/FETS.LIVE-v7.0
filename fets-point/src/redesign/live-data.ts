@@ -75,12 +75,9 @@ export async function loadLiveData(F: any) {
       data.forEach((p: any) => {
         if (p.is_active === false) return;
         const b = branchOf(p.branch_assigned);
-        if (p.branch_assigned === 'global') {
-          if (p.full_name) {
-            pool.calicut.push(p.full_name);
-            pool.cochin.push(p.full_name);
-          }
-        } else {
+        // Super admins (global branch) are excluded from the roster staff pool rows —
+        // they manage the roster but don't appear as scheduleable staff rows.
+        if (p.branch_assigned !== 'global') {
           const list = pool[b] || (pool[b] = []);
           if (p.full_name) list.push(p.full_name);
         }
