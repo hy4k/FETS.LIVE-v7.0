@@ -60,7 +60,7 @@ export async function loadLiveData(F: any) {
   let profileBranch: Record<string, string> = {};
   try {
     const { data, error } = await supabase
-      .from("staff_profiles").select("id, user_id, full_name, role, branch_assigned, is_active, hourly_rate, daily_rate").order("full_name");
+      .from("staff_profiles").select("id, user_id, full_name, role, branch_assigned, is_active, hourly_rate, daily_rate, monthly_salary").order("full_name");
     if (!error && data && data.length) {
       const pool: Record<string, string[]> = { calicut: [], cochin: [] };
       const idByName: Record<string, any> = {};
@@ -77,11 +77,11 @@ export async function loadLiveData(F: any) {
         if (p.full_name) list.push(p.full_name);
         if (p.id) {
           profileBranch[p.id] = b;
-          F._staffRatesByProfileId[p.id] = { hourly_rate: Number(p.hourly_rate) || 0, daily_rate: Number(p.daily_rate) || 0 };
+          F._staffRatesByProfileId[p.id] = { hourly_rate: Number(p.hourly_rate) || 0, daily_rate: Number(p.daily_rate) || 0, monthly_salary: Number(p.monthly_salary) || 0 };
         }
         if (p.full_name && p.id) {
           idByName[p.full_name] = p.id;
-          F._staffRatesByName[p.full_name] = { id: p.id, user_id: p.user_id, role: p.role, hourly_rate: Number(p.hourly_rate) || 0, daily_rate: Number(p.daily_rate) || 0, is_active: p.is_active };
+          F._staffRatesByName[p.full_name] = { id: p.id, user_id: p.user_id, role: p.role, hourly_rate: Number(p.hourly_rate) || 0, daily_rate: Number(p.daily_rate) || 0, monthly_salary: Number(p.monthly_salary) || 0, is_active: p.is_active };
         }
         if (p.full_name && p.user_id) userIdByName[p.full_name] = p.user_id;
         if (p.id && p.user_id) {
@@ -290,12 +290,12 @@ export async function loadLiveData(F: any) {
     }
   } catch (e) { /* keep seed */ }
 
-  /* ---- current user toil balance ---- */
+  /* ---- current user toil balance + OT hours ---- */
   try {
     if (F._meId) {
       const { data, error } = await supabase
         .from("roster_schedules")
-        .select("shift_code")
+        .select("date, shift_code, overtime_hours")
         .eq("profile_id", F._meId);
       if (!error && data) {
         const toilEarned = data.filter((r: any) => String(r.shift_code).toUpperCase() === "TOIL").length;
@@ -305,6 +305,20 @@ export async function loadLiveData(F: any) {
         F._meToilEarned = toilEarned;
         F._meToilRedeemed = toilRedeemed;
         F._meToilPaid = toilPaid;
+
+        const today = new Date();
+        const currentYear = today.getFullYear();
+        const currentMonth = today.getMonth() + 1;
+        
+        const currentMonthOt = data
+          .filter((r: any) => {
+            if (!r.date || !r.overtime_hours) return false;
+            const dObj = new Date(r.date + "T00:00:00");
+            return dObj.getFullYear() === currentYear && (dObj.getMonth() + 1) === currentMonth;
+          })
+          .reduce((sum: number, r: any) => sum + (Number(r.overtime_hours) || 0), 0);
+          
+        F._meTotalMonthOt = currentMonthOt;
       }
     }
   } catch (e) { /* ignore */ }
@@ -351,8 +365,9 @@ export async function loadLiveData(F: any) {
 
   try {
     await loadOtClaims(F);
+    await loadMonthlyPayroll(F);
   } catch (e) {
-    console.error("Error loading OT claims on startup:", e);
+    console.error("Error loading OT claims/payroll on startup:", e);
   }
 
   F._liveLoaded = true;
@@ -448,6 +463,7 @@ export async function loadOtClaims(F: any) {
         end_time,
         ot_hours,
         toil_payout,
+        toil_dates,
         status,
         notes,
         created_at,
@@ -472,6 +488,7 @@ export async function loadOtClaims(F: any) {
           end_time: c.end_time ? c.end_time.slice(0, 5) : "",
           ot_hours: Number(c.ot_hours) || 0,
           toil_payout: !!c.toil_payout,
+          toil_dates: c.toil_dates || [],
           status: c.status || "pending",
           notes: c.notes || "",
           hourly_rate: Number(sp.hourly_rate) || 0,
@@ -483,6 +500,30 @@ export async function loadOtClaims(F: any) {
     }
   } catch (e) {
     console.error("loadOtClaims error:", e);
+  }
+}
+
+export async function loadMonthlyPayroll(F: any) {
+  if (!F) return;
+  try {
+    const { data, error } = await supabase
+      .from("staff_monthly_payroll")
+      .select("*");
+    if (!error && data) {
+      F._monthlyPayroll = {};
+      data.forEach((row: any) => {
+        F._monthlyPayroll[row.profile_id] = F._monthlyPayroll[row.profile_id] || {};
+        F._monthlyPayroll[row.profile_id][row.month] = {
+          monthly_salary: Number(row.monthly_salary) || 0,
+          manual_addition: Number(row.manual_addition) || 0,
+          manual_deduction: Number(row.manual_deduction) || 0,
+          adjustment_notes: row.adjustment_notes || ""
+        };
+      });
+      window.dispatchEvent(new Event("fets-payroll-changed"));
+    }
+  } catch (e) {
+    console.error("loadMonthlyPayroll error:", e);
   }
 }
 

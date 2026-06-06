@@ -335,6 +335,7 @@ export async function dbAddOtClaim(claim: any) {
     end_time: claim.end_time || null,
     ot_hours: Number(claim.ot_hours) || 0,
     toil_payout: !!claim.toil_payout,
+    toil_dates: claim.toil_dates || [],
     notes: claim.notes || null,
     status: "pending"
   };
@@ -365,22 +366,34 @@ export async function dbDeleteOtClaim(claimId: string) {
   }
 }
 
-export async function dbUpdateStaffRates(profileId: string, hourlyRate: number, dailyRate: number) {
+export async function dbUpdateStaffRates(profileId: string, hourlyRate: number, dailyRate: number, monthlySalary?: number) {
   try {
+    const updatePayload: any = { hourly_rate: hourlyRate, daily_rate: dailyRate };
+    if (monthlySalary !== undefined) {
+      updatePayload.monthly_salary = monthlySalary;
+    }
     const { error } = await supabase
       .from("staff_profiles")
-      .update({ hourly_rate: hourlyRate, daily_rate: dailyRate })
+      .update(updatePayload)
       .eq("id", profileId);
     
     if (error) throw error;
     
     if (F()._staffRatesByProfileId) {
-      F()._staffRatesByProfileId[profileId] = { hourly_rate: hourlyRate, daily_rate: dailyRate };
+      F()._staffRatesByProfileId[profileId] = { 
+        ...F()._staffRatesByProfileId[profileId], 
+        hourly_rate: hourlyRate, 
+        daily_rate: dailyRate,
+        monthly_salary: monthlySalary !== undefined ? monthlySalary : F()._staffRatesByProfileId[profileId].monthly_salary
+      };
     }
     const name = Object.keys(F()._staffIdByName).find(k => F()._staffIdByName[k] === profileId);
     if (name && F()._staffRatesByName && F()._staffRatesByName[name]) {
       F()._staffRatesByName[name].hourly_rate = hourlyRate;
       F()._staffRatesByName[name].daily_rate = dailyRate;
+      if (monthlySalary !== undefined) {
+        F()._staffRatesByName[name].monthly_salary = monthlySalary;
+      }
     }
     
     rtoast("Pay rates updated");
@@ -392,12 +405,67 @@ export async function dbUpdateStaffRates(profileId: string, hourlyRate: number, 
   }
 }
 
-export async function dbResolveOtClaim(claimId: string, status: "Approved" | "Rejected") {
+export async function dbUpdateMonthlyPayroll(profileId: string, month: string, data: any) {
+  const row = {
+    profile_id: profileId,
+    month,
+    monthly_salary: Number(data.monthly_salary) || 0,
+    manual_addition: Number(data.manual_addition) || 0,
+    manual_deduction: Number(data.manual_deduction) || 0,
+    adjustment_notes: data.adjustment_notes || null,
+    updated_at: new Date().toISOString()
+  };
+  try {
+    const { data: ex } = await supabase
+      .from("staff_monthly_payroll")
+      .select("id")
+      .eq("profile_id", profileId)
+      .eq("month", month)
+      .maybeSingle();
+    
+    let res;
+    if (ex && (ex as any).id) {
+      res = await supabase.from("staff_monthly_payroll").update(row).eq("id", (ex as any).id).select().single();
+    } else {
+      res = await supabase.from("staff_monthly_payroll").insert([row]).select().single();
+    }
+    
+    if (res.error) throw res.error;
+    
+    // Also update staff_profiles.monthly_salary as the default baseline
+    await supabase.from("staff_profiles").update({ monthly_salary: row.monthly_salary }).eq("id", profileId);
+    
+    // Update local cache baseline
+    if (F()._staffRatesByProfileId && F()._staffRatesByProfileId[profileId]) {
+      F()._staffRatesByProfileId[profileId].monthly_salary = row.monthly_salary;
+    }
+    const name = Object.keys(F()._staffIdByName).find(k => F()._staffIdByName[k] === profileId);
+    if (name && F()._staffRatesByName && F()._staffRatesByName[name]) {
+      F()._staffRatesByName[name].monthly_salary = row.monthly_salary;
+    }
+
+    const { loadMonthlyPayroll } = await import("./live-data");
+    await loadMonthlyPayroll(F());
+    rtoast("Monthly payroll updated");
+    return res.data;
+  } catch (e) {
+    console.error("dbUpdateMonthlyPayroll error:", e);
+    rtoast("Failed to update payroll", "alert");
+    return null;
+  }
+}
+
+export async function dbResolveOtClaim(claimId: string, status: "Approved" | "Rejected", approvedOtHours?: number) {
   const dbStatus = status === "Approved" ? "approved" : "rejected";
+  const updatePayload: any = { status: dbStatus, updated_at: new Date().toISOString() };
+  if (status === "Approved" && approvedOtHours !== undefined) {
+    updatePayload.ot_hours = Number(approvedOtHours) || 0;
+  }
+  
   try {
     const { data: claim, error } = await supabase
       .from("staff_ot_claims")
-      .update({ status: dbStatus, updated_at: new Date().toISOString() })
+      .update(updatePayload)
       .eq("id", claimId)
       .select()
       .single();
@@ -410,23 +478,34 @@ export async function dbResolveOtClaim(claimId: string, status: "Approved" | "Re
       const toilPayout = claim.toil_payout;
       const otHours = claim.ot_hours;
       
+      const name = Object.keys(F()._staffIdByName).find(k => F()._staffIdByName[k] === pid);
+      
       if (toilPayout) {
-        await dbSetRosterById(pid, date, "TP");
+        const tDates = typeof claim.toil_dates === 'string' ? JSON.parse(claim.toil_dates) : (claim.toil_dates || []);
+        for (const d of tDates) {
+          await dbSetRosterById(pid, d, "TP");
+          if (name) {
+            const dt = new Date(d + "T00:00:00");
+            const off = F().offsetOf ? F().offsetOf(dt) : null;
+            if (off != null && !isNaN(off)) {
+              F()._dbRoster = F()._dbRoster || {};
+              F()._dbRoster[name] = F()._dbRoster[name] || {};
+              F()._dbRoster[name][off] = { code: "TP", ot: 0 };
+            }
+          }
+        }
       } else if (otHours > 0) {
         await dbSetRosterOtById(pid, date, otHours);
-      }
-      
-      const name = Object.keys(F()._staffIdByName).find(k => F()._staffIdByName[k] === pid);
-      const dt = new Date(date + "T00:00:00");
-      const off = F().offsetOf ? F().offsetOf(dt) : null;
-      if (name && off != null && !isNaN(off)) {
-        F()._dbRoster = F()._dbRoster || {};
-        F()._dbRoster[name] = F()._dbRoster[name] || {};
-        const existing = F()._dbRoster[name][off] || { code: "D", ot: 0 };
-        if (toilPayout) {
-          F()._dbRoster[name][off] = { code: "TP", ot: 0 };
-        } else {
-          F()._dbRoster[name][off] = { code: existing.code, ot: otHours };
+        if (name) {
+          const dt = new Date(date + "T00:00:00");
+          const off = F().offsetOf ? F().offsetOf(dt) : null;
+          if (off != null && !isNaN(off)) {
+            F()._dbRoster = F()._dbRoster || {};
+            F()._dbRoster[name] = F()._dbRoster[name] || {};
+            const existingCell = F()._dbRoster[name][off];
+            const existingCode = existingCell ? (typeof existingCell === 'string' ? existingCell : existingCell.code) : 'D';
+            F()._dbRoster[name][off] = { code: existingCode, ot: otHours };
+          }
         }
       }
     }
