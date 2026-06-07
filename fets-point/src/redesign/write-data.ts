@@ -128,9 +128,18 @@ export async function dbDeleteTask(id: any) {
 }
 
 /* ---------------- lost_found_items ---------------- */
-export async function dbClaimLostFound(id: any) {
+export async function dbClaimLostFound(id: any, claimant?: { name: string; contact: string; idProof: string; date?: string }) {
   if (id == null) return;
-  try { await supabase.from("lost_found_items").update({ status: "claimed" }).eq("id", id); } catch (e) {}
+  const payload: any = { status: "claimed" };
+  if (claimant) {
+    payload.returned_date = claimant.date || new Date().toISOString();
+    payload.returned_to_name = claimant.name;
+    payload.returned_to_contact = claimant.contact;
+    payload.returned_to_id_proof = claimant.idProof;
+  } else {
+    payload.returned_date = new Date().toISOString();
+  }
+  try { await supabase.from("lost_found_items").update(payload).eq("id", id); } catch (e) {}
 }
 
 /* tries each payload in order, returns the first that inserts cleanly */
@@ -160,7 +169,24 @@ export async function dbDeleteNews(id: any) {
 
 /* ---------------- lost_found_items ---------------- */
 export async function dbAddLostFound(item: any) {
+  const payload = {
+    description: item.item,
+    found_date: item.when || new Date().toISOString(),
+    found_location: item.where,
+    found_by_staff_id: item.by || null,
+    branch_location: item.branch,
+    perishable: !!item.perishable,
+    locker: item.locker || null,
+    reference_no: item.reference_no ? parseInt(item.reference_no, 10) : null,
+    exam_details: item.exam_details || null,
+    cctv_dvr_no: item.cctv_dvr_no || null,
+    candidate_details: item.candidate_details || null,
+    contact_info: item.contact_info || null,
+    status: "active"
+  };
+
   const data = await tryInsert("lost_found_items", [
+    payload,
     { item_name: item.item, location: item.where, branch: item.branch, status: "stored" },
     { name: item.item, location: item.where, branch: item.branch, status: "stored" },
     { description: item.item, location: item.where, branch: item.branch, status: "stored" },

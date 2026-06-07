@@ -1375,60 +1375,743 @@ const LF_STATUS = { stored: { label: "In locker", color: "var(--v-ielts)" }, cla
 function LostFoundPanel({ branch }) {
   const [items, setItems] = React.useState(() => (window.FETS._lostFound && window.FETS._lostFound.length) ? [...window.FETS._lostFound] : []);
   const [adding, setAdding] = React.useState(false);
-  const [dItem, setDItem] = React.useState("");
-  const [dWhere, setDWhere] = React.useState("");
-  const list = items.filter((i) => branch === "global" || i.branch === branch);
+  const [activeTab, setActiveTab] = React.useState(branch === "global" ? "all" : branch);
+  const [search, setSearch] = React.useState("");
+
+  // Detailed Log Form States
+  const [fItem, setFItem] = React.useState("");
+  const [fDate, setFDate] = React.useState(() => new Date().toISOString().split("T")[0]);
+  const [fWhere, setFWhere] = React.useState("");
+  const [fLocker, setFLocker] = React.useState("");
+  const [fStaffName, setFStaffName] = React.useState(window.FETS._meName || "");
+  const [fPerishable, setFPerishable] = React.useState(false);
+  const [fRefNo, setFRefNo] = React.useState("");
+  const [fCctv, setFCctv] = React.useState("");
+  const [fCandidate, setFCandidate] = React.useState("");
+  const [fContact, setFContact] = React.useState("");
+  const [fExam, setFExam] = React.useState("");
+  const [fBranch, setFBranch] = React.useState(branch === "global" ? "calicut" : branch);
+
+  // Claim Modal States
+  const [claimingItem, setClaimingItem] = React.useState(null);
+  const [cName, setCName] = React.useState("");
+  const [cContact, setCContact] = React.useState("");
+  const [cIdProof, setCIdProof] = React.useState("");
+  const [cDate, setCDate] = React.useState(() => new Date().toISOString().split("T")[0]);
+
+  // Details Dialog State (to view full logged details of any item)
+  const [viewingItem, setViewingItem] = React.useState(null);
+
+  // Filter list
+  const list = items.filter((i) => {
+    // Branch filter
+    const matchesBranch = activeTab === "all" || i.branch === activeTab;
+    if (!matchesBranch) return false;
+    
+    // Search query filter
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      return (
+        i.item.toLowerCase().includes(q) ||
+        i.where.toLowerCase().includes(q) ||
+        (i.locker && i.locker.toLowerCase().includes(q)) ||
+        (i.reference_no && String(i.reference_no).includes(q)) ||
+        (i.candidate_details && i.candidate_details.toLowerCase().includes(q))
+      );
+    }
+    return true;
+  });
+
   const stored = list.filter((i) => i.status === "stored").length;
-  const branchForNew = branch === "global" ? "calicut" : branch;
-  const claim = (it) => { if (it && it.id != null) DB.dbClaimLostFound(it.id); setItems((arr) => arr.map((x) => x === it ? { ...x, status: "claimed" } : x)); toast("Marked as claimed", "check"); };
-  const del = (it) => { if (!window.confirm("Remove this item?")) return; if (it && it.id != null) DB.dbDeleteLostFound(it.id); setItems((arr) => arr.filter((x) => x !== it)); };
-  const add = () => {
-    if (!dItem.trim()) return;
-    const entry = { item: dItem.trim(), where: dWhere.trim() || "—", when: new Date().toLocaleDateString(), branch: branchForNew, locker: "", status: "stored", by: window.FETS.user.name };
-    setItems((arr) => [entry, ...arr]);
-    DB.dbAddLostFound(entry).then((row) => { if (row && row.id != null) setItems((arr) => arr.map((x) => x === entry ? { ...x, id: row.id } : x)); });
-    setDItem(""); setDWhere(""); setAdding(false);
+
+  const staffList = window.FETS.PEOPLE || [];
+
+  const handleClaimSubmit = (e) => {
+    e.preventDefault();
+    if (!cName.trim() || !cContact.trim() || !cIdProof.trim()) {
+      toast("Please fill in all claiming fields", "alert");
+      return;
+    }
+    const it = claimingItem;
+    if (it && it.id != null) {
+      DB.dbClaimLostFound(it.id, { name: cName.trim(), contact: cContact.trim(), idProof: cIdProof.trim(), date: cDate });
+    }
+    setItems((arr) =>
+      arr.map((x) =>
+        x === it
+          ? {
+              ...x,
+              status: "claimed",
+              returned_date: cDate,
+              returned_to_name: cName.trim(),
+              returned_to_contact: cContact.trim(),
+              returned_to_id_proof: cIdProof.trim()
+            }
+          : x
+      )
+    );
+    toast("Marked as claimed successfully", "check");
+    setClaimingItem(null);
+    setCName("");
+    setCContact("");
+    setCIdProof("");
   };
-  const inp = { background: "var(--inset)", border: "1px solid var(--hairline)", borderRadius: 9, color: "var(--ink)", fontFamily: "var(--font)", fontSize: 13, padding: "9px 11px", width: "100%" };
+
+  const del = (it) => {
+    if (!window.confirm("Remove this item?")) return;
+    if (it && it.id != null) DB.dbDeleteLostFound(it.id);
+    setItems((arr) => arr.filter((x) => x !== it));
+  };
+
+  const add = () => {
+    if (!fItem.trim()) {
+      toast("Item description is required", "alert");
+      return;
+    }
+    
+    // Resolve selected staff to their profile ID
+    const staffId = window.FETS._staffIdByName[fStaffName] || null;
+    
+    const entry = {
+      item: fItem.trim(),
+      where: fWhere.trim() || "—",
+      when: fDate,
+      branch: fBranch,
+      locker: fLocker.trim(),
+      status: "stored",
+      by: staffId || window.FETS.user.name,
+      perishable: fPerishable,
+      reference_no: fRefNo ? parseInt(fRefNo, 10) : null,
+      cctv_dvr_no: fCctv.trim(),
+      candidate_details: fCandidate.trim(),
+      contact_info: fContact.trim(),
+      exam_details: fExam.trim()
+    };
+
+    // Optimistic UI update
+    setItems((arr) => [entry, ...arr]);
+
+    DB.dbAddLostFound(entry).then((row) => {
+      if (row && row.id != null) {
+        setItems((arr) => arr.map((x) => x === entry ? { ...x, id: row.id } : x));
+      }
+    });
+
+    // Reset Form
+    setFItem("");
+    setFWhere("");
+    setFLocker("");
+    setFStaffName(window.FETS._meName || "");
+    setFPerishable(false);
+    setFRefNo("");
+    setFCctv("");
+    setFCandidate("");
+    setFContact("");
+    setFExam("");
+    setAdding(false);
+  };
+
+  const getStaffName = (by) => {
+    if (!by) return "—";
+    const staffMaps = window.FETS._staffIdByName || {};
+    const foundName = Object.keys(staffMaps).find(name => staffMaps[name] === by);
+    if (foundName) return foundName;
+    return by;
+  };
+
+  const getAgeInfo = (item) => {
+    if (!item.when) return { text: "Unknown", color: "var(--ink-4)" };
+    const foundDate = new Date(item.when);
+    const now = new Date();
+    foundDate.setHours(0,0,0,0);
+    now.setHours(0,0,0,0);
+    const diffTime = now.getTime() - foundDate.getTime();
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (item.status === "claimed") {
+      return { text: `Claimed`, color: "var(--ok)", days: diffDays };
+    }
+    
+    if (item.perishable) {
+      if (diffDays >= 2) {
+        return { text: `Expired (${diffDays}d) - Dispose`, color: "var(--bad)", alert: true, days: diffDays };
+      }
+      if (diffDays === 1) {
+        return { text: `1 day old (Expiring)`, color: "var(--v-ielts)", warning: true, days: diffDays };
+      }
+      return { text: `Recent (<24h)`, color: "var(--ok)", days: diffDays };
+    }
+    
+    if (diffDays >= 30) {
+      return { text: `Aged (${diffDays} days)`, color: "var(--v-ielts)", alert: true, days: diffDays };
+    }
+    if (diffDays >= 7) {
+      return { text: `${diffDays} days old`, color: "var(--accent)", days: diffDays };
+    }
+    return { text: `${diffDays === 0 ? "Today" : `${diffDays}d ago`}`, color: "var(--ok)", days: diffDays };
+  };
+
+  const inp = {
+    background: "var(--inset)",
+    border: "1px solid var(--hairline)",
+    borderRadius: 10,
+    color: "var(--ink)",
+    fontFamily: "var(--font)",
+    fontSize: 13,
+    padding: "9px 12px",
+    width: "100%"
+  };
+
+  const formGridStyle = {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, 1fr)",
+    gap: 10
+  };
+
+  const labelStyle = {
+    fontSize: 11.5,
+    fontWeight: 650,
+    color: "var(--ink-3)",
+    display: "flex",
+    flexDirection: "column",
+    gap: 4
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Branch Tabs Filter */}
+      <div style={{ display: "flex", background: "var(--inset)", padding: 3, borderRadius: 12, border: "1px solid var(--hairline)" }}>
+        {["all", "cochin", "calicut"].map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            style={{
+              flex: 1,
+              padding: "7px 10px",
+              borderRadius: 9,
+              border: "none",
+              fontSize: 12,
+              fontWeight: activeTab === tab ? 750 : 600,
+              cursor: "pointer",
+              background: activeTab === tab ? "var(--glass-thick)" : "transparent",
+              color: activeTab === tab ? "var(--ink)" : "var(--ink-3)",
+              boxShadow: activeTab === tab ? "0 2px 8px var(--shadow)" : "none",
+              transition: "all 0.15s ease",
+              textTransform: "capitalize"
+            }}
+          >
+            {tab === "all" ? "All Centers" : tab}
+          </button>
+        ))}
+      </div>
+
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         <StatPill value={stored} label="Awaiting claim" tone={stored ? "var(--v-ielts)" : "var(--ok)"} />
         <StatPill value={list.length} label="Items logged" />
       </div>
+
+      {/* Search Filter */}
+      <div style={{ position: "relative" }}>
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search items by keyword..."
+          style={{ ...inp, paddingLeft: 36 }}
+        />
+        <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--ink-4)", pointerEvents: "none" }}>
+          <Icon name="search" size={15} />
+        </span>
+      </div>
+
       {adding ? (
-        <div className="glass-2" style={{ padding: 14, borderRadius: 14, display: "flex", flexDirection: "column", gap: 10 }}>
-          <input autoFocus value={dItem} onChange={(e) => setDItem(e.target.value)} placeholder="Item (e.g. Black umbrella)" style={inp} />
-          <input value={dWhere} onChange={(e) => setDWhere(e.target.value)} placeholder="Where found (e.g. Hall B)" style={inp} />
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-            <button onClick={() => setAdding(false)} className="tap glass-2" style={{ padding: "8px 14px", borderRadius: 9, cursor: "pointer", border: "1px solid var(--hairline)", color: "var(--ink-2)", fontSize: 12.5, fontWeight: 650 }}>Cancel</button>
-            <button onClick={add} className="tap" style={{ padding: "8px 16px", borderRadius: 9, cursor: "pointer", border: "none", color: "var(--accent-ink)", background: "var(--accent)", fontSize: 12.5, fontWeight: 750 }}>Log item</button>
+        <div className="glass-2" style={{ padding: 14, borderRadius: 16, display: "flex", flexDirection: "column", gap: 12, border: "1px solid var(--hairline)" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+            <span style={{ fontSize: 13, fontWeight: 750, color: "var(--ink)" }}>Log Found Item</span>
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                color: "var(--accent-ink)",
+                background: "var(--accent)",
+                padding: "3px 8px",
+                borderRadius: 8,
+                textTransform: "uppercase"
+              }}
+            >
+              {fBranch}
+            </span>
+          </div>
+
+          <label style={labelStyle}>
+            Item Description *
+            <input autoFocus value={fItem} onChange={(e) => setFItem(e.target.value)} placeholder="e.g. Black iPhone 15 with brown leather case" style={inp} required />
+          </label>
+
+          <div style={formGridStyle}>
+            <label style={labelStyle}>
+              Date Found
+              <input type="date" value={fDate} onChange={(e) => setFDate(e.target.value)} style={inp} />
+            </label>
+            <label style={labelStyle}>
+              Founded Location
+              <input value={fWhere} onChange={(e) => setFWhere(e.target.value)} placeholder="e.g. Waiting Lounge" style={inp} />
+            </label>
+          </div>
+
+          <div style={formGridStyle}>
+            <label style={labelStyle}>
+              Locker / Shelf
+              <input value={fLocker} onChange={(e) => setFLocker(e.target.value)} placeholder="e.g. Locker B-2" style={inp} />
+            </label>
+            <label style={labelStyle}>
+              Found By Staff
+              <select value={fStaffName} onChange={(e) => setFStaffName(e.target.value)} style={inp}>
+                <option value="">Choose Staff...</option>
+                {staffList.map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div style={formGridStyle}>
+            <label style={labelStyle}>
+              Reference Tag No
+              <input type="number" value={fRefNo} onChange={(e) => setFRefNo(e.target.value)} placeholder="e.g. 104" style={inp} />
+            </label>
+            <label style={labelStyle}>
+              CCTV Camera/DVR
+              <input value={fCctv} onChange={(e) => setFCctv(e.target.value)} placeholder="e.g. Cam 4 reception" style={inp} />
+            </label>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, background: "var(--inset)", padding: 10, borderRadius: 10, border: "1px solid var(--hairline)" }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-3)", textTransform: "uppercase" }}>Candidate Details (Optional)</span>
+            <div style={formGridStyle}>
+              <label style={labelStyle}>
+                Name
+                <input value={fCandidate} onChange={(e) => setFCandidate(e.target.value)} placeholder="Candidate name" style={inp} />
+              </label>
+              <label style={labelStyle}>
+                Contact Number
+                <input value={fContact} onChange={(e) => setFContact(e.target.value)} placeholder="Candidate phone" style={inp} />
+              </label>
+            </div>
+            <label style={{ ...labelStyle, marginTop: 4 }}>
+              Exam Details
+              <input value={fExam} onChange={(e) => setFExam(e.target.value)} placeholder="e.g. Pearson Vue - IELTS Academic" style={inp} />
+            </label>
+          </div>
+
+          {branch === "global" && (
+            <label style={labelStyle}>
+              Select Target Center
+              <select value={fBranch} onChange={(e) => setFBranch(e.target.value)} style={inp}>
+                <option value="calicut">Calicut</option>
+                <option value="cochin">Cochin</option>
+              </select>
+            </label>
+          )}
+
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--inset)", padding: "8px 12px", borderRadius: 10, border: "1px solid var(--hairline)" }}>
+            <span style={{ fontSize: 12, fontWeight: 650, color: "var(--ink)" }}>Is Perishable Item?</span>
+            <label style={{ position: "relative", display: "inline-block", width: 44, height: 24 }}>
+              <input type="checkbox" checked={fPerishable} onChange={(e) => setFPerishable(e.target.checked)} style={{ opacity: 0, width: 0, height: 0 }} />
+              <span style={{
+                position: "absolute",
+                cursor: "pointer",
+                top: 0, left: 0, right: 0, bottom: 0,
+                backgroundColor: fPerishable ? "var(--bad)" : "var(--hairline)",
+                transition: "0.2s",
+                borderRadius: 24
+              }}>
+                <span style={{
+                  position: "absolute",
+                  content: '""',
+                  height: 18, width: 18,
+                  left: fPerishable ? 22 : 3,
+                  bottom: 3,
+                  backgroundColor: "white",
+                  transition: "0.2s",
+                  borderRadius: "50%",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.2)"
+                }} />
+              </span>
+            </label>
+          </div>
+
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
+            <button onClick={() => setAdding(false)} className="tap glass-2" style={{ padding: "9px 14px", borderRadius: 10, cursor: "pointer", border: "1px solid var(--hairline)", color: "var(--ink-2)", fontSize: 12.5, fontWeight: 650 }}>Cancel</button>
+            <button onClick={add} className="tap" style={{ padding: "9px 18px", borderRadius: 10, cursor: "pointer", border: "none", color: "var(--accent-ink)", background: "var(--accent)", fontSize: 12.5, fontWeight: 750 }}>Log item</button>
           </div>
         </div>
       ) : (
-        <button onClick={() => setAdding(true)} className="tap inset" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px", borderRadius: 14, cursor: "pointer", color: "var(--ink-2)", fontFamily: "var(--font)", fontSize: 13, fontWeight: 650, borderStyle: "dashed" }}><Icon name="plus" size={16} /> Log a found item</button>
+        <button onClick={() => setAdding(true)} className="tap inset" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px", borderRadius: 14, cursor: "pointer", color: "var(--ink-2)", fontFamily: "var(--font)", fontSize: 13, fontWeight: 650, borderStyle: "dashed" }}>
+          <Icon name="plus" size={16} /> Log a found item
+        </button>
       )}
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {list.length === 0
-          ? <div className="inset" style={{ padding: 22, borderRadius: 14, textAlign: "center", color: "var(--ink-4)", fontSize: 13 }}>Nothing logged for this centre.</div>
-          : list.map((it, i) => {
-            const sm = LF_STATUS[it.status] || LF_STATUS.stored;
-            return (
-              <div key={i} className="glass-2" style={{ padding: 15, borderRadius: 14, display: "flex", alignItems: "center", gap: 13 }}>
-                <span style={{ width: 40, height: 40, borderRadius: 11, display: "grid", placeItems: "center", flexShrink: 0, color: sm.color, background: `color-mix(in oklch, ${sm.color} 14%, transparent)`, border: `1px solid color-mix(in oklch, ${sm.color} 28%, transparent)` }}>
-                  <Icon name="package" size={19} />
-                </span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.item}</div>
-                  <div className="mono" style={{ fontSize: 10.5, color: "var(--ink-4)", marginTop: 3 }}>{it.where} · {it.when}{it.locker ? ` · ${it.locker}` : ""}</div>
+
+      {/* Claimant Input Form Modal */}
+      {claimingItem && (
+        <div style={{
+          position: "fixed",
+          top: 0, left: 0, right: 0, bottom: 0,
+          background: "rgba(0,0,0,0.4)",
+          backdropFilter: "blur(4px)",
+          display: "grid",
+          placeItems: "center",
+          zIndex: 99999,
+          padding: 16
+        }}>
+          <form onSubmit={handleClaimSubmit} className="glass-thick" style={{
+            width: "100%",
+            maxWidth: 380,
+            padding: 18,
+            borderRadius: 18,
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+            boxShadow: "0 20px 40px var(--shadow-heavy)",
+            border: "1px solid var(--hairline)",
+            animation: "rise 0.25s ease"
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 14, fontWeight: 750, color: "var(--ink)" }}>Complete Claim Handover</span>
+              <button type="button" onClick={() => setClaimingItem(null)} style={{ border: "none", background: "none", cursor: "pointer", color: "var(--ink-4)" }}><Icon name="x" size={18} /></button>
+            </div>
+            <div style={{ fontSize: 12, color: "var(--ink-3)", background: "var(--inset)", padding: 8, borderRadius: 8 }}>
+              Item: <strong>{claimingItem.item}</strong>
+            </div>
+            
+            <label style={labelStyle}>
+              Claimant Full Name *
+              <input autoFocus value={cName} onChange={(e) => setCName(e.target.value)} placeholder="e.g. John Doe" style={inp} required />
+            </label>
+            <label style={labelStyle}>
+              Contact Number *
+              <input value={cContact} onChange={(e) => setCContact(e.target.value)} placeholder="e.g. +91 9876543210" style={inp} required />
+            </label>
+            <label style={labelStyle}>
+              ID Proof Details *
+              <input value={cIdProof} onChange={(e) => setCIdProof(e.target.value)} placeholder="e.g. Driving License (DL-XXXXXX)" style={inp} required />
+            </label>
+            <label style={labelStyle}>
+              Handover Date
+              <input type="date" value={cDate} onChange={(e) => setCDate(e.target.value)} style={inp} required />
+            </label>
+
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 6 }}>
+              <button type="button" onClick={() => setClaimingItem(null)} className="tap glass-2" style={{ padding: "8px 14px", borderRadius: 10, cursor: "pointer", border: "1px solid var(--hairline)", color: "var(--ink-2)", fontSize: 12 }}>Cancel</button>
+              <button type="submit" className="tap" style={{ padding: "8px 16px", borderRadius: 10, cursor: "pointer", border: "none", color: "var(--accent-ink)", background: "var(--accent)", fontSize: 12, fontWeight: 700 }}>Confirm handover</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* View Details Modal */}
+      {viewingItem && (
+        <div style={{
+          position: "fixed",
+          top: 0, left: 0, right: 0, bottom: 0,
+          background: "rgba(0,0,0,0.4)",
+          backdropFilter: "blur(4px)",
+          display: "grid",
+          placeItems: "center",
+          zIndex: 99998,
+          padding: 16
+        }}>
+          <div className="glass-thick" style={{
+            width: "100%",
+            maxWidth: 420,
+            padding: 18,
+            borderRadius: 18,
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+            boxShadow: "0 20px 40px var(--shadow-heavy)",
+            border: "1px solid var(--hairline)",
+            animation: "rise 0.25s ease"
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 14, fontWeight: 750, color: "var(--ink)" }}>Lost & Found Details</span>
+              <button onClick={() => setViewingItem(null)} style={{ border: "none", background: "none", cursor: "pointer", color: "var(--ink-4)" }}><Icon name="x" size={18} /></button>
+            </div>
+            
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 13, color: "var(--ink)" }}>
+              <div style={{ background: "var(--inset)", padding: 12, borderRadius: 10, border: "1px solid var(--hairline)" }}>
+                <span style={{ display: "block", fontSize: 10.5, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase", marginBottom: 2 }}>Item Description</span>
+                <span style={{ fontWeight: 700, fontSize: 14 }}>{viewingItem.item}</span>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <div>
+                  <span style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>Center Location</span>
+                  <strong style={{ textTransform: "capitalize" }}>{viewingItem.branch}</strong>
                 </div>
-                {it.status === "stored"
-                  ? <button onClick={() => claim(it)} className="tap" style={{ flexShrink: 0, padding: "8px 13px", borderRadius: 10, border: "none", cursor: "pointer", fontFamily: "var(--font)", fontSize: 12, fontWeight: 700, color: "var(--accent-ink)", background: "var(--accent)" }}>Claim</button>
-                  : <span style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 6, fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", padding: "5px 10px", borderRadius: 99, color: sm.color, background: `color-mix(in oklch, ${sm.color} 16%, transparent)` }}><Icon name="check" size={12} stroke={3} /> {sm.label}</span>}
-                <button onClick={() => del(it)} title="Delete" className="tap glass-2" style={{ width: 34, height: 34, borderRadius: 9, display: "grid", placeItems: "center", cursor: "pointer", color: "var(--bad)", border: "1px solid var(--hairline)", flexShrink: 0 }}><Icon name="trash" size={15} /></button>
+                <div>
+                  <span style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>Date Found</span>
+                  <strong>{viewingItem.when}</strong>
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <div>
+                  <span style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>Found Location</span>
+                  <strong>{viewingItem.where || "—"}</strong>
+                </div>
+                <div>
+                  <span style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>Locker Location</span>
+                  <strong>{viewingItem.locker || "—"}</strong>
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <div>
+                  <span style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>Found By Staff</span>
+                  <strong>{getStaffName(viewingItem.by)}</strong>
+                </div>
+                <div>
+                  <span style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>Reference No</span>
+                  <strong>{viewingItem.reference_no ? `#${viewingItem.reference_no}` : "—"}</strong>
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <div>
+                  <span style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>Item Class</span>
+                  <span style={{ display: "inline-block", fontSize: 11, fontWeight: 700, color: viewingItem.perishable ? "var(--bad)" : "var(--accent)" }}>
+                    {viewingItem.perishable ? "⚠️ Perishable" : "Standard"}
+                  </span>
+                </div>
+                <div>
+                  <span style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>CCTV Reference</span>
+                  <strong>{viewingItem.cctv_dvr_no || "—"}</strong>
+                </div>
+              </div>
+
+              {/* Candidate Info */}
+              {(viewingItem.candidate_details || viewingItem.contact_info || viewingItem.exam_details) && (
+                <div style={{ background: "var(--inset)", padding: 10, borderRadius: 10, border: "1px solid var(--hairline)" }}>
+                  <span style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase", marginBottom: 4 }}>Linked Candidate / Exam</span>
+                  <div style={{ fontSize: 12, display: "flex", flexDirection: "column", gap: 2 }}>
+                    {viewingItem.candidate_details && <div>Candidate: <strong>{viewingItem.candidate_details}</strong></div>}
+                    {viewingItem.contact_info && <div>Phone: <strong>{viewingItem.contact_info}</strong></div>}
+                    {viewingItem.exam_details && <div>Exam: <strong>{viewingItem.exam_details}</strong></div>}
+                  </div>
+                </div>
+              )}
+
+              {/* Handover Details */}
+              {viewingItem.status === "claimed" && (
+                <div style={{ background: "color-mix(in oklch, var(--ok) 8%, transparent)", padding: 10, borderRadius: 10, border: "1px solid color-mix(in oklch, var(--ok) 25%, transparent)", borderLeft: "4px solid var(--ok)" }}>
+                  <span style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--ok)", textTransform: "uppercase", marginBottom: 4 }}>Claim Handover Details</span>
+                  <div style={{ fontSize: 12, display: "flex", flexDirection: "column", gap: 2 }}>
+                    <div>Claimant: <strong>{viewingItem.returned_to_name || "—"}</strong></div>
+                    <div>Phone: <strong>{viewingItem.returned_to_contact || "—"}</strong></div>
+                    <div>ID Verified: <strong>{viewingItem.returned_to_id_proof || "—"}</strong></div>
+                    {viewingItem.returned_date && <div>Date Claimed: <strong>{new Date(viewingItem.returned_date).toLocaleDateString()}</strong></div>}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
+              <button onClick={() => setViewingItem(null)} className="tap" style={{ padding: "8px 16px", borderRadius: 10, cursor: "pointer", border: "none", color: "var(--accent-ink)", background: "var(--accent)", fontSize: 12, fontWeight: 700 }}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Item List Container */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {list.length === 0 ? (
+          <div className="inset" style={{ padding: 22, borderRadius: 14, textAlign: "center", color: "var(--ink-4)", fontSize: 13 }}>
+            No items match your selected filter.
+          </div>
+        ) : (
+          list.map((it, i) => {
+            const sm = LF_STATUS[it.status] || LF_STATUS.stored;
+            const age = getAgeInfo(it);
+            
+            return (
+              <div
+                key={i}
+                className="glass-2"
+                style={{
+                  padding: 12,
+                  borderRadius: 14,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  border: it.perishable && it.status !== "claimed" ? "1px dashed var(--bad)" : "1px solid var(--hairline)"
+                }}
+              >
+                {/* Status Indicator Icon */}
+                <span
+                  onClick={() => setViewingItem(it)}
+                  title="Click to view details"
+                  className="tap"
+                  style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 11,
+                    display: "grid",
+                    placeItems: "center",
+                    flexShrink: 0,
+                    cursor: "pointer",
+                    color: sm.color,
+                    background: `color-mix(in oklch, ${sm.color} 12%, transparent)`,
+                    border: `1px solid color-mix(in oklch, ${sm.color} 24%, transparent)`
+                  }}
+                >
+                  <Icon name="package" size={18} />
+                </span>
+
+                {/* Body Details */}
+                <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+                  <div
+                    onClick={() => setViewingItem(it)}
+                    className="tap"
+                    style={{
+                      fontSize: 13.5,
+                      fontWeight: 700,
+                      color: "var(--ink)",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      cursor: "pointer"
+                    }}
+                  >
+                    {it.item}
+                  </div>
+                  
+                  {/* Badges / Sub-meta */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    <span className="mono" style={{ fontSize: 10, color: "var(--ink-4)" }}>
+                      {it.where} · {it.when}
+                    </span>
+                    {it.locker && (
+                      <span style={{ fontSize: 9.5, padding: "1px 5px", borderRadius: 5, background: "var(--inset)", color: "var(--ink-3)", border: "1px solid var(--hairline)" }}>
+                        {it.locker}
+                      </span>
+                    )}
+                    {it.reference_no && (
+                      <span style={{ fontSize: 9.5, padding: "1px 5px", borderRadius: 5, background: "var(--inset)", color: "var(--accent)", fontWeight: 700, border: "1px solid var(--hairline)" }}>
+                        #{it.reference_no}
+                      </span>
+                    )}
+                  </div>
+                  
+                  {/* Aging & Perishable trackers */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 2 }}>
+                    <span style={{
+                      fontSize: 9.5,
+                      fontWeight: 700,
+                      color: age.color,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4
+                    }}>
+                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: age.color }} />
+                      {age.text}
+                    </span>
+                    
+                    {it.perishable && it.status !== "claimed" && (
+                      <span style={{
+                        fontSize: 9,
+                        fontWeight: 800,
+                        color: "var(--bad)",
+                        background: "color-mix(in oklch, var(--bad) 12%, transparent)",
+                        padding: "1px 5px",
+                        borderRadius: 4,
+                        textTransform: "uppercase"
+                      }}>
+                        Perishable
+                      </span>
+                    )}
+
+                    {activeTab === "all" && (
+                      <span style={{
+                        fontSize: 9,
+                        fontWeight: 700,
+                        color: "var(--ink-3)",
+                        background: "var(--inset)",
+                        padding: "1px 5px",
+                        borderRadius: 4,
+                        textTransform: "capitalize"
+                      }}>
+                        {it.branch}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Handover & Actions */}
+                {it.status === "stored" ? (
+                  <button
+                    onClick={() => setClaimingItem(it)}
+                    className="tap"
+                    style={{
+                      flexShrink: 0,
+                      padding: "8px 12px",
+                      borderRadius: 10,
+                      border: "none",
+                      cursor: "pointer",
+                      fontFamily: "var(--font)",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: "var(--accent-ink)",
+                      background: "var(--accent)"
+                    }}
+                  >
+                    Claim
+                  </button>
+                ) : (
+                  <span
+                    onClick={() => setViewingItem(it)}
+                    className="tap"
+                    style={{
+                      flexShrink: 0,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      fontSize: 9.5,
+                      fontWeight: 800,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.03em",
+                      padding: "5px 9px",
+                      borderRadius: 99,
+                      color: sm.color,
+                      cursor: "pointer",
+                      background: `color-mix(in oklch, ${sm.color} 12%, transparent)`
+                    }}
+                  >
+                    <Icon name="check" size={11} stroke={3} /> {sm.label}
+                  </span>
+                )}
+                
+                <button
+                  onClick={() => del(it)}
+                  title="Delete log"
+                  className="tap glass-2"
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 8,
+                    display: "grid",
+                    placeItems: "center",
+                    cursor: "pointer",
+                    color: "var(--bad)",
+                    border: "1px solid var(--hairline)",
+                    flexShrink: 0
+                  }}
+                >
+                  <Icon name="trash" size={14} />
+                </button>
               </div>
             );
-          })}
+          })
+        )}
       </div>
     </div>
   );

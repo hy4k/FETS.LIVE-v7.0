@@ -190,13 +190,23 @@ export async function loadLiveData(F: any) {
     if (!error && data) {
       F._lostFound = data.map((i: any) => ({
         id: i.id,
-        item: i.item_name || i.name || i.description || "Item",
-        where: i.location || i.found_location || "—",
-        when: i.created_at ? new Date(i.created_at).toLocaleDateString() : "",
-        branch: branchOf(i.branch || i.branch_location),
+        item: i.description || i.item_name || i.name || "Item",
+        where: i.found_location || i.location || "—",
+        when: i.found_date ? new Date(i.found_date).toISOString().split('T')[0] : (i.created_at ? new Date(i.created_at).toISOString().split('T')[0] : ""),
+        branch: branchOf(i.branch_location || i.branch),
         locker: i.locker || i.locker_no || "",
         status: lc(i.status).includes("claim") ? "claimed" : "stored",
-        by: i.reported_by || i.logged_by || "",
+        by: i.found_by_staff_id || i.found_by_user_id || i.reported_by || i.logged_by || "",
+        perishable: !!i.perishable,
+        candidate_details: i.candidate_details || "",
+        contact_info: i.contact_info || "",
+        reference_no: i.reference_no || "",
+        exam_details: i.exam_details || "",
+        cctv_dvr_no: i.cctv_dvr_no || "",
+        returned_date: i.returned_date || "",
+        returned_to_name: i.returned_to_name || "",
+        returned_to_id_proof: i.returned_to_id_proof || "",
+        returned_to_contact: i.returned_to_contact || "",
       }));
     }
   } catch (e) { /* keep seed */ }
