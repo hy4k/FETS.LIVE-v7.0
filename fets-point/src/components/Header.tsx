@@ -113,7 +113,7 @@ export function Header({ isMobile = false, sidebarOpen = false, setSidebarOpen, 
   const mithunNavItems = [
     { id: 'fets-calendar-demo', label: 'CELPIP', icon: CalendarDays },
     { id: 'client-portal', label: 'CLIENTS', icon: Briefcase },
-    { id: 'cma-availability', label: 'CMA US', icon: GraduationCap },
+    { id: 'branch-delegation', label: 'BRANCH ACCESS', icon: Shield },
   ];
 
   const secondRowItems = [

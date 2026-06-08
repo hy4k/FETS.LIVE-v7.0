@@ -150,28 +150,24 @@ export function BranchProvider({ children }: BranchProviderProps) {
 
 
 
-  // When the signed-in user changes: restore their saved centre, or fall back to profile default.
-  // Do not re-run when activeBranch changes — that was resetting non–super-admin picks immediately after they switched.
+  // When the signed-in user changes: default active branch strictly to their profile's assigned branch
+  // to avoid cross-center mistakes on shared center machines.
   useEffect(() => {
     if (!user?.id || !profile) return;
 
     const key = branchStorageKey(user.id);
-    const saved = localStorage.getItem(key) as BranchType | null;
-    const defaultBranch = (
-      profile.branch_assigned === 'both' ? 'calicut' : profile.branch_assigned || 'calicut'
-    ) as BranchType;
+    const profileBranch = profile.branch_assigned || 'calicut';
+    
+    let defaultBranch: BranchType = 'calicut';
+    if (profileBranch === 'cochin') defaultBranch = 'cochin';
+    else if (profileBranch === 'calicut') defaultBranch = 'calicut';
+    else if (profileBranch === 'kannur') defaultBranch = 'kannur';
+    else if (profileBranch === 'global') defaultBranch = 'global';
+    else if (profileBranch === 'both') defaultBranch = 'calicut';
 
-    const savedOk = saved && VALID_BRANCHES.includes(saved);
-
-    if (!savedOk) {
-      setActiveBranchState(defaultBranch);
-      localStorage.setItem(key, defaultBranch);
-      localStorage.setItem('fets_active_branch', defaultBranch);
-      return;
-    }
-
-    setActiveBranchState(saved);
-    localStorage.setItem('fets_active_branch', saved);
+    setActiveBranchState(defaultBranch);
+    localStorage.setItem(key, defaultBranch);
+    localStorage.setItem('fets_active_branch', defaultBranch);
   }, [user?.id, profile?.user_id]);
 
 

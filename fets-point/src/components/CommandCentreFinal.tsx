@@ -404,12 +404,12 @@ export default function CommandCentre({ onNavigate, onAiQuery }: { onNavigate?: 
                                                                 <ChevronRight size={10} className="opacity-20" />
                                                             </button>
                                                             <button
-                                                                onClick={() => { onNavigate?.('cma-availability'); setShowManagementMenu(false); }}
+                                                                onClick={() => { onNavigate?.('branch-delegation'); setShowManagementMenu(false); }}
                                                                 className="w-full flex items-center justify-between p-2 rounded-sm transition-all hover:bg-white/5 text-white/80"
                                                             >
                                                                 <div className="flex items-center gap-2">
-                                                                    <GraduationCap size={12} className="text-amber-400" />
-                                                                    <span className="text-[9px] font-bold uppercase tracking-wider">CMA US</span>
+                                                                    <Shield size={12} className="text-amber-400" />
+                                                                    <span className="text-[9px] font-bold uppercase tracking-wider">Branch Access</span>
                                                                 </div>
                                                                 <ChevronRight size={10} className="opacity-20" />
                                                             </button>

@@ -77,7 +77,7 @@ export function MobileHome({ setActiveTab, profile }: MobileHomeProps) {
     { id: 'client-portal', label: 'Clients', icon: Briefcase, gradient: 'from-amber-500 to-orange-600', restricted: true },
     { id: 'fets-roster', label: 'Roster', icon: UserCheck, gradient: 'from-indigo-500 to-blue-600' },
     { id: 'incident-log', label: 'Cases', icon: AlertCircle, gradient: 'from-orange-500 to-red-600' },
-    { id: 'cma-availability', label: 'CMA US', icon: GraduationCap, gradient: 'from-teal-500 to-emerald-600', restricted: true },
+    { id: 'branch-delegation', label: 'Branch Access', icon: Shield, gradient: 'from-teal-500 to-emerald-600', restricted: true },
   ].filter(item => {
     if (item.restricted && !isMithun) return false;
     const mod = modules.find(m => m.id === item.id);
@@ -655,12 +655,12 @@ export function MobileHome({ setActiveTab, profile }: MobileHomeProps) {
                   <ChevronRight size={14} className="text-white/15" />
                 </button>
                 <button
-                  onClick={() => { setActiveTab('cma-availability'); setShowManagementSheet(false); }}
+                  onClick={() => { setActiveTab('branch-delegation'); setShowManagementSheet(false); }}
                   className="w-full flex items-center justify-between p-3 rounded-xl transition-all active:bg-white/5 text-white/80"
                 >
                   <div className="flex items-center gap-3">
-                    <GraduationCap size={16} className="text-amber-400/80" />
-                    <span className="text-[10px] font-bold uppercase tracking-wider">CMA US</span>
+                    <Shield size={16} className="text-amber-400/80" />
+                    <span className="text-[10px] font-bold uppercase tracking-wider">Branch Access</span>
                   </div>
                   <ChevronRight size={14} className="text-white/15" />
                 </button>

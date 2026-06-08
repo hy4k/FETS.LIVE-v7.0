@@ -200,6 +200,36 @@ export async function dbDeleteLostFound(id: any) {
   try { await supabase.from("lost_found_items").delete().eq("id", id); rtoast("Item removed"); } catch (e) { rtoast("DB delete failed", "alert"); }
 }
 
+/* ---------------- staff_branch_delegations ---------------- */
+export async function dbAddBranchDelegation(delegation: any) {
+  try {
+    const { data, error } = await supabase
+      .from("staff_branch_delegations")
+      .insert([delegation])
+      .select()
+      .single();
+    if (error) throw error;
+    rtoast("Access delegation saved");
+    return data;
+  } catch (e) {
+    rtoast("DB sync failed", "alert");
+    return null;
+  }
+}
+export async function dbDeleteBranchDelegation(id: any) {
+  if (id == null) return;
+  try {
+    const { error } = await supabase
+      .from("staff_branch_delegations")
+      .delete()
+      .eq("id", id);
+    if (error) throw error;
+    rtoast("Delegation revoked");
+  } catch (e) {
+    rtoast("Revocation failed", "alert");
+  }
+}
+
 /* ---------------- fets_vault ---------------- */
 export async function dbAddVault(entry: any) {
   const row: any = { title: entry.title || "Entry", category: entry.category || "General", username: entry.username || "", password: entry.password || "", url: entry.url || "", notes: entry.notes || "" };

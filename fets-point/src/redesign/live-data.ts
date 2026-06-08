@@ -105,6 +105,7 @@ export async function loadLiveData(F: any) {
           F._meId = p.id;
           F._meName = p.full_name;
           F._meBranch = b;
+          F._meBaseBranch = p.branch_assigned;
           if (F.user) {
             F.user.name = p.full_name;
             F.user.role = p.role === 'super_admin' ? 'Super Admin' : 'Staff';
@@ -129,6 +130,46 @@ export async function loadLiveData(F: any) {
       }
     }
   } catch (e) { /* keep seed */ }
+
+  /* ---- branch delegations ---- */
+  try {
+    if (F._meId) {
+      const nowIso = new Date().toISOString();
+      const { data: delegations, error } = await supabase
+        .from("staff_branch_delegations")
+        .select("id")
+        .eq("profile_id", F._meId)
+        .lte("start_date", nowIso)
+        .gte("end_date", nowIso);
+      F._hasTempCrossAccess = !error && delegations && delegations.length > 0;
+    } else {
+      F._hasTempCrossAccess = false;
+    }
+
+    if (F.user && F.user.role === 'Super Admin') {
+      const { data, error } = await supabase
+        .from("staff_branch_delegations")
+        .select(`
+          id,
+          profile_id,
+          allowed_branch,
+          start_date,
+          end_date,
+          created_at,
+          staff_profiles (
+            full_name,
+            email
+          )
+        `)
+        .order("created_at", { ascending: false });
+      F._branchDelegations = (!error && data) ? data : [];
+    } else {
+      F._branchDelegations = [];
+    }
+  } catch (e) {
+    F._hasTempCrossAccess = false;
+    F._branchDelegations = [];
+  }
 
   /* ---- install live roster override, then load nearby months ---- */
   if (!F._rosterPatched) {

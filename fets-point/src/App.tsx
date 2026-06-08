@@ -64,7 +64,7 @@ const LostAndFound = lazy(() => import('./components/LostAndFound').then(module 
 const RaiseACasePage = lazy(() => import('./components/RaiseACasePage').then(module => ({ default: module.RaiseACasePage })))
 
 const FetsProfilePage = lazy(() => import('./components/FetsProfile').then(module => ({ default: module.FetsProfile })))
-const CMAAvailabilityWidget = lazy(() => import('./components/CMAAvailabilityWidget').then(module => ({ default: module.CMAAvailabilityWidget })))
+const BranchDelegationWidget = lazy(() => import('./components/BranchDelegationWidget').then(module => ({ default: module.BranchDelegationWidget })))
 const GBPDashboard = lazy(() => import('./pages/GBPDashboard'))
 
 const queryClient = new QueryClient({
@@ -159,7 +159,7 @@ function AppContent() {
       if (activeTab === 'news-manager') return <NewsManager />;
       if (activeTab === 'lost-and-found') return <LostAndFound />;
       if (activeTab === 'fets-roster') return <FetsRoster />;
-      if (activeTab === 'cma-availability') return isMithun ? <CMAAvailabilityWidget /> : <MobileHome setActiveTab={setActiveTab} profile={profile} />;
+      if (activeTab === 'cma-availability' || activeTab === 'branch-delegation') return isMithun ? <BranchDelegationWidget /> : <MobileHome setActiveTab={setActiveTab} profile={profile} />;
       if (activeTab === 'gbp') return <GBPDashboard />;
     }
 
@@ -184,7 +184,7 @@ function AppContent() {
       'user-management': { component: <UserManagement onNavigate={setActiveTab} />, name: 'User Management' },
       'profile': { component: <FetsProfilePage />, name: 'Profile' },
       'fets-omni-ai': { component: <FetsIntelligence initialQuery={aiQuery} />, name: 'FETS AI' },
-      'cma-availability': { component: isMithun ? <CMAAvailabilityWidget /> : <CommandCentre onNavigate={setActiveTab} onAiQuery={(q: string) => { setAiQuery(q); setActiveTab('fets-intelligence'); }} />, name: 'CMA Availability' },
+      'branch-delegation': { component: isMithun ? <BranchDelegationWidget /> : <CommandCentre onNavigate={setActiveTab} onAiQuery={(q: string) => { setAiQuery(q); setActiveTab('fets-intelligence'); }} />, name: 'Branch Access Delegation' },
       'gbp': { component: <GBPDashboard />, name: 'Google Business' }
     }
 

@@ -934,21 +934,28 @@ function Icon({ name, size = 18, stroke = 2, className = "", style = {} }) {
 
 /* ---- segmented control (glass pill) ---- */
 function Segmented({ options, value, onChange, size = "md", activeColor }) {
-  const pad = size === "sm" ? "5px 11px" : "8px 16px";
-  const fs = size === "sm" ? 12 : 13;
+  const pad = size === "sm" ? "6px 14px" : "8px 18px";
+  const fs = size === "sm" ? 11.5 : 13;
+  const br = 9;
   return (
-    <div className="inset" style={{ display: "inline-flex", padding: 3, gap: 2, borderRadius: 999 }}>
+    <div className="inset" style={{ display: "inline-flex", padding: 3, gap: 3, borderRadius: br + 2, border: "1px solid var(--hairline)" }}>
       {options.map((o) => {
         const active = o.value === value;
+        const oColor = o.color || activeColor;
+        const bgGradient = oColor 
+          ? `linear-gradient(150deg, ${oColor}, color-mix(in oklch, ${oColor} 70%, black))` 
+          : "linear-gradient(150deg, var(--accent), var(--accent-2))";
         return (
           <button key={o.value} onClick={() => onChange(o.value)} className="tap"
             style={{
               border: "none", cursor: "pointer", padding: pad, fontSize: fs,
-              fontWeight: active ? 650 : 550, letterSpacing: "-0.01em", borderRadius: 999,
-              fontFamily: "var(--font)", display: "inline-flex", alignItems: "center", gap: 6,
-              color: active ? (activeColor || "var(--ink)") : "var(--ink-3)",
-              background: active ? (activeColor ? `color-mix(in oklch, ${activeColor} 22%, var(--glass-strong))` : "var(--glass-strong)") : "transparent",
-              boxShadow: active ? "var(--shadow)" : "none",
+              fontWeight: active ? 900 : 550, letterSpacing: active ? "-0.03em" : "-0.01em", borderRadius: br,
+              fontFamily: active ? '"Archivo Expanded", var(--font)' : "var(--font)",
+              display: "inline-flex", alignItems: "center", gap: 6,
+              color: active ? "var(--accent-ink)" : "var(--ink-3)",
+              background: active ? bgGradient : "transparent",
+              boxShadow: active ? "inset 0 1.5px 0 oklch(1 0 0 / 0.45), 0 6px 16px oklch(0 0 0 / 0.35)" : "none",
+              textTransform: active ? "uppercase" : "none",
             }}>
             {o.icon && <Icon name={o.icon} size={fs + 2} stroke={2.1} />}
             {o.label}
@@ -1390,7 +1397,23 @@ function LostFoundPanel({ branch }) {
   const [fCandidate, setFCandidate] = React.useState("");
   const [fContact, setFContact] = React.useState("");
   const [fExam, setFExam] = React.useState("");
-  const [fBranch, setFBranch] = React.useState(branch === "global" ? "calicut" : branch);
+  const isSuperAdmin = window.FETS?.user?.role === 'Super Admin';
+  const hasDelegation = !!window.FETS?._hasTempCrossAccess;
+  const userProfileBranch = window.FETS?._meBranch || 'cochin';
+  
+  const defaultFBranch = (isSuperAdmin || hasDelegation)
+    ? (branch === "global" ? "cochin" : branch)
+    : userProfileBranch;
+
+  const [fBranch, setFBranch] = React.useState(defaultFBranch);
+
+  React.useEffect(() => {
+    if (isSuperAdmin || hasDelegation) {
+      setFBranch(branch === "global" ? "cochin" : branch);
+    } else {
+      setFBranch(userProfileBranch);
+    }
+  }, [branch]);
 
   // Claim Modal States
   const [claimingItem, setClaimingItem] = React.useState(null);
@@ -1703,15 +1726,23 @@ function LostFoundPanel({ branch }) {
             </label>
           </div>
 
-          {branch === "global" && (
-            <label style={labelStyle}>
-              Select Target Center
-              <select value={fBranch} onChange={(e) => setFBranch(e.target.value)} style={inp}>
-                <option value="calicut">Calicut</option>
-                <option value="cochin">Cochin</option>
-              </select>
-            </label>
-          )}
+          <label style={labelStyle}>
+            Select Target Center
+            <select 
+              value={fBranch} 
+              onChange={(e) => setFBranch(e.target.value)} 
+              disabled={!isSuperAdmin && !hasDelegation}
+              style={{
+                ...inp,
+                opacity: (!isSuperAdmin && !hasDelegation) ? 0.65 : 1,
+                cursor: (!isSuperAdmin && !hasDelegation) ? "not-allowed" : "default",
+                background: (!isSuperAdmin && !hasDelegation) ? "var(--inset)" : "var(--glass-2)",
+              }}
+            >
+              <option value="calicut">Calicut</option>
+              <option value="cochin">Cochin</option>
+            </select>
+          </label>
 
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--inset)", padding: "8px 12px", borderRadius: 10, border: "1px solid var(--hairline)" }}>
             <span style={{ fontSize: 12, fontWeight: 650, color: "var(--ink)" }}>Is Perishable Item?</span>
@@ -7324,7 +7355,7 @@ const TOOLS = [
   { id: "news-manager", icon: "message", label: "News Manager", sub: "Announcements", legacy: true },
   { id: "system-manager", icon: "settings", label: "System Manager", sub: "Admin & config", legacy: true },
   { id: "user-management", icon: "shield", label: "User Management", sub: "Roles & permissions", legacy: true },
-  { id: "cma-availability", icon: "calendar", label: "CMA Availability", sub: "Prometric seats", legacy: true },
+  { id: "branch-delegation", icon: "shield", label: "Branch Access Delegation", sub: "Temporary access override", legacy: true },
 ];
 
 /* per-branch tint for the subtle top-bar indicator */
@@ -7388,10 +7419,10 @@ function TopNav({ active, onNavigate, branch, setBranch, t, setTweak, onTools, o
         <span className="topnav-branch">today</span>
       </span>
       <div className="topnav-seg">
-        <Segmented value={branch} onChange={setBranch} size="sm" activeColor={BRANCH_TINT[branch]} options={[
-          { value: "calicut", label: "Calicut" },
-          { value: "cochin", label: "Cochin" },
-          { value: "global", label: "All" },
+        <Segmented value={branch} onChange={setBranch} size="sm" options={[
+          { value: "calicut", label: "Calicut", color: BRANCH_TINT.calicut },
+          { value: "cochin", label: "Cochin", color: BRANCH_TINT.cochin },
+          { value: "global", label: "All", color: BRANCH_TINT.global },
         ]} />
       </div>
       {window.FETS.isAdmin && (
@@ -7992,7 +8023,10 @@ function AccentSwatches({ value, onChange }) {
 
 function App({ bridge, onLogout }) {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
-  const [branch, setBranch] = React.useState("calicut");
+  const [branch, setBranch] = React.useState(() => {
+    const base = window.FETS?._meBaseBranch || "calicut";
+    return base === "global" ? "global" : base;
+  });
   const [drawer, setDrawer] = React.useState(null);  // 'outlook' | 'vault' | 'help'
   const [tools, setTools] = React.useState(false);
   const [burger, setBurger] = React.useState(false);
