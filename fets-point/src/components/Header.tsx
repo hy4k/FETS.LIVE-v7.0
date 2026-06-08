@@ -14,6 +14,7 @@ import { canSwitchBranches, formatBranchName, getAvailableBranches, isMithunEmai
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppModules } from '../hooks/useAppModules';
 import { LocationSelectorThread } from './LocationSelectorThread';
+import { supabase } from '../lib/supabase';
 
 interface HeaderProps {
   isMobile?: boolean;
@@ -53,7 +54,32 @@ export function Header({ isMobile = false, sidebarOpen = false, setSidebarOpen, 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const availableBranches = getAvailableBranches(profile?.email, profile?.role);
-  const canSwitch = canSwitchBranches(profile?.email, profile?.role);
+  const [hasDelegation, setHasDelegation] = useState(false);
+  const isSuperAdmin = profile?.role === 'super_admin';
+
+  useEffect(() => {
+    if (profile?.id && !isSuperAdmin) {
+      const checkDelegation = async () => {
+        try {
+          const nowIso = new Date().toISOString();
+          const { data } = await supabase
+            .from('staff_branch_delegations')
+            .select('id')
+            .eq('profile_id', profile.id)
+            .lte('start_date', nowIso)
+            .gte('end_date', nowIso);
+          setHasDelegation(data && data.length > 0);
+        } catch (e) {
+          setHasDelegation(false);
+        }
+      };
+      checkDelegation();
+    } else {
+      setHasDelegation(false);
+    }
+  }, [profile?.id, isSuperAdmin]);
+
+  const canSwitch = isSuperAdmin || hasDelegation || activeTab === 'news-manager' || activeTab === 'news';
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {

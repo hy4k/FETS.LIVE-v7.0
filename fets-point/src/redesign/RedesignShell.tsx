@@ -933,12 +933,21 @@ function Icon({ name, size = 18, stroke = 2, className = "", style = {} }) {
 }
 
 /* ---- segmented control (glass pill) ---- */
-function Segmented({ options, value, onChange, size = "md", activeColor }) {
+function Segmented({ options, value, onChange, size = "md", activeColor, disabled }) {
   const pad = size === "sm" ? "6px 14px" : "8px 18px";
   const fs = size === "sm" ? 11.5 : 13;
   const br = 9;
   return (
-    <div className="inset" style={{ display: "inline-flex", padding: 3, gap: 3, borderRadius: br + 2, border: "1px solid var(--hairline)" }}>
+    <div className="inset" style={{ 
+      display: "inline-flex", 
+      padding: 3, 
+      gap: 3, 
+      borderRadius: br + 2, 
+      border: "1px solid var(--hairline)",
+      opacity: disabled ? 0.65 : 1,
+      pointerEvents: disabled ? "none" : "auto",
+      cursor: disabled ? "not-allowed" : "default"
+    }}>
       {options.map((o) => {
         const active = o.value === value;
         const oColor = o.color || activeColor;
@@ -946,9 +955,10 @@ function Segmented({ options, value, onChange, size = "md", activeColor }) {
           ? `linear-gradient(150deg, ${oColor}, color-mix(in oklch, ${oColor} 70%, black))` 
           : "linear-gradient(150deg, var(--accent), var(--accent-2))";
         return (
-          <button key={o.value} onClick={() => onChange(o.value)} className="tap"
+          <button key={o.value} onClick={() => !disabled && onChange(o.value)} className="tap"
+            disabled={disabled}
             style={{
-              border: "none", cursor: "pointer", padding: pad, fontSize: fs,
+              border: "none", cursor: disabled ? "not-allowed" : "pointer", padding: pad, fontSize: fs,
               fontWeight: active ? 900 : 550, letterSpacing: active ? "-0.03em" : "-0.01em", borderRadius: br,
               fontFamily: active ? '"Archivo Expanded", var(--font)' : "var(--font)",
               display: "inline-flex", alignItems: "center", gap: 6,
@@ -7419,11 +7429,13 @@ function TopNav({ active, onNavigate, branch, setBranch, t, setTweak, onTools, o
         <span className="topnav-branch">today</span>
       </span>
       <div className="topnav-seg">
-        <Segmented value={branch} onChange={setBranch} size="sm" options={[
-          { value: "calicut", label: "Calicut", color: BRANCH_TINT.calicut },
-          { value: "cochin", label: "Cochin", color: BRANCH_TINT.cochin },
-          { value: "global", label: "All", color: BRANCH_TINT.global },
-        ]} />
+        <Segmented value={branch} onChange={setBranch} size="sm" 
+          disabled={!window.FETS?.isAdmin && !window.FETS?._hasTempCrossAccess && active !== "news"}
+          options={[
+            { value: "calicut", label: "Calicut", color: BRANCH_TINT.calicut },
+            { value: "cochin", label: "Cochin", color: BRANCH_TINT.cochin },
+            { value: "global", label: "All", color: BRANCH_TINT.global },
+          ]} />
       </div>
       {window.FETS.isAdmin && (
         <button onClick={onTools} title="All modules" className="tap glass-2" style={{
@@ -8039,6 +8051,17 @@ function App({ bridge, onLogout }) {
     r.style.setProperty("--accent", acc);
     r.style.setProperty("--density", DENSITY_VAL[t.density] ?? 1);
   }, [t]);
+
+  React.useEffect(() => {
+    const isLocked = !window.FETS?.isAdmin && !window.FETS?._hasTempCrossAccess && active !== "news";
+    if (isLocked) {
+      const base = window.FETS?._meBaseBranch || "calicut";
+      const profileBranch = base === "global" ? "global" : base;
+      if (branch !== profileBranch) {
+        setBranch(profileBranch);
+      }
+    }
+  }, [active, branch]);
 
   const handlePick = (it) => {
     if (it.nav) { setActive(it.id); return; }

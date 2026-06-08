@@ -37,7 +37,33 @@ export function MobileHome({ setActiveTab, profile }: MobileHomeProps) {
 
   const isMithun = isMithunEmail(profile?.email);
   const availableBranches = getAvailableBranches(profile?.email, profile?.role);
-  const canSwitch = canSwitchBranches(profile?.email, profile?.role);
+  
+  const [hasDelegation, setHasDelegation] = useState(false);
+  const isSuperAdmin = profile?.role === 'super_admin';
+
+  useEffect(() => {
+    if (profile?.id && !isSuperAdmin) {
+      const checkDelegation = async () => {
+        try {
+          const nowIso = new Date().toISOString();
+          const { data } = await supabase
+            .from('staff_branch_delegations')
+            .select('id')
+            .eq('profile_id', profile.id)
+            .lte('start_date', nowIso)
+            .gte('end_date', nowIso);
+          setHasDelegation(data && data.length > 0);
+        } catch (e) {
+          setHasDelegation(false);
+        }
+      };
+      checkDelegation();
+    } else {
+      setHasDelegation(false);
+    }
+  }, [profile?.id, isSuperAdmin]);
+
+  const canSwitch = isSuperAdmin || hasDelegation;
 
   const branches = [
     { id: 'calicut', label: 'Calicut HQ', sub: 'Kerala, India' },
@@ -131,16 +157,25 @@ export function MobileHome({ setActiveTab, profile }: MobileHomeProps) {
             <div className="mt-2 text-[#FACC15]/30 text-[8px] tracking-[0.3em] uppercase font-medium">v5.0</div>
           </div>
 
-          <button
-            onClick={() => setShowBranchPicker(true)}
-            className="flex items-center gap-2 px-3 py-2 bg-white/5 rounded-xl border border-white/10 active:scale-95 transition-transform mt-2"
-          >
-            <MapPin size={12} className="text-[#FACC15]/60" />
-            <span className="text-[#FACC15] font-bold text-[9px] uppercase tracking-widest">
-              {activeBranch === 'calicut' ? 'CLT' : activeBranch === 'cochin' ? 'COK' : 'ALL'}
-            </span>
-            <ChevronDown size={10} className="text-[#FACC15]/30" />
-          </button>
+          {canSwitch ? (
+            <button
+              onClick={() => setShowBranchPicker(true)}
+              className="flex items-center gap-2 px-3 py-2 bg-white/5 rounded-xl border border-white/10 active:scale-95 transition-transform mt-2"
+            >
+              <MapPin size={12} className="text-[#FACC15]/60" />
+              <span className="text-[#FACC15] font-bold text-[9px] uppercase tracking-widest">
+                {activeBranch === 'calicut' ? 'CLT' : activeBranch === 'cochin' ? 'COK' : 'ALL'}
+              </span>
+              <ChevronDown size={10} className="text-[#FACC15]/30" />
+            </button>
+          ) : (
+            <div className="flex items-center gap-2 px-3 py-2 bg-white/5 rounded-xl border border-white/5 opacity-65 mt-2 select-none">
+              <MapPin size={12} className="text-[#FACC15]/40" />
+              <span className="text-[#FACC15]/60 font-bold text-[9px] uppercase tracking-widest">
+                {activeBranch === 'calicut' ? 'CLT' : activeBranch === 'cochin' ? 'COK' : 'ALL'}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Date */}

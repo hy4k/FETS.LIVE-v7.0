@@ -79,7 +79,7 @@ const queryClient = new QueryClient({
 
 function AppContent() {
   const { user, loading, profile, signOut } = useAuth()
-  const { activeBranch, getBranchTheme } = useBranch()
+  const { activeBranch, setActiveBranch, getBranchTheme } = useBranch()
   const [activeTab, setActiveTab] = useState('command-center')
   const isMobile = useIsMobile()
   const [isRecovering, setIsRecovering] = useState(false)
@@ -87,6 +87,44 @@ function AppContent() {
   const isMithun = isMithunEmail(profile?.email)
   const userName = profile?.full_name || profile?.name || (profile?.email || user?.email || '').split('@')[0] || 'User'
   const userEmail = profile?.email || user?.email || ''
+
+  const [hasDelegation, setHasDelegation] = useState(false)
+
+  useEffect(() => {
+    if (!user || !profile || profile.role === 'super_admin') {
+      setHasDelegation(false)
+      return
+    }
+    const checkDelegation = async () => {
+      try {
+        const nowIso = new Date().toISOString()
+        const { data } = await supabase
+          .from('staff_branch_delegations')
+          .select('id')
+          .eq('profile_id', profile.id)
+          .lte('start_date', nowIso)
+          .gte('end_date', nowIso)
+        setHasDelegation(data && data.length > 0)
+      } catch (e) {
+        setHasDelegation(false)
+      }
+    }
+    checkDelegation()
+  }, [user, profile])
+
+  useEffect(() => {
+    if (!user || !profile || loading) return
+    const isSuperAdmin = profile.role === 'super_admin'
+    if (isSuperAdmin || hasDelegation) return
+
+    // Allow switching branch on news page
+    if (activeTab === 'news' || activeTab === 'news-manager') return
+
+    const baseBranch = profile.branch_assigned || 'calicut'
+    if (baseBranch !== 'global' && baseBranch !== 'both' && activeBranch !== baseBranch) {
+      setActiveBranch(baseBranch as any)
+    }
+  }, [activeTab, activeBranch, profile, user, hasDelegation, loading])
 
   const handleLogout = async () => {
     try { localStorage.removeItem('fets-session-start') } catch {}

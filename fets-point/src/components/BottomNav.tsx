@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { LayoutDashboard, CalendarDays, AlertCircle, Brain, Globe, X, MapPin, CheckCircle2, GraduationCap, Briefcase, Building2, Shield } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useBranch } from '../hooks/useBranch';
 import { useAppModules } from '../hooks/useAppModules';
 import { useAuth } from '../hooks/useAuth';
 import { isMithunEmail } from '../utils/authUtils';
+import { supabase } from '../lib/supabase';
 
 interface BottomNavProps {
   activeTab: string;
@@ -17,6 +18,33 @@ export function BottomNav({ activeTab, setActiveTab }: BottomNavProps) {
   const { modules } = useAppModules();
   const [showBranchPicker, setShowBranchPicker] = useState(false);
   const isMithun = isMithunEmail(profile?.email);
+
+  const [hasDelegation, setHasDelegation] = useState(false);
+  const isSuperAdmin = profile?.role === 'super_admin';
+
+  useEffect(() => {
+    if (profile?.id && !isSuperAdmin) {
+      const checkDelegation = async () => {
+        try {
+          const nowIso = new Date().toISOString();
+          const { data } = await supabase
+            .from('staff_branch_delegations')
+            .select('id')
+            .eq('profile_id', profile.id)
+            .lte('start_date', nowIso)
+            .gte('end_date', nowIso);
+          setHasDelegation(data && data.length > 0);
+        } catch (e) {
+          setHasDelegation(false);
+        }
+      };
+      checkDelegation();
+    } else {
+      setHasDelegation(false);
+    }
+  }, [profile?.id, isSuperAdmin]);
+
+  const canSwitch = isSuperAdmin || hasDelegation || activeTab === 'news-manager' || activeTab === 'news';
 
   const branches = [
     { id: 'calicut', label: 'Calicut HQ', sub: 'Kerala, India' },
@@ -80,17 +108,19 @@ export function BottomNav({ activeTab, setActiveTab }: BottomNavProps) {
           })}
 
           {/* BRANCH SELECTOR BUTTON */}
-          <button
-            onClick={() => setShowBranchPicker(true)}
-            className="relative flex flex-col items-center justify-center w-14 h-14"
-          >
-            <div className="p-2 rounded-xl bg-[#FACC15]/10 border border-[#FACC15]/20 text-[#FACC15]">
-              <Globe size={20} />
-            </div>
-            <span className="text-[7px] font-bold uppercase tracking-wider mt-0.5 text-[#FACC15]/60">
-              Node
-            </span>
-          </button>
+          {canSwitch && (
+            <button
+              onClick={() => setShowBranchPicker(true)}
+              className="relative flex flex-col items-center justify-center w-14 h-14"
+            >
+              <div className="p-2 rounded-xl bg-[#FACC15]/10 border border-[#FACC15]/20 text-[#FACC15]">
+                <Globe size={20} />
+              </div>
+              <span className="text-[7px] font-bold uppercase tracking-wider mt-0.5 text-[#FACC15]/60">
+                Node
+              </span>
+            </button>
+          )}
         </div>
       </div>
 
