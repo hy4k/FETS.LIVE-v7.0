@@ -15,6 +15,34 @@ import { formatDistanceToNow } from 'date-fns'
 export function MobileIncidentManager() {
     const { profile, user } = useAuth()
     const { activeBranch } = useBranch()
+
+    const isSuperAdmin = profile?.role === 'super_admin';
+    const [hasDelegation, setHasDelegation] = useState(false);
+
+    useEffect(() => {
+        if (profile?.id && !isSuperAdmin) {
+            const checkDelegation = async () => {
+                try {
+                    const nowIso = new Date().toISOString();
+                    const { data } = await supabase
+                        .from('staff_branch_delegations')
+                        .select('id')
+                        .eq('profile_id', profile.id)
+                        .lte('start_date', nowIso)
+                        .gte('end_date', nowIso);
+                    setHasDelegation(data && data.length > 0);
+                } catch (e) {
+                    setHasDelegation(false);
+                }
+            };
+            checkDelegation();
+        } else {
+            setHasDelegation(false);
+        }
+    }, [profile?.id, isSuperAdmin]);
+
+    const userProfileBranch = profile?.branch_assigned || 'cochin';
+    const canCreateHere = isSuperAdmin || hasDelegation || activeBranch === userProfileBranch;
     const [incidents, setIncidents] = useState<any[]>([])
     const [selectedId, setSelectedId] = useState<string | null>(null)
     const [showCreate, setShowCreate] = useState(false)
@@ -46,6 +74,10 @@ export function MobileIncidentManager() {
             if (Object.keys(caseData.followUpData).length > 0) metadata.follow_up_data = caseData.followUpData
             if (caseData.vendorInfo) metadata.vendor_info = caseData.vendorInfo
 
+            const targetBranch = (isSuperAdmin || hasDelegation)
+                ? (activeBranch === 'global' ? 'calicut' : activeBranch)
+                : userProfileBranch;
+
             // CRITICAL FIX: Ensure user_id matches Supabase Auth and branch is correctly set
             const { error } = await supabase.from('incidents').insert({
                 title: caseData.title,
@@ -55,7 +87,7 @@ export function MobileIncidentManager() {
                 severity: 'minor',
                 user_id: user?.id, 
                 reporter: profile?.full_name || 'Staff',
-                branch_location: activeBranch === 'global' ? 'calicut' : activeBranch,
+                branch_location: targetBranch,
                 metadata: Object.keys(metadata).length > 0 ? metadata : null
             });
 
@@ -134,8 +166,17 @@ export function MobileIncidentManager() {
                         <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.4em] mt-2 px-1">Operations Log</p>
                     </div>
                     <button 
-                        onClick={() => setShowCreate(true)}
-                        className="w-14 h-14 rounded-2xl bg-[#3E2723] text-amber-500 shadow-xl flex items-center justify-center active:scale-90 transition-transform"
+                        onClick={() => {
+                            if (!canCreateHere) {
+                                toast.error(`You can only raise cases for your home branch (${userProfileBranch.toUpperCase()})`);
+                                return;
+                            }
+                            setShowCreate(true);
+                        }}
+                        className={`w-14 h-14 rounded-2xl bg-[#3E2723] text-amber-500 shadow-xl flex items-center justify-center transition-transform ${
+                            canCreateHere ? 'active:scale-90' : 'opacity-50 cursor-not-allowed'
+                        }`}
+                        title={!canCreateHere ? `Switch back to ${userProfileBranch.toUpperCase()} to raise a case` : undefined}
                     >
                         <Plus size={28} />
                     </button>

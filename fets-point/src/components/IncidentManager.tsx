@@ -76,6 +76,34 @@ export default function IncidentManager() {
     const { profile } = useAuth()
     const { activeBranch } = useBranch()
 
+    const isSuperAdmin = profile?.role === 'super_admin';
+    const [hasDelegation, setHasDelegation] = useState(false);
+
+    useEffect(() => {
+        if (profile?.id && !isSuperAdmin) {
+            const checkDelegation = async () => {
+                try {
+                    const nowIso = new Date().toISOString();
+                    const { data } = await supabase
+                        .from('staff_branch_delegations')
+                        .select('id')
+                        .eq('profile_id', profile.id)
+                        .lte('start_date', nowIso)
+                        .gte('end_date', nowIso);
+                    setHasDelegation(data && data.length > 0);
+                } catch (e) {
+                    setHasDelegation(false);
+                }
+            };
+            checkDelegation();
+        } else {
+            setHasDelegation(false);
+        }
+    }, [profile?.id, isSuperAdmin]);
+
+    const userProfileBranch = profile?.branch_assigned || 'cochin';
+    const canCreateHere = isSuperAdmin || hasDelegation || activeBranch === userProfileBranch;
+
     // Data
     const [incidents, setIncidents] = useState<Incident[]>([])
     const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -244,6 +272,10 @@ export default function IncidentManager() {
             metadata.vendor_info = caseData.vendorInfo
         }
 
+        const targetBranch = (isSuperAdmin || hasDelegation)
+            ? (activeBranch === 'global' ? 'calicut' : activeBranch)
+            : userProfileBranch;
+
         const { error } = await supabase.from('incidents').insert({
             title: caseData.title,
             description: caseData.description,
@@ -252,7 +284,7 @@ export default function IncidentManager() {
             severity: 'minor',
             user_id: profile?.id,
             reporter: profile?.full_name || 'Staff',
-            branch_location: activeBranch === 'global' ? 'calicut' : activeBranch,
+            branch_location: targetBranch,
             metadata: Object.keys(metadata).length > 0 ? metadata : null
         })
 
@@ -362,10 +394,17 @@ export default function IncidentManager() {
 
                 {/* Raise A Case Button - Top Right */}
                 <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className="rac-create-btn"
-                    onClick={() => setShowCreate(true)}
+                    whileHover={canCreateHere ? { scale: 1.05 } : {}}
+                    whileTap={canCreateHere ? { scale: 0.95 } : {}}
+                    className={`rac-create-btn ${!canCreateHere ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    onClick={() => {
+                        if (!canCreateHere) {
+                            toast.error(`You can only raise cases for your home branch (${userProfileBranch.toUpperCase()})`);
+                            return;
+                        }
+                        setShowCreate(true);
+                    }}
+                    title={!canCreateHere ? `Switch back to ${userProfileBranch.toUpperCase()} to raise a case` : undefined}
                 >
                     <div className="rac-create-btn-glow" />
                     <Plus className="w-5 h-5" />
