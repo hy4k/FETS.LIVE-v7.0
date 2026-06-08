@@ -79,7 +79,7 @@ export function Header({ isMobile = false, sidebarOpen = false, setSidebarOpen, 
     }
   }, [profile?.id, isSuperAdmin]);
 
-  const canSwitch = isSuperAdmin || hasDelegation || activeTab === 'news-manager' || activeTab === 'news';
+  const canSwitch = true;
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -213,7 +213,7 @@ export function Header({ isMobile = false, sidebarOpen = false, setSidebarOpen, 
             <p className="text-sm font-black text-white truncate">{profile?.full_name}</p>
             <p className="text-[9px] font-bold text-amber-500 uppercase tracking-widest mt-0.5">{profile?.role?.replace('_', ' ')}</p>
           </div>
-          {canSwitch && (
+          {canSwitch && activeTab !== 'news-manager' && activeTab !== 'news' && (
             <button
               onClick={() => setIsBranchDropdownOpen(!isBranchDropdownOpen)}
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-all text-[9px] font-bold uppercase tracking-widest ${
@@ -449,7 +449,7 @@ export function Header({ isMobile = false, sidebarOpen = false, setSidebarOpen, 
 
           {/* RIGHT: COMMAND CONTROLS */}
           <div className="flex items-center justify-end gap-3 md:gap-4 shrink-0 w-[360px]">
-            {!isMobile && (
+            {!isMobile && activeTab !== 'news-manager' && activeTab !== 'news' && (
               <LocationSelectorThread
                 activeBranch={activeBranch}
                 setActiveBranch={setActiveBranch as any}

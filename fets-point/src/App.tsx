@@ -112,19 +112,7 @@ function AppContent() {
     checkDelegation()
   }, [user, profile])
 
-  useEffect(() => {
-    if (!user || !profile || loading) return
-    const isSuperAdmin = profile.role === 'super_admin'
-    if (isSuperAdmin || hasDelegation) return
 
-    // Allow switching branch on news page
-    if (activeTab === 'news' || activeTab === 'news-manager') return
-
-    const baseBranch = profile.branch_assigned || 'calicut'
-    if (baseBranch !== 'global' && baseBranch !== 'both' && activeBranch !== baseBranch) {
-      setActiveBranch(baseBranch as any)
-    }
-  }, [activeTab, activeBranch, profile, user, hasDelegation, loading])
 
   const handleLogout = async () => {
     try { localStorage.removeItem('fets-session-start') } catch {}

@@ -44,7 +44,7 @@ export function BottomNav({ activeTab, setActiveTab }: BottomNavProps) {
     }
   }, [profile?.id, isSuperAdmin]);
 
-  const canSwitch = isSuperAdmin || hasDelegation || activeTab === 'news-manager' || activeTab === 'news';
+  const canSwitch = activeTab !== 'news-manager' && activeTab !== 'news';
 
   const branches = [
     { id: 'calicut', label: 'Calicut HQ', sub: 'Kerala, India' },

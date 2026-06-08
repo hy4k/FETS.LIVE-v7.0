@@ -63,7 +63,7 @@ export function MobileHome({ setActiveTab, profile }: MobileHomeProps) {
     }
   }, [profile?.id, isSuperAdmin]);
 
-  const canSwitch = isSuperAdmin || hasDelegation;
+  const canSwitch = true;
 
   const branches = [
     { id: 'calicut', label: 'Calicut HQ', sub: 'Kerala, India' },

@@ -5795,7 +5795,25 @@ const caseInput = {
 function RaiseCaseForm({ branch, onSubmit }) {
   const [cat, setCat] = React.useState("Technical");
   const [prio, setPrio] = React.useState("Medium");
-  const [br, setBr] = React.useState(branch === "global" ? "calicut" : branch);
+  
+  const isSuperAdmin = !!window.FETS?.isAdmin;
+  const hasDelegation = !!window.FETS?._hasTempCrossAccess;
+  const userProfileBranch = window.FETS?._meBranch || 'cochin';
+
+  const defaultBr = (isSuperAdmin || hasDelegation)
+    ? (branch === "global" ? "cochin" : branch)
+    : userProfileBranch;
+
+  const [br, setBr] = React.useState(defaultBr);
+
+  React.useEffect(() => {
+    if (isSuperAdmin || hasDelegation) {
+      setBr(branch === "global" ? "cochin" : branch);
+    } else {
+      setBr(userProfileBranch);
+    }
+  }, [branch]);
+
   const [vendor, setVendor] = React.useState("");
   const [subject, setSubject] = React.useState("");
   const [desc, setDesc] = React.useState("");
@@ -5827,7 +5845,9 @@ function RaiseCaseForm({ branch, onSubmit }) {
         </div>
         <div>
           <FieldLabel>Centre</FieldLabel>
-          <ChipRow options={["calicut", "cochin"]} value={br} onChange={setBr} />
+          <div style={{ opacity: (isSuperAdmin || hasDelegation) ? 1 : 0.65, pointerEvents: (isSuperAdmin || hasDelegation) ? "auto" : "none" }}>
+            <ChipRow options={["calicut", "cochin"]} value={br} onChange={setBr} />
+          </div>
         </div>
       </div>
       <div>
@@ -7428,15 +7448,16 @@ function TopNav({ active, onNavigate, branch, setBranch, t, setTweak, onTools, o
         <span className="tabnum" style={{ fontSize: 13.5, fontWeight: 750, color: "var(--ink)" }}>{candToday}</span>
         <span className="topnav-branch">today</span>
       </span>
-      <div className="topnav-seg">
-        <Segmented value={branch} onChange={setBranch} size="sm" 
-          disabled={!window.FETS?.isAdmin && !window.FETS?._hasTempCrossAccess && active !== "news"}
-          options={[
-            { value: "calicut", label: "Calicut", color: BRANCH_TINT.calicut },
-            { value: "cochin", label: "Cochin", color: BRANCH_TINT.cochin },
-            { value: "global", label: "All", color: BRANCH_TINT.global },
-          ]} />
-      </div>
+      {active !== "news" && (
+        <div className="topnav-seg">
+          <Segmented value={branch} onChange={setBranch} size="sm" 
+            options={[
+              { value: "calicut", label: "Calicut", color: BRANCH_TINT.calicut },
+              { value: "cochin", label: "Cochin", color: BRANCH_TINT.cochin },
+              { value: "global", label: "All", color: BRANCH_TINT.global },
+            ]} />
+        </div>
+      )}
       {window.FETS.isAdmin && (
         <button onClick={onTools} title="All modules" className="tap glass-2" style={{
           display: "inline-flex", alignItems: "center", gap: 8, height: 36, padding: "0 14px", borderRadius: 10,
@@ -7858,7 +7879,16 @@ function TheLabPage({ branch }) {
   const [loading, setLoading] = React.useState(true);
   const [type, setType] = React.useState("handover");
   const [text, setText] = React.useState("");
-  const [center, setCenter] = React.useState(window.FETS.user.shift && window.FETS.user.shift.branch ? window.FETS.user.shift.branch : "all");
+
+  const isSuperAdmin = !!window.FETS?.isAdmin;
+  const hasDelegation = !!window.FETS?._hasTempCrossAccess;
+  const userProfileBranch = window.FETS?._meBranch || 'cochin';
+
+  const defaultCenter = (isSuperAdmin || hasDelegation)
+    ? (window.FETS.user.shift && window.FETS.user.shift.branch ? window.FETS.user.shift.branch : "all")
+    : userProfileBranch;
+
+  const [center, setCenter] = React.useState(defaultCenter);
   const [exam, setExam] = React.useState(null);
   const [compliance, setCompliance] = React.useState(false);
   const [attachments, setAttachments] = React.useState([]);
@@ -7923,7 +7953,16 @@ function TheLabPage({ branch }) {
           ); })}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <select value={center} onChange={(e) => setCenter(e.target.value)} style={inp}>
+          <select 
+            value={center} 
+            onChange={(e) => setCenter(e.target.value)} 
+            disabled={!isSuperAdmin && !hasDelegation}
+            style={{
+              ...inp,
+              opacity: (!isSuperAdmin && !hasDelegation) ? 0.65 : 1,
+              pointerEvents: (isSuperAdmin || hasDelegation) ? "auto" : "none"
+            }}
+          >
             {LAB_CENTERS.map((c) => <option key={c} value={c}>{LAB_CLABEL[c]}</option>)}
           </select>
           <button onClick={() => setCompliance((v) => !v)} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 12px", borderRadius: 10, cursor: "pointer", border: `1px solid ${compliance ? "color-mix(in oklch, var(--bad) 45%, transparent)" : "var(--hairline)"}`, background: compliance ? "color-mix(in oklch, var(--bad) 14%, transparent)" : "transparent", color: compliance ? "var(--bad)" : "var(--ink-3)", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 650 }}><Icon name="shield" size={14} /> Compliance</button>
@@ -8052,16 +8091,7 @@ function App({ bridge, onLogout }) {
     r.style.setProperty("--density", DENSITY_VAL[t.density] ?? 1);
   }, [t]);
 
-  React.useEffect(() => {
-    const isLocked = !window.FETS?.isAdmin && !window.FETS?._hasTempCrossAccess && active !== "news";
-    if (isLocked) {
-      const base = window.FETS?._meBaseBranch || "calicut";
-      const profileBranch = base === "global" ? "global" : base;
-      if (branch !== profileBranch) {
-        setBranch(profileBranch);
-      }
-    }
-  }, [active, branch]);
+
 
   const handlePick = (it) => {
     if (it.nav) { setActive(it.id); return; }
