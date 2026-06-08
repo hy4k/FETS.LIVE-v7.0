@@ -449,3 +449,21 @@
   .fets-redesign-root .topnav-seg button { padding: 4px 8px !important; font-size: 11px !important; }
   .fets-redesign-root .main-scroll { padding-left: 14px !important; padding-right: 14px !important; }
 }
+
+/* ============================================================
+   BLINKING NOTIFICATIONS FOR ROSTER CELLS
+   ============================================================ */
+@keyframes fetsBlink {
+  0%, 100% { opacity: 0.45; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.3); }
+}
+.fets-redesign-root .blink-blue {
+  animation: fetsBlink 1s infinite ease-in-out;
+  background: #00ddff !important;
+  box-shadow: 0 0 8px #00ddff, 0 0 15px #00ddff !important;
+}
+.fets-redesign-root .blink-red {
+  animation: fetsBlink 1s infinite ease-in-out;
+  background: #ff3344 !important;
+  box-shadow: 0 0 8px #ff3344, 0 0 15px #ff3344 !important;
+}

@@ -408,6 +408,67 @@ export async function dbSetRosterOtById(pid: string, date: string, ot: number) {
   }
 }
 
+function formatTimeForDb(t: string) {
+  if (!t) return null;
+  const parts = t.split(":");
+  if (parts.length >= 2) {
+    const hh = parts[0].padStart(2, "0");
+    const mm = parts[1].padStart(2, "0");
+    const ss = parts[2] ? parts[2].padStart(2, "0") : "00";
+    return `${hh}:${mm}:${ss}`;
+  }
+  return t;
+}
+
+async function revertRosterChangesForClaim(claim: any) {
+  if (!claim) return;
+  const pid = claim.profile_id;
+  const date = claim.date;
+  const toilPayout = claim.toil_payout;
+  const name = Object.keys(F()._staffIdByName).find(k => F()._staffIdByName[k] === pid);
+
+  if (toilPayout) {
+    let tDates = [];
+    if (claim.notes && claim.notes.trim().startsWith("{")) {
+      try {
+        const parsed = JSON.parse(claim.notes);
+        tDates = parsed.toil_dates || [];
+      } catch (e) {}
+    } else if (Array.isArray(claim.toil_dates)) {
+      tDates = claim.toil_dates;
+    } else if (typeof claim.toil_dates === 'string') {
+      try {
+        tDates = JSON.parse(claim.toil_dates);
+      } catch (e) {}
+    }
+    for (const d of tDates) {
+      await dbSetRosterById(pid, d, "TOIL");
+      if (name) {
+        const dt = new Date(d + "T00:00:00");
+        const off = F().offsetOf ? F().offsetOf(dt) : null;
+        if (off != null && !isNaN(off)) {
+          F()._dbRoster = F()._dbRoster || {};
+          F()._dbRoster[name] = F()._dbRoster[name] || {};
+          F()._dbRoster[name][off] = { code: "TOIL", ot: 0 };
+        }
+      }
+    }
+  } else {
+    await dbSetRosterOtById(pid, date, 0);
+    if (name) {
+      const dt = new Date(date + "T00:00:00");
+      const off = F().offsetOf ? F().offsetOf(dt) : null;
+      if (off != null && !isNaN(off)) {
+        F()._dbRoster = F()._dbRoster || {};
+        F()._dbRoster[name] = F()._dbRoster[name] || {};
+        const existingCell = F()._dbRoster[name][off];
+        const existingCode = existingCell ? (typeof existingCell === 'string' ? existingCell : existingCell.code) : 'D';
+        F()._dbRoster[name][off] = { code: existingCode, ot: 0 };
+      }
+    }
+  }
+}
+
 export async function dbAddOtClaim(claim: any) {
   let notesValue = claim.notes || null;
   if (claim.toil_payout && claim.toil_dates && claim.toil_dates.length) {
@@ -419,8 +480,8 @@ export async function dbAddOtClaim(claim: any) {
   const row = {
     profile_id: claim.profile_id || F()._meId,
     date: claim.date,
-    start_time: claim.start_time || "17:00:00",
-    end_time: claim.end_time || null,
+    start_time: formatTimeForDb(claim.start_time || "17:00:00"),
+    end_time: claim.end_time ? formatTimeForDb(claim.end_time) : null,
     ot_hours: Number(claim.ot_hours) || 0,
     toil_payout: !!claim.toil_payout,
     notes: notesValue,
@@ -441,6 +502,10 @@ export async function dbAddOtClaim(claim: any) {
 
 export async function dbDeleteOtClaim(claimId: string) {
   try {
+    const { data: claimBefore } = await supabase.from("staff_ot_claims").select("*").eq("id", claimId).maybeSingle();
+    if (claimBefore && claimBefore.status === "approved") {
+      await revertRosterChangesForClaim(claimBefore);
+    }
     const { error } = await supabase.from("staff_ot_claims").delete().eq("id", claimId);
     if (error) throw error;
     await loadOtClaims(F());
@@ -542,6 +607,8 @@ export async function dbResolveOtClaim(claimId: string, status: "Approved" | "Re
   }
   
   try {
+    const { data: claimBefore } = await supabase.from("staff_ot_claims").select("*").eq("id", claimId).maybeSingle();
+    
     const { data: claim, error } = await supabase
       .from("staff_ot_claims")
       .update(updatePayload)
@@ -550,6 +617,10 @@ export async function dbResolveOtClaim(claimId: string, status: "Approved" | "Re
       .single();
     
     if (error) throw error;
+    
+    if (claimBefore && claimBefore.status === "approved" && dbStatus !== "approved") {
+      await revertRosterChangesForClaim(claimBefore);
+    }
     
     if (status === "Approved" && claim) {
       const pid = claim.profile_id;
@@ -616,19 +687,86 @@ export async function dbUpdateOtClaim(claimId: string, claim: any) {
       toil_dates: claim.toil_dates
     });
   }
-  const row = {
-    start_time: claim.start_time || "17:00:00",
-    end_time: claim.end_time || null,
-    ot_hours: Number(claim.ot_hours) || 0,
-    toil_payout: !!claim.toil_payout,
-    notes: notesValue,
-    status: "pending",
-    updated_at: new Date().toISOString()
-  };
+  
   try {
+    const { data: claimBefore } = await supabase.from("staff_ot_claims").select("*").eq("id", claimId).maybeSingle();
+    
+    const row = {
+      start_time: formatTimeForDb(claim.start_time || "17:00:00"),
+      end_time: claim.end_time ? formatTimeForDb(claim.end_time) : null,
+      ot_hours: Number(claim.ot_hours) || 0,
+      toil_payout: !!claim.toil_payout,
+      notes: notesValue,
+      status: claim.status || "pending",
+      updated_at: new Date().toISOString()
+    };
+    
     const { data, error } = await supabase.from("staff_ot_claims").update(row).eq("id", claimId).select().single();
     if (error) throw error;
+
+    if (claimBefore) {
+      const oldStatus = claimBefore.status;
+      const newStatus = row.status;
+      
+      if (oldStatus === "approved" && newStatus !== "approved") {
+        await revertRosterChangesForClaim(claimBefore);
+      }
+      else if (newStatus === "approved") {
+        if (oldStatus === "approved") {
+          await revertRosterChangesForClaim(claimBefore);
+        }
+        
+        const pid = data.profile_id;
+        const date = data.date;
+        const toilPayout = data.toil_payout;
+        const otHours = data.ot_hours;
+        const name = Object.keys(F()._staffIdByName).find(k => F()._staffIdByName[k] === pid);
+        
+        if (toilPayout) {
+          let tDates = [];
+          if (data.notes && data.notes.trim().startsWith("{")) {
+            try {
+              const parsed = JSON.parse(data.notes);
+              tDates = parsed.toil_dates || [];
+            } catch (e) {}
+          } else if (Array.isArray(claim.toil_dates)) {
+            tDates = claim.toil_dates;
+          } else if (typeof claim.toil_dates === 'string') {
+            try {
+              tDates = JSON.parse(claim.toil_dates);
+            } catch (e) {}
+          }
+          for (const d of tDates) {
+            await dbSetRosterById(pid, d, "TP");
+            if (name) {
+              const dt = new Date(d + "T00:00:00");
+              const off = F().offsetOf ? F().offsetOf(dt) : null;
+              if (off != null && !isNaN(off)) {
+                F()._dbRoster = F()._dbRoster || {};
+                F()._dbRoster[name] = F()._dbRoster[name] || {};
+                F()._dbRoster[name][off] = { code: "TP", ot: 0 };
+              }
+            }
+          }
+        } else if (otHours > 0) {
+          await dbSetRosterOtById(pid, date, otHours);
+          if (name) {
+            const dt = new Date(date + "T00:00:00");
+            const off = F().offsetOf ? F().offsetOf(dt) : null;
+            if (off != null && !isNaN(off)) {
+              F()._dbRoster = F()._dbRoster || {};
+              F()._dbRoster[name] = F()._dbRoster[name] || {};
+              const existingCell = F()._dbRoster[name][off];
+              const existingCode = existingCell ? (typeof existingCell === 'string' ? existingCell : existingCell.code) : 'D';
+              F()._dbRoster[name][off] = { code: existingCode, ot: otHours };
+            }
+          }
+        }
+      }
+    }
+    
     await loadOtClaims(F());
+    window.dispatchEvent(new Event("fets-roster-changed"));
     rtoast("OT/TOIL claim updated");
     return data;
   } catch (e) {

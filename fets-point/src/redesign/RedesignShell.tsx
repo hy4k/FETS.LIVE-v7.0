@@ -1411,6 +1411,7 @@ function LostFoundPanel({ branch }) {
   const isSuperAdmin = window.FETS?.user?.role === 'Super Admin';
   const hasDelegation = !!window.FETS?._hasTempCrossAccess;
   const userProfileBranch = window.FETS?._meBranch || 'cochin';
+  const isLocked = !isSuperAdmin && branch !== userProfileBranch;
   
   const defaultFBranch = (isSuperAdmin || hasDelegation)
     ? (branch === "global" ? "cochin" : branch)
@@ -1788,9 +1789,15 @@ function LostFoundPanel({ branch }) {
           </div>
         </div>
       ) : (
-        <button onClick={() => setAdding(true)} className="tap inset" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px", borderRadius: 14, cursor: "pointer", color: "var(--ink-2)", fontFamily: "var(--font)", fontSize: 13, fontWeight: 650, borderStyle: "dashed" }}>
-          <Icon name="plus" size={16} /> Log a found item
-        </button>
+        !isLocked ? (
+          <button onClick={() => setAdding(true)} className="tap inset" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px", borderRadius: 14, cursor: "pointer", color: "var(--ink-2)", fontFamily: "var(--font)", fontSize: 13, fontWeight: 650, borderStyle: "dashed" }}>
+            <Icon name="plus" size={16} /> Log a found item
+          </button>
+        ) : (
+          <div className="inset" style={{ padding: "12px", borderRadius: 14, textAlign: "center", color: "var(--ink-4)", fontSize: 13, fontWeight: 650, border: "1px dashed var(--hairline)" }}>
+            🔒 Log found item restricted (Locked to {capBranch(userProfileBranch)})
+          </div>
+        )
       )}
 
       {/* Claimant Input Form Modal */}
@@ -2090,24 +2097,48 @@ function LostFoundPanel({ branch }) {
 
                 {/* Handover & Actions */}
                 {it.status === "stored" ? (
-                  <button
-                    onClick={() => setClaimingItem(it)}
-                    className="tap"
-                    style={{
-                      flexShrink: 0,
-                      padding: "8px 12px",
-                      borderRadius: 10,
-                      border: "none",
-                      cursor: "pointer",
-                      fontFamily: "var(--font)",
-                      fontSize: 12,
-                      fontWeight: 700,
-                      color: "var(--accent-ink)",
-                      background: "var(--accent)"
-                    }}
-                  >
-                    Claim
-                  </button>
+                  !isLocked ? (
+                    <button
+                      onClick={() => setClaimingItem(it)}
+                      className="tap"
+                      style={{
+                        flexShrink: 0,
+                        padding: "8px 12px",
+                        borderRadius: 10,
+                        border: "none",
+                        cursor: "pointer",
+                        fontFamily: "var(--font)",
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: "var(--accent-ink)",
+                        background: "var(--accent)"
+                      }}
+                    >
+                      Claim
+                    </button>
+                  ) : (
+                    <span
+                      onClick={() => setViewingItem(it)}
+                      className="tap"
+                      style={{
+                        flexShrink: 0,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
+                        fontSize: 9.5,
+                        fontWeight: 800,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.03em",
+                        padding: "5px 9px",
+                        borderRadius: 99,
+                        color: sm.color,
+                        cursor: "pointer",
+                        background: `color-mix(in oklch, ${sm.color} 12%, transparent)`
+                      }}
+                    >
+                      {sm.label}
+                    </span>
+                  )
                 ) : (
                   <span
                     onClick={() => setViewingItem(it)}
@@ -2132,24 +2163,26 @@ function LostFoundPanel({ branch }) {
                   </span>
                 )}
                 
-                <button
-                  onClick={() => del(it)}
-                  title="Delete log"
-                  className="tap glass-2"
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 8,
-                    display: "grid",
-                    placeItems: "center",
-                    cursor: "pointer",
-                    color: "var(--bad)",
-                    border: "1px solid var(--hairline)",
-                    flexShrink: 0
-                  }}
-                >
-                  <Icon name="trash" size={14} />
-                </button>
+                {!isLocked && (
+                  <button
+                    onClick={() => del(it)}
+                    title="Delete log"
+                    className="tap glass-2"
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 8,
+                      display: "grid",
+                      placeItems: "center",
+                      cursor: "pointer",
+                      color: "var(--bad)",
+                      border: "1px solid var(--hairline)",
+                      flexShrink: 0
+                    }}
+                  >
+                    <Icon name="trash" size={14} />
+                  </button>
+                )}
               </div>
             );
           })
@@ -2836,6 +2869,10 @@ function DayDetailPanel({ date, branch }) {
    ===================================================================== */
 function CalendarStrip({ offsets, branch, onPick }) {
   const showBranch = branch === "global";
+  const isSuperAdmin = !!window.FETS?.isAdmin;
+  const userProfileBranch = window.FETS?._meBranch || 'cochin';
+  const isLocked = !isSuperAdmin && branch !== userProfileBranch;
+
   return (
     <div className="scroll-soft" style={{ overflowX: "auto", paddingBottom: 8 }}>
       <div style={{ display: "grid", gridTemplateColumns: `repeat(${offsets.length}, minmax(172px,1fr))`, gap: 12, minWidth: offsets.length * 176 }}>
@@ -2862,7 +2899,7 @@ function CalendarStrip({ offsets, branch, onPick }) {
                     : total > 0 && <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "4px 8px", borderRadius: 999, flexShrink: 0, background: "var(--inset)", color: "var(--ink-3)" }} title={`${total} candidates`}>
                         <Icon name="users" size={12} stroke={2.2} /><span className="tabnum mono" style={{ fontSize: 11.5, fontWeight: 700 }}>{total}</span>
                       </span>}
-                  {onPick && <button onClick={() => onPick(d)} title="Add / edit sessions" className="tap" style={{ width: 24, height: 24, borderRadius: 7, display: "grid", placeItems: "center", border: "1px solid var(--hairline)", background: "var(--inset)", color: "var(--ink-3)", cursor: "pointer", flexShrink: 0 }}><Icon name="plus" size={13} /></button>}
+                  {onPick && !isLocked && <button onClick={() => onPick(d)} title="Add / edit sessions" className="tap" style={{ width: 24, height: 24, borderRadius: 7, display: "grid", placeItems: "center", border: "1px solid var(--hairline)", background: "var(--inset)", color: "var(--ink-3)", cursor: "pointer", flexShrink: 0 }}><Icon name="plus" size={13} /></button>}
                 </div>
               </div>
               {isToday && total > 0 && (
@@ -3257,24 +3294,72 @@ function OtToilClaimDialog({ ctx, onClose }) {
   const d = ctx.date;
   const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   
-  const profileId = F()._meId;
+  const staffName = ctx.name || F()._meName || (F().user && F().user.name);
+  const profileId = F()._staffIdByName?.[staffName] || F()._meId;
   const rates = F()._staffRatesByProfileId?.[profileId] || { hourly_rate: 0, daily_rate: 0 };
-  const toilBalance = F()._meToilBalance || 0;
-  const meName = F()._meName || (F().user && F().user.name);
+  
+  const getStaffToilBalance = (name) => {
+    if (!name) return 0;
+    const dbRoster = F()._dbRoster?.[name] || {};
+    let toilEarned = 0;
+    let toilRedeemed = 0;
+    let toilPaid = 0;
+    Object.values(dbRoster).forEach((cell: any) => {
+      const code = cell ? (typeof cell === "string" ? cell : cell.code) : "";
+      const upper = String(code).toUpperCase();
+      if (upper === "TOIL") toilEarned++;
+      if (upper === "TR") toilRedeemed++;
+      if (upper === "TP") toilPaid++;
+    });
+    return toilEarned - toilRedeemed - toilPaid;
+  };
+  
+  const toilBalance = getStaffToilBalance(staffName);
+  const meName = staffName;
   
   const existingClaim = F()._otClaims?.find(c => c.profile_id === profileId && c.date === dateStr);
   
+  const cleanTime = (t) => {
+    if (!t) return "";
+    const parts = t.split(":");
+    if (parts.length >= 2) {
+      return `${parts[0].padStart(2, "0")}:${parts[1].padStart(2, "0")}`;
+    }
+    return t;
+  };
+  
+  const getNotesValue = () => {
+    if (!existingClaim) return "";
+    const nVal = existingClaim.notes || "";
+    if (existingClaim.toil_payout && nVal.trim().startsWith("{")) {
+      try {
+        const parsed = JSON.parse(nVal);
+        return parsed.user_notes || "";
+      } catch (e) {
+        return nVal;
+      }
+    }
+    return nVal;
+  };
+
   const [toilPayout, setToilPayout] = React.useState(existingClaim ? existingClaim.toil_payout : false);
-  const [startTime, setStartTime] = React.useState(existingClaim ? existingClaim.start_time : "17:00");
-  const [endTime, setEndTime] = React.useState(existingClaim ? existingClaim.end_time || "" : "");
+  const [startTime, setStartTime] = React.useState(existingClaim ? cleanTime(existingClaim.start_time) : "17:00");
+  const [endTime, setEndTime] = React.useState(existingClaim ? cleanTime(existingClaim.end_time) : "");
   const [otHours, setOtHours] = React.useState(existingClaim ? existingClaim.ot_hours : 0);
-  const [notes, setNotes] = React.useState(existingClaim ? existingClaim.notes : "");
+  const [notes, setNotes] = React.useState(getNotesValue);
+  const [status, setStatus] = React.useState(existingClaim ? existingClaim.status : "pending");
   
   const initToilDates = () => {
     if (!existingClaim) return [];
     let list = existingClaim.toil_dates || [];
     if (typeof list === 'string') {
       try { list = JSON.parse(list); } catch (e) { list = []; }
+    }
+    if (list.length === 0 && existingClaim.notes && existingClaim.notes.trim().startsWith("{")) {
+      try {
+        const parsed = JSON.parse(existingClaim.notes);
+        list = parsed.toil_dates || [];
+      } catch (e) {}
     }
     return list;
   };
@@ -3305,7 +3390,7 @@ function OtToilClaimDialog({ ctx, onClose }) {
   const pendingToilDates = React.useMemo(() => {
     const dates = new Set();
     F()._otClaims?.forEach(c => {
-      if (c.toil_payout && c.status === "pending" && c.id !== existingClaim?.id) {
+      if (c.toil_payout && c.status === "pending" && c.id !== existingClaim?.id && c.profile_id === profileId) {
         let list = [];
         try {
           list = typeof c.toil_dates === 'string' ? JSON.parse(c.toil_dates) : (c.toil_dates || []);
@@ -3316,7 +3401,7 @@ function OtToilClaimDialog({ ctx, onClose }) {
       }
     });
     return dates;
-  }, [existingClaim]);
+  }, [existingClaim, profileId]);
 
   const availableToilDates = React.useMemo(() => {
     const currentSelected = initToilDates();
@@ -3360,15 +3445,29 @@ function OtToilClaimDialog({ ctx, onClose }) {
     }
     
     setLoading(true);
+    
+    const formatTimeForDb = (t) => {
+      if (!t) return null;
+      const parts = t.split(":");
+      if (parts.length >= 2) {
+        const hh = parts[0].padStart(2, "0");
+        const mm = parts[1].padStart(2, "0");
+        const ss = parts[2] ? parts[2].padStart(2, "0") : "00";
+        return `${hh}:${mm}:${ss}`;
+      }
+      return t;
+    };
+
     const payload = {
       profile_id: profileId,
       date: dateStr,
-      start_time: startTime + ":00",
-      end_time: toilPayout ? null : (endTime + ":00"),
+      start_time: formatTimeForDb(startTime),
+      end_time: toilPayout ? null : formatTimeForDb(endTime),
       ot_hours: toilPayout ? 0 : otHours,
       toil_payout: toilPayout,
       toil_dates: toilPayout ? selectedToilDates : [],
-      notes: notes || null
+      notes: notes || null,
+      status: F().isAdmin ? status : (existingClaim ? existingClaim.status : "pending")
     };
     
     const result = existingClaim 
@@ -3412,7 +3511,7 @@ function OtToilClaimDialog({ ctx, onClose }) {
         width: "min(420px, 92vw)", maxHeight: "90vh", overflowY: "auto", borderRadius: "var(--radius)", padding: 24, boxShadow: "var(--shadow-lift)", display: "flex", flexDirection: "column", gap: 18 }}>
         
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <Avatar name={ctx.name} size={40} />
+          <Avatar name={staffName} size={40} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 16, fontWeight: 750, color: "var(--ink)", letterSpacing: "-0.01em" }}>Log OT & TOIL</div>
             <div className="mono" style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>
@@ -3433,7 +3532,7 @@ function OtToilClaimDialog({ ctx, onClose }) {
           </div>
         )}
         
-        {(!displayStatus || displayStatus === 'pending' || displayStatus === 'rejected') ? (
+        {(!displayStatus || displayStatus === 'pending' || displayStatus === 'rejected' || F().isAdmin) ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div className="inset" style={{ padding: 14, borderRadius: 12, display: "flex", alignItems: "center", gap: 12 }}>
               <span style={{ minWidth: 32, height: 22, padding: "0 6px", borderRadius: 6, display: "grid", placeItems: "center", fontSize: 10, fontWeight: 800, color: "#fff", background: "var(--v-pearson)" }}>TOIL</span>
@@ -3462,7 +3561,7 @@ function OtToilClaimDialog({ ctx, onClose }) {
                 </div>
                 {availableToilDates.length === 0 ? (
                   <div style={{ fontSize: 11.5, color: "var(--ink-4)", fontStyle: "italic" }}>
-                    No unredeemed TOIL dates found in your roster.
+                    No unredeemed TOIL dates found in roster.
                   </div>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 120, overflowY: "auto", paddingRight: 6 }} className="scroll-soft">
@@ -3478,7 +3577,7 @@ function OtToilClaimDialog({ ctx, onClose }) {
                                 setSelectedToilDates(prev => prev.filter(d => d !== date));
                               } else {
                                 if (selectedToilDates.length >= toilBalance) {
-                                  alert(`You can select at most ${toilBalance} days (your current TOIL balance).`);
+                                  alert(`You can select at most ${toilBalance} days (TOIL balance).`);
                                   return;
                                 }
                                 setSelectedToilDates(prev => [...prev, date].sort());
@@ -3538,6 +3637,22 @@ function OtToilClaimDialog({ ctx, onClose }) {
               </div>
             ) : null}
             
+            {F().isAdmin && (
+              <div>
+                <label style={{ fontSize: 11.5, color: "var(--ink-3)", fontWeight: 650, display: "block", marginBottom: 6 }}>Claim Status (Admin Override)</label>
+                <select 
+                  value={status} 
+                  onChange={(e) => setStatus(e.target.value)}
+                  className="glass-2"
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid var(--hairline)", color: "var(--ink)", background: "var(--inset)", fontSize: 13.5, outline: "none", cursor: "pointer" }}
+                >
+                  <option value="pending">Pending</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+              </div>
+            )}
+
             <div>
               <label style={{ fontSize: 11.5, color: "var(--ink-3)", fontWeight: 600, display: "block", marginBottom: 6 }}>Notes / Remarks</label>
               <textarea 
@@ -3555,7 +3670,7 @@ function OtToilClaimDialog({ ctx, onClose }) {
               className="tap btn-accent"
               style={{ padding: "11px 0", borderRadius: 12, border: "none", fontWeight: 700, fontSize: 14, cursor: (toilPayout && toilBalance <= 0) ? "default" : "pointer", background: "var(--accent)", color: "#fff", transition: "opacity .2s", opacity: (loading || (toilPayout && toilBalance <= 0)) ? 0.6 : 1 }}
             >
-              {loading ? "Submitting..." : existingClaim ? "Update Claim" : "Submit Claim"}
+              {loading ? "Submitting..." : existingClaim ? "Save Changes" : "Submit Claim"}
             </button>
             
             {existingClaim && (
@@ -3565,7 +3680,7 @@ function OtToilClaimDialog({ ctx, onClose }) {
                 className="tap"
                 style={{ padding: "10px 0", borderRadius: 12, border: "1px solid var(--bad)", fontWeight: 700, fontSize: 13, cursor: "pointer", background: "transparent", color: "var(--bad)", transition: "opacity .2s", opacity: loading ? 0.6 : 1 }}
               >
-                Cancel / Delete Claim
+                Delete / Cancel Claim
               </button>
             )}
           </div>
@@ -3653,6 +3768,16 @@ function RosterGrid({ offsets, branch }) {
     const dstr = ymdFormat(F().ISO(off));
     return F()._staffRequests.some(r => r.who === name && r.date === dstr && r.status === "Submitted");
   };
+  const unseenResolutionOf = (name, off) => {
+    if (!F()._staffRequests) return null;
+    const dstr = ymdFormat(F().ISO(off));
+    return F()._staffRequests.find(r => 
+      r.who === name && 
+      r.date === dstr && 
+      (r.status === "Approved" || r.status === "Rejected") && 
+      !localStorage.getItem(`fets-seen-req-${r.id}`)
+    );
+  };
 
   return (
     <React.Fragment>
@@ -3701,10 +3826,20 @@ function RosterGrid({ offsets, branch }) {
               const main = ot > 0 ? `${code}+OT` : code;
               const d = F().ISO(o);
               const pending = reqMarkOf(n, o);
+              const unseenRes = unseenResolutionOf(n, o);
               const isSelf = n === F().user.name;
               return (
                 <button key={o} onClick={() => {
-                  if (isSelf) {
+                  if (unseenRes) {
+                    localStorage.setItem(`fets-seen-req-${unseenRes.id}`, "true");
+                    window.dispatchEvent(new Event("fets-roster-changed"));
+                  }
+
+                  const dstr = ymdFormat(F().ISO(o));
+                  const pid = F()._staffIdByName?.[n];
+                  const hasClaim = F()._otClaims?.some(c => c.profile_id === pid && c.date === dstr);
+
+                  if (isSelf || (window.FETS.isAdmin && hasClaim)) {
                     setOtDialog({
                       name: n,
                       off: o,
@@ -3725,6 +3860,13 @@ function RosterGrid({ offsets, branch }) {
                   <span style={{ fontSize: main.length > 2 ? 9.5 : 12, lineHeight: 1 }}>{main}</span>
                   {ot > 0 && <span className="mono" style={{ fontSize: 8, fontWeight: 700, lineHeight: 1.1, opacity: 0.92 }}>{ot}h</span>}
                   {pending && <span title="Request pending — Mithun to action" style={{ position: "absolute", top: 3, right: 3, width: 7, height: 7, borderRadius: 999, background: "var(--warn)", boxShadow: "0 0 6px var(--warn)" }} />}
+                  {unseenRes && (
+                    <span 
+                      className={unseenRes.status === "Approved" ? "blink-blue" : "blink-red"} 
+                      title={`Request ${unseenRes.status} for ${unseenRes.date}`}
+                      style={{ position: "absolute", top: 3, right: 3, width: 7, height: 7, borderRadius: 999, zIndex: 5 }} 
+                    />
+                  )}
                 </button>
               );
             })}
@@ -4971,7 +5113,8 @@ function OtToilClaimsHub({ branch }) {
           { value: "pending", label: "Pending Claims" },
           { value: "history", label: "Month-Wise Claims" },
           { value: "payroll", label: "Payroll Calculation" },
-          { value: "rates", label: "Staff Rates Config" }
+          { value: "rates", label: "Staff Rates Config" },
+          { value: "discussion", label: "Roster Discussions" }
         ]} />
         <div style={{ flex: 1 }} />
         <button onClick={load} className="tap glass-2" style={{ width: 36, height: 36, borderRadius: 10, display: "grid", placeItems: "center", border: "1px solid var(--hairline)", cursor: "pointer", color: "var(--ink-2)" }}>
@@ -5386,7 +5529,7 @@ function OtToilClaimsHub({ branch }) {
             </table>
           </div>
         </div>
-      ) : (
+      ) : tab === "rates" ? (
         /* Rates Config Tab */
         <div className="glass" style={{ padding: 24, borderRadius: "var(--radius)", display: "flex", flexDirection: "column", gap: 18 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -5458,7 +5601,9 @@ function OtToilClaimsHub({ branch }) {
             </table>
           </div>
         </div>
-      )}
+      ) : tab === "discussion" ? (
+        <RosterDiscussionsAdmin />
+      ) : null}
 
       {/* Salary Slip Modal Popup */}
       {activePayslipStaff && (
@@ -5713,6 +5858,70 @@ function RosterPage({ branch }) {
   return (
     <div style={{ maxWidth: 1180, margin: "0 auto", display: "flex", flexDirection: "column", gap: "20px" }}>
       <PageHeader eyebrow={`Staffing // ${capBranch(branch)}`} title="Roster" />
+
+      {(() => {
+        const meName = F()._meName || (F().user && F().user.name);
+        const myUnseenResolutions = F()._staffRequests?.filter(r => 
+          r.who === meName && 
+          (r.status === "Approved" || r.status === "Rejected") && 
+          !localStorage.getItem(`fets-seen-req-${r.id}`)
+        ) || [];
+        if (myUnseenResolutions.length === 0) return null;
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {myUnseenResolutions.map((r) => (
+              <div 
+                key={r.id} 
+                className="glass rise" 
+                style={{ 
+                  padding: "12px 16px", 
+                  borderRadius: 12, 
+                  borderLeft: `4px solid ${r.status === "Approved" ? "var(--ok)" : "var(--bad)"}`,
+                  display: "flex", 
+                  alignItems: "center", 
+                  justifyContent: "space-between",
+                  gap: 12
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ 
+                    width: 24, 
+                    height: 24, 
+                    borderRadius: 6, 
+                    display: "grid", 
+                    placeItems: "center", 
+                    color: r.status === "Approved" ? "var(--ok)" : "var(--bad)",
+                    background: r.status === "Approved" ? "color-mix(in oklch, var(--ok) 15%, transparent)" : "color-mix(in oklch, var(--bad) 15%, transparent)"
+                  }}>
+                    <Icon name={r.status === "Approved" ? "check" : "x"} size={14} />
+                  </span>
+                  <span style={{ fontSize: 13, color: "var(--ink)", fontWeight: 550 }}>
+                    Your request for <strong>{r.leaveType || r.kind.toUpperCase()}</strong> on <strong>{r.date}</strong> has been <strong>{r.status.toLowerCase()}</strong>.
+                  </span>
+                </div>
+                <button 
+                  onClick={() => {
+                    localStorage.setItem(`fets-seen-req-${r.id}`, "true");
+                    window.dispatchEvent(new Event("fets-roster-changed"));
+                  }}
+                  className="tap glass-2" 
+                  style={{ 
+                    padding: "5px 10px", 
+                    borderRadius: 6, 
+                    border: "1px solid var(--hairline)", 
+                    fontSize: 11, 
+                    fontWeight: 700, 
+                    color: "var(--ink-2)", 
+                    cursor: "pointer" 
+                  }}
+                >
+                  Dismiss
+                </button>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
 
       {/* ─── Section 1: Personal Stats Overview ─── */}
       <section>
@@ -7671,6 +7880,7 @@ const DESK_TABS = [
   { id: "tasks", icon: "check", color: "var(--accent)", label: "My Task" },
   { id: "checklist", icon: "clipboard", color: "var(--v-prometric)", label: "Checklist" },
   { id: "certs", icon: "shield", color: "var(--ok)", label: "Certificates" },
+  { id: "leave", icon: "calendar", color: "var(--warn)", label: "Attendance & Leaves" },
   { id: "readiness", icon: "trend", color: "var(--v-cma)", label: "Readiness" },
 ];
 
