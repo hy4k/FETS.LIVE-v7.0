@@ -608,3 +608,99 @@ export async function dbResolveOtClaim(claimId: string, status: "Approved" | "Re
   }
 }
 
+export async function dbUpdateOtClaim(claimId: string, claim: any) {
+  let notesValue = claim.notes || null;
+  if (claim.toil_payout && claim.toil_dates && claim.toil_dates.length) {
+    notesValue = JSON.stringify({
+      user_notes: claim.notes || "",
+      toil_dates: claim.toil_dates
+    });
+  }
+  const row = {
+    start_time: claim.start_time || "17:00:00",
+    end_time: claim.end_time || null,
+    ot_hours: Number(claim.ot_hours) || 0,
+    toil_payout: !!claim.toil_payout,
+    notes: notesValue,
+    status: "pending",
+    updated_at: new Date().toISOString()
+  };
+  try {
+    const { data, error } = await supabase.from("staff_ot_claims").update(row).eq("id", claimId).select().single();
+    if (error) throw error;
+    await loadOtClaims(F());
+    rtoast("OT/TOIL claim updated");
+    return data;
+  } catch (e) {
+    console.error("dbUpdateOtClaim error:", e);
+    rtoast("Sync failed — saved locally", "alert");
+    return null;
+  }
+}
+
+export async function dbFetchRosterDiscussions(profileId: string) {
+  try {
+    const { data, error } = await supabase
+      .from("roster_discussions")
+      .select(`
+        id,
+        profile_id,
+        sender_id,
+        message,
+        related_date,
+        topic,
+        created_at,
+        sender:staff_profiles!roster_discussions_sender_id_fkey(full_name, role)
+      `)
+      .eq("profile_id", profileId)
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    return data || [];
+  } catch (e) {
+    console.error("dbFetchRosterDiscussions error:", e);
+    return [];
+  }
+}
+
+export async function dbFetchRosterThreads() {
+  try {
+    const { data, error } = await supabase
+      .from("roster_discussions")
+      .select(`
+        id,
+        profile_id,
+        sender_id,
+        message,
+        topic,
+        created_at,
+        thread_owner:staff_profiles!roster_discussions_profile_id_fkey(full_name, branch_assigned),
+        sender:staff_profiles!roster_discussions_sender_id_fkey(full_name, role)
+      `)
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return data || [];
+  } catch (e) {
+    console.error("dbFetchRosterThreads error:", e);
+    return [];
+  }
+}
+
+export async function dbSendRosterDiscussion(profileId: string, senderId: string, message: string, topic: string = 'general', relatedDate: string | null = null) {
+  const row = {
+    profile_id: profileId,
+    sender_id: senderId,
+    message: message.trim(),
+    topic,
+    related_date: relatedDate
+  };
+  try {
+    const { data, error } = await supabase.from("roster_discussions").insert([row]).select().single();
+    if (error) throw error;
+    return data;
+  } catch (e) {
+    console.error("dbSendRosterDiscussion error:", e);
+    return null;
+  }
+}
+
+

@@ -10,7 +10,8 @@
 */
 import React from "react";
 import "./liquid-glass.css";
-import { loadLiveData, ensureMonth } from "./live-data";
+import { loadLiveData, ensureMonth, loadLeaveRequests, loadOtClaims } from "./live-data";
+import { supabase } from "../lib/supabase";
 import * as DB from "./write-data";
 import * as LAB from "./lab-data";
 import * as ATT from "./attendance-data";
@@ -2728,8 +2729,13 @@ function DayDetailPanel({ date, branch }) {
   const dayBranch = branch === "global" ? "calicut" : branch;
   const [editing, setEditing] = React.useState(null); // sig string | "__new" | null
 
+  const isSuperAdmin = !!window.FETS?.isAdmin;
+  const userProfileBranch = window.FETS?._meBranch || 'cochin';
+  const isLocked = !isSuperAdmin && branch !== userProfileBranch;
+
   const liveKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
   const delSession = (s) => {
+    if (isLocked) return;
     if (!window.confirm("Delete this exam session?")) return;
     if (window.FETS._liveSessions && window.FETS._liveSessions[liveKey] && s.id != null) {
       window.FETS._liveSessions[liveKey] = window.FETS._liveSessions[liveKey].filter((x) => x !== s && x.id !== s.id);
@@ -2744,6 +2750,7 @@ function DayDetailPanel({ date, branch }) {
     sessOvrSet(date, day);
   };
   const saveEdit = (s, patch) => {
+    if (isLocked) return;
     if (window.FETS._liveSessions && s.id != null) {
       Object.assign(s, patch);
       DB.dbUpdateSession(s.id, patch);
@@ -2757,6 +2764,7 @@ function DayDetailPanel({ date, branch }) {
     sessOvrSet(date, day); setEditing(null);
   };
   const addSession = (s) => {
+    if (isLocked) return;
     if (window.FETS._liveSessions) {
       const entry = { id: undefined, vendor: s.vendor, exam: s.exam, count: s.count, start: s.start, end: s.end || s.start, branch: dayBranch };
       (window.FETS._liveSessions[liveKey] ||= []).push(entry);
@@ -2778,9 +2786,15 @@ function DayDetailPanel({ date, branch }) {
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <SectionLabel right={
-          <button onClick={() => setEditing("__new")} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 11px", borderRadius: 8, cursor: "pointer", fontSize: 11.5, fontWeight: 700, color: "var(--accent-ink)", background: "var(--accent)", border: "none" }}>
-            <Icon name="plus" size={13} /> Add session
-          </button>
+          !isLocked ? (
+            <button onClick={() => setEditing("__new")} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 11px", borderRadius: 8, cursor: "pointer", fontSize: 11.5, fontWeight: 700, color: "var(--accent-ink)", background: "var(--accent)", border: "none" }}>
+              <Icon name="plus" size={13} /> Add session
+            </button>
+          ) : (
+            <span style={{ fontSize: 11, color: "var(--ink-4)", display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <Icon name="lock" size={11} /> Read-only
+            </span>
+          )
         }>Sessions</SectionLabel>
         {editing === "__new" && <SessionEditRow vendors={F().VENDORS} onSave={addSession} onCancel={() => setEditing(null)} />}
         {sessions.length === 0 && editing !== "__new"
@@ -2791,10 +2805,12 @@ function DayDetailPanel({ date, branch }) {
                   ? <SessionEditRow key={i} s={s} vendors={F().VENDORS} onSave={(patch) => saveEdit(s, patch)} onCancel={() => setEditing(null)} />
                   : <div key={i} style={{ display: "flex", alignItems: "stretch", gap: 8 }}>
                       <div style={{ flex: 1, minWidth: 0 }}><CalSessionCard s={s} showBranch={showBranch} /></div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                        <button onClick={() => setEditing(sessSig(s))} title="Edit" className="tap glass-2" style={{ width: 34, height: 34, borderRadius: 9, display: "grid", placeItems: "center", cursor: "pointer", color: "var(--ink-2)", border: "1px solid var(--hairline)" }}><Icon name="settings" size={15} /></button>
-                        <button onClick={() => delSession(s)} title="Delete" className="tap glass-2" style={{ width: 34, height: 34, borderRadius: 9, display: "grid", placeItems: "center", cursor: "pointer", color: "var(--bad)", border: "1px solid var(--hairline)" }}><Icon name="trash" size={15} /></button>
-                      </div>
+                      {!isLocked && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                          <button onClick={() => setEditing(sessSig(s))} title="Edit" className="tap glass-2" style={{ width: 34, height: 34, borderRadius: 9, display: "grid", placeItems: "center", cursor: "pointer", color: "var(--ink-2)", border: "1px solid var(--hairline)" }}><Icon name="settings" size={15} /></button>
+                          <button onClick={() => delSession(s)} title="Delete" className="tap glass-2" style={{ width: 34, height: 34, borderRadius: 9, display: "grid", placeItems: "center", cursor: "pointer", color: "var(--bad)", border: "1px solid var(--hairline)" }}><Icon name="trash" size={15} /></button>
+                        </div>
+                      )}
                     </div>
               ))}
             </div>}
@@ -3355,7 +3371,9 @@ function OtToilClaimDialog({ ctx, onClose }) {
       notes: notes || null
     };
     
-    const result = await DB.dbAddOtClaim(payload);
+    const result = existingClaim 
+      ? await DB.dbUpdateOtClaim(existingClaim.id, payload)
+      : await DB.dbAddOtClaim(payload);
     setLoading(false);
     if (result) {
       onClose();
@@ -3415,7 +3433,7 @@ function OtToilClaimDialog({ ctx, onClose }) {
           </div>
         )}
         
-        {(!displayStatus || displayStatus === 'pending') ? (
+        {(!displayStatus || displayStatus === 'pending' || displayStatus === 'rejected') ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div className="inset" style={{ padding: 14, borderRadius: 12, display: "flex", alignItems: "center", gap: 12 }}>
               <span style={{ minWidth: 32, height: 22, padding: "0 6px", borderRadius: 6, display: "grid", placeItems: "center", fontSize: 10, fontWeight: 800, color: "#fff", background: "var(--v-pearson)" }}>TOIL</span>
@@ -3554,7 +3572,7 @@ function OtToilClaimDialog({ ctx, onClose }) {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div style={{ fontSize: 13.5, color: "var(--ink-2)", fontWeight: 500, lineHeight: 1.5 }}>
-              This claim has already been <strong>{displayStatus}</strong> by management. Approved or rejected claims cannot be edited.
+              This claim has already been <strong>{displayStatus}</strong> by management. Approved claims cannot be edited.
             </div>
             
             <div className="inset" style={{ padding: 12, borderRadius: 10, display: "flex", flexDirection: "column", gap: 8, fontSize: 12 }}>
@@ -3766,6 +3784,11 @@ function StaffReqCard({ r, onResolve }) {
 }
 function LeaveApprovalsPanel({ branch }) {
   const [reqs, setReqs] = React.useState(() => F().staffReqList());
+  React.useEffect(() => {
+    const h = () => setReqs(F().staffReqList());
+    window.addEventListener("fets-roster-changed", h);
+    return () => window.removeEventListener("fets-roster-changed", h);
+  }, []);
   const inBranch = reqs.filter((r) => branch === "global" || r.branch === branch);
   const resolve = (id, status) => {
     const next = F().staffReqResolve(id, status);
@@ -3855,6 +3878,11 @@ function AttendanceConsole({ branch }) {
   );
   const txt = row === undefined ? "Loading…" : done ? "Checked out" : onBreak ? "On break" : checkedIn ? "On shift" : "Not checked in";
   const col = done ? "var(--ink-3)" : onBreak ? "var(--warn)" : checkedIn ? "var(--ok)" : "var(--ink-4)";
+  
+  const isSuperAdmin = !!window.FETS?.isAdmin;
+  const userProfileBranch = window.FETS?._meBranch || 'cochin';
+  const isLocked = !isSuperAdmin && branch !== userProfileBranch;
+
   return (
     <div className="glass" style={{ borderRadius: "var(--radius)", padding: "18px 20px", display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 13, flex: "1 1 240px", minWidth: 0 }}>
@@ -3867,11 +3895,19 @@ function AttendanceConsole({ branch }) {
         </div>
       </div>
       <div style={{ display: "flex", gap: 9, flexWrap: "wrap", alignItems: "center" }}>
-        {row !== undefined && !row && <Btn on={() => act(() => ATT.attCheckIn(branch), "Checked in")} label="Check in" icon="power" primary />}
-        {checkedIn && !onBreak && <React.Fragment><Btn on={() => act(ATT.attStepOut, "Stepped out")} label="Step out" icon="coffee" /><Btn on={() => act(ATT.attCheckOut, "Checked out")} label="Check out" icon="power" primary /></React.Fragment>}
-        {onBreak && <Btn on={() => act(ATT.attBack, "Back on shift")} label="I'm back" icon="arrowR" primary />}
-        {done && <span className="mono" style={{ fontSize: 13, color: "var(--ok)", fontWeight: 700 }}>✓ {ATT.attFmtMins(worked)} today</span>}
-        {hasNfc && row !== undefined && !done && <button onClick={tapCard} title="Check in by tapping your NFC ID card" className="tap glass-2" style={{ display: "inline-flex", alignItems: "center", gap: 7, height: 42, padding: "0 13px", borderRadius: 12, cursor: "pointer", color: "var(--ink-2)", border: "1px solid var(--hairline)", fontSize: 12.5, fontWeight: 650 }}><Icon name="key" size={15} /> Tap card</button>}
+        {isLocked ? (
+          <div style={{ fontSize: 12.5, color: "var(--ink-3)", fontWeight: 650, display: "flex", alignItems: "center", gap: 6 }}>
+            <Icon name="lock" size={14} /> Read-only (Locked to {userProfileBranch.toUpperCase()})
+          </div>
+        ) : (
+          <React.Fragment>
+            {row !== undefined && !row && <Btn on={() => act(() => ATT.attCheckIn(branch), "Checked in")} label="Check in" icon="power" primary />}
+            {checkedIn && !onBreak && <React.Fragment><Btn on={() => act(ATT.attStepOut, "Stepped out")} label="Step out" icon="coffee" /><Btn on={() => act(ATT.attCheckOut, "Checked out")} label="Check out" icon="power" primary /></React.Fragment>}
+            {onBreak && <Btn on={() => act(ATT.attBack, "Back on shift")} label="I'm back" icon="arrowR" primary />}
+            {done && <span className="mono" style={{ fontSize: 13, color: "var(--ok)", fontWeight: 700 }}>✓ {ATT.attFmtMins(worked)} today</span>}
+            {hasNfc && row !== undefined && !done && <button onClick={tapCard} title="Check in by tapping your NFC ID card" className="tap glass-2" style={{ display: "inline-flex", alignItems: "center", gap: 7, height: 42, padding: "0 13px", borderRadius: 12, cursor: "pointer", color: "var(--ink-2)", border: "1px solid var(--hairline)", fontSize: 12.5, fontWeight: 650 }}><Icon name="key" size={15} /> Tap card</button>}
+          </React.Fragment>
+        )}
       </div>
     </div>
   );
@@ -3985,6 +4021,26 @@ function RosterRequestForm({ branch }) {
 
   const F = window.FETS;
   const meName = F.user.name;
+
+  const isSuperAdmin = !!window.FETS?.isAdmin;
+  const userProfileBranch = window.FETS?._meBranch || 'cochin';
+  const isLocked = !isSuperAdmin && branch !== userProfileBranch;
+
+  if (isLocked) {
+    return (
+      <div className="glass" style={{ borderRadius: "var(--radius)", padding: 24, display: "flex", flexDirection: "column", gap: 14, alignItems: "center", justifyContent: "center", textAlign: "center" }}>
+        <div style={{ width: 44, height: 44, borderRadius: 12, background: "color-mix(in oklch, var(--bad) 12%, transparent)", display: "grid", placeItems: "center", color: "var(--bad)" }}>
+          <Icon name="lock" size={20} />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <div style={{ fontSize: 15, fontWeight: 750, color: "var(--ink)" }}>Request Form Locked</div>
+          <div style={{ fontSize: 12.5, color: "var(--ink-3)", maxWidth: 300, lineHeight: 1.4 }}>
+            You are viewing the <strong>{branch.toUpperCase()}</strong> branch. To submit a leave, swap, or TOIL request, please switch back to your home branch: <strong>{userProfileBranch.toUpperCase()}</strong>.
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // list of colleagues for shift swap
   const pool = branch === "global"
@@ -4252,7 +4308,8 @@ function RosterApprovalsHub({ branch }) {
       <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
         <Segmented value={tab} onChange={setTab} size="sm" options={[
           { value: "pending", label: "Pending Requests" },
-          { value: "history", label: "History" }
+          { value: "history", label: "History" },
+          { value: "discussions", label: "Staff Discussions" }
         ]} />
         <div style={{ flex: 1 }} />
         <button onClick={load} className="tap glass-2" style={{ width: 36, height: 36, borderRadius: 10, display: "grid", placeItems: "center", border: "1px solid var(--hairline)", cursor: "pointer", color: "var(--ink-2)" }}>
@@ -4264,6 +4321,8 @@ function RosterApprovalsHub({ branch }) {
         <div className="glass" style={{ padding: 40, borderRadius: "var(--radius)", textAlign: "center", color: "var(--ink-4)" }}>
           Loading requests…
         </div>
+      ) : tab === "discussions" ? (
+        <RosterDiscussionsAdmin />
       ) : filtered.length === 0 ? (
         <div className="glass" style={{ padding: 40, borderRadius: "var(--radius)", textAlign: "center", color: "var(--ink-4)" }}>
           No {tab === "pending" ? "pending" : "resolved"} requests found.
@@ -6002,7 +6061,7 @@ function Bubble({ m }) {
   );
 }
 
-function ContactStrip({ c, onSave }) {
+function ContactStrip({ c, onSave, isLocked }) {
   const [edit, setEdit] = React.useState(false);
   const [name, setName] = React.useState(c.contact ? c.contact.name : "");
   const [phone, setPhone] = React.useState(c.contact ? c.contact.phone : "");
@@ -6026,7 +6085,12 @@ function ContactStrip({ c, onSave }) {
     );
   }
   if (!c.contact) {
-    return (
+    return isLocked ? (
+      <div className="inset" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "11px", borderRadius: 12,
+        color: "var(--ink-4)", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 650 }}>
+        No outside contact linked
+      </div>
+    ) : (
       <button onClick={() => setEdit(true)} className="tap inset" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "11px", borderRadius: 12,
         cursor: "pointer", borderStyle: "dashed", color: "var(--ink-3)", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 650 }}>
         <Icon name="plus" size={14} /> Add an outside contact (name &amp; number)
@@ -6047,14 +6111,16 @@ function ContactStrip({ c, onSave }) {
           {ct.email && <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><Icon name="at" size={12} /> {ct.email}</span>}
         </div>
       </div>
-      <button onClick={() => setEdit(true)} className="tap" title="Edit contact" style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid var(--hairline)", background: "transparent", cursor: "pointer", display: "grid", placeItems: "center", color: "var(--ink-3)" }}>
-        <Icon name="settings" size={14} />
-      </button>
+      {!isLocked && (
+        <button onClick={() => setEdit(true)} className="tap" title="Edit contact" style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid var(--hairline)", background: "transparent", cursor: "pointer", display: "grid", placeItems: "center", color: "var(--ink-3)" }}>
+          <Icon name="settings" size={14} />
+        </button>
+      )}
     </div>
   );
 }
 
-function CasePlayground({ c, onStatus, onPost, onContact }) {
+function CasePlayground({ c, onStatus, onPost, onContact, isLocked }) {
   const [mode, setMode] = React.useState("staff");
   const [draft, setDraft] = React.useState("");
   const [extName, setExtName] = React.useState("");
@@ -6106,7 +6172,7 @@ function CasePlayground({ c, onStatus, onPost, onContact }) {
               const on = c.status === s;
               const m = STATUS_META[s];
               return (
-                <button key={s} onClick={() => !on && onStatus(c.id, s)} className="tap" style={{ border: "none", cursor: "pointer", padding: "6px 14px", borderRadius: 999,
+                <button key={s} onClick={() => !on && !isLocked && onStatus(c.id, s)} className="tap" style={{ border: "none", cursor: isLocked ? "not-allowed" : (on ? "default" : "pointer"), padding: "6px 14px", borderRadius: 999,
                   fontFamily: "var(--font)", fontSize: 12, fontWeight: on ? 700 : 550, display: "inline-flex", alignItems: "center", gap: 6,
                   color: on ? "#fff" : "var(--ink-3)", background: on ? m.color : "transparent" }}>
                   <span style={{ width: 7, height: 7, borderRadius: 999, background: on ? "#fff" : m.color }} /> {m.label}
@@ -6119,7 +6185,7 @@ function CasePlayground({ c, onStatus, onPost, onContact }) {
 
       {/* contact + detail + thread (scroll) */}
       <div ref={threadRef} className="scroll-soft" style={{ flex: 1, overflowY: "auto", padding: "18px 22px", display: "flex", flexDirection: "column", gap: 14, minHeight: 0 }}>
-        <ContactStrip c={c} onSave={(ct) => onContact(c.id, ct)} />
+        <ContactStrip c={c} onSave={(ct) => onContact(c.id, ct)} isLocked={isLocked} />
         <div className="inset" style={{ padding: "12px 14px", borderRadius: 12, fontSize: 13, color: "var(--ink-2)", fontWeight: 500, lineHeight: 1.55,
           fontFamily: "var(--font-serif)", fontStyle: "italic", borderLeft: "3px solid var(--accent-line)" }}>{c.detail}</div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "2px 0" }}>
@@ -6133,37 +6199,43 @@ function CasePlayground({ c, onStatus, onPost, onContact }) {
       </div>
 
       {/* composer */}
-      <div style={{ borderTop: "1px solid var(--hairline)", padding: "13px 16px", flexShrink: 0, display: "flex", flexDirection: "column", gap: 10, background: "var(--glass-2)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
-          <span className="eyebrow" style={{ fontSize: 9, color: "var(--ink-4)" }}>Post as</span>
-          <div className="inset" style={{ display: "inline-flex", padding: 3, gap: 2, borderRadius: 999 }}>
-            {[{ k: "staff", label: "You · Staff" }, { k: "external", label: "Outside contact" }].map((o) => {
-              const on = mode === o.k;
-              return (
-                <button key={o.k} onClick={() => setMode(o.k)} className="tap" style={{ border: "none", cursor: "pointer", padding: "6px 13px", borderRadius: 999,
-                  fontFamily: "var(--font)", fontSize: 11.5, fontWeight: on ? 700 : 550, color: on ? "var(--ink)" : "var(--ink-3)",
-                  background: on ? "var(--glass-strong)" : "transparent", boxShadow: on ? "var(--shadow)" : "none" }}>{o.label}</button>
-              );
-            })}
+      {isLocked ? (
+        <div style={{ borderTop: "1px solid var(--hairline)", padding: "18px 20px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: "var(--glass-2)", color: "var(--ink-3)", fontSize: 13, fontWeight: 650 }}>
+          <Icon name="lock" size={15} /> This case is in {c.branch.toUpperCase()} and is locked (read-only)
+        </div>
+      ) : (
+        <div style={{ borderTop: "1px solid var(--hairline)", padding: "13px 16px", flexShrink: 0, display: "flex", flexDirection: "column", gap: 10, background: "var(--glass-2)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
+            <span className="eyebrow" style={{ fontSize: 9, color: "var(--ink-4)" }}>Post as</span>
+            <div className="inset" style={{ display: "inline-flex", padding: 3, gap: 2, borderRadius: 999 }}>
+              {[{ k: "staff", label: "You · Staff" }, { k: "external", label: "Outside contact" }].map((o) => {
+                const on = mode === o.k;
+                return (
+                  <button key={o.k} onClick={() => setMode(o.k)} className="tap" style={{ border: "none", cursor: "pointer", padding: "6px 13px", borderRadius: 999,
+                    fontFamily: "var(--font)", fontSize: 11.5, fontWeight: on ? 700 : 550, color: on ? "var(--ink)" : "var(--ink-3)",
+                    background: on ? "var(--glass-strong)" : "transparent", boxShadow: on ? "var(--shadow)" : "none" }}>{o.label}</button>
+                );
+              })}
+            </div>
+          </div>
+          {mode === "external" && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <input value={extName} onChange={(e) => setExtName(e.target.value)} placeholder="Their name" style={{ ...caseInput, padding: "9px 12px", fontSize: 12.5 }} />
+              <input value={extPhone} onChange={(e) => setExtPhone(e.target.value)} placeholder="Contact number" style={{ ...caseInput, padding: "9px 12px", fontSize: 12.5 }} />
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 9, alignItems: "flex-end" }}>
+            <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={1}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+              placeholder={mode === "staff" ? "Write an update… (Enter to send)" : "Log what the outside contact said…"}
+              style={{ ...caseInput, padding: "11px 14px", resize: "none", lineHeight: 1.4, minHeight: 44 }} />
+            <button onClick={send} className="tap" style={{ width: 46, height: 46, borderRadius: 12, border: "none", cursor: "pointer", flexShrink: 0,
+              display: "grid", placeItems: "center", color: "var(--accent-ink)", background: "var(--accent)" }}>
+              <Icon name="arrowR" size={19} stroke={2.4} />
+            </button>
           </div>
         </div>
-        {mode === "external" && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            <input value={extName} onChange={(e) => setExtName(e.target.value)} placeholder="Their name" style={{ ...caseInput, padding: "9px 12px", fontSize: 12.5 }} />
-            <input value={extPhone} onChange={(e) => setExtPhone(e.target.value)} placeholder="Contact number" style={{ ...caseInput, padding: "9px 12px", fontSize: 12.5 }} />
-          </div>
-        )}
-        <div style={{ display: "flex", gap: 9, alignItems: "flex-end" }}>
-          <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={1}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-            placeholder={mode === "staff" ? "Write an update… (Enter to send)" : "Log what the outside contact said…"}
-            style={{ ...caseInput, padding: "11px 14px", resize: "none", lineHeight: 1.4, minHeight: 44 }} />
-          <button onClick={send} className="tap" style={{ width: 46, height: 46, borderRadius: 12, border: "none", cursor: "pointer", flexShrink: 0,
-            display: "grid", placeItems: "center", color: "var(--accent-ink)", background: "var(--accent)" }}>
-            <Icon name="arrowR" size={19} stroke={2.4} />
-          </button>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -6258,6 +6330,10 @@ function RaiseCasePage({ branch, setActive }) {
   const [statusF, setStatusF] = React.useState("all");
   const [raiseOpen, setRaiseOpen] = React.useState(false);
 
+  const isSuperAdmin = !!window.FETS?.isAdmin;
+  const userProfileBranch = window.FETS?._meBranch || 'cochin';
+  const isLocked = !isSuperAdmin && branch !== userProfileBranch;
+
   const inBranch = cases.filter((c) => branch === "global" || c.branch === branch);
   const filtered = inBranch.filter((c) => (cat === "all" || c.category === cat) && (statusF === "all" || c.status === statusF));
 
@@ -6268,14 +6344,25 @@ function RaiseCasePage({ branch, setActive }) {
   const selected = cases.find((c) => c.id === selectedId) || filtered[0] || null;
 
   const setStatus = (id, s) => {
+    if (isLocked) return;
     const c0 = cases.find((c) => c.id === id);
     if (c0 && c0._dbId != null) DB.dbSetCaseStatus(c0._dbId, s);
     setCases((cs) => cs.map((c) => c.id === id ? { ...c, status: s,
       thread: [...c.thread, { id: "s" + Date.now(), kind: "status", role: "system", author: window.FETS.user.name, text: `marked the case ${STATUS_META[s].label}`, when: caseNow() }] } : c));
   };
-  const post = (id, msg) => setCases((cs) => cs.map((c) => c.id === id ? { ...c, thread: [...c.thread, msg] } : c));
-  const setContact = (id, ct) => setCases((cs) => cs.map((c) => c.id === id ? { ...c, contact: ct } : c));
-  const addCase = (c) => { DB.dbAddCase(c).then((row) => { if (row && row.id != null) c._dbId = row.id; }); setCases((cs) => [c, ...cs]); setSelectedId(c.id); setCat("all"); setStatusF("all"); setView("cases"); setRaiseOpen(false); };
+  const post = (id, msg) => {
+    if (isLocked) return;
+    setCases((cs) => cs.map((c) => c.id === id ? { ...c, thread: [...c.thread, msg] } : c));
+  };
+  const setContact = (id, ct) => {
+    if (isLocked) return;
+    setCases((cs) => cs.map((c) => c.id === id ? { ...c, contact: ct } : c));
+  };
+  const addCase = (c) => {
+    if (isLocked) return;
+    DB.dbAddCase(c).then((row) => { if (row && row.id != null) c._dbId = row.id; });
+    setCases((cs) => [c, ...cs]); setSelectedId(c.id); setCat("all"); setStatusF("all"); setView("cases"); setRaiseOpen(false);
+  };
 
   const idx = filtered.findIndex((c) => selected && c.id === selected.id);
   const go = (delta) => { const ni = idx + delta; if (ni >= 0 && ni < filtered.length) setSelectedId(filtered[ni].id); };
@@ -6299,10 +6386,12 @@ function RaiseCasePage({ branch, setActive }) {
             { value: "cases", label: "Cases", icon: "layers" },
             { value: "analysis", label: "Analysis", icon: "trend" },
           ]} />
-          <button onClick={() => setRaiseOpen(true)} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 18px", borderRadius: 12,
-            border: "none", cursor: "pointer", fontFamily: "var(--font)", fontSize: 13.5, fontWeight: 700, color: "var(--accent-ink)", background: "var(--accent)", boxShadow: "var(--shadow)" }}>
-            <Icon name="plus" size={16} stroke={2.6} /> Raise a case
-          </button>
+          {!isLocked && (
+            <button onClick={() => setRaiseOpen(true)} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 18px", borderRadius: 12,
+              border: "none", cursor: "pointer", fontFamily: "var(--font)", fontSize: 13.5, fontWeight: 700, color: "var(--accent-ink)", background: "var(--accent)", boxShadow: "var(--shadow)" }}>
+              <Icon name="plus" size={16} stroke={2.6} /> Raise a case
+            </button>
+          )}
         </div>
       </header>
 
@@ -6331,7 +6420,7 @@ function RaiseCasePage({ branch, setActive }) {
           </div>
 
           {selected
-            ? <CasePlayground c={selected} onStatus={setStatus} onPost={post} onContact={setContact} />
+            ? <CasePlayground c={selected} onStatus={setStatus} onPost={post} onContact={setContact} isLocked={isLocked} />
             : <div className="glass" style={{ borderRadius: "var(--radius)", padding: 48, textAlign: "center", color: "var(--ink-4)", fontSize: 14, display: "grid", placeItems: "center", minHeight: 360 }}>
                 No cases match these filters — adjust the dropdowns or raise a new one.
               </div>}
@@ -6907,14 +6996,336 @@ function TimeOff() {
   );
 }
 
+function RosterDiscussionChat() {
+  const F = window.FETS;
+  const profileId = F._meId;
+  const [messages, setMessages] = React.useState([]);
+  const [draft, setDraft] = React.useState("");
+  const [topic, setTopic] = React.useState("general");
+  const [loading, setLoading] = React.useState(true);
+  const threadRef = React.useRef(null);
+
+  const load = async () => {
+    if (!profileId) return;
+    const msgs = await DB.dbFetchRosterDiscussions(profileId);
+    setMessages(msgs || []);
+    setLoading(false);
+  };
+
+  React.useEffect(() => {
+    load();
+    window.addEventListener("fets-discussion-changed", load);
+    return () => window.removeEventListener("fets-discussion-changed", load);
+  }, [profileId]);
+
+  React.useEffect(() => {
+    if (threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight;
+  }, [messages.length]);
+
+  const send = async () => {
+    if (!draft.trim() || !profileId) return;
+    const msgText = draft.trim();
+    setDraft("");
+    const result = await DB.dbSendRosterDiscussion(profileId, profileId, msgText, topic);
+    if (result) {
+      load();
+    } else {
+      toast("Message failed to send", "alert");
+    }
+  };
+
+  const topicOptions = [
+    { value: "general", label: "General Inquiry" },
+    { value: "roster", label: "Roster Schedule" },
+    { value: "toil", label: "TOIL Balance / Payout" },
+    { value: "rejection", label: "Claim Rejection" }
+  ];
+
+  return (
+    <div className="glass" style={{ borderRadius: "var(--radius)", display: "flex", flexDirection: "column", overflow: "hidden", height: 500 }}>
+      {/* Top control bar: select topic */}
+      <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--hairline)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, background: "var(--glass-2)" }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-2)" }}>Discussion Topic:</span>
+        <div className="inset" style={{ display: "inline-flex", padding: 3, gap: 2, borderRadius: 999 }}>
+          {topicOptions.map((o) => {
+            const on = topic === o.value;
+            return (
+              <button key={o.value} onClick={() => setTopic(o.value)} className="tap" style={{ border: "none", cursor: "pointer", padding: "5px 12px", borderRadius: 999,
+                fontFamily: "var(--font)", fontSize: 11.5, fontWeight: on ? 750 : 550, color: on ? "#1c1305" : "var(--ink-3)", background: on ? "var(--accent)" : "transparent" }}>
+                {o.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Messages thread */}
+      <div ref={threadRef} className="scroll-soft" style={{ flex: 1, overflowY: "auto", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14, minHeight: 0 }}>
+        {loading ? (
+          <div style={{ textAlign: "center", color: "var(--ink-4)", fontSize: 13, padding: 20 }}>Loading messages…</div>
+        ) : messages.length === 0 ? (
+          <div style={{ textAlign: "center", color: "var(--ink-4)", fontSize: 13, padding: 40, fontStyle: "italic" }}>
+            No messages yet. Start a discussion with Super Admin regarding your Roster or TOIL balance!
+          </div>
+        ) : (
+          messages.map((m) => {
+            const isMe = m.sender_id === profileId;
+            const senderName = isMe ? "You" : (m.sender?.full_name || "Admin");
+            const senderRole = isMe ? "Staff" : (m.sender?.role || "Management");
+            const formattedTime = new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const formattedDate = new Date(m.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' });
+            
+            return (
+              <div key={m.id} style={{ display: "flex", flexDirection: "column", alignItems: isMe ? "flex-end" : "flex-start", gap: 4 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "0 4px", flexDirection: isMe ? "row-reverse" : "row" }}>
+                  <span style={{ fontSize: 11.5, fontWeight: 700, color: isMe ? "var(--accent)" : "var(--ink-2)" }}>{senderName}</span>
+                  <span style={{ fontSize: 9.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: isMe ? "var(--accent)" : "var(--v-ielts)",
+                    background: isMe ? "color-mix(in oklch, var(--accent) 15%, transparent)" : "color-mix(in oklch, var(--v-ielts) 15%, transparent)", padding: "1px 6px", borderRadius: 5 }}>
+                    {senderRole}
+                  </span>
+                  <span className="mono" style={{ fontSize: 10, color: "var(--ink-4)" }}>{formattedDate} {formattedTime}</span>
+                  {m.topic && m.topic !== 'general' && (
+                    <span style={{ fontSize: 9.5, fontWeight: 700, color: "var(--warn)", background: "color-mix(in oklch, var(--warn) 15%, transparent)", padding: "1px 6px", borderRadius: 5 }}>
+                      #{m.topic}
+                    </span>
+                  )}
+                </div>
+                <div style={{ maxWidth: "78%", padding: "10px 14px", borderRadius: 14, fontSize: 13, lineHeight: 1.5, fontWeight: 500,
+                  borderTopRightRadius: isMe ? 4 : 14, borderTopLeftRadius: isMe ? 14 : 4,
+                  color: isMe ? "var(--accent-ink)" : "var(--ink)", background: isMe ? "var(--accent)" : "var(--glass-2)",
+                  border: isMe ? "none" : "1px solid var(--hairline)" }}>
+                  {m.message}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Input Composer */}
+      <div style={{ borderTop: "1px solid var(--hairline)", padding: "10px 14px", flexShrink: 0, display: "flex", gap: 9, background: "var(--glass-2)", alignItems: "flex-end" }}>
+        <textarea 
+          value={draft} 
+          onChange={(e) => setDraft(e.target.value)} 
+          rows={1}
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+          placeholder="Send a message to Super Admin…" 
+          style={{ 
+            background: "var(--inset)", border: "1px solid var(--hairline)", borderRadius: 10, color: "var(--ink)",
+            fontFamily: "var(--font)", fontSize: 13.5, padding: "10px 12px", width: "100%", outline: "none",
+            resize: "none", lineHeight: 1.4, minHeight: 38 
+          }} 
+        />
+        <button onClick={send} className="tap" style={{ width: 38, height: 38, borderRadius: 10, border: "none", cursor: "pointer", flexShrink: 0,
+          display: "grid", placeItems: "center", color: "var(--accent-ink)", background: "var(--accent)" }}>
+          <Icon name="arrowR" size={17} stroke={2.4} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function RosterDiscussionsAdmin() {
+  const F = window.FETS;
+  const adminId = F._meId;
+  const [allMessages, setAllMessages] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [selectedProfileId, setSelectedProfileId] = React.useState(null);
+  const [replyText, setReplyText] = React.useState("");
+  const threadScrollRef = React.useRef(null);
+
+  const load = async () => {
+    const msgs = await DB.dbFetchRosterThreads();
+    setAllMessages(msgs || []);
+    setLoading(false);
+  };
+
+  React.useEffect(() => {
+    load();
+    window.addEventListener("fets-discussion-changed", load);
+    return () => window.removeEventListener("fets-discussion-changed", load);
+  }, []);
+
+  // Compile threads
+  const threadsMap = {};
+  allMessages.forEach((m) => {
+    if (!threadsMap[m.profile_id]) {
+      threadsMap[m.profile_id] = {
+        profile_id: m.profile_id,
+        staffName: m.thread_owner?.full_name || "Unknown Staff",
+        branch: m.thread_owner?.branch_assigned || "cochin",
+        lastMessage: m.message,
+        lastCreatedAt: m.created_at,
+        messages: []
+      };
+    }
+    threadsMap[m.profile_id].messages.unshift(m);
+  });
+
+  const threads = Object.values(threadsMap).sort((a: any, b: any) => new Date(b.lastCreatedAt).getTime() - new Date(a.lastCreatedAt).getTime());
+  const selectedThread = selectedProfileId ? threadsMap[selectedProfileId] : null;
+
+  React.useEffect(() => {
+    if (threadScrollRef.current) threadScrollRef.current.scrollTop = threadScrollRef.current.scrollHeight;
+  }, [selectedThread?.messages.length, selectedProfileId]);
+
+  const sendReply = async () => {
+    if (!replyText.trim() || !selectedProfileId || !adminId) return;
+    const msgText = replyText.trim();
+    setReplyText("");
+    const result = await DB.dbSendRosterDiscussion(selectedProfileId, adminId, msgText, "general");
+    if (result) {
+      load();
+    } else {
+      toast("Failed to send reply", "alert");
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="glass" style={{ padding: 48, borderRadius: "var(--radius)", textAlign: "center", color: "var(--ink-4)" }}>
+        Loading discussions…
+      </div>
+    );
+  }
+
+  return (
+    <div className="glass" style={{ borderRadius: "var(--radius)", display: "flex", height: 600, overflow: "hidden" }}>
+      {/* Threads Sidebar */}
+      <div style={{ width: "30%", borderRight: "1px solid var(--hairline)", display: "flex", flexDirection: "column", background: "var(--glass-2)" }}>
+        <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--hairline)", fontSize: 13, fontWeight: 750, color: "var(--ink)" }}>
+          Active Threads
+        </div>
+        <div className="scroll-soft" style={{ flex: 1, overflowY: "auto" }}>
+          {threads.length === 0 ? (
+            <div style={{ padding: 20, textAlign: "center", fontSize: 12.5, color: "var(--ink-4)", fontStyle: "italic" }}>
+              No discussions started yet.
+            </div>
+          ) : (
+            threads.map((t: any) => {
+              const active = selectedProfileId === t.profile_id;
+              const formattedTime = new Date(t.lastCreatedAt).toLocaleDateString([], { month: 'short', day: 'numeric' });
+              return (
+                <div 
+                  key={t.profile_id} 
+                  onClick={() => setSelectedProfileId(t.profile_id)}
+                  className="tap"
+                  style={{ 
+                    padding: "12px 14px", borderBottom: "1px solid var(--hairline)", cursor: "pointer",
+                    background: active ? "var(--glass-strong)" : "transparent",
+                    transition: "background 0.2s"
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <Avatar name={t.staffName} size={24} />
+                      <span style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>{t.staffName}</span>
+                    </div>
+                    <span className="mono" style={{ fontSize: 10, color: "var(--ink-4)" }}>{formattedTime}</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                    <div style={{ fontSize: 11.5, color: "var(--ink-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+                      {t.lastMessage}
+                    </div>
+                    <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", color: "var(--accent)", background: "color-mix(in oklch, var(--accent) 15%, transparent)", padding: "1px 5px", borderRadius: 4 }}>
+                      {t.branch.toUpperCase()}
+                    </span>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      {/* Thread Content */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "transparent" }}>
+        {selectedThread ? (
+          <React.Fragment>
+            {/* Thread Header */}
+            <div style={{ padding: "12px 20px", borderBottom: "1px solid var(--hairline)", display: "flex", alignItems: "center", gap: 12, background: "var(--glass-2)" }}>
+              <Avatar name={selectedThread.staffName} size={32} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 750, color: "var(--ink)" }}>{selectedThread.staffName}</div>
+                <div style={{ fontSize: 11, color: "var(--ink-3)", fontWeight: 500 }}>
+                  Branch: <span style={{ textTransform: "uppercase", fontWeight: 700 }}>{selectedThread.branch}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Messages Scroll Area */}
+            <div ref={threadScrollRef} className="scroll-soft" style={{ flex: 1, overflowY: "auto", padding: "20px", display: "flex", flexDirection: "column", gap: 14 }}>
+              {selectedThread.messages.map((m: any) => {
+                const isMe = m.sender_id === adminId;
+                const senderName = isMe ? "You" : m.sender?.full_name || selectedThread.staffName;
+                const senderRole = isMe ? "Admin" : m.sender?.role || "Staff";
+                const formattedTime = new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const formattedDate = new Date(m.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' });
+                
+                return (
+                  <div key={m.id} style={{ display: "flex", flexDirection: "column", alignItems: isMe ? "flex-end" : "flex-start", gap: 4 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "0 4px", flexDirection: isMe ? "row-reverse" : "row" }}>
+                      <span style={{ fontSize: 11.5, fontWeight: 700, color: isMe ? "var(--accent)" : "var(--ink-2)" }}>{senderName}</span>
+                      <span style={{ fontSize: 9.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: isMe ? "var(--accent)" : "var(--v-ielts)",
+                        background: isMe ? "color-mix(in oklch, var(--accent) 15%, transparent)" : "color-mix(in oklch, var(--v-ielts) 15%, transparent)", padding: "1px 6px", borderRadius: 5 }}>
+                        {senderRole}
+                      </span>
+                      <span className="mono" style={{ fontSize: 10, color: "var(--ink-4)" }}>{formattedDate} {formattedTime}</span>
+                      {m.topic && m.topic !== 'general' && (
+                        <span style={{ fontSize: 9.5, fontWeight: 700, color: "var(--warn)", background: "color-mix(in oklch, var(--warn) 15%, transparent)", padding: "1px 6px", borderRadius: 5 }}>
+                          #{m.topic}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ maxWidth: "78%", padding: "10px 14px", borderRadius: 14, fontSize: 13, lineHeight: 1.5, fontWeight: 500,
+                      borderTopRightRadius: isMe ? 4 : 14, borderTopLeftRadius: isMe ? 14 : 4,
+                      color: isMe ? "var(--accent-ink)" : "var(--ink)", background: isMe ? "var(--accent)" : "var(--glass-2)",
+                      border: isMe ? "none" : "1px solid var(--hairline)" }}>
+                      {m.message}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Composer */}
+            <div style={{ borderTop: "1px solid var(--hairline)", padding: "12px 16px", flexShrink: 0, display: "flex", gap: 9, background: "var(--glass-2)", alignItems: "flex-end" }}>
+              <textarea 
+                value={replyText} 
+                onChange={(e) => setReplyText(e.target.value)} 
+                rows={1}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendReply(); } }}
+                placeholder={`Reply to ${selectedThread.staffName}…`} 
+                style={{ 
+                  background: "var(--inset)", border: "1px solid var(--hairline)", borderRadius: 10, color: "var(--ink)",
+                  fontFamily: "var(--font)", fontSize: 13.5, padding: "10px 12px", width: "100%", outline: "none",
+                  resize: "none", lineHeight: 1.4, minHeight: 38 
+                }} 
+              />
+              <button onClick={sendReply} className="tap" style={{ width: 38, height: 38, borderRadius: 10, border: "none", cursor: "pointer", flexShrink: 0,
+                display: "grid", placeItems: "center", color: "var(--accent-ink)", background: "var(--accent)" }}>
+                <Icon name="arrowR" size={17} stroke={2.4} />
+              </button>
+            </div>
+          </React.Fragment>
+        ) : (
+          <div style={{ flex: 1, display: "grid", placeItems: "center", color: "var(--ink-4)", fontSize: 13, fontStyle: "italic" }}>
+            Select a staff member from the left to view the discussion.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function LeaveModule() {
   const [tab, setTab] = React.useState("hours");
   return (
     <section style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-        <SectionLabel right={<RadioTabs value={tab} onChange={setTab} tabs={[{ k: "hours", label: "Shift hours", icon: "clock" }, { k: "requests", label: "Requests", icon: "calendar" }]} />}>Attendance</SectionLabel>
+        <SectionLabel right={<RadioTabs value={tab} onChange={setTab} tabs={[{ k: "hours", label: "Shift hours", icon: "clock" }, { k: "requests", label: "Requests", icon: "calendar" }, { k: "discussion", label: "Discussion", icon: "message" }]} />}>Attendance</SectionLabel>
       </div>
-      {tab === "hours" ? <WorkedHours /> : <TimeOff />}
+      {tab === "hours" ? <WorkedHours /> : tab === "requests" ? <TimeOff /> : <RosterDiscussionChat />}
     </section>
   );
 }
@@ -7953,18 +8364,24 @@ function TheLabPage({ branch }) {
           ); })}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <select 
-            value={center} 
-            onChange={(e) => setCenter(e.target.value)} 
-            disabled={!isSuperAdmin && !hasDelegation}
-            style={{
-              ...inp,
-              opacity: (!isSuperAdmin && !hasDelegation) ? 0.65 : 1,
-              pointerEvents: (isSuperAdmin || hasDelegation) ? "auto" : "none"
-            }}
-          >
-            {LAB_CENTERS.map((c) => <option key={c} value={c}>{LAB_CLABEL[c]}</option>)}
-          </select>
+          {(!isSuperAdmin && !hasDelegation) ? (
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 10, background: "var(--glass-2)", border: "1px solid var(--hairline)", fontSize: 13.5, fontWeight: 650, color: "var(--ink-2)" }}>
+              <Icon name="mapPin" size={13} /> {LAB_CLABEL[center]} Centre
+            </div>
+          ) : (
+            <select 
+              value={center} 
+              onChange={(e) => setCenter(e.target.value)} 
+              disabled={!isSuperAdmin && !hasDelegation}
+              style={{
+                ...inp,
+                opacity: (!isSuperAdmin && !hasDelegation) ? 0.65 : 1,
+                pointerEvents: (isSuperAdmin || hasDelegation) ? "auto" : "none"
+              }}
+            >
+              {LAB_CENTERS.map((c) => <option key={c} value={c}>{LAB_CLABEL[c]}</option>)}
+            </select>
+          )}
           <button onClick={() => setCompliance((v) => !v)} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 12px", borderRadius: 10, cursor: "pointer", border: `1px solid ${compliance ? "color-mix(in oklch, var(--bad) 45%, transparent)" : "var(--hairline)"}`, background: compliance ? "color-mix(in oklch, var(--bad) 14%, transparent)" : "transparent", color: compliance ? "var(--bad)" : "var(--ink-3)", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 650 }}><Icon name="shield" size={14} /> Compliance</button>
           <button onClick={() => fileRef.current && fileRef.current.click()} className="tap glass-2" style={{ display: "inline-flex", alignItems: "center", gap: 7, height: 38, padding: "0 13px", borderRadius: 10, cursor: "pointer", color: "var(--ink-2)", border: "1px solid var(--hairline)", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 650 }}><Icon name="camera" size={15} /> Attach</button>
           <input ref={fileRef} type="file" accept="image/*,application/pdf" onChange={onFile} style={{ display: "none" }} />
@@ -7985,7 +8402,9 @@ function TheLabPage({ branch }) {
 
       {/* filters */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <Segmented value={fCenter} onChange={setFCenter} size="sm" options={LAB_CENTERS.map((c) => ({ value: c, label: c === "all" ? "All" : LAB_CLABEL[c] }))} />
+        {(isSuperAdmin || hasDelegation) && (
+          <Segmented value={fCenter} onChange={setFCenter} size="sm" options={LAB_CENTERS.map((c) => ({ value: c, label: c === "all" ? "All" : LAB_CLABEL[c] }))} />
+        )}
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {["all", ...Object.keys(LAB_TYPES), "compliance"].map((k) => { const on = fType === k; const lab = k === "all" ? "All" : k === "compliance" ? "Compliance" : LAB_TYPES[k].label; return (
             <button key={k} onClick={() => setFType(k)} className="tap" style={{ padding: "5px 11px", borderRadius: 999, cursor: "pointer", fontSize: 11.5, fontWeight: on ? 750 : 600, border: `1px solid ${on ? "var(--accent-line)" : "var(--hairline)"}`, background: on ? "var(--accent-soft)" : "transparent", color: on ? "var(--accent)" : "var(--ink-3)", fontFamily: "var(--font)" }}>{lab}</button>
@@ -8090,6 +8509,41 @@ function App({ bridge, onLogout }) {
     r.style.setProperty("--accent", acc);
     r.style.setProperty("--density", DENSITY_VAL[t.density] ?? 1);
   }, [t]);
+
+  React.useEffect(() => {
+    const channel = supabase.channel("realtime-claims-requests")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "staff_ot_claims" },
+        async (payload) => {
+          console.log("Realtime: staff_ot_claims changed", payload);
+          await loadOtClaims(window.FETS);
+          window.dispatchEvent(new Event("fets-roster-changed"));
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "leave_requests" },
+        async (payload) => {
+          console.log("Realtime: leave_requests changed", payload);
+          await loadLeaveRequests(window.FETS);
+          window.dispatchEvent(new Event("fets-roster-changed"));
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "roster_discussions" },
+        async (payload) => {
+          console.log("Realtime: roster_discussions changed", payload);
+          window.dispatchEvent(new Event("fets-discussion-changed"));
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
 
 

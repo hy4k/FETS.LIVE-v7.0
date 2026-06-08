@@ -297,72 +297,7 @@ export async function loadLiveData(F: any) {
   } catch (e) { /* keep seed */ }
 
   /* ---- leave requests (my leave) ---- */
-  try {
-    const { data, error } = await supabase
-      .from("leave_requests")
-      .select(`
-        *,
-        requestor:staff_profiles!leave_requests_user_id_fkey(full_name, branch_assigned),
-        target:staff_profiles!leave_requests_swap_with_user_id_fkey(full_name)
-      `)
-      .order("created_at", { ascending: false });
-
-    if (!error && data) {
-      F._staffRequests = data.map((r: any) => {
-        const who = r.requestor?.full_name || "Unknown";
-        const branch = branchOf(r.requestor?.branch_assigned);
-        const withWho = r.target?.full_name || "";
-        
-        let status = "Submitted";
-        if (r.status === "approved" || r.status === "Approved") status = "Approved";
-        if (r.status === "rejected" || r.status === "Rejected") status = "Rejected";
-
-        let kind = "leave";
-        if (r.request_type === "shift_swap" || r.request_type === "swap") kind = "swap";
-        if (r.request_type === "toil") kind = "toil";
-
-        let leaveType = "";
-        let reason = r.reason || "";
-        if (kind === "leave") {
-          const m = reason.match(/^\[(.*?)\]\s*(.*)/);
-          if (m) {
-            leaveType = m[1];
-            reason = m[2];
-          } else {
-            leaveType = "Full-day leave";
-          }
-        } else if (kind === "toil") {
-          leaveType = "TOIL Redeemed";
-        }
-
-        return {
-          id: String(r.id),
-          kind,
-          who,
-          with: withWho,
-          branch,
-          leaveType,
-          days: r.request_type === "toil" ? 1 : undefined,
-          date: r.requested_date || "",
-          swapDate: r.swap_date || "",
-          reason,
-          status,
-          user_id: r.user_id,
-          swap_with_user_id: r.swap_with_user_id
-        };
-      });
-
-      F.MY_LEAVE = F._staffRequests
-        .filter((r: any) => r.user_id === F._meId || r.who === F.user.name)
-        .map((r: any) => ({
-          id: r.id,
-          type: r.leaveType || (r.kind === "swap" ? "Shift swap" : "Leave"),
-          date: r.date,
-          status: r.status,
-          comment: r.reason,
-        }));
-    }
-  } catch (e) { /* keep seed */ }
+  await loadLeaveRequests(F);
 
   /* ---- current user toil balance + OT hours ---- */
   try {
@@ -613,4 +548,79 @@ export async function loadMonthlyPayroll(F: any) {
     console.error("loadMonthlyPayroll error:", e);
   }
 }
+
+export async function loadLeaveRequests(F: any) {
+  if (!F) return;
+  try {
+    const { data, error } = await supabase
+      .from("leave_requests")
+      .select(`
+        *,
+        requestor:staff_profiles!leave_requests_user_id_fkey(full_name, branch_assigned),
+        target:staff_profiles!leave_requests_swap_with_user_id_fkey(full_name)
+      `)
+      .order("created_at", { ascending: false });
+
+    if (!error && data) {
+      F._staffRequests = data.map((r: any) => {
+        const who = r.requestor?.full_name || "Unknown";
+        const branch = branchOf(r.requestor?.branch_assigned);
+        const withWho = r.target?.full_name || "";
+        
+        let status = "Submitted";
+        if (r.status === "approved" || r.status === "Approved") status = "Approved";
+        if (r.status === "rejected" || r.status === "Rejected") status = "Rejected";
+
+        let kind = "leave";
+        if (r.request_type === "shift_swap" || r.request_type === "swap") kind = "swap";
+        if (r.request_type === "toil") kind = "toil";
+
+        let leaveType = "";
+        let reason = r.reason || "";
+        if (kind === "leave") {
+          const m = reason.match(/^\[(.*?)\]\s*(.*)/);
+          if (m) {
+            leaveType = m[1];
+            reason = m[2];
+          } else {
+            leaveType = "Full-day leave";
+          }
+        } else if (kind === "toil") {
+          leaveType = "TOIL Redeemed";
+        }
+
+        return {
+          id: String(r.id),
+          kind,
+          who,
+          with: withWho,
+          branch,
+          leaveType,
+          days: r.request_type === "toil" ? 1 : undefined,
+          date: r.requested_date || "",
+          swapDate: r.swap_date || "",
+          reason,
+          status,
+          user_id: r.user_id,
+          swap_with_user_id: r.swap_with_user_id
+        };
+      });
+
+      F.MY_LEAVE = F._staffRequests
+        .filter((r: any) => r.user_id === F._meId || r.who === F.user.name)
+        .map((r: any) => ({
+          id: r.id,
+          type: r.leaveType || (r.kind === "swap" ? "Shift swap" : "Leave"),
+          date: r.date,
+          status: r.status,
+          comment: r.reason,
+        }));
+        
+      window.dispatchEvent(new Event("fets-roster-changed"));
+    }
+  } catch (e) {
+    console.error("loadLeaveRequests error:", e);
+  }
+}
+
 
