@@ -56,7 +56,7 @@ describe('Candidates Service', () => {
     const mockQuery = {
       select: vi.fn().mockReturnThis(),
       gte: vi.fn().mockReturnThis(),
-      lt: vi.fn().mockReturnThis(),
+      lte: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       order: vi.fn().mockResolvedValue({ data: mockData, error: null })
     }
@@ -70,7 +70,7 @@ describe('Candidates Service', () => {
     })
 
     expect(mockQuery.gte).toHaveBeenCalled()
-    expect(mockQuery.lt).toHaveBeenCalled()
+    expect(mockQuery.lte).toHaveBeenCalled()
     expect(mockQuery.eq).toHaveBeenCalledWith('status', 'registered')
     expect(mockQuery.eq).toHaveBeenCalledWith('branch_location', 'calicut')
     expect(result).toEqual(mockData)

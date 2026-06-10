@@ -3,8 +3,13 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useCandidateMetrics, useIncidentStats } from '../hooks/useQueries'
 
-// Mock the supabase helpers
+// Mock the supabase client and helpers
+const mockFrom = vi.fn()
+
 vi.mock('../lib/supabase', () => ({
+  supabase: {
+    from: (table: string) => mockFrom(table),
+  },
   supabaseHelpers: {
     getCandidates: vi.fn(),
     getIncidents: vi.fn(),
@@ -16,7 +21,7 @@ const createTestQueryClient = () => new QueryClient({
   defaultOptions: {
     queries: {
       retry: false,
-      gcTime: 0, // Updated from cacheTime
+      gcTime: 0,
     },
   },
 })
@@ -44,14 +49,14 @@ describe('useQueries hooks', () => {
         { id: '4', status: 'registered', exam_date: '2025-09-19T10:00:00Z' },
       ]
 
-      const { supabaseHelpers } = await import('../lib/supabase')
-      vi.mocked(supabaseHelpers.getCandidates).mockResolvedValue({
-        data: mockCandidates,
-        error: null,
-        count: null,
-        status: 200,
-        statusText: 'OK'
-      })
+      const mockQuery = {
+        select: vi.fn().mockReturnThis(),
+        gte: vi.fn().mockReturnThis(),
+        lte: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({ data: mockCandidates, error: null }),
+      }
+      mockFrom.mockReturnValue(mockQuery)
 
       const { result } = renderHook(() => useCandidateMetrics('2025-09-19'), { wrapper })
 
@@ -69,14 +74,14 @@ describe('useQueries hooks', () => {
     })
 
     it('should handle empty candidates', async () => {
-      const { supabaseHelpers } = await import('../lib/supabase')
-      vi.mocked(supabaseHelpers.getCandidates).mockResolvedValue({
-        data: [],
-        error: null,
-        count: null,
-        status: 200,
-        statusText: 'OK'
-      })
+      const mockQuery = {
+        select: vi.fn().mockReturnThis(),
+        gte: vi.fn().mockReturnThis(),
+        lte: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({ data: [], error: null }),
+      }
+      mockFrom.mockReturnValue(mockQuery)
 
       const { result } = renderHook(() => useCandidateMetrics('2025-09-19'), { wrapper })
 
@@ -91,7 +96,6 @@ describe('useQueries hooks', () => {
     })
 
     it('should handle errors', async () => {
-      const { supabaseHelpers } = await import('../lib/supabase')
       const mockError = { 
         name: 'PostgrestError',
         message: 'Database connection failed',
@@ -99,13 +103,14 @@ describe('useQueries hooks', () => {
         hint: 'Check your network connection',
         code: '500'
       }
-      vi.mocked(supabaseHelpers.getCandidates).mockResolvedValue({
-        data: null,
-        error: mockError,
-        count: null,
-        status: 500,
-        statusText: 'Internal Server Error'
-      })
+      const mockQuery = {
+        select: vi.fn().mockReturnThis(),
+        gte: vi.fn().mockReturnThis(),
+        lte: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({ data: null, error: mockError }),
+      }
+      mockFrom.mockReturnValue(mockQuery)
 
       const { result } = renderHook(() => useCandidateMetrics('2025-09-19'), { wrapper })
 
@@ -124,14 +129,12 @@ describe('useQueries hooks', () => {
         { id: '4', status: 'closed', priority: 'medium' },
       ]
 
-      const { supabaseHelpers } = await import('../lib/supabase')
-      vi.mocked(supabaseHelpers.getIncidents).mockResolvedValue({
-        data: mockIncidents,
-        error: null,
-        count: null,
-        status: 200,
-        statusText: 'OK'
-      })
+      const mockQuery = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({ data: mockIncidents, error: null }),
+      }
+      mockFrom.mockReturnValue(mockQuery)
 
       const { result } = renderHook(() => useIncidentStats(), { wrapper })
 
@@ -140,20 +143,18 @@ describe('useQueries hooks', () => {
           total: 4,
           open: 1,
           inProgress: 1,
-          resolved: 2, // rectified + closed
+          resolved: 2,
         })
       })
     })
 
     it('should handle no incidents', async () => {
-      const { supabaseHelpers } = await import('../lib/supabase')
-      vi.mocked(supabaseHelpers.getIncidents).mockResolvedValue({
-        data: [],
-        error: null,
-        count: null,
-        status: 200,
-        statusText: 'OK'
-      })
+      const mockQuery = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockResolvedValue({ data: [], error: null }),
+      }
+      mockFrom.mockReturnValue(mockQuery)
 
       const { result } = renderHook(() => useIncidentStats(), { wrapper })
 
