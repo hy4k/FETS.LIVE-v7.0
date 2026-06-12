@@ -205,6 +205,16 @@ export function FetsCalendarPremium() {
     currentDate, activeBranch, applyFilter, isGlobalView
   )
   const { data: dbClients = [] } = useClients()
+  const clientsWithOptions = useMemo(() => {
+    const list = [...dbClients];
+    if (!list.some((c: any) => c.name === 'CMA US')) {
+      list.push({ id: 'cma-us-client', name: 'CMA US', color: 'emerald' });
+    }
+    if (!list.some((c: any) => c.name === 'CELPIP')) {
+      list.push({ id: 'celpip-client', name: 'CELPIP', color: 'rose' });
+    }
+    return list;
+  }, [dbClients]);
   const { data: dbExams = [] } = useClientExams()
   const { addSession, updateSession, deleteSession, isMutating } = useSessionMutations()
 
@@ -322,7 +332,26 @@ export function FetsCalendarPremium() {
     if (cap.warning) toast(cap.warning, { icon: '⚠️' })
     try {
       if (activeBranch === 'global') { toast.error('Select a centre to add/edit sessions.'); return }
-      const data: any = { ...formData, user_id: user.id, updated_at: new Date().toISOString(), branch_location: activeBranch }
+      
+      let clientName = formData.client_name;
+      const examNameUpper = formData.exam_name.toUpperCase().trim();
+      const clientNameUpper = clientName.toUpperCase().trim();
+      
+      if (clientNameUpper === 'PROMETRIC') {
+        if (examNameUpper.includes('CMA US') || examNameUpper.includes('CMA')) {
+          clientName = 'CMA US';
+        } else if (examNameUpper.includes('CELPIP')) {
+          clientName = 'CELPIP';
+        }
+      }
+
+      const data: any = { 
+        ...formData, 
+        client_name: clientName,
+        user_id: user.id, 
+        updated_at: new Date().toISOString(), 
+        branch_location: activeBranch 
+      }
       if (editingSession?.id) await updateSession({ ...data, id: editingSession.id })
       else await addSession({ ...data, created_at: new Date().toISOString() })
       closeModal()
@@ -1194,8 +1223,8 @@ export function FetsCalendarPremium() {
                         className="w-full px-3 py-2.5 bg-[var(--recessed-bg)] border border-[var(--border-color)] rounded-lg text-sm font-medium text-[var(--text-primary)] focus:ring-1 focus:ring-[var(--accent-mint)]/50 focus:border-[var(--accent-mint)] outline-none"
                         required>
                         <option value="">Select Client</option>
-                        {dbClients.length > 0 ? (
-                          dbClients.map((c: any) => <option key={c.id} value={c.name}>{c.name}</option>)
+                        {clientsWithOptions.length > 0 ? (
+                          clientsWithOptions.map((c: any) => <option key={c.id} value={c.name}>{c.name}</option>)
                         ) : (
                           Object.keys(EXAM_COLORS).filter(k => k !== 'OTHER').map(k => <option key={k} value={k}>{k}</option>)
                         )}
@@ -1204,7 +1233,7 @@ export function FetsCalendarPremium() {
                     <div>
                       <label className="block text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">Exam</label>
                       {(() => {
-                        const sel = dbClients.find((c: any) => c.name === formData.client_name)
+                        const sel = clientsWithOptions.find((c: any) => c.name === formData.client_name)
                         const exams = sel ? dbExams.filter((e: any) => e.client_id === sel.id) : []
                         return exams.length > 0 ? (
                           <select value={formData.exam_name}

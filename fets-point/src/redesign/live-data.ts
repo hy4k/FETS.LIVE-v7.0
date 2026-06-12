@@ -413,9 +413,19 @@ export async function ensureMonth(d: Date) {
       data.forEach((s: any) => {
         const dt = new Date(`${s.date}T00:00:00`); if (isNaN(dt.getTime())) return;
         const k = `${dt.getFullYear()}-${dt.getMonth()}-${dt.getDate()}`;
+        let clientName = s.client_name || '';
+        const clientUpper = clientName.toUpperCase().trim();
+        const examUpper = (s.exam_name || '').toUpperCase().trim();
+        if (clientUpper === 'PROMETRIC') {
+          if (examUpper.includes('CMA US') || examUpper.includes('CMA')) {
+            clientName = 'CMA US';
+          } else if (examUpper.includes('CELPIP')) {
+            clientName = 'CELPIP';
+          }
+        }
         (F._liveSessions[k] || (F._liveSessions[k] = [])).push({
-          id: s.id, vendor: clientToSlug(s.client_name || s.exam_name),
-          exam: s.exam_name || s.client_name || "Exam session", count: Number(s.candidate_count) || 0,
+          id: s.id, vendor: clientToSlug(clientName || s.exam_name),
+          exam: s.exam_name || clientName || "Exam session", count: Number(s.candidate_count) || 0,
           start: (s.start_time || "09:00").slice(0, 5), end: (s.end_time || s.start_time || "").slice(0, 5),
           branch: branchOf(s.branch_location || s.branch),
         });

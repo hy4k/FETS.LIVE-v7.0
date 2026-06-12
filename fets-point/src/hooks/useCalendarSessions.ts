@@ -47,7 +47,20 @@ const fetchCalendarSessions = async (currentDate: Date, activeBranch: string, ap
 
   if (error) throw new Error(error.message)
 
-  return (data as Session[]) || []
+  const sessions = (data as Session[]) || []
+  return sessions.map(s => {
+    const clientUpper = (s.client_name || '').toUpperCase().trim();
+    const examUpper = (s.exam_name || '').toUpperCase().trim();
+    if (clientUpper === 'PROMETRIC') {
+      if (examUpper.includes('CMA US') || examUpper.includes('CMA')) {
+        return { ...s, client_name: 'CMA US' };
+      }
+      if (examUpper.includes('CELPIP')) {
+        return { ...s, client_name: 'CELPIP' };
+      }
+    }
+    return s;
+  });
 }
 
 export const useCalendarSessions = (currentDate: Date, activeBranch: string, applyFilter: (q: any) => any, isGlobalView: boolean) => {
