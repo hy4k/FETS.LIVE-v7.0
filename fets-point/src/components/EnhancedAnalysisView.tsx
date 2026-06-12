@@ -35,9 +35,9 @@ export const EnhancedAnalysisView: React.FC<AnalysisViewProps> = ({
 }) => {
   const { activeBranch } = useBranch();
 
-  // Neumorphic Styles
-  const neumorphicCard = "bg-[#1a3a3d] shadow-lg rounded-2xl border border-[#388087]";
-  const neumorphicInset = "bg-[#0d1d1f] shadow-inner rounded-xl border border-[#388087]";
+  // TE OP-XY Theme Styles
+  const opXyCard = "bg-[#f4f3ef] shadow-sm rounded-3xl border border-[#d5d4ce] text-[#1a1a1a]";
+  const opXyInset = "bg-[#eae9e4] rounded-2xl border border-[#d5d4ce] text-[#1a1a1a]";
 
   // Calculate comprehensive analytics
   const analytics = useMemo(() => {
@@ -122,7 +122,7 @@ export const EnhancedAnalysisView: React.FC<AnalysisViewProps> = ({
   }, [schedules, staffProfiles, currentDate, activeBranch]);
 
   return (
-    <div className="space-y-8 pb-12" style={{ fontFamily: "'Montserrat', sans-serif" }}>
+    <div className="space-y-8 pb-12" style={{ fontFamily: "'Inter', sans-serif" }}>
 
       {/* Header Section */}
       <motion.div
@@ -131,13 +131,13 @@ export const EnhancedAnalysisView: React.FC<AnalysisViewProps> = ({
         className="flex items-center justify-between mb-8"
       >
         <div>
-          <h2 className="text-3xl font-black text-white uppercase tracking-tight flex items-center gap-3">
-            <div className="p-3 rounded-xl bg-[#0d1d1f] border border-[#388087] text-[#92cdb3]">
+          <h2 className="text-3xl font-black text-[#1a1a1a] uppercase tracking-tight flex items-center gap-3">
+            <div className="p-3 rounded-2xl bg-[#eae9e4] border border-[#d5d4ce] text-black">
               <Activity size={24} />
             </div>
-            Workforce <span className="text-[#92cdb3]">Intelligence</span>
+            Workforce Intelligence
           </h2>
-          <p className="text-slate-400 font-medium mt-2 ml-16">
+          <p className="text-black/60 font-bold mt-2 ml-16">
             {currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })} • {activeBranch === 'global' ? 'All Centers' : activeBranch.toUpperCase()}
           </p>
         </div>
@@ -146,25 +146,25 @@ export const EnhancedAnalysisView: React.FC<AnalysisViewProps> = ({
       {/* KPI Grid */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
         {[
-          { label: 'Avg Attendance', value: `${Math.round(analytics.avgAttendance)}%`, icon: UserCheck, color: 'text-emerald-400', sub: 'Monthly Average' },
-          { label: 'Leave Rate', value: `${analytics.leaveRate.toFixed(1)}%`, icon: UserX, color: 'text-rose-400', sub: 'Absenteeism' },
-          { label: 'Total Overtime', value: `${analytics.totalOT}h`, icon: Clock, color: 'text-indigo-400', sub: 'Extra Hours' },
-          { label: 'Total TOIL', value: analytics.totalTOIL, icon: Zap, color: 'text-purple-400', sub: 'Rest Day Work' },
-          { label: 'Active Staff', value: analytics.totalStaff, icon: Users, color: 'text-[#92cdb3]', sub: 'Headcount' },
+          { label: 'Avg Attendance', value: `${Math.round(analytics.avgAttendance)}%`, icon: UserCheck, color: 'text-emerald-700', sub: 'Monthly Average' },
+          { label: 'Leave Rate', value: `${analytics.leaveRate.toFixed(1)}%`, icon: UserX, color: 'text-rose-700', sub: 'Absenteeism' },
+          { label: 'Total Overtime', value: `${analytics.totalOT}h`, icon: Clock, color: 'text-blue-700', sub: 'Extra Hours' },
+          { label: 'Total TOIL', value: analytics.totalTOIL, icon: Zap, color: 'text-purple-700', sub: 'Rest Day Work' },
+          { label: 'Active Staff', value: analytics.totalStaff, icon: Users, color: 'text-black', sub: 'Headcount' },
         ].map((stat, idx) => (
           <motion.div
             key={idx}
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: idx * 0.1 }}
-            className={`${neumorphicCard} p-6 flex flex-col items-center justify-center relative overflow-hidden group`}
+            className={`${opXyCard} p-6 flex flex-col items-center justify-center relative overflow-hidden group`}
           >
-            <div className={`absolute top-0 right-0 p-4 opacity-10 ${stat.color}`}>
+            <div className="absolute top-0 right-0 p-4 opacity-5 text-black">
               <stat.icon size={80} />
             </div>
-            <h3 className="text-slate-400 font-bold uppercase tracking-widest text-xs mb-2">{stat.label}</h3>
+            <h3 className="text-black/40 font-black uppercase tracking-wider text-[10px] mb-2">{stat.label}</h3>
             <div className={`text-4xl font-black ${stat.color} mb-1`}>{stat.value}</div>
-            <p className="text-xs text-slate-500 font-medium">{stat.sub}</p>
+            <p className="text-xs text-black/50 font-bold">{stat.sub}</p>
           </motion.div>
         ))}
       </div>
@@ -175,14 +175,14 @@ export const EnhancedAnalysisView: React.FC<AnalysisViewProps> = ({
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
-          className={`${neumorphicCard} p-6`}
+          className={`${opXyCard} p-6`}
         >
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-bold text-white uppercase tracking-tight flex items-center gap-2">
-              <AlertCircle size={20} className="text-[#FFD633]" />
+            <h3 className="text-lg font-black text-black uppercase tracking-tight flex items-center gap-2">
+              <AlertCircle size={20} className="text-rose-600" />
               High Load Warnings
             </h3>
-            <span className="text-xs font-bold bg-[#FFD633]/20 text-[#FFD633] px-2 py-1 rounded">
+            <span className="text-xs font-bold bg-rose-100 text-rose-800 px-2.5 py-1 rounded-lg">
               {analytics.overloadedStaff.length} Staff
             </span>
           </div>
@@ -190,25 +190,25 @@ export const EnhancedAnalysisView: React.FC<AnalysisViewProps> = ({
           <div className="space-y-3 max-h-[250px] overflow-y-auto pr-2 custom-scrollbar">
             {analytics.overloadedStaff.length > 0 ? (
               analytics.overloadedStaff.map(staff => (
-                <div key={staff.id} className="flex items-center justify-between p-3 rounded-xl bg-rose-900/20 border border-rose-500/30">
+                <div key={staff.id} className="flex items-center justify-between p-3 rounded-xl bg-rose-50 border border-rose-200/50">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-rose-500/20 flex items-center justify-center text-rose-400 font-bold text-xs">
+                    <div className="w-8 h-8 rounded-full bg-rose-200 flex items-center justify-center text-rose-800 font-bold text-xs">
                       {staff.full_name.charAt(0)}
                     </div>
                     <div>
-                      <p className="font-bold text-slate-200 text-sm">{staff.full_name}</p>
-                      <p className="text-xs text-rose-400 font-medium">{staff.metrics.otHours}h OT • {staff.metrics.totalAssigned} Shifts</p>
+                      <p className="font-bold text-black text-sm">{staff.full_name}</p>
+                      <p className="text-xs text-rose-700 font-medium">{staff.metrics.otHours}h OT • {staff.metrics.totalAssigned} Shifts</p>
                     </div>
                   </div>
-                  <div className="text-xs font-bold text-rose-400 bg-rose-500/20 px-2 py-1 rounded shadow-sm">
+                  <div className="text-xs font-black text-rose-800 bg-rose-100 px-2 py-1 rounded-lg shadow-sm uppercase tracking-wide">
                     OVERLOADED
                   </div>
                 </div>
               ))
             ) : (
-              <div className="flex flex-col items-center justify-center py-8 text-slate-500">
-                <CheckCircle2 size={32} className="text-emerald-400 mb-2" />
-                <p className="text-sm">Workload validated. No risks detected.</p>
+              <div className="flex flex-col items-center justify-center py-8 text-black/40">
+                <CheckCircle2 size={32} className="text-emerald-600 mb-2" />
+                <p className="text-sm font-medium">Workload validated. No risks detected.</p>
               </div>
             )}
           </div>
@@ -218,14 +218,14 @@ export const EnhancedAnalysisView: React.FC<AnalysisViewProps> = ({
         <motion.div
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
-          className={`${neumorphicCard} p-6`}
+          className={`${opXyCard} p-6`}
         >
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-bold text-white uppercase tracking-tight flex items-center gap-2">
-              <BatteryCharging size={20} className="text-emerald-400" />
+            <h3 className="text-lg font-black text-black uppercase tracking-tight flex items-center gap-2">
+              <BatteryCharging size={20} className="text-emerald-600" />
               Optimization Opportunities
             </h3>
-            <span className="text-xs font-bold bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded">
+            <span className="text-xs font-bold bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-lg">
               {analytics.underutilizedStaff.length} Staff
             </span>
           </div>
@@ -233,24 +233,24 @@ export const EnhancedAnalysisView: React.FC<AnalysisViewProps> = ({
           <div className="space-y-3 max-h-[250px] overflow-y-auto pr-2 custom-scrollbar">
             {analytics.underutilizedStaff.length > 0 ? (
               analytics.underutilizedStaff.map(staff => (
-                <div key={staff.id} className="flex items-center justify-between p-3 rounded-xl bg-emerald-900/20 border border-emerald-500/30">
+                <div key={staff.id} className="flex items-center justify-between p-3 rounded-xl bg-emerald-50 border border-emerald-200/50">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 font-bold text-xs">
+                    <div className="w-8 h-8 rounded-full bg-emerald-200 flex items-center justify-center text-emerald-800 font-bold text-xs">
                       {staff.full_name.charAt(0)}
                     </div>
                     <div>
-                      <p className="font-bold text-slate-200 text-sm">{staff.full_name}</p>
-                      <p className="text-xs text-emerald-400 font-medium">Only {staff.metrics.totalAssigned} Shifts Assigned</p>
+                      <p className="font-bold text-black text-sm">{staff.full_name}</p>
+                      <p className="text-xs text-emerald-700 font-medium">Only {staff.metrics.totalAssigned} Shifts Assigned</p>
                     </div>
                   </div>
-                  <div className="text-xs font-bold text-emerald-400 bg-emerald-500/20 px-2 py-1 rounded shadow-sm">
+                  <div className="text-xs font-black text-emerald-800 bg-emerald-100 px-2 py-1 rounded-lg shadow-sm uppercase tracking-wide">
                     AVAILABLE
                   </div>
                 </div>
               ))
             ) : (
-              <div className="flex flex-col items-center justify-center py-8 text-slate-500">
-                <p className="text-sm">All staff are actively utilized.</p>
+              <div className="flex flex-col items-center justify-center py-8 text-black/40">
+                <p className="text-sm font-medium">All staff are actively utilized.</p>
               </div>
             )}
           </div>
@@ -261,11 +261,11 @@ export const EnhancedAnalysisView: React.FC<AnalysisViewProps> = ({
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className={`${neumorphicCard} p-6 overflow-hidden`}
+        className={`${opXyCard} p-6 overflow-hidden`}
       >
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-bold text-white uppercase tracking-tight flex items-center gap-2">
-            <Users size={20} className="text-slate-400" />
+          <h3 className="text-lg font-black text-black uppercase tracking-tight flex items-center gap-2">
+            <Users size={20} className="text-black/60" />
             Detailed Staff Performance
           </h3>
         </div>
@@ -273,53 +273,53 @@ export const EnhancedAnalysisView: React.FC<AnalysisViewProps> = ({
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-[#388087]">
-                <th className="text-left py-4 px-4 font-bold text-slate-400 text-xs uppercase tracking-wider">Staff Member</th>
-                <th className="text-center py-4 px-4 font-bold text-slate-400 text-xs uppercase tracking-wider">Attendance</th>
-                <th className="text-center py-4 px-4 font-bold text-slate-400 text-xs uppercase tracking-wider">Shifts</th>
-                <th className="text-center py-4 px-4 font-bold text-slate-400 text-xs uppercase tracking-wider">Leaves</th>
-                <th className="text-center py-4 px-4 font-bold text-slate-400 text-xs uppercase tracking-wider">OT Hours</th>
-                <th className="text-center py-4 px-4 font-bold text-slate-400 text-xs uppercase tracking-wider">Status</th>
+              <tr className="border-b border-[#d5d4ce]">
+                <th className="text-left py-4 px-4 font-black text-black/60 text-xs uppercase tracking-wider">Staff Member</th>
+                <th className="text-center py-4 px-4 font-black text-black/60 text-xs uppercase tracking-wider">Attendance</th>
+                <th className="text-center py-4 px-4 font-black text-black/60 text-xs uppercase tracking-wider">Shifts</th>
+                <th className="text-center py-4 px-4 font-black text-black/60 text-xs uppercase tracking-wider">Leaves</th>
+                <th className="text-center py-4 px-4 font-black text-black/60 text-xs uppercase tracking-wider">OT Hours</th>
+                <th className="text-center py-4 px-4 font-black text-black/60 text-xs uppercase tracking-wider">Status</th>
               </tr>
             </thead>
             <tbody>
               {analytics.staffMetrics.map((staff) => (
-                <tr key={staff.id} className="border-b border-[#388087]/50 hover:bg-[#0d1d1f] transition-colors">
+                <tr key={staff.id} className="border-b border-[#d5d4ce]/50 hover:bg-black/5 transition-colors">
                   <td className="py-4 px-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-[#27575b] flex items-center justify-center text-[#92cdb3] font-bold text-xs">
+                      <div className="w-8 h-8 rounded-full bg-[#eae9e4] border border-[#d5d4ce] flex items-center justify-center text-black font-bold text-xs">
                         {staff.full_name.charAt(0)}
                       </div>
                       <div>
-                        <div className="font-bold text-slate-200 text-sm">{staff.full_name}</div>
-                        <div className="text-[10px] text-slate-500 uppercase tracking-wide">{staff.role}</div>
+                        <div className="font-bold text-black text-sm">{staff.full_name}</div>
+                        <div className="text-[10px] text-black/50 uppercase tracking-wide font-medium">{staff.role}</div>
                       </div>
                     </div>
                   </td>
                   <td className="text-center py-4 px-4">
                     <div className="flex flex-col items-center">
-                      <span className={`font-bold ${staff.metrics.attendanceScore >= 95 ? 'text-emerald-400' :
-                        staff.metrics.attendanceScore >= 85 ? 'text-[#FFD633]' : 'text-rose-400'
+                      <span className={`font-black ${staff.metrics.attendanceScore >= 95 ? 'text-emerald-700' :
+                        staff.metrics.attendanceScore >= 85 ? 'text-amber-700' : 'text-rose-700'
                         }`}>
                         {Math.round(staff.metrics.attendanceScore)}%
                       </span>
                     </div>
                   </td>
-                  <td className="text-center py-4 px-4 text-slate-300 font-medium">{staff.metrics.totalAssigned}</td>
+                  <td className="text-center py-4 px-4 text-black font-medium">{staff.metrics.totalAssigned}</td>
                   <td className="text-center py-4 px-4">
                     {staff.metrics.leaveDays > 0 ? (
-                      <span className="text-rose-400 font-bold bg-rose-500/20 px-2 py-1 rounded text-xs">{staff.metrics.leaveDays} Days</span>
+                      <span className="text-rose-800 font-bold bg-rose-100 border border-rose-200/50 px-2 py-1 rounded-lg text-xs">{staff.metrics.leaveDays} Days</span>
                     ) : (
-                      <span className="text-slate-600">-</span>
+                      <span className="text-black/30 font-medium">-</span>
                     )}
                   </td>
-                  <td className="text-center py-4 px-4 text-indigo-400 font-bold">
+                  <td className="text-center py-4 px-4 text-blue-700 font-bold">
                     {staff.metrics.otHours > 0 ? `${staff.metrics.otHours}h` : '-'}
                   </td>
                   <td className="text-center py-4 px-4">
-                    <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wide ${staff.metrics.loadStatus === 'Overloaded' ? 'bg-rose-500/20 text-rose-400' :
-                      staff.metrics.loadStatus === 'Underutilized' ? 'bg-emerald-500/20 text-emerald-400' :
-                        'bg-[#27575b] text-slate-300'
+                    <span className={`text-[10px] font-black px-2.5 py-1 rounded-lg uppercase tracking-wider ${staff.metrics.loadStatus === 'Overloaded' ? 'bg-rose-100 text-rose-800 border border-rose-200/50' :
+                      staff.metrics.loadStatus === 'Underutilized' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200/50' :
+                      'bg-[#eae9e4] text-black/60 border border-[#d5d4ce]'
                       }`}>
                       {staff.metrics.loadStatus}
                     </span>
@@ -333,3 +333,4 @@ export const EnhancedAnalysisView: React.FC<AnalysisViewProps> = ({
     </div>
   );
 };
+

@@ -13,22 +13,22 @@ export function RosterListView({ schedules, staffProfiles }: RosterListViewProps
 
   return (
     <div className="overflow-x-auto">
-      <table className="min-w-full bg-[#0d1d1f] shadow-md rounded-lg border border-[#388087]">
-        <thead className="bg-[#1a3a3d]">
+      <table className="min-w-full bg-[#f4f3ef] shadow-sm rounded-2xl border border-[#d5d4ce]">
+        <thead className="bg-[#eae9e4]">
           <tr>
-            <th className="py-3 px-4 text-left text-sm font-semibold text-slate-400">Date</th>
-            <th className="py-3 px-4 text-left text-sm font-semibold text-slate-400">Staff Name</th>
-            <th className="py-3 px-4 text-left text-sm font-semibold text-slate-400">Shift</th>
-            <th className="py-3 px-4 text-left text-sm font-semibold text-slate-400">Overtime</th>
+            <th className="py-4 px-6 text-left text-xs font-black uppercase tracking-wider text-black/60">Date</th>
+            <th className="py-4 px-6 text-left text-xs font-black uppercase tracking-wider text-black/60">Staff Name</th>
+            <th className="py-4 px-6 text-left text-xs font-black uppercase tracking-wider text-black/60">Shift</th>
+            <th className="py-4 px-6 text-left text-xs font-black uppercase tracking-wider text-black/60">Overtime</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-[#388087]">
+        <tbody className="divide-y divide-[#d5d4ce]">
           {schedules.map(schedule => (
-            <tr key={schedule.id}>
-              <td className="py-3 px-4 text-sm text-slate-200">{schedule.date}</td>
-              <td className="py-3 px-4 text-sm text-slate-200">{getStaffName(schedule.profile_id)}</td>
-              <td className="py-3 px-4 text-sm text-slate-200">{schedule.shift_code}</td>
-              <td className="py-3 px-4 text-sm text-slate-200">{schedule.overtime_hours}</td>
+            <tr key={schedule.id} className="hover:bg-black/5 transition-colors">
+              <td className="py-4 px-6 text-sm font-medium text-[#1a1a1a]">{schedule.date}</td>
+              <td className="py-4 px-6 text-sm font-bold text-[#1a1a1a]">{getStaffName(schedule.profile_id)}</td>
+              <td className="py-4 px-6 text-sm font-mono font-black text-[#1a1a1a]">{schedule.shift_code}</td>
+              <td className="py-4 px-6 text-sm font-mono text-[#1a1a1a]">{schedule.overtime_hours || 0} hrs</td>
             </tr>
           ))}
         </tbody>
@@ -36,3 +36,4 @@ export function RosterListView({ schedules, staffProfiles }: RosterListViewProps
     </div>
   );
 }
+
