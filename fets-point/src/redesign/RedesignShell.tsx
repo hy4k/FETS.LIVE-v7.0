@@ -2309,7 +2309,7 @@ function CalSessionCard({ s, showBranch }) {
       <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
         <span style={{ width: 18, height: 18, borderRadius: 5, background: v.color, color: "#fff", fontSize: 7.5, fontWeight: 800,
           display: "grid", placeItems: "center", flexShrink: 0, fontFamily: "var(--font)" }}>{v.short}</span>
-        <span className="mono" style={{ fontSize: 10.5, fontWeight: 700, color: v.color, letterSpacing: "0.02em" }}>{pfmt12(s.start)}</span>
+        <span className="mono" style={{ fontSize: 10.5, fontWeight: 700, color: "var(--ink-2)", letterSpacing: "0.02em" }}>{pfmt12(s.start)}</span>
       </div>
       <div style={{ fontSize: 12.5, fontWeight: 650, color: "var(--ink)", lineHeight: 1.25 }}>{s.exam}</div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -2605,8 +2605,12 @@ function useWindow(size) {
 
 function rangeLabel(offsets) {
   if (!offsets.length) return "";
-  const a = F().ISO(offsets[0]), b = F().ISO(offsets[offsets.length - 1]);
+  const a = F().ISO(offsets[0]);
   const mo = window.P_MO;
+  if (offsets.length === 1) {
+    return `${a.getDate()} ${mo[a.getMonth()]} ${a.getFullYear()}`;
+  }
+  const b = F().ISO(offsets[offsets.length - 1]);
   return a.getMonth() === b.getMonth()
     ? `${mo[a.getMonth()]} ${a.getDate()} – ${b.getDate()}`
     : `${mo[a.getMonth()]} ${a.getDate()} – ${mo[b.getMonth()]} ${b.getDate()}`;
@@ -2614,8 +2618,14 @@ function rangeLabel(offsets) {
 
 /* ---------- prev / next pager ---------- */
 function RangeNav({ win, unit = "days" }) {
+  const isWeek = win.offsets.length === 7;
+  const isDay = win.offsets.length === 1;
+  const navLabel = isWeek ? "Next Week" : isDay ? "Next Day" : `Next ${win.offsets.length}`;
+  const prevTitle = isWeek ? "Previous Week" : isDay ? "Previous Day" : "Earlier";
+  const nextTitle = isWeek ? "Next Week" : isDay ? "Next Day" : `Next ${win.offsets.length}`;
+
   const Btn = ({ dir, on, can }) => (
-    <button onClick={on} disabled={!can} title={dir === "prev" ? "Earlier" : `Next ${unit}`} className="tap glass-2"
+    <button onClick={on} disabled={!can} title={dir === "prev" ? prevTitle : nextTitle} className="tap glass-2"
       style={{ width: 38, height: 38, borderRadius: 11, display: "grid", placeItems: "center", flexShrink: 0,
         cursor: can ? "pointer" : "not-allowed", opacity: can ? 1 : 0.34,
         color: can ? "var(--ink)" : "var(--ink-4)", border: "1px solid var(--hairline)" }}>
@@ -2625,11 +2635,11 @@ function RangeNav({ win, unit = "days" }) {
   return (
     <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
       <Btn dir="prev" on={win.prev} can={win.canPrev} />
-      <button onClick={win.next} disabled={!win.canNext} className="tap" title={`Next ${unit}`}
+      <button onClick={win.next} disabled={!win.canNext} className="tap" title={nextTitle}
         style={{ display: "inline-flex", alignItems: "center", gap: 7, height: 38, padding: "0 14px", borderRadius: 11,
           cursor: win.canNext ? "pointer" : "not-allowed", opacity: win.canNext ? 1 : 0.34, border: "none",
           fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 700, color: "var(--accent-ink)", background: "var(--accent)" }}>
-        Next 10 <Icon name="arrowR" size={15} stroke={2.4} />
+        {navLabel} <Icon name="arrowR" size={15} stroke={2.4} />
       </button>
       <Btn dir="next" on={win.next} can={win.canNext} />
     </div>
@@ -2659,27 +2669,22 @@ function MonthGrid({ onPick, renderCell, monthOffset }) {
   for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(y, m, d));
   const sameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
   return (
-    <div className="glass" style={{ padding: "16px 16px 18px", borderRadius: "var(--radius)" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 8, marginBottom: 10 }}>
+    <div className="glass month-grid-container" style={{ padding: "20px 20px 24px", borderRadius: "var(--radius)" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 10, marginBottom: 14 }}>
         {window.P_WD.map((w, i) => (
-          <div key={i} className="eyebrow" style={{ textAlign: "center", fontSize: 9.5,
-            color: i === 0 || i === 6 ? "var(--ink-4)" : "var(--ink-3)" }}>{w}</div>
+          <div key={i} className="eyebrow" style={{ textAlign: "center", fontSize: 10,
+            color: i === 0 || i === 6 ? "var(--ink-4)" : "var(--ink-3)", fontWeight: 800 }}>{w}</div>
         ))}
       </div>
-      <div className="month-grid" style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 8 }}>
+      <div className="month-grid" style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 10 }}>
         {cells.map((date, i) => {
           if (!date) return <div key={i} />;
           const isToday = sameDay(date, today);
           const isPast = date < today && !isToday;
           return (
-            <button key={i} onClick={() => onPick(date)} className="tap"
-              style={{ minHeight: 122, padding: "9px 10px", borderRadius: 12, textAlign: "left", cursor: "pointer",
-                display: "flex", flexDirection: "column", gap: 5, fontFamily: "var(--font)",
-                background: isToday ? "var(--accent-soft)" : "var(--inset)",
-                border: isToday ? "1px solid var(--accent-line)" : "1px solid var(--glass-edge-lo)",
-                opacity: isPast ? 0.66 : 1 }}>
-              <span className="tabnum" style={{ fontSize: 15, fontWeight: 800, lineHeight: 1,
-                color: isToday ? "var(--accent)" : "var(--ink-2)" }}>{date.getDate()}</span>
+            <button key={i} onClick={() => onPick(date)} className={`tap month-day-cell ${isToday ? "today" : ""} ${isPast ? "past" : ""}`}
+              style={{ opacity: isPast ? 0.66 : 1 }}>
+              <span className="month-day-number">{date.getDate()}</span>
               {renderCell(date, isToday, isPast)}
             </button>
           );
@@ -3043,8 +3048,9 @@ function DayModal({ date, branch, onClose }) {
 }
 
 function CalendarPage({ branch }) {
-  const [view, setView] = React.useState("days");   // days | agenda | month | analysis
-  const win = useWindow(10);
+  const [view, setView] = React.useState("month");   // Default to Month (30 days) view
+  const winSize = view === "days" ? 7 : (view === "agenda" ? 1 : 7);
+  const win = useWindow(winSize);
   const [dayDrawer, setDayDrawer] = React.useState(null);
   const [monthOff, setMonthOff] = React.useState(0);
   const mi = monthInfo(monthOff);
@@ -3055,7 +3061,7 @@ function CalendarPage({ branch }) {
   useLiveSync(view === "month" ? [new Date(mi.y, mi.m, 1)] : win.offsets.map((o) => F().ISO(o)));
 
   return (
-    <div style={{ maxWidth: 1180, margin: "0 auto", display: "flex", flexDirection: "column", gap }}>
+    <div className="fets-calendar-mint" style={{ maxWidth: 1180, margin: "0 auto", display: "flex", flexDirection: "column", gap }}>
       <PageHeader eyebrow={`Exam Schedule // ${capBranch(branch)}`} title="Calendar" />
 
       <section style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -3074,7 +3080,7 @@ function CalendarPage({ branch }) {
           </div>
           <div style={{ flex: 1 }} />
           <Segmented value={view} onChange={setView} size="sm" options={[
-            { value: "days", label: "10 Days" }, { value: "agenda", label: "Day wise" }, { value: "month", label: "Month wise" }, { value: "analysis", label: "Overview" },
+            { value: "month", label: "Month" }, { value: "agenda", label: "Day" }, { value: "days", label: "Week" }, { value: "analysis", label: "Overview" },
           ]} />
           {(view === "days" || view === "agenda") && <RangeNav win={win} />}
         </div>
@@ -3110,19 +3116,22 @@ function CalendarPage({ branch }) {
             const total = ss.reduce((a, x) => a + x.count, 0);
             return (
               <React.Fragment>
-                <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 1, minWidth: 0 }}>
-                  {ss.slice(0, 3).map((s, i) => (
-                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 9.5, color: "var(--ink-3)", minWidth: 0 }}>
-                      <span style={{ width: 6, height: 6, borderRadius: 2, background: window.VENDOR_BY_SLUG[s.vendor].color, flexShrink: 0 }} />
-                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{window.VENDOR_BY_SLUG[s.vendor].short} · {s.count}</span>
+                <div className="month-day-cell-sessions" style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 4, minWidth: 0, width: "100%" }}>
+                  {ss.slice(0, 4).map((s, i) => (
+                    <div key={i} className="month-day-session-badge" style={{ display: "flex", alignItems: "center", fontSize: 9.5, color: "var(--ink-2)", minWidth: 0, padding: "2px 6px", borderRadius: "5px", background: "var(--panel-2)", border: "1px solid var(--hairline)" }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        <span style={{ width: 5, height: 5, borderRadius: "50%", background: window.VENDOR_BY_SLUG[s.vendor].color, flexShrink: 0 }} />
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 600 }}>{window.VENDOR_BY_SLUG[s.vendor].short}</span>
+                      </span>
+                      <span className="tabnum mono" style={{ marginLeft: "auto", fontWeight: 800, color: "var(--ink)" }}>{s.count}</span>
                     </div>
                   ))}
-                  {ss.length > 3 && <span style={{ fontSize: 9, color: "var(--ink-4)" }}>+{ss.length - 3} more</span>}
+                  {ss.length > 4 && <span style={{ fontSize: 9, color: "var(--ink-4)", fontWeight: 700, paddingLeft: 4 }}>+{ss.length - 4} more</span>}
                 </div>
-                <div style={{ marginTop: "auto", display: "flex", alignItems: "center", gap: 5, paddingTop: 4, borderTop: "1px solid var(--hairline)" }}>
-                  <Icon name="users" size={11} style={{ color: "var(--ink-4)" }} />
-                  <span className="mono" style={{ fontSize: 10.5, fontWeight: 700, color: "var(--ink-3)" }}>{total}</span>
-                  <span style={{ fontSize: 9, color: "var(--ink-4)" }}>· {ss.length} sess</span>
+                <div className="month-day-cell-footer" style={{ marginTop: "auto", display: "flex", alignItems: "center", gap: 4, paddingTop: 6, borderTop: "1px solid var(--hairline)", width: "100%" }}>
+                  <Icon name="users" size={10} style={{ color: "var(--accent)" }} />
+                  <span className="mono" style={{ fontSize: 10, fontWeight: 800, color: "var(--ink-3)" }}>{total} Candidates</span>
+                  <span style={{ fontSize: 8.5, color: "var(--ink-4)", marginLeft: "auto", fontWeight: 700 }}>{ss.length} sess</span>
                 </div>
               </React.Fragment>
             );

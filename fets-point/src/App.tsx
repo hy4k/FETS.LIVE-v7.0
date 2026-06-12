@@ -227,7 +227,7 @@ function AppContent() {
   const isFullscreenPage = activeTab === 'my-desk' || activeTab === 'fets-intelligence' || activeTab === 'command-center';
 
   return (
-    <div className={`golden-theme min-h-screen h-screen flex flex-col overflow-hidden relative ${getBranchTheme(activeBranch)}`}>
+    <div className={`golden-theme min-h-screen h-screen flex flex-col overflow-hidden relative ${getBranchTheme(activeBranch)} ${(activeTab === 'fets-calendar' || activeTab === 'fets-calendar-demo') ? 'fets-calendar-active-page' : ''}`}>
       {isMobile && !isFullscreenPage && <div className="h-safe-top bg-[#1a3a3d] w-full flex-none" />}
 
       {!isFullscreenPage && !isMobile && (

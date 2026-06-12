@@ -1,309 +1,195 @@
-/* Enhanced Calendar Styles for Yellow Gradient and Improved Layout */
+/* Custom Sage-Theme Neumorphic & Claymorphic Styles for standalone FetsCalendarPremium */
 
-/* Enhanced Calendar Day Cells with Larger Size */
-.calendar-day-cell-enhanced {
-  position: relative;
-  padding: 8px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  border-radius: 8px;
-  display: flex;
-  flex-direction: column;
-  min-height: 120px; /* Larger day columns */
-  margin: 2px;
+.fets-calendar-standalone-mint,
+.fets-calendar-active-page {
+  /* Sage & Bronze Theme colors */
+  --accent-mint: #b17729; /* Warm bronze */
+  --accent-mint-hover: #9c6620;
+  --accent-mint-glow: rgba(177, 119, 41, 0.25);
+  
+  /* Page backgrounds & UI elements (Dark Mode) */
+  --page-bg: #1c2825; /* Rich deep sage green background */
+  --card-bg: #263531; /* Premium sage card surface */
+  --recessed-bg: #151e1c; /* Recessed dark sage background */
+  
+  --border-color: rgba(183, 162, 128, 0.2); /* Muted sand border */
+  --border-color-hover: rgba(177, 119, 41, 0.4); /* Bronze border on hover */
+  
+  --text-primary: #f2f5f4; /* Clean off-white primary text */
+  --text-secondary: #a5beb1; /* Light sage-gray secondary text */
+  --text-accent: #b7a280; /* Sand accent text */
 }
 
-.calendar-day-cell-enhanced:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+/* Light mode overrides */
+body:not(.dark-mode) .fets-calendar-standalone-mint,
+body:not(.dark-mode) .fets-calendar-active-page,
+[data-theme="light"] .fets-calendar-standalone-mint,
+.fets-calendar-standalone-mint[data-theme="light"],
+[data-theme="light"] .fets-calendar-active-page,
+.fets-calendar-active-page[data-theme="light"] {
+  /* Page backgrounds & UI elements (Light Mode) */
+  --page-bg: #f0f4f2; /* Very soft light sage green-gray based on #8ca197 */
+  --card-bg: #ffffff; /* Clean white card surfaces */
+  --recessed-bg: #e2eae6; /* Recessed sage-gray */
+  
+  --border-color: rgba(183, 162, 128, 0.45); /* Muted sand border */
+  --border-color-hover: rgba(177, 119, 41, 0.6);
+  
+  --text-primary: #1e2d28; /* Dark sage-slate primary text */
+  --text-secondary: #5a7067; /* Sage secondary text */
+  --text-accent: #8e6224; /* Muted bronze accent text */
+}
+
+/* Page Background & Global Text Color Override */
+.fets-calendar-standalone-mint,
+.fets-calendar-active-page,
+body.dark-mode .fets-calendar-active-page {
+  background: var(--page-bg) !important;
+  background-color: var(--page-bg) !important;
+  background-image: none !important;
+  color: var(--text-primary) !important;
+  min-height: 100vh;
+}
+
+/* Page-level overrides when calendar is active */
+.fets-calendar-active-page .flex-1.overflow-y-auto {
+  background: var(--page-bg) !important;
+  background-color: var(--page-bg) !important;
+  background-image: none !important;
+  padding: 0 !important; /* Remove parent padding so calendar fills screen */
+}
+
+/* Style the legacy header container in desktop when calendar is active */
+.fets-calendar-active-page .bg-\[\#e0e5ec\] {
+  background-color: var(--recessed-bg) !important;
+  background: var(--recessed-bg) !important;
+  border-bottom: 1px solid var(--border-color) !important;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Style the command deck in desktop when calendar is active */
+.fets-calendar-active-page .fets-command-deck {
+  background-color: var(--recessed-bg) !important;
+  background: var(--recessed-bg) !important;
+  border-bottom: 1px solid var(--border-color) !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Override header text and items when calendar is active to use theme colors */
+.fets-calendar-active-page .fets-command-deck,
+.fets-calendar-active-page .fets-command-deck *,
+.fets-calendar-active-page .bg-\[\#e0e5ec\],
+.fets-calendar-active-page .bg-\[\#e0e5ec\] * {
+  color: var(--text-primary) !important;
+}
+
+/* Override active navigation text and logo F to use the Bronze accent color */
+.fets-calendar-active-page .fets-command-deck .text-\[\#FACC15\],
+.fets-calendar-active-page .fets-command-deck .border-\[\#FACC15\],
+.fets-calendar-active-page .fets-command-deck .bg-\[\#FACC15\],
+.fets-calendar-active-page .fets-command-deck .text-7xl,
+.fets-calendar-active-page .fets-command-deck .text-8xl,
+.fets-calendar-active-page .fets-command-deck button.active,
+.fets-calendar-active-page .fets-command-deck .module-btn.active {
+  color: var(--accent-mint) !important;
+  border-color: var(--accent-mint) !important;
+}
+
+/* Subtle border color for header pill controls */
+.fets-calendar-active-page .fets-command-deck .fets-pill-control,
+.fets-calendar-active-page .fets-command-deck .border-white\/5,
+.fets-calendar-active-page .fets-command-deck .border-white\/10 {
+  border-color: var(--border-color) !important;
+  background: rgba(255, 255, 255, 0.02) !important;
+}
+
+.fets-calendar-active-page .fets-command-deck .fets-pill-control:hover,
+.fets-calendar-active-page .fets-command-deck .module-btn:hover {
+  color: var(--accent-mint) !important;
+  border-color: var(--accent-mint) !important;
+  background: rgba(177, 119, 41, 0.08) !important;
+}
+
+
+
+/* Standalone calendar Month cell claymorphism + neumorphism */
+.fets-calendar-standalone-mint .month-day-cell-premium {
+  background: var(--card-bg) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 20px !important;
+  min-height: 185px !important;
+  padding: 14px !important;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  /* Neumorphic outer shadow for dark mode with subtle sage #8ca197 ambient tint */
+  box-shadow: 
+    6px 6px 16px rgba(10, 16, 15, 0.5), 
+    -6px -6px 16px rgba(255, 255, 255, 0.02),
+    inset 2px 2px 4px rgba(255, 255, 255, 0.04), 
+    inset -2px -2px 6px rgba(0, 0, 0, 0.4) !important;
+}
+
+[data-theme="light"] .fets-calendar-standalone-mint .month-day-cell-premium {
+  /* Light Mode Neumorphism with Sage-gray shadow */
+  box-shadow: 
+    6px 6px 14px rgba(140, 161, 151, 0.35), 
+    -6px -6px 14px #ffffff,
+    inset 2px 2px 4px #ffffff,
+    inset -2px -2px 5px rgba(183, 162, 128, 0.12) !important;
+}
+
+.fets-calendar-standalone-mint .month-day-cell-premium:hover {
+  transform: translateY(-4px) scale(1.02);
+  border-color: var(--accent-mint) !important;
   z-index: 10;
+  box-shadow: 
+    10px 10px 24px rgba(10, 16, 15, 0.7), 
+    -10px -10px 24px rgba(255, 255, 255, 0.04),
+    inset 3px 3px 6px rgba(255, 255, 255, 0.08), 
+    inset -3px -3px 8px rgba(0, 0, 0, 0.5) !important;
 }
 
-.calendar-day-today-enhanced {
-  box-shadow: 0 0 0 3px #3b82f6, 0 4px 12px rgba(59, 130, 246, 0.3);
-  transform: scale(1.02);
+[data-theme="light"] .fets-calendar-standalone-mint .month-day-cell-premium:hover {
+  box-shadow: 
+    10px 10px 20px rgba(140, 161, 151, 0.45), 
+    -10px -10px 20px #ffffff,
+    inset 3px 3px 6px #ffffff,
+    inset -3px -3px 8px rgba(177, 119, 41, 0.15) !important;
 }
 
-.calendar-day-has-events-enhanced {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+/* Today highlighted cell */
+.fets-calendar-standalone-mint .month-day-cell-premium.today {
+  border: 2px solid var(--accent-mint) !important;
+  background: linear-gradient(135deg, rgba(177, 119, 41, 0.08) 0%, rgba(183, 162, 128, 0.05) 100%) !important;
+  box-shadow: 
+    0 0 20px rgba(177, 119, 41, 0.25), 
+    inset 2px 2px 4px rgba(255, 255, 255, 0.08),
+    inset -2px -2px 6px rgba(0, 0, 0, 0.4) !important;
 }
 
-.calendar-day-empty-date-enhanced {
-  opacity: 0.8;
+[data-theme="light"] .fets-calendar-standalone-mint .month-day-cell-premium.today {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(183, 162, 128, 0.08) 100%) !important;
+  box-shadow: 
+    6px 6px 14px rgba(140, 161, 151, 0.35), 
+    -6px -6px 14px #ffffff,
+    inset 2px 2px 4px #ffffff,
+    inset -2px -2px 6px rgba(177, 119, 41, 0.08) !important;
 }
 
-.calendar-day-empty-date-enhanced:hover {
-  opacity: 1;
+.fets-calendar-standalone-mint .month-day-cell-premium.today .text-white {
+  color: var(--accent-mint) !important;
 }
 
-/* Enhanced Calendar Day Header */
-.calendar-day-header-enhanced {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 8px;
+/* Micro bar glow overrides */
+.fets-calendar-standalone-mint .month-day-cell-premium .bg-emerald-500 {
+  background-color: var(--accent-mint) !important;
+  box-shadow: 0 0 8px var(--accent-mint-glow);
 }
 
-.calendar-day-number-enhanced {
-  font-size: 1.25rem;
-  font-weight: 600;
-  line-height: 1;
+.fets-calendar-standalone-mint .month-day-cell-premium .text-emerald-400 {
+  color: var(--accent-mint) !important;
 }
 
-/* Enhanced Calendar Grid */
-.calendar-grid-professional {
-  background: white;
-  border-radius: 16px;
-  overflow: hidden;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-  margin: 0 1rem;
-}
-
-.calendar-weekday-headers {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  background: linear-gradient(135deg, #374151 0%, #1f2937 100%);
-  color: white;
-}
-
-.calendar-weekday-header {
-  padding: 1rem;
-  text-align: center;
-  font-weight: 600;
-  font-size: 0.875rem;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.calendar-weekday-short {
-  display: none;
-}
-
-@media (max-width: 768px) {
-  .calendar-weekday-full {
-    display: none;
-  }
-  
-  .calendar-weekday-short {
-    display: inline;
-  }
-}
-
-.calendar-days-grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 0;
-  background: #f9fafb;
-}
-
-.calendar-day-empty {
-  min-height: 120px;
-  background: #f3f4f6;
-  opacity: 0.3;
-}
-
-/* Enhanced Event Indicators */
-.calendar-day-events {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin-top: 4px;
-}
-
-.calendar-event-indicator {
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 10px;
-  font-weight: 500;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(4px);
-  border: 1px solid rgba(0, 0, 0, 0.1);
-}
-
-.calendar-event-client {
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
-.calendar-event-count {
-  background: rgba(0, 0, 0, 0.1);
-  padding: 1px 4px;
-  border-radius: 3px;
-  font-size: 9px;
-}
-
-.calendar-event-more {
-  text-align: center;
-  font-size: 10px;
-  color: rgba(0, 0, 0, 0.6);
-  font-style: italic;
-  padding: 2px;
-}
-
-/* Client-specific colors for enhanced visibility */
-.calendar-event-pearson {
-  border-left: 3px solid #3b82f6;
-}
-
-.calendar-event-vue {
-  border-left: 3px solid #10b981;
-}
-
-.calendar-event-ets {
-  border-left: 3px solid #f59e0b;
-}
-
-.calendar-event-psi {
-  border-left: 3px solid #ef4444;
-}
-
-.calendar-event-prometric {
-  border-left: 3px solid #8b5cf6;
-}
-
-.calendar-event-other {
-  border-left: 3px solid #6b7280;
-}
-
-/* Enhanced Navigation */
-.calendar-navigation-professional {
-  background: white;
-  padding: 1.5rem 1rem;
-  display: flex;
-  justify-content: center;
-  margin: 0 1rem;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  margin-bottom: 1rem;
-}
-
-.calendar-nav-content {
-  display: flex;
-  align-items: center;
-  gap: 2rem;
-}
-
-.calendar-nav-btn {
-  padding: 0.75rem;
-  border: none;
-  background: #f3f4f6;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  color: #374151;
-}
-
-.calendar-nav-btn:hover {
-  background: #e5e7eb;
-  transform: translateY(-1px);
-}
-
-.calendar-month-display {
-  min-width: 200px;
-  text-align: center;
-}
-
-.calendar-month-title {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #1f2937;
-  margin: 0;
-}
-
-/* Enhanced Modal Styles */
-.calendar-modal-enhanced {
-  background: linear-gradient(135deg, rgba(17, 24, 39, 0.95) 0%, rgba(0, 0, 0, 0.9) 100%);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 20px;
-  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
-}
-
-/* Loading and Error States */
-.calendar-loading-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 60vh;
-  background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
-}
-
-.calendar-loading-content {
-  text-align: center;
-  padding: 2rem;
-}
-
-.calendar-loading-spinner {
-  width: 3rem;
-  height: 3rem;
-  border: 4px solid #f3f4f6;
-  border-top: 4px solid #3b82f6;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin: 0 auto 1rem;
-}
-
-.calendar-loading-text {
-  color: #6b7280;
-  font-size: 1.125rem;
-  font-weight: 500;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-/* Responsive Design */
-@media (max-width: 768px) {
-  .calendar-day-cell-enhanced {
-    min-height: 80px;
-    padding: 4px;
-  }
-  
-  .calendar-day-number-enhanced {
-    font-size: 1rem;
-  }
-  
-  .calendar-grid-professional {
-    margin: 0 0.5rem;
-  }
-  
-  .calendar-navigation-professional {
-    margin: 0 0.5rem;
-    padding: 1rem 0.5rem;
-  }
-  
-  .calendar-nav-content {
-    gap: 1rem;
-  }
-  
-  .calendar-month-title {
-    font-size: 1.25rem;
-  }
-}
-
-@media (max-width: 480px) {
-  .calendar-day-cell-enhanced {
-    min-height: 60px;
-    padding: 2px;
-  }
-  
-  .calendar-day-number-enhanced {
-    font-size: 0.875rem;
-  }
-  
-  .calendar-event-indicator {
-    font-size: 8px;
-    padding: 1px 3px;
-  }
-  
-  .calendar-event-count-badge {
-    font-size: 8px !important;
-    padding: 1px 3px !important;
-  }
+/* Weekend cells styling */
+.fets-calendar-standalone-mint .month-day-cell-premium.weekend {
+  background: var(--recessed-bg) !important;
 }

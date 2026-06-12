@@ -467,3 +467,155 @@
   background: #ff3344 !important;
   box-shadow: 0 0 8px #ff3344, 0 0 15px #ff3344 !important;
 }
+
+/* ============================================================
+   FETS CALENDAR EARTH SAGE-BRONZE THEME & CLAYMORPHISM CELLS
+   ============================================================ */
+.fets-redesign-root .fets-calendar-mint {
+  /* Sage & Bronze colors */
+  --accent: #b17729; /* Warm copper/bronze */
+  --accent-2: #b7a280; /* Sand / gold */
+  --accent-soft: rgba(183, 162, 128, 0.12); /* Soft sand glow */
+  --accent-line: rgba(177, 119, 41, 0.25);
+  --accent-ink: #ffffff;
+}
+
+/* Light mode overrides inside fets-calendar-mint */
+.fets-redesign-root[data-theme="light"] .fets-calendar-mint {
+  --accent: #b17729;
+  --accent-2: #b7a280;
+  --accent-soft: rgba(183, 162, 128, 0.15); /* Soft sand background */
+  --accent-line: rgba(177, 119, 41, 0.25);
+  --accent-ink: #ffffff;
+  --wall-base: #f0f3f2; /* Soft light sage page background based on #8ca197 */
+  background-color: #f0f3f2;
+  border-radius: var(--radius);
+  padding: 24px;
+}
+
+/* Neumorphic + Claymorphic Month Grid Cells */
+.fets-redesign-root .month-day-cell {
+  position: relative;
+  min-height: 175px; /* Large enough to include more content */
+  padding: 12px 12px 14px;
+  border-radius: 18px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-family: var(--font);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  outline: none;
+  width: 100%;
+}
+
+/* Dark Mode Cell styling */
+.fets-redesign-root .month-day-cell {
+  background: var(--inset);
+  border: 1px solid var(--hairline);
+  /* Soft Dark Neumorphic Shadow */
+  box-shadow: 
+    4px 4px 12px rgba(10, 16, 15, 0.5), 
+    -4px -4px 12px rgba(255, 255, 255, 0.02);
+}
+
+/* Light Mode Cell styling with Sage-gray (#8ca197) neumorphic shadows */
+.fets-redesign-root[data-theme="light"] .month-day-cell {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  /* Claymorphic inner shadow + Neumorphic outer shadow using sage-gray #8ca197 shadow */
+  box-shadow: 
+    6px 6px 14px rgba(140, 161, 151, 0.35), /* Sage-gray shadow */
+    -6px -6px 14px #ffffff,
+    inset 2px 2px 4px #ffffff,
+    inset -2px -2px 5px rgba(183, 162, 128, 0.12); /* Sand glow */
+}
+
+/* Cell hover behavior */
+.fets-redesign-root .month-day-cell:hover {
+  transform: translateY(-4px) scale(1.02);
+  z-index: 5;
+  border-color: var(--accent);
+}
+
+.fets-redesign-root .month-day-cell:hover {
+  box-shadow: 
+    8px 8px 18px rgba(10, 16, 15, 0.7), 
+    -8px -8px 18px rgba(255, 255, 255, 0.04),
+    inset 2px 2px 4px rgba(255, 255, 255, 0.06),
+    inset -2px -2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.fets-redesign-root[data-theme="light"] .month-day-cell:hover {
+  box-shadow: 
+    10px 10px 20px rgba(140, 161, 151, 0.45), 
+    -10px -10px 20px #ffffff,
+    inset 3px 3px 6px #ffffff,
+    inset -3px -3px 8px rgba(177, 119, 41, 0.15); /* Bronze glow */
+}
+
+/* Prominent Date Inside Cell */
+.fets-redesign-root .month-day-number {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1;
+  color: var(--ink-2);
+  transition: color 0.2s;
+}
+
+.fets-redesign-root .month-day-cell:hover .month-day-number {
+  color: var(--accent);
+}
+
+/* Today highlighted cell */
+.fets-redesign-root .month-day-cell.today {
+  background: var(--accent-soft);
+  border: 2px solid var(--accent);
+}
+
+.fets-redesign-root[data-theme="light"] .month-day-cell.today {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(183, 162, 128, 0.08) 100%);
+  border: 2px solid var(--accent);
+  box-shadow: 
+    6px 6px 14px rgba(140, 161, 151, 0.35), 
+    -6px -6px 14px #ffffff,
+    inset 2px 2px 4px #ffffff,
+    inset -2px -2px 6px rgba(177, 119, 41, 0.08);
+}
+
+.fets-redesign-root .month-day-cell.today .month-day-number {
+  color: var(--accent);
+  font-weight: 900;
+}
+
+/* Past cell opacity */
+.fets-redesign-root .month-day-cell.past {
+  opacity: 0.65;
+}
+.fets-redesign-root .month-day-cell.past:hover {
+  opacity: 1;
+}
+
+/* Roster / Calendar strip column overrides for Week view styling */
+.fets-redesign-root .cal-col {
+  border-radius: 18px !important;
+  transition: all 0.25s ease-in-out !important;
+}
+.fets-redesign-root[data-theme="light"] .cal-col {
+  background: rgba(255, 255, 255, 0.8) !important;
+  border: 1px solid rgba(255, 255, 255, 0.6) !important;
+  box-shadow: 
+    6px 6px 14px rgba(140, 161, 151, 0.25), 
+    -6px -6px 14px #ffffff,
+    inset 2px 2px 4px #ffffff !important;
+}
+.fets-redesign-root[data-theme="light"] .cal-col:hover {
+  transform: translateY(-2px);
+  box-shadow: 
+    8px 8px 18px rgba(140, 161, 151, 0.35), 
+    -8px -8px 18px #ffffff,
+    inset 2px 2px 4px #ffffff !important;
+}
+
