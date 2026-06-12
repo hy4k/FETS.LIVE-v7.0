@@ -35,8 +35,9 @@ jobs:
           command_timeout: 15m
           script: |
             set -e
-            cd ~/FETS.LIVE-v7.0 || git clone https://github.com/hy4k/FETS.LIVE-v7.0.git ~/FETS.LIVE-v7.0
-            cd ~/FETS.LIVE-v7.0
+            cd ~/FETS.LIVE-v6.0 || git clone https://github.com/hy4k/FETS.LIVE-v6.0.git ~/FETS.LIVE-v6.0
+            cd ~/FETS.LIVE-v6.0
+            git pull
             bash deploy.sh
 
       - name: Note when skipped
