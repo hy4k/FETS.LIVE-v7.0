@@ -254,7 +254,7 @@ export async function loadLiveData(F: any) {
 
   /* ---- cases (incidents) ---- */
   try {
-    const { data, error } = await supabase.from("incidents").select("*").order("created_at", { ascending: false }).limit(1000);
+    const { data, error } = await supabase.from("incidents").select("*, incident_comments(*)").order("created_at", { ascending: false }).limit(1000);
     if (!error && data) {
       const mapStatus = (s: string) => { s = lc(s); if (s.includes("resolv") || s.includes("close") || s.includes("done")) return "resolved"; if (s.includes("progress")) return "progress"; return "open"; };
       const mapPrio = (p: string) => { p = lc(p); if (p.includes("urgent") || p.includes("critical")) return "Urgent"; if (p.includes("high")) return "High"; if (p.includes("low")) return "Low"; return "Medium"; };
@@ -272,7 +272,15 @@ export async function loadLiveData(F: any) {
         age: "",
         detail: c.description || c.details || "",
         contact: null,
-        thread: [],
+        thread: (c.incident_comments || []).map((m: any) => ({
+          id: m.id,
+          kind: "comment",
+          role: m.author_id === F._meUserId ? "user" : "proctor",
+          author: m.author_full_name,
+          text: m.body,
+          when: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          rawTime: m.created_at
+        })).sort((a: any, b: any) => new Date(a.rawTime).getTime() - new Date(b.rawTime).getTime()),
       }));
     }
   } catch (e) { /* keep seed */ }

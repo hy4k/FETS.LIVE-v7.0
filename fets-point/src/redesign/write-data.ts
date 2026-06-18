@@ -111,6 +111,30 @@ export async function dbAddCase(c: any) {
   } catch (e) { rtoast("Saved locally — DB sync failed", "alert"); return null; }
 }
 
+export async function dbAssignCase(dbId: any, staffName: string) {
+  if (dbId == null) return;
+  try { await supabase.from("incidents").update({ assigned_to: staffName }).eq("id", dbId); } catch (e) {}
+}
+
+export async function dbAddCaseComment(caseDbId: any, body: string) {
+  if (caseDbId == null) return null;
+  const row: any = {
+    incident_id: caseDbId,
+    author_id: F()._meUserId || "00000000-0000-0000-0000-000000000000",
+    author_full_name: F()._meName || F().user.name || "Staff",
+    body: body.trim()
+  };
+  try {
+    const { data, error } = await supabase.from("incident_comments").insert([row]).select().single();
+    if (error) throw error;
+    return data;
+  } catch (e) {
+    console.error("dbAddCaseComment error:", e);
+    return null;
+  }
+}
+
+
 /* ---------------- user_tasks ---------------- */
 export async function dbAddTask(title: string, priority: string) {
   const row: any = { title, status: "pending", priority: (priority || "medium").toLowerCase() };
@@ -841,4 +865,121 @@ export async function dbSendRosterDiscussion(profileId: string, senderId: string
   }
 }
 
+/* ---------------- shift_handovers & questions ---------------- */
 
+export async function dbFetchHandoverQuestions() {
+  try {
+    const { data, error } = await supabase
+      .from("handover_questions")
+      .select("*")
+      .eq("is_active", true)
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    return data || [];
+  } catch (e) {
+    console.error("dbFetchHandoverQuestions error:", e);
+    // Return standard defaults if table is empty or error
+    return [
+      { label: "Workstations & servers" },
+      { label: "Internet & network" },
+      { label: "CCTV & recording" },
+      { label: "Power & AC" },
+      { label: "All candidates exited" },
+      { label: "Secure materials locked" },
+      { label: "Dashboards logged out" }
+    ];
+  }
+}
+
+export async function dbMutateHandoverQuestion(action: "add" | "edit" | "delete", label: string, id?: string) {
+  try {
+    if (action === "add") {
+      const { data, error } = await supabase
+        .from("handover_questions")
+        .insert([{ label }])
+        .select()
+        .single();
+      if (error) throw error;
+      rtoast("Question added");
+      return data;
+    } else if (action === "edit") {
+      const { data, error } = await supabase
+        .from("handover_questions")
+        .update({ label, updated_at: new Date().toISOString() })
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) throw error;
+      rtoast("Question updated");
+      return data;
+    } else if (action === "delete") {
+      const { data, error } = await supabase
+        .from("handover_questions")
+        .update({ is_active: false, updated_at: new Date().toISOString() })
+        .eq("id", id)
+        .select()
+        .single();
+      if (error) throw error;
+      rtoast("Question deleted");
+      return data;
+    }
+  } catch (e) {
+    console.error("dbMutateHandoverQuestion error:", e);
+    rtoast("Saved locally — DB sync failed", "alert");
+    return null;
+  }
+}
+
+export async function dbCreateHandover(h: any) {
+  const row = {
+    branch: h.branch,
+    date: h.date,
+    handover_time: h.handover_time,
+    outgoing_staff: h.outgoing_staff,
+    incoming_staff: h.incoming_staff,
+    currently_testing: Number(h.currently_testing) || 0,
+    no_shows: Number(h.no_shows) || 0,
+    candidate_notes: h.candidate_notes || "",
+    checklist: h.checklist,
+    pending_items: h.pending_items || [],
+    instructions: h.instructions || "",
+    sig_out: h.sig_out || null,
+    sig_in: h.sig_in || null,
+    created_by: F()._meUserId || null
+  };
+  try {
+    const { data, error } = await supabase
+      .from("shift_handovers")
+      .insert([row])
+      .select()
+      .single();
+    if (error) throw error;
+    rtoast("Handover saved successfully");
+    return data;
+  } catch (e) {
+    console.error("dbCreateHandover error:", e);
+    rtoast("Saved locally — DB sync failed", "alert");
+    return null;
+  }
+}
+
+export async function dbFetchHandovers(branch: string) {
+  try {
+    let query = supabase
+      .from("shift_handovers")
+      .select("*")
+      .order("date", { ascending: false })
+      .order("created_at", { ascending: false });
+    
+    if (branch && branch !== "global") {
+      query = query.eq("branch", branch);
+    }
+    
+    const { data, error } = await query.limit(100);
+    if (error) throw error;
+    return data || [];
+  } catch (e) {
+    console.error("dbFetchHandovers error:", e);
+    return [];
+  }
+}
