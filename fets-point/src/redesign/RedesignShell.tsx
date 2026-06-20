@@ -7808,19 +7808,20 @@ function ShiftHandoverPage({ branch, setActive }) {
 
   // Sign-off handlers
   const handleSign = (which) => {
-    const currentStaff = window.FETS?.user?.name || "Staff";
-    const stamp = {
-      name: currentStaff,
-      time: new Date().toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).replace(",", "")
-    };
+    const timeStr = new Date().toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).replace(",", "");
     if (which === "out") {
+      const staffName = outgoing.length > 0 ? outgoing.join(", ") : (window.FETS?.user?.name || "Staff");
+      const stamp = { name: staffName, time: timeStr };
       setSigOut(stamp);
       updateDraft({ sigOut: stamp });
+      toast(`Outgoing signed by ${staffName}`, "check");
     } else {
+      const staffName = incoming.length > 0 ? incoming.join(", ") : "Incoming Staff";
+      const stamp = { name: staffName, time: timeStr };
       setSigIn(stamp);
       updateDraft({ sigIn: stamp });
+      toast(`Incoming signed by ${staffName}`, "check");
     }
-    toast(`Digitally signed as ${currentStaff}`, "check");
   };
 
   const handleResetSig = (which) => {
@@ -7962,57 +7963,69 @@ function ShiftHandoverPage({ branch, setActive }) {
   }, [historyLogs, historyFilter]);
 
   const PAL = {
-    ok:        { sel: "#138A5E", soft: "rgba(19, 138, 94, 0.08)" },
-    attention: { sel: "#C2860F", soft: "rgba(194, 134, 15, 0.08)" },
-    critical:  { sel: "#D23F3F", soft: "rgba(210, 63, 63, 0.08)" },
-    na:        { sel: "#7A857E", soft: "rgba(122, 133, 126, 0.08)" },
-    low:       { sel: "#7A857E", soft: "rgba(122, 133, 126, 0.08)" },
-    med:       { sel: "#C2860F", soft: "rgba(194, 134, 15, 0.08)" },
-    high:      { sel: "#D23F3F", soft: "rgba(210, 63, 63, 0.08)" },
+    ok:        { sel: "#00B894", soft: "rgba(0, 184, 148, 0.10)" },
+    attention: { sel: "#FDCB6E", soft: "rgba(253, 203, 110, 0.10)" },
+    critical:  { sel: "#FF7675", soft: "rgba(255, 118, 117, 0.10)" },
+    na:        { sel: "#B2BEC3", soft: "rgba(178, 190, 195, 0.10)" },
+    low:       { sel: "#B2BEC3", soft: "rgba(178, 190, 195, 0.10)" },
+    med:       { sel: "#FDCB6E", soft: "rgba(253, 203, 110, 0.10)" },
+    high:      { sel: "#FF7675", soft: "rgba(255, 118, 117, 0.10)" },
   };
 
   const styleBlock = `
     @import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Caveat:wght@600;700&display=swap');
 
     :root, [data-theme="light"] {
-      --ho-bg: #F1EFE9;
-      --ho-card-bg: #ffffff;
-      --ho-text: #1F2421;
-      --ho-text-muted: #8A958F;
-      --ho-border: #E6E4DD;
-      --ho-input-bg: #FBFAF7;
-      --ho-input-border: #DEDCD4;
-      --ho-inset: #FBFAF7;
-      --ho-focus-ring: rgba(20, 107, 98, 0.12);
-      --ho-header-bg: #0E2E2A;
-      --ho-header-text: #EAF2EF;
-      --ho-header-muted: #8FB3AB;
-      --ho-header-border: rgba(255, 255, 255, 0.1);
-      --ho-header-badge-bg: rgba(255, 255, 255, 0.07);
-      --ho-signature-box: #FBFAF7;
-      --ho-success-bg: #E7F4EE;
-      --ho-success-border: #B9E0CE;
-      --ho-success-text: #3E6B57;
+      --ho-bg: #E4E8EC;
+      --ho-card-bg: #E4E8EC;
+      --ho-text: #2D3436;
+      --ho-text-muted: #7F8C8D;
+      --ho-border: transparent;
+      --ho-input-bg: #dce0e4;
+      --ho-input-border: transparent;
+      --ho-inset: #dce0e4;
+      --ho-focus-ring: rgba(108, 92, 231, 0.18);
+      --ho-header-bg: #E4E8EC;
+      --ho-header-text: #2D3436;
+      --ho-header-muted: #6C5CE7;
+      --ho-header-border: transparent;
+      --ho-header-badge-bg: rgba(108, 92, 231, 0.08);
+      --ho-signature-box: #E4E8EC;
+      --ho-success-bg: #E4E8EC;
+      --ho-success-border: transparent;
+      --ho-success-text: #00B894;
+      --ho-shadow-light: #ffffff;
+      --ho-shadow-dark: rgba(163, 177, 198, 0.6);
+      --ho-shadow-dark-strong: rgba(163, 177, 198, 0.8);
+      --ho-accent: #6C5CE7;
+      --ho-accent-soft: rgba(108, 92, 231, 0.10);
+      --ho-accent-glow: rgba(108, 92, 231, 0.25);
     }
     [data-theme="dark"] {
-      --ho-bg: #090e0c;
-      --ho-card-bg: #0f1917;
-      --ho-text: #EAF2EF;
-      --ho-text-muted: #8FB3AB;
-      --ho-border: #182824;
-      --ho-input-bg: #0b1210;
-      --ho-input-border: #1c322d;
-      --ho-inset: #0b1210;
-      --ho-focus-ring: rgba(95, 203, 176, 0.15);
-      --ho-header-bg: #06110f;
-      --ho-header-text: #EAF2EF;
-      --ho-header-muted: #5FCBB0;
-      --ho-header-border: rgba(95, 203, 176, 0.15);
-      --ho-header-badge-bg: rgba(95, 203, 176, 0.08);
-      --ho-signature-box: #0b1210;
-      --ho-success-bg: rgba(19, 138, 94, 0.15);
-      --ho-success-border: rgba(19, 138, 94, 0.3);
-      --ho-success-text: #9FE6D2;
+      --ho-bg: #1a1d23;
+      --ho-card-bg: #1a1d23;
+      --ho-text: #E4E8EC;
+      --ho-text-muted: #8899A6;
+      --ho-border: transparent;
+      --ho-input-bg: #15181d;
+      --ho-input-border: transparent;
+      --ho-inset: #15181d;
+      --ho-focus-ring: rgba(108, 92, 231, 0.25);
+      --ho-header-bg: #1a1d23;
+      --ho-header-text: #E4E8EC;
+      --ho-header-muted: #A29BFE;
+      --ho-header-border: transparent;
+      --ho-header-badge-bg: rgba(162, 155, 254, 0.08);
+      --ho-signature-box: #1a1d23;
+      --ho-success-bg: #1a1d23;
+      --ho-success-border: transparent;
+      --ho-success-text: #55EFC4;
+      --ho-shadow-light: rgba(255, 255, 255, 0.05);
+      --ho-shadow-dark: rgba(0, 0, 0, 0.5);
+      --ho-shadow-dark-strong: rgba(0, 0, 0, 0.7);
+      --ho-accent: #A29BFE;
+      --ho-accent-soft: rgba(162, 155, 254, 0.10);
+      --ho-accent-glow: rgba(162, 155, 254, 0.25);
     }
 
     .handover-page-wrapper {
@@ -8029,15 +8042,15 @@ function ShiftHandoverPage({ branch, setActive }) {
       margin: 0 auto;
       display: flex;
       flex-direction: column;
-      gap: 18px;
+      gap: 22px;
     }
     .handover-card {
       background: var(--ho-card-bg);
-      border: 1px solid var(--ho-border);
-      border-radius: 14px;
-      padding: 24px 26px;
-      box-shadow: 0 1px 2px rgba(20,30,28,.04);
-      transition: background 0.3s ease, border-color 0.3s ease;
+      border: none;
+      border-radius: 20px;
+      padding: 28px 30px;
+      box-shadow: 8px 8px 16px var(--ho-shadow-dark), -8px -8px 16px var(--ho-shadow-light);
+      transition: background 0.3s ease, box-shadow 0.3s ease;
     }
     .handover-label {
       display: block;
@@ -8051,9 +8064,9 @@ function ShiftHandoverPage({ branch, setActive }) {
     }
     .handover-input {
       width: 100%;
-      padding: 11px 13px;
-      border: 1px solid var(--ho-input-border);
-      border-radius: 9px;
+      padding: 12px 16px;
+      border: none;
+      border-radius: 12px;
       font-family: 'Hanken Grotesk', system-ui, sans-serif;
       font-size: 14px;
       font-weight: 500;
@@ -8061,11 +8074,10 @@ function ShiftHandoverPage({ branch, setActive }) {
       background: var(--ho-input-bg);
       outline: none;
       transition: all 0.2s ease;
+      box-shadow: inset 3px 3px 6px var(--ho-shadow-dark), inset -3px -3px 6px var(--ho-shadow-light);
     }
     .handover-input:focus {
-      border-color: #146B62;
-      background: var(--ho-card-bg);
-      box-shadow: 0 0 0 3px var(--ho-focus-ring);
+      box-shadow: inset 3px 3px 6px var(--ho-shadow-dark), inset -3px -3px 6px var(--ho-shadow-light), 0 0 0 3px var(--ho-accent-glow);
     }
     .handover-btn-group {
       display: flex;
@@ -8074,101 +8086,103 @@ function ShiftHandoverPage({ branch, setActive }) {
     }
     .handover-seg-btn {
       padding: 9px 14px;
-      border-radius: 8px;
+      border-radius: 10px;
       font-size: 12.5px;
       font-weight: 600;
       font-family: 'Hanken Grotesk', system-ui, sans-serif;
-      border: 1px solid var(--ho-input-border);
+      border: none;
       background: var(--ho-card-bg);
       color: var(--ho-text-muted);
       cursor: pointer;
-      transition: all 0.12s ease;
+      transition: all 0.15s ease;
       min-width: 60px;
       text-align: center;
       user-select: none;
+      box-shadow: 3px 3px 6px var(--ho-shadow-dark), -3px -3px 6px var(--ho-shadow-light);
     }
     .handover-seg-btn:hover {
-      background: var(--ho-bg);
+      box-shadow: 2px 2px 4px var(--ho-shadow-dark), -2px -2px 4px var(--ho-shadow-light);
+    }
+    .handover-seg-btn:active {
+      box-shadow: inset 2px 2px 4px var(--ho-shadow-dark), inset -2px -2px 4px var(--ho-shadow-light);
     }
     .handover-seg-btn.active-ok {
-      background: #138A5E;
-      border-color: #138A5E;
+      background: #00B894;
       color: #fff;
-      box-shadow: 0 1px 2px rgba(0,0,0,.12);
+      box-shadow: inset 2px 2px 4px rgba(0,0,0,.15), inset -2px -2px 4px rgba(255,255,255,.1);
     }
     .handover-seg-btn.active-attention {
-      background: #C2860F;
-      border-color: #C2860F;
-      color: #fff;
-      box-shadow: 0 1px 2px rgba(0,0,0,.12);
+      background: #FDCB6E;
+      color: #2D3436;
+      box-shadow: inset 2px 2px 4px rgba(0,0,0,.12), inset -2px -2px 4px rgba(255,255,255,.15);
     }
     .handover-seg-btn.active-critical {
-      background: #D23F3F;
-      border-color: #D23F3F;
+      background: #FF7675;
       color: #fff;
-      box-shadow: 0 1px 2px rgba(0,0,0,.12);
+      box-shadow: inset 2px 2px 4px rgba(0,0,0,.15), inset -2px -2px 4px rgba(255,255,255,.1);
     }
     .handover-seg-btn.active-na {
-      background: #7A857E;
-      border-color: #7A857E;
-      color: #fff;
-      box-shadow: 0 1px 2px rgba(0,0,0,.12);
+      background: #B2BEC3;
+      color: #2D3436;
+      box-shadow: inset 2px 2px 4px rgba(0,0,0,.1), inset -2px -2px 4px rgba(255,255,255,.15);
     }
     .checklist-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 14px;
-      padding: 13px 15px;
-      border-radius: 11px;
-      border: 1px solid var(--ho-border);
+      padding: 14px 18px;
+      border-radius: 14px;
+      border: none;
       background: var(--ho-card-bg);
-      transition: all 0.12s ease;
+      transition: all 0.15s ease;
       flex-wrap: wrap;
+      box-shadow: 4px 4px 8px var(--ho-shadow-dark), -4px -4px 8px var(--ho-shadow-light);
     }
     .checklist-row.attention {
-      border-left: 3px solid #C2860F;
-      background: rgba(194, 134, 15, 0.08);
+      border-left: 3px solid #FDCB6E;
+      background: var(--ho-card-bg);
     }
     .checklist-row.critical {
-      border-left: 3px solid #D23F3F;
-      background: rgba(210, 63, 63, 0.08);
+      border-left: 3px solid #FF7675;
+      background: var(--ho-card-bg);
     }
     .signature-box {
-      border: 1px solid var(--ho-border);
-      border-radius: 13px;
-      padding: 18px;
+      border: none;
+      border-radius: 18px;
+      padding: 22px;
       background: var(--ho-signature-box);
+      box-shadow: 6px 6px 12px var(--ho-shadow-dark), -6px -6px 12px var(--ho-shadow-light);
     }
     .signature-cursive {
       font-family: 'Caveat', cursive;
       font-size: 36px;
-      color: #146B62;
+      color: var(--ho-accent);
       line-height: 1;
     }
     .handover-back-btn {
-      width: 34px;
-      height: 34px;
-      border-radius: 9px;
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      color: #EAF2EF;
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      background: var(--ho-bg);
+      border: none;
+      color: var(--ho-accent);
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
       transition: all 0.15s ease;
+      box-shadow: 4px 4px 8px var(--ho-shadow-dark), -4px -4px 8px var(--ho-shadow-light);
     }
     .handover-back-btn:hover {
-      background: rgba(255, 255, 255, 0.15);
-      border-color: rgba(255, 255, 255, 0.25);
+      box-shadow: 2px 2px 4px var(--ho-shadow-dark), -2px -2px 4px var(--ho-shadow-light);
       transform: translateX(-2px);
     }
     .counter-btn {
-      width: 38px;
-      height: 38px;
-      border-radius: 8px;
-      border: 1px solid var(--ho-input-border);
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      border: none;
       background: var(--ho-card-bg);
       color: var(--ho-text);
       font-size: 18px;
@@ -8179,13 +8193,14 @@ function ShiftHandoverPage({ branch, setActive }) {
       justify-content: center;
       transition: all 0.15s ease;
       user-select: none;
+      box-shadow: 4px 4px 8px var(--ho-shadow-dark), -4px -4px 8px var(--ho-shadow-light);
     }
     .counter-btn:hover {
-      background: var(--ho-bg);
-      border-color: var(--ho-border);
+      box-shadow: 2px 2px 4px var(--ho-shadow-dark), -2px -2px 4px var(--ho-shadow-light);
     }
     .counter-btn:active {
-      transform: scale(0.95);
+      box-shadow: inset 2px 2px 4px var(--ho-shadow-dark), inset -2px -2px 4px var(--ho-shadow-light);
+      transform: scale(0.97);
     }
     .handover-grid-2 {
       display: grid;
@@ -8201,7 +8216,7 @@ function ShiftHandoverPage({ branch, setActive }) {
       <style dangerouslySetInnerHTML={{ __html: styleBlock }} />
 
       {/* STICKY HEADER BAR */}
-      <div style={{ background: "var(--ho-header-bg)", borderBottom: "1px solid var(--ho-header-border)", padding: "24px clamp(14px,3vw,30px)", position: "sticky", top: 0, zIndex: 20 }}>
+      <div style={{ background: "var(--ho-header-bg)", padding: "24px clamp(14px,3vw,30px)", position: "sticky", top: 0, zIndex: 20, boxShadow: "0 4px 12px var(--ho-shadow-dark)" }}>
         <div style={{ maxWidth: 1180, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <button onClick={() => setActive("live")} className="handover-back-btn" title="Back to Live">
@@ -8248,7 +8263,7 @@ function ShiftHandoverPage({ branch, setActive }) {
         
         {subView === "new" && (
           <div style={{ height: "3px", background: "var(--ho-header-border)", marginTop: 16, marginBottom: -24 }}>
-            <div style={{ width: `${percent}%`, height: "100%", background: "#5FCBB0", transition: "width .3s ease" }} />
+            <div style={{ width: `${percent}%`, height: "100%", background: "var(--ho-accent)", borderRadius: 4, transition: "width .3s ease" }} />
           </div>
         )}
       </div>
@@ -8283,7 +8298,7 @@ function ShiftHandoverPage({ branch, setActive }) {
                     </p>
                   </div>
                   <div style={{ textContent: "right", textAlign: "right" }}>
-                    <span style={{ font: "700 16px 'JetBrains Mono'", color: "#146B62" }}>
+                    <span style={{ font: "700 16px 'JetBrains Mono'", color: "var(--ho-accent)" }}>
                       {new Date(selectedLog.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
                     </span>
                     <div style={{ font: "600 13px 'JetBrains Mono'", color: "var(--ho-text-muted)", marginTop: 2 }}>
@@ -8293,19 +8308,19 @@ function ShiftHandoverPage({ branch, setActive }) {
                 </div>
 
                 <div className="handover-grid-2" style={{ marginBottom: 20 }}>
-                  <div style={{ border: "1px solid var(--ho-border)", borderRadius: 12, padding: 16 }}>
+                  <div style={{ border: "none", borderRadius: 14, padding: 16, boxShadow: "inset 3px 3px 6px var(--ho-shadow-dark), inset -3px -3px 6px var(--ho-shadow-light)" }}>
                     <div className="handover-label">Outgoing Staff</div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
                       {(selectedLog.outgoing_staff || []).map((s, idx) => (
-                        <span key={idx} style={{ padding: "4px 10px", borderRadius: 6, background: "var(--ho-bg)", border: "1px solid var(--ho-border)", fontSize: 13, fontWeight: 600 }}>{s}</span>
+                        <span key={idx} style={{ padding: "5px 12px", borderRadius: 10, background: "var(--ho-card-bg)", border: "none", fontSize: 13, fontWeight: 600, boxShadow: "2px 2px 4px var(--ho-shadow-dark), -2px -2px 4px var(--ho-shadow-light)" }}>{s}</span>
                       ))}
                     </div>
                   </div>
-                  <div style={{ border: "1px solid var(--ho-border)", borderRadius: 12, padding: 16 }}>
+                  <div style={{ border: "none", borderRadius: 14, padding: 16, boxShadow: "inset 3px 3px 6px var(--ho-shadow-dark), inset -3px -3px 6px var(--ho-shadow-light)" }}>
                     <div className="handover-label">Incoming Staff</div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
                       {(selectedLog.incoming_staff || []).map((s, idx) => (
-                        <span key={idx} style={{ padding: "4px 10px", borderRadius: 6, background: "var(--ho-bg)", border: "1px solid var(--ho-border)", fontSize: 13, fontWeight: 600 }}>{s}</span>
+                        <span key={idx} style={{ padding: "5px 12px", borderRadius: 10, background: "var(--ho-card-bg)", border: "none", fontSize: 13, fontWeight: 600, boxShadow: "2px 2px 4px var(--ho-shadow-dark), -2px -2px 4px var(--ho-shadow-light)" }}>{s}</span>
                       ))}
                     </div>
                   </div>
@@ -8313,11 +8328,11 @@ function ShiftHandoverPage({ branch, setActive }) {
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
                   <div style={{ border: "1px solid var(--ho-border)", borderRadius: 12, padding: 16, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-                    <span style={{ font: "800 28px 'JetBrains Mono'", color: "#138A5E" }}>{selectedLog.currently_testing}</span>
+                    <span style={{ font: "800 28px 'JetBrains Mono'", color: "var(--ho-success-text)" }}>{selectedLog.currently_testing}</span>
                     <span className="handover-label" style={{ marginBottom: 0, marginTop: 4 }}>Currently Testing</span>
                   </div>
                   <div style={{ border: "1px solid var(--ho-border)", borderRadius: 12, padding: 16, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-                    <span style={{ font: "800 28px 'JetBrains Mono'", color: "#D23F3F" }}>{selectedLog.no_shows}</span>
+                    <span style={{ font: "800 28px 'JetBrains Mono'", color: "#FF7675" }}>{selectedLog.no_shows}</span>
                     <span className="handover-label" style={{ marginBottom: 0, marginTop: 4 }}>No Shows</span>
                   </div>
                 </div>
@@ -8355,7 +8370,7 @@ function ShiftHandoverPage({ branch, setActive }) {
                     <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
                       {selectedLog.pending_items.map((p, idx) => (
                         <div key={idx} style={{ display: "flex", gap: 10, alignItems: "center", padding: "10px 14px", border: "1px solid var(--ho-border)", borderRadius: 10, background: "var(--ho-card-bg)" }}>
-                          <span style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", padding: "3px 6px", borderRadius: 4, background: p.sev === "high" ? "rgba(210,63,63,0.1)" : p.sev === "med" ? "rgba(194,134,15,0.1)" : "rgba(122,133,126,0.1)", color: p.sev === "high" ? "#D23F3F" : p.sev === "med" ? "#C2860F" : "var(--ho-text-muted)" }}>{p.sev}</span>
+                          <span style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", padding: "3px 6px", borderRadius: 4, background: p.sev === "high" ? "rgba(255,118,117,0.1)" : p.sev === "med" ? "rgba(253,203,110,0.1)" : "rgba(178,190,195,0.1)", color: p.sev === "high" ? "#D23F3F" : p.sev === "med" ? "#C2860F" : "var(--ho-text-muted)" }}>{p.sev}</span>
                           <span style={{ fontSize: 13.5, color: "var(--ho-text)" }}>{p.text}</span>
                         </div>
                       ))}
@@ -8453,10 +8468,11 @@ function ShiftHandoverPage({ branch, setActive }) {
                       <div 
                         key={log.id} 
                         onClick={() => setSelectedLog(log)}
-                        className="handover-card tap" 
+                        className="handover-card tap"
                         style={{
-                          cursor: "pointer", padding: "18px 20px", display: "flex", justifyContent: "space-between", alignItems: "center",
-                          gap: 16, border: "1px solid var(--ho-border)", borderRadius: 12, background: "var(--ho-card-bg)"
+                          cursor: "pointer", padding: "18px 22px", display: "flex", justifyContent: "space-between", alignItems: "center",
+                          gap: 16, border: "none", borderRadius: 16, background: "var(--ho-card-bg)",
+                          boxShadow: "5px 5px 10px var(--ho-shadow-dark), -5px -5px 10px var(--ho-shadow-light)"
                         }}
                       >
                         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -8468,7 +8484,7 @@ function ShiftHandoverPage({ branch, setActive }) {
                           </span>
                         </div>
                         <div style={{ textContent: "right", textAlign: "right" }}>
-                          <span style={{ font: "700 13px 'JetBrains Mono'", color: "#146B62" }}>
+                          <span style={{ font: "700 13px 'JetBrains Mono'", color: "var(--ho-accent)" }}>
                             {log.handover_time}
                           </span>
                           <div style={{ font: "600 11px 'Hanken Grotesk'", color: "var(--ho-text-muted)", marginTop: 2 }}>
@@ -8492,7 +8508,7 @@ function ShiftHandoverPage({ branch, setActive }) {
                   <div style={{ font: "500 13px 'Hanken Grotesk'", color: "var(--ho-success-text)", marginTop: 2 }}>The report has been saved to database and published on The Lab coordination wall.</div>
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
-                  <button onClick={() => { setSubView("history"); loadHistoryLogs(); }} className="tap" style={{ padding: "8px 14px", borderRadius: 8, border: "none", background: "#146B62", color: "#fff", font: "600 12.5px 'Hanken Grotesk'", cursor: "pointer" }}>View History</button>
+                  <button onClick={() => { setSubView("history"); loadHistoryLogs(); }} className="tap" style={{ padding: "8px 14px", borderRadius: 8, border: "none", background: "var(--ho-accent)", color: "#fff", font: "600 12.5px 'Hanken Grotesk'", cursor: "pointer" }}>View History</button>
                   <button onClick={() => setSubmitted(false)} className="tap" style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid var(--ho-success-border)", background: "var(--ho-card-bg)", color: "var(--ho-success-text)", font: "600 12.5px 'Hanken Grotesk'", cursor: "pointer" }}>Dismiss</button>
                 </div>
               </div>
@@ -8501,7 +8517,7 @@ function ShiftHandoverPage({ branch, setActive }) {
             {/* SECTION 1: OVERVIEW & PROCTORS */}
             <div className="handover-card">
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
-                <div style={{ width: 26, height: 26, borderRadius: 7, background: "var(--ho-inset)", border: "1px solid var(--ho-border)", color: "#146B62", display: "flex", alignItems: "center", justifyContent: "center", font: "700 13px 'JetBrains Mono'", flex: "none" }}>1</div>
+                <div style={{ width: 30, height: 30, borderRadius: 10, background: "var(--ho-card-bg)", border: "none", color: "var(--ho-accent)", display: "flex", alignItems: "center", justifyContent: "center", font: "700 13px 'JetBrains Mono'", flex: "none", boxShadow: "inset 2px 2px 4px var(--ho-shadow-dark), inset -2px -2px 4px var(--ho-shadow-light)" }}>1</div>
                 <div>
                   <div style={{ font: "700 16px 'Hanken Grotesk'", color: "var(--ho-text)" }}>Shift Overview & Staff</div>
                   <div style={{ font: "500 12.5px 'Hanken Grotesk'", color: "var(--ho-text-muted)" }}>Date, time, and rostered proctors</div>
@@ -8593,7 +8609,7 @@ function ShiftHandoverPage({ branch, setActive }) {
             {/* SECTION 2: CANDIDATE STATUS */}
             <div className="handover-card">
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
-                <div style={{ width: 26, height: 26, borderRadius: 7, background: "var(--ho-inset)", border: "1px solid var(--ho-border)", color: "#146B62", display: "flex", alignItems: "center", justifyContent: "center", font: "700 13px 'JetBrains Mono'", flex: "none" }}>2</div>
+                <div style={{ width: 30, height: 30, borderRadius: 10, background: "var(--ho-card-bg)", border: "none", color: "var(--ho-accent)", display: "flex", alignItems: "center", justifyContent: "center", font: "700 13px 'JetBrains Mono'", flex: "none", boxShadow: "inset 2px 2px 4px var(--ho-shadow-dark), inset -2px -2px 4px var(--ho-shadow-light)" }}>2</div>
                 <div>
                   <div style={{ font: "700 16px 'Hanken Grotesk'", color: "var(--ho-text)" }}>Candidate status</div>
                   <div style={{ font: "500 12.5px 'Hanken Grotesk'", color: "var(--ho-text-muted)" }}>Headcount and attendance metrics</div>
@@ -8604,7 +8620,7 @@ function ShiftHandoverPage({ branch, setActive }) {
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", border: "1px solid var(--ho-border)", borderRadius: 12, padding: "14px 16px", background: "var(--ho-card-bg)" }}>
                   <div>
                     <span className="handover-label" style={{ marginBottom: 2 }}>Currently Testing</span>
-                    <span style={{ font: "700 24px 'JetBrains Mono'", color: "#146B62" }}>{testing}</span>
+                    <span style={{ font: "700 24px 'JetBrains Mono'", color: "var(--ho-accent)" }}>{testing}</span>
                   </div>
                   <div style={{ display: "flex", gap: 4 }}>
                     <button onClick={() => handleStep("testing", -1)} className="counter-btn">-</button>
@@ -8614,7 +8630,7 @@ function ShiftHandoverPage({ branch, setActive }) {
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", border: "1px solid var(--ho-border)", borderRadius: 12, padding: "14px 16px", background: "var(--ho-card-bg)" }}>
                   <div>
                     <span className="handover-label" style={{ marginBottom: 2 }}>No-Shows</span>
-                    <span style={{ font: "700 24px 'JetBrains Mono'", color: "#D23F3F" }}>{noShow}</span>
+                    <span style={{ font: "700 24px 'JetBrains Mono'", color: "#FF7675" }}>{noShow}</span>
                   </div>
                   <div style={{ display: "flex", gap: 4 }}>
                     <button onClick={() => handleStep("noShow", -1)} className="counter-btn">-</button>
@@ -8633,7 +8649,7 @@ function ShiftHandoverPage({ branch, setActive }) {
             <div className="handover-card">
               <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14, marginBottom: 18, flexWrap: "wrap" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{ width: 26, height: 26, borderRadius: 7, background: "var(--ho-inset)", border: "1px solid var(--ho-border)", color: "#146B62", display: "flex", alignItems: "center", justifyContent: "center", font: "700 13px 'JetBrains Mono'", flex: "none" }}>3</div>
+                  <div style={{ width: 30, height: 30, borderRadius: 10, background: "var(--ho-card-bg)", border: "none", color: "var(--ho-accent)", display: "flex", alignItems: "center", justifyContent: "center", font: "700 13px 'JetBrains Mono'", flex: "none", boxShadow: "inset 2px 2px 4px var(--ho-shadow-dark), inset -2px -2px 4px var(--ho-shadow-light)" }}>3</div>
                   <div>
                     <div style={{ font: "700 16px 'Hanken Grotesk'", color: "var(--ho-text)" }}>Handover checklist</div>
                     <div style={{ font: "500 12.5px 'Hanken Grotesk'", color: "var(--ho-text-muted)" }}>Confirm the state of each system</div>
@@ -8641,10 +8657,10 @@ function ShiftHandoverPage({ branch, setActive }) {
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
                   <span style={{ font: "600 12px 'JetBrains Mono'", color: "var(--ho-text-muted)" }}>{answered}/{total} checked</span>
-                  {criticalCount > 0 && <span style={{ padding: "4px 9px", borderRadius: 999, font: "700 11px 'Hanken Grotesk'", background: "rgba(210,63,63,0.15)", color: "#D23F3F" }}>{criticalCount} critical</span>}
-                  {attentionCount > 0 && <span style={{ padding: "4px 9px", borderRadius: 999, font: "700 11px 'Hanken Grotesk'", background: "rgba(194,134,15,0.15)", color: "#C2860F" }}>{attentionCount} attention</span>}
-                  <button onClick={handleMarkAllOk} className="tap" style={{ padding: "7px 12px", borderRadius: 8, border: "1px solid var(--ho-border)", background: "var(--ho-card-bg)", color: "#146B62", font: "600 12px 'Hanken Grotesk'", cursor: "pointer" }}>✓ Mark all OK</button>
-                  <button onClick={() => setIsManagingQuestions(true)} className="tap" style={{ padding: "7px 12px", borderRadius: 8, border: "1px solid #146B62", background: "transparent", color: "#146B62", font: "600 12px 'Hanken Grotesk'", cursor: "pointer" }}>⚙️ Manage Questions</button>
+                  {criticalCount > 0 && <span style={{ padding: "4px 9px", borderRadius: 999, font: "700 11px 'Hanken Grotesk'", background: "rgba(255,118,117,0.12)", color: "#FF7675" }}>{criticalCount} critical</span>}
+                  {attentionCount > 0 && <span style={{ padding: "4px 9px", borderRadius: 999, font: "700 11px 'Hanken Grotesk'", background: "rgba(253,203,110,0.12)", color: "#FDCB6E" }}>{attentionCount} attention</span>}
+                  <button onClick={handleMarkAllOk} className="tap" style={{ padding: "7px 12px", borderRadius: 8, border: "1px solid var(--ho-border)", background: "var(--ho-card-bg)", color: "var(--ho-accent)", font: "600 12px 'Hanken Grotesk'", cursor: "pointer" }}>✓ Mark all OK</button>
+                  <button onClick={() => setIsManagingQuestions(true)} className="tap" style={{ padding: "7px 12px", borderRadius: 8, border: "1px solid var(--ho-accent)", background: "transparent", color: "var(--ho-accent)", font: "600 12px 'Hanken Grotesk'", cursor: "pointer" }}>⚙️ Manage Questions</button>
                 </div>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
@@ -8682,13 +8698,13 @@ function ShiftHandoverPage({ branch, setActive }) {
             <div className="handover-card">
               <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14, marginBottom: 18, flexWrap: "wrap" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{ width: 26, height: 26, borderRadius: 7, background: "var(--ho-inset)", border: "1px solid var(--ho-border)", color: "#146B62", display: "flex", alignItems: "center", justifyContent: "center", font: "700 13px 'JetBrains Mono'", flex: "none" }}>4</div>
+                  <div style={{ width: 30, height: 30, borderRadius: 10, background: "var(--ho-card-bg)", border: "none", color: "var(--ho-accent)", display: "flex", alignItems: "center", justifyContent: "center", font: "700 13px 'JetBrains Mono'", flex: "none", boxShadow: "inset 2px 2px 4px var(--ho-shadow-dark), inset -2px -2px 4px var(--ho-shadow-light)" }}>4</div>
                   <div>
                     <div style={{ font: "700 16px 'Hanken Grotesk'", color: "var(--ho-text)" }}>Pending work & incidents</div>
                     <div style={{ font: "500 12.5px 'Hanken Grotesk'", color: "var(--ho-text-muted)" }}>Anything the next shift must pick up</div>
                   </div>
                 </div>
-                <button onClick={handleAddPending} className="tap" style={{ padding: "8px 14px", borderRadius: 9, border: "none", background: "#146B62", color: "#fff", font: "600 12.5px 'Hanken Grotesk'", cursor: "pointer" }}>+ Add item</button>
+                <button onClick={handleAddPending} className="tap" style={{ padding: "9px 16px", borderRadius: 12, border: "none", background: "var(--ho-accent)", color: "#fff", font: "600 12.5px 'Hanken Grotesk'", cursor: "pointer", boxShadow: "3px 3px 6px var(--ho-shadow-dark), -3px -3px 6px var(--ho-shadow-light)" }}>+ Add item</button>
               </div>
               {pending.length === 0 ? (
                 <div style={{ border: "1.5px dashed var(--ho-border)", borderRadius: 11, padding: 30, textAlign: "center" }}>
@@ -8720,7 +8736,7 @@ function ShiftHandoverPage({ branch, setActive }) {
             {/* SECTION 5: INSTRUCTIONS & SIGNATURES */}
             <div className="handover-card">
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
-                <div style={{ width: 26, height: 26, borderRadius: 7, background: "var(--ho-inset)", border: "1px solid var(--ho-border)", color: "#146B62", display: "flex", alignItems: "center", justifyContent: "center", font: "700 13px 'JetBrains Mono'", flex: "none" }}>5</div>
+                <div style={{ width: 30, height: 30, borderRadius: 10, background: "var(--ho-card-bg)", border: "none", color: "var(--ho-accent)", display: "flex", alignItems: "center", justifyContent: "center", font: "700 13px 'JetBrains Mono'", flex: "none", boxShadow: "inset 2px 2px 4px var(--ho-shadow-dark), inset -2px -2px 4px var(--ho-shadow-light)" }}>5</div>
                 <div>
                   <div style={{ font: "700 16px 'Hanken Grotesk'", color: "var(--ho-text)" }}>Instructions & sign-off</div>
                   <div style={{ font: "500 12.5px 'Hanken Grotesk'", color: "var(--ho-text-muted)" }}>Final notes and signatures</div>
@@ -8738,14 +8754,14 @@ function ShiftHandoverPage({ branch, setActive }) {
                   {signedOut ? (
                     <div style={{ border: "1px solid var(--ho-success-border)", background: "var(--ho-success-bg)", borderRadius: 10, padding: "14px 16px" }}>
                       <div className="signature-cursive">{sigOut.name}</div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 12, font: "600 11px 'JetBrains Mono'", color: "#138A5E" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 12, font: "600 11px 'JetBrains Mono'", color: "var(--ho-success-text)" }}>
                         <span>✓ Verified digital signature</span>
                       </div>
                       <div style={{ font: "500 11px 'JetBrains Mono'", color: "var(--ho-text-muted)", marginTop: 3 }}>{sigOut.time}</div>
-                      <button onClick={() => handleResetSig("out")} className="tap" style={{ marginTop: 10, padding: 0, border: "none", background: "none", color: "#D23F3F", font: "600 12px 'Hanken Grotesk'", cursor: "pointer" }}>Reset signature</button>
+                      <button onClick={() => handleResetSig("out")} className="tap" style={{ marginTop: 10, padding: 0, border: "none", background: "none", color: "#FF7675", font: "600 12px 'Hanken Grotesk'", cursor: "pointer" }}>Reset signature</button>
                     </div>
                   ) : (
-                    <button onClick={() => handleSign("out")} className="tap" style={{ width: "100%", border: "1.5px dashed var(--ho-border)", borderRadius: 10, padding: 24, background: "var(--ho-card-bg)", cursor: "pointer", color: "#146B62", font: "600 13.5px 'Hanken Grotesk'", display: "flex", alignItems: "center", justifyItems: "center", justifyContent: "center", gap: 8 }}>✎ Tap to sign as Outgoing</button>
+                    <button onClick={() => handleSign("out")} className="tap" style={{ width: "100%", border: "none", borderRadius: 14, padding: 24, background: "var(--ho-card-bg)", cursor: "pointer", color: "var(--ho-accent)", font: "600 13.5px 'Hanken Grotesk'", display: "flex", alignItems: "center", justifyItems: "center", justifyContent: "center", gap: 8, boxShadow: "4px 4px 8px var(--ho-shadow-dark), -4px -4px 8px var(--ho-shadow-light)" }}>✎ Tap to sign as Outgoing</button>
                   )}
                 </div>
 
@@ -8756,14 +8772,14 @@ function ShiftHandoverPage({ branch, setActive }) {
                   {signedIn ? (
                     <div style={{ border: "1px solid var(--ho-success-border)", background: "var(--ho-success-bg)", borderRadius: 10, padding: "14px 16px" }}>
                       <div className="signature-cursive">{sigIn.name}</div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 12, font: "600 11px 'JetBrains Mono'", color: "#138A5E" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 12, font: "600 11px 'JetBrains Mono'", color: "var(--ho-success-text)" }}>
                         <span>✓ Verified digital signature</span>
                       </div>
                       <div style={{ font: "500 11px 'JetBrains Mono'", color: "var(--ho-text-muted)", marginTop: 3 }}>{sigIn.time}</div>
-                      <button onClick={() => handleResetSig("in")} className="tap" style={{ marginTop: 10, padding: 0, border: "none", background: "none", color: "#D23F3F", font: "600 12px 'Hanken Grotesk'", cursor: "pointer" }}>Reset signature</button>
+                      <button onClick={() => handleResetSig("in")} className="tap" style={{ marginTop: 10, padding: 0, border: "none", background: "none", color: "#FF7675", font: "600 12px 'Hanken Grotesk'", cursor: "pointer" }}>Reset signature</button>
                     </div>
                   ) : (
-                    <button onClick={() => handleSign("in")} className="tap" style={{ width: "100%", border: "1.5px dashed var(--ho-border)", borderRadius: 10, padding: 24, background: "var(--ho-card-bg)", cursor: "pointer", color: "#146B62", font: "600 13.5px 'Hanken Grotesk'", display: "flex", alignItems: "center", justifyItems: "center", justifyContent: "center", gap: 8 }}>✎ Tap to sign as Incoming</button>
+                    <button onClick={() => handleSign("in")} className="tap" style={{ width: "100%", border: "none", borderRadius: 14, padding: 24, background: "var(--ho-card-bg)", cursor: "pointer", color: "var(--ho-accent)", font: "600 13.5px 'Hanken Grotesk'", display: "flex", alignItems: "center", justifyItems: "center", justifyContent: "center", gap: 8, boxShadow: "4px 4px 8px var(--ho-shadow-dark), -4px -4px 8px var(--ho-shadow-light)" }}>✎ Tap to sign as Incoming</button>
                   )}
                 </div>
               </div>
@@ -8786,9 +8802,9 @@ function ShiftHandoverPage({ branch, setActive }) {
                   Reset Draft
                 </button>
                 <button onClick={handleSubmit} disabled={!canSubmit} className="tap" style={{
-                  padding: "11px 24px", borderRadius: 10, border: "none", font: "700 13.5px 'Hanken Grotesk'", cursor: canSubmit ? "pointer" : "not-allowed",
-                  background: canSubmit ? "var(--ho-header-bg)" : "var(--ho-border)", color: canSubmit ? "var(--ho-header-text)" : "var(--ho-text-muted)",
-                  boxShadow: canSubmit ? "0 4px 12px rgba(14,46,42,.2)" : "none"
+                  padding: "12px 28px", borderRadius: 14, border: "none", font: "700 13.5px 'Hanken Grotesk'", cursor: canSubmit ? "pointer" : "not-allowed",
+                  background: canSubmit ? "var(--ho-accent)" : "var(--ho-card-bg)", color: canSubmit ? "#fff" : "var(--ho-text-muted)",
+                  boxShadow: canSubmit ? "4px 4px 8px var(--ho-shadow-dark), -4px -4px 8px var(--ho-shadow-light)" : "inset 2px 2px 4px var(--ho-shadow-dark), inset -2px -2px 4px var(--ho-shadow-light)"
                 }}>
                   Submit Handover
                 </button>
@@ -8851,7 +8867,7 @@ function ShiftHandoverPage({ branch, setActive }) {
                     <button 
                       onClick={() => setEditingQId(null)}
                       className="tap"
-                      style={{ border: "none", background: "none", color: "#D23F3F", cursor: "pointer", fontSize: 12, fontWeight: 600 }}
+                      style={{ border: "none", background: "none", color: "#FF7675", cursor: "pointer", fontSize: 12, fontWeight: 600 }}
                     >
                       Cancel
                     </button>
