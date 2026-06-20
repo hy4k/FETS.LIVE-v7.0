@@ -8228,7 +8228,7 @@ function ShiftHandoverPage({ branch, setActive }) {
                 <span style={{ width: 4, height: 4, borderRadius: "50%", background: "var(--ho-header-muted)" }} />
                 <span className="mono" style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".1em", color: "var(--ho-header-muted)", textTransform: "uppercase" }}>{branchLabel}</span>
               </div>
-              <h1 style={{ margin: "4px 0 0", font: "800 24px 'Hanken Grotesk'", color: "var(--ho-header-text)", letterSpacing: "-.02em" }}>Shift Handover</h1>
+              <h1 style={{ margin: "4px 0 0", font: "800 24px 'Hanken Grotesk'", color: "var(--ho-header-text)", letterSpacing: "-.02em" }}>Shift Handover </h1>
             </div>
           </div>
           
