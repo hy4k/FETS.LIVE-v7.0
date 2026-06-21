@@ -89,7 +89,7 @@ const EXAM_COLORS: Record<string, {
 type ExamKind = keyof typeof EXAM_COLORS
 
 const KIND_SECTION_LABEL: Record<ExamKind, string> = {
-  PROMETRIC: 'Prometric',
+  PROMETRIC: 'CMA US',
   PEARSON: 'Pearson Vue (PV)',
   PSI: 'PSI',
   CELPIP: 'CELPIP',
@@ -134,7 +134,7 @@ const getClientBadgeLabel = (s: Pick<Session, 'client_name' | 'exam_name'>) => {
   const k = resolveExamKind(s)
   switch (k) {
     case 'PEARSON': return 'PV'
-    case 'PROMETRIC': return 'PMT'
+    case 'PROMETRIC': return 'CMA US'
     case 'PSI': return 'PSI'
     case 'ITTS': return 'ITTS'
     case 'CELPIP': return 'CELPIP'
@@ -195,6 +195,7 @@ export function FetsCalendarPremium() {
   const [showDetailsModal, setShowDetailsModal] = useState(false)
   const [showAnalysis, setShowAnalysis] = useState(false)
   const [editingSession, setEditingSession] = useState<Session | null>(null)
+  const [expandedClient, setExpandedClient] = useState<ExamKind | null>(null)
 
   const [formData, setFormData] = useState({
     client_name: '', exam_name: '', date: '',
@@ -298,8 +299,17 @@ export function FetsCalendarPremium() {
   const openModal = (date?: Date, session?: Session) => {
     if (session) {
       setEditingSession(session)
+      // Case-insensitive match against dropdown options so edit form pre-selects correctly
+      const matchedClient = clientsWithOptions.find((c: any) =>
+        c.name.toUpperCase().trim() === session.client_name.toUpperCase().trim()
+      )
+      const matchedClientName = matchedClient?.name || session.client_name
+      const matchedExams = matchedClient ? dbExams.filter((e: any) => e.client_id === matchedClient.id) : []
+      const matchedExam = matchedExams.find((e: any) =>
+        e.name.toUpperCase().trim() === session.exam_name.toUpperCase().trim()
+      )
       setFormData({
-        client_name: session.client_name, exam_name: session.exam_name,
+        client_name: matchedClientName, exam_name: matchedExam?.name || session.exam_name,
         date: session.date, candidate_count: session.candidate_count,
         start_time: session.start_time, end_time: session.end_time,
         status: session.status || 'scheduled'
@@ -320,7 +330,7 @@ export function FetsCalendarPremium() {
 
   const closeModal = () => {
     setShowModal(false); setShowDetailsModal(false)
-    setEditingSession(null); setSelectedDate(null)
+    setEditingSession(null); setSelectedDate(null); setExpandedClient(null)
     setFormData({ client_name: '', exam_name: '', date: '', candidate_count: 1, start_time: '09:00', end_time: '17:00', status: 'scheduled' })
   }
 
@@ -1043,7 +1053,10 @@ export function FetsCalendarPremium() {
       </div>
       {/* ════════════════════ DAILY DETAILS MODAL ════════════════════ */}
       <AnimatePresence>
-        {showDetailsModal && selectedDate && (
+        {showDetailsModal && selectedDate && (() => {
+          const daySessions = getSessionsForDate(selectedDate)
+          const grouped = groupSessionsByKind(daySessions)
+          return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={closeModal} />
@@ -1051,7 +1064,7 @@ export function FetsCalendarPremium() {
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="relative w-full max-w-3xl bg-[var(--card-bg)] rounded-2xl shadow-2xl border border-[var(--border-color)] overflow-hidden max-h-[85vh] flex flex-col"
+              className="relative w-full max-w-6xl bg-[var(--card-bg)] rounded-2xl shadow-2xl border border-[var(--border-color)] overflow-hidden max-h-[85vh] flex flex-col"
             >
               {/* Header */}
               <div className="px-6 py-5 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--recessed-bg)]">
@@ -1060,10 +1073,10 @@ export function FetsCalendarPremium() {
                     {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
                   </h3>
                   <div className="flex items-center gap-3 mt-1">
-                    <span className="text-xs font-bold text-[var(--text-secondary)]">{getSessionsForDate(selectedDate).length} sessions</span>
+                    <span className="text-xs font-bold text-[var(--text-secondary)]">{daySessions.length} sessions</span>
                     <span className="w-1 h-1 rounded-full bg-[var(--border-color)]" />
                     <span className="text-xs font-bold text-[var(--text-secondary)]">
-                      {getSessionsForDate(selectedDate).reduce((s, x) => s + x.candidate_count, 0)} candidates
+                      {daySessions.reduce((s, x) => s + x.candidate_count, 0)} candidates
                     </span>
                   </div>
                 </div>
@@ -1073,102 +1086,200 @@ export function FetsCalendarPremium() {
                 </button>
               </div>
 
-              {/* Sessions — grouped by client family, sorted by time within each group */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                {getSessionsForDate(selectedDate).length > 0 ? (
-                  groupSessionsByKind(getSessionsForDate(selectedDate)).map(({ kind, sessions }) => {
-                    const band = getExamColor(kind)
-                    return (
-                      <div key={kind} className="space-y-3">
-                        <div className="flex items-center gap-3 px-0.5">
-                          <span className="h-px flex-1 bg-gradient-to-r from-transparent via-[var(--border-color)] to-transparent opacity-80" />
-                          <span
-                            className="text-[10px] font-black uppercase tracking-[0.22em] shrink-0 px-3 py-1 rounded-full border"
-                            style={{ color: band.badgeText, borderColor: band.border, backgroundColor: band.badge }}
+              <div className="flex-1 overflow-y-auto p-6 space-y-5">
+                {daySessions.length > 0 ? (
+                  <>
+                    {/* ── Client Summary Cards ── */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                      {grouped.map(({ kind, sessions: grpSessions }) => {
+                        const band = getExamColor(kind)
+                        const totalPax = grpSessions.reduce((s, x) => s + x.candidate_count, 0)
+                        const isExpanded = expandedClient === kind
+                        return (
+                          <button
+                            key={kind}
+                            onClick={() => setExpandedClient(isExpanded ? null : kind)}
+                            className={`text-left rounded-xl border p-3 transition-all ${isExpanded ? 'ring-2 ring-[var(--accent-mint)] border-[var(--accent-mint)]' : 'border-[var(--border-color)] hover:border-[var(--accent-mint)]/50'}`}
+                            style={{ background: isExpanded ? band.bg : 'var(--recessed-bg)' }}
                           >
-                            {KIND_SECTION_LABEL[kind]}
-                          </span>
-                          <span className="h-px flex-1 bg-gradient-to-l from-transparent via-[var(--border-color)] to-transparent opacity-80" />
-                        </div>
-                        <div className="space-y-2.5 pl-1 border-l-2 border-[var(--border-color)]/30 ml-1.5">
-                          {sessions.map((session, idx) => {
-                            const c = getExamColor(resolveExamKind(session))
-                            return (
-                              <div
-                                key={session.id ?? idx}
-                                className="rounded-xl border border-[var(--border-color)] overflow-hidden transition-all hover:ring-1 hover:ring-[var(--accent-mint)]"
-                                style={{ borderColor: c.border, background: `linear-gradient(145deg, ${c.bg} 0%, var(--recessed-bg) 100%)` }}
+                            <div className="flex items-center gap-2 mb-2">
+                              <span
+                                className="px-2 py-0.5 rounded text-[9px] font-black tracking-widest uppercase border"
+                                style={{ backgroundColor: band.badge, color: band.badgeText, borderColor: band.border }}
                               >
-                                <div className="flex items-stretch">
-                                  <div className="w-1 shrink-0 rounded-l-xl" style={{ backgroundColor: c.dot }} />
-                                  <div className="flex-1 p-4 min-w-0">
-                                    <div className="flex items-start justify-between gap-3">
-                                      <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                          <span
-                                            className="px-2.5 py-1 rounded-md text-[10px] font-black tracking-widest uppercase border border-[var(--border-color)]"
-                                            style={{ backgroundColor: c.badge, color: c.badgeText }}
-                                          >
-                                            {getClientBadgeLabel(session)}
-                                          </span>
-                                          <span className="text-[10px] text-[var(--text-secondary)] font-semibold truncate max-w-[200px]">
-                                            {session.client_name}
+                                {KIND_SECTION_LABEL[kind]}
+                              </span>
+                              {isExpanded && <ChevronDown size={12} className="text-[var(--accent-mint)] ml-auto" />}
+                            </div>
+                            <div className="flex items-baseline justify-between">
+                              <span className="text-2xl font-extrabold tabular-nums" style={{ color: band.text }}>{totalPax}</span>
+                              <span className="text-[10px] font-bold text-[var(--text-secondary)]">{grpSessions.length} {grpSessions.length === 1 ? 'session' : 'sessions'}</span>
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+
+                    {/* ── Expanded Client Sessions ── */}
+                    <AnimatePresence mode="wait">
+                      {expandedClient ? (
+                        <motion.div
+                          key={expandedClient}
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="space-y-2.5 overflow-hidden"
+                        >
+                          {(() => {
+                            const grp = grouped.find(g => g.kind === expandedClient)
+                            if (!grp) return null
+                            return grp.sessions.map((session, idx) => {
+                              const c = getExamColor(resolveExamKind(session))
+                              return (
+                                <div
+                                  key={session.id ?? idx}
+                                  className="rounded-xl border border-[var(--border-color)] overflow-hidden transition-all hover:ring-1 hover:ring-[var(--accent-mint)]"
+                                  style={{ borderColor: c.border, background: `linear-gradient(145deg, ${c.bg} 0%, var(--recessed-bg) 100%)` }}
+                                >
+                                  <div className="flex items-stretch">
+                                    <div className="w-1 shrink-0 rounded-l-xl" style={{ backgroundColor: c.dot }} />
+                                    <div className="flex-1 p-4 min-w-0">
+                                      <div className="flex items-start justify-between gap-3">
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                            <span
+                                              className="px-2.5 py-1 rounded-md text-[10px] font-black tracking-widest uppercase border border-[var(--border-color)]"
+                                              style={{ backgroundColor: c.badge, color: c.badgeText }}
+                                            >
+                                              {getClientBadgeLabel(session)}
+                                            </span>
+                                            <span className="text-[10px] text-[var(--text-secondary)] font-semibold truncate max-w-[200px]">
+                                              {session.client_name}
+                                            </span>
+                                          </div>
+                                          <h4 className="text-sm font-bold text-[var(--text-primary)] leading-snug">{session.exam_name}</h4>
+                                          {(session as any).assigned_staff && (
+                                            <p className="text-xs text-[var(--text-secondary)] mt-1 flex items-center gap-1">
+                                              <User size={11} className="text-[var(--text-secondary)]/80" /> {(session as any).assigned_staff}
+                                            </p>
+                                          )}
+                                        </div>
+                                        <div className="text-right shrink-0">
+                                          <div className="text-2xl font-extrabold tabular-nums" style={{ color: c.text }}>
+                                            {session.candidate_count}
+                                          </div>
+                                          <div className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">candidates</div>
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center flex-wrap gap-3 mt-3 pt-3 border-t border-[var(--border-color)]/30">
+                                        <div className="flex items-center gap-1.5 text-xs text-[var(--text-primary)]">
+                                          <Clock size={12} style={{ color: c.dot }} />
+                                          <span className="font-semibold tabular-nums">
+                                            {formatTime(session.start_time)} – {formatTime(session.end_time)}
                                           </span>
                                         </div>
-                                        <h4 className="text-sm font-bold text-[var(--text-primary)] leading-snug">{session.exam_name}</h4>
-                                        {(session as any).assigned_staff && (
-                                          <p className="text-xs text-[var(--text-secondary)] mt-1 flex items-center gap-1">
-                                            <User size={11} className="text-[var(--text-secondary)]/80" /> {(session as any).assigned_staff}
-                                          </p>
+                                        {session.branch_location && (
+                                          <div className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
+                                            <MapPin size={12} className="text-[var(--text-secondary)]/80" />
+                                            <span className="font-semibold capitalize">{session.branch_location}</span>
+                                          </div>
+                                        )}
+                                        {canEdit && (session.id === undefined || session.id >= 0) && (
+                                          <div className="ml-auto flex items-center gap-1">
+                                            <button
+                                              onClick={(e) => { e.stopPropagation(); openModal(selectedDate!, session as Session) }}
+                                              className="p-1.5 rounded-lg text-[var(--text-secondary)] hover:text-[var(--accent-mint)] hover:bg-[var(--accent-mint)]/10 transition-colors"
+                                            >
+                                              <Edit size={13} />
+                                            </button>
+                                            <button
+                                              onClick={(e) => { e.stopPropagation(); typeof session.id === 'number' && handleDelete(session.id) }}
+                                              className="p-1.5 rounded-lg text-[var(--text-secondary)] hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                                            >
+                                              <Trash2 size={13} />
+                                            </button>
+                                          </div>
                                         )}
                                       </div>
-                                      <div className="text-right shrink-0">
-                                        <div className="text-2xl font-extrabold tabular-nums" style={{ color: c.text }}>
-                                          {session.candidate_count}
-                                        </div>
-                                        <div className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">candidates</div>
-                                      </div>
-                                    </div>
-
-                                    <div className="flex items-center flex-wrap gap-3 mt-3 pt-3 border-t border-[var(--border-color)]/30">
-                                      <div className="flex items-center gap-1.5 text-xs text-[var(--text-primary)]">
-                                        <Clock size={12} style={{ color: c.dot }} />
-                                        <span className="font-semibold tabular-nums">
-                                          {formatTime(session.start_time)} – {formatTime(session.end_time)}
-                                        </span>
-                                      </div>
-                                      {session.branch_location && (
-                                        <div className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
-                                          <MapPin size={12} className="text-[var(--text-secondary)]/80" />
-                                          <span className="font-semibold capitalize">{session.branch_location}</span>
-                                        </div>
-                                      )}
-                                      {canEdit && (session.id === undefined || session.id >= 0) && (
-                                        <div className="ml-auto flex items-center gap-1">
-                                          <button
-                                            onClick={() => openModal(selectedDate!, session as Session)}
-                                            className="p-1.5 rounded-lg text-[var(--text-secondary)] hover:text-[var(--accent-mint)] hover:bg-[var(--accent-mint)]/10 transition-colors"
-                                          >
-                                            <Edit size={13} />
-                                          </button>
-                                          <button
-                                            onClick={() => typeof session.id === 'number' && handleDelete(session.id)}
-                                            className="p-1.5 rounded-lg text-[var(--text-secondary)] hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                                          >
-                                            <Trash2 size={13} />
-                                          </button>
-                                        </div>
-                                      )}
                                     </div>
                                   </div>
                                 </div>
+                              )
+                            })
+                          })()}
+                        </motion.div>
+                      ) : (
+                        /* ── Default: all sessions in 2-col grid grouped by client ── */
+                        <motion.div
+                          key="all"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          className="grid grid-cols-1 md:grid-cols-2 gap-4"
+                        >
+                          {grouped.map(({ kind, sessions: grpSessions }) => {
+                            const band = getExamColor(kind)
+                            return (
+                              <div key={kind} className="space-y-2">
+                                <div className="flex items-center gap-2 px-0.5">
+                                  <span className="h-px flex-1 bg-gradient-to-r from-transparent via-[var(--border-color)] to-transparent opacity-60" />
+                                  <span
+                                    className="text-[9px] font-black uppercase tracking-[0.2em] shrink-0 px-2.5 py-0.5 rounded-full border"
+                                    style={{ color: band.badgeText, borderColor: band.border, backgroundColor: band.badge }}
+                                  >
+                                    {KIND_SECTION_LABEL[kind]}
+                                  </span>
+                                  <span className="h-px flex-1 bg-gradient-to-l from-transparent via-[var(--border-color)] to-transparent opacity-60" />
+                                </div>
+                                {grpSessions.map((session, idx) => {
+                                  const c = getExamColor(resolveExamKind(session))
+                                  return (
+                                    <div
+                                      key={session.id ?? idx}
+                                      className="rounded-lg border border-[var(--border-color)] p-3 transition-all hover:ring-1 hover:ring-[var(--accent-mint)]"
+                                      style={{ background: `linear-gradient(145deg, ${c.bg} 0%, var(--recessed-bg) 100%)` }}
+                                    >
+                                      <div className="flex items-center justify-between gap-2">
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center gap-2 mb-1">
+                                            <span className="px-2 py-0.5 rounded text-[9px] font-black tracking-widest uppercase border border-[var(--border-color)]"
+                                              style={{ backgroundColor: c.badge, color: c.badgeText }}>
+                                              {getClientBadgeLabel(session)}
+                                            </span>
+                                            <span className="text-xs font-bold text-[var(--text-primary)] truncate">{session.exam_name}</span>
+                                          </div>
+                                          <div className="flex items-center gap-3 text-[10px] text-[var(--text-secondary)]">
+                                            <span className="flex items-center gap-1">
+                                              <Clock size={10} style={{ color: c.dot }} />
+                                              {formatTime(session.start_time)} – {formatTime(session.end_time)}
+                                            </span>
+                                            <span className="flex items-center gap-1">
+                                              <Users size={10} /> {session.candidate_count}
+                                            </span>
+                                          </div>
+                                        </div>
+                                        {canEdit && (
+                                          <div className="flex items-center gap-0.5 shrink-0">
+                                            <button onClick={() => openModal(selectedDate!, session as Session)}
+                                              className="p-1 rounded text-[var(--text-secondary)] hover:text-[var(--accent-mint)] hover:bg-[var(--accent-mint)]/10 transition-colors">
+                                              <Edit size={12} />
+                                            </button>
+                                            <button onClick={() => typeof session.id === 'number' && handleDelete(session.id)}
+                                              className="p-1 rounded text-[var(--text-secondary)] hover:text-red-400 hover:bg-red-500/10 transition-colors">
+                                              <Trash2 size={12} />
+                                            </button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )
+                                })}
                               </div>
                             )
                           })}
-                        </div>
-                      </div>
-                    )
-                  })
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </>
                 ) : (
                   <div className="flex flex-col items-center justify-center py-16 text-[var(--text-secondary)]/50">
                     <Calendar size={40} className="mb-3" />
@@ -1187,7 +1298,8 @@ export function FetsCalendarPremium() {
               )}
             </motion.div>
           </div>
-        )}
+          )
+        })()}
       </AnimatePresence>
 
       {/* ════════════════════ ADD / EDIT SESSION MODAL ════════════════════ */}
