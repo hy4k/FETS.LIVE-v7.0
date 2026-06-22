@@ -7571,7 +7571,7 @@ const DEFAULT_CHECKLIST = [
 ];
 
 function ShiftHandoverPage({ branch, setActive }) {
-  const [subView, setSubView] = React.useState("new"); // "new" | "history"
+  const [subView, setSubView] = React.useState("new"); // "new" | "pending" | "history"
   const [date, setDate] = React.useState(() => new Date().toISOString().split("T")[0]);
   const [handoverTime, setHandoverTime] = React.useState(() => {
     const now = new Date();
@@ -7610,6 +7610,10 @@ function ShiftHandoverPage({ branch, setActive }) {
   const [loadingHistory, setLoadingHistory] = React.useState(false);
   const [historyFilter, setHistoryFilter] = React.useState("all"); // "all" | "given" | "taken"
   const [selectedLog, setSelectedLog] = React.useState(null);
+
+  // Pending handovers (outgoing staff's view of their submitted-but-unsigned)
+  const [myPendingOut, setMyPendingOut] = React.useState([]);
+  const [loadingPending, setLoadingPending] = React.useState(false);
 
   // Load staff list for autocomplete
   const staffList = React.useMemo(() => {
@@ -7669,7 +7673,7 @@ function ShiftHandoverPage({ branch, setActive }) {
   const loadHistoryLogs = async () => {
     setLoadingHistory(true);
     try {
-      const logs = await DB.dbFetchHandovers(branch);
+      const logs = await DB.dbFetchHandovers(branch, "completed");
       setHistoryLogs(logs || []);
     } catch (e) {
       console.error("Error loading history logs:", e);
@@ -7681,8 +7685,26 @@ function ShiftHandoverPage({ branch, setActive }) {
   React.useEffect(() => {
     if (subView === "history") {
       loadHistoryLogs();
+    } else if (subView === "pending") {
+      loadMyPendingOut();
     }
   }, [subView, branch]);
+
+  const loadMyPendingOut = async () => {
+    setLoadingPending(true);
+    try {
+      const logs = await DB.dbFetchHandovers(branch, "pending");
+      const myName = (window.FETS?.user?.name || "").toLowerCase().trim();
+      const mine = (logs || []).filter(h =>
+        (h.outgoing_staff || []).some(s => s.toLowerCase().trim() === myName)
+      );
+      setMyPendingOut(mine);
+    } catch (e) {
+      console.error("Error loading pending handovers:", e);
+    } finally {
+      setLoadingPending(false);
+    }
+  };
 
   // Save draft state helper
   const updateDraft = (patch) => {
@@ -7855,51 +7877,7 @@ function ShiftHandoverPage({ branch, setActive }) {
       return;
     }
 
-    const branchLabel = branch === "global" ? "All centres" : branch.charAt(0).toUpperCase() + branch.slice(1);
-    
-    // Format markdown for The Lab wall post
-    let md = `### 📋 Shift Handover Report · &nbsp;${branchLabel}\n`;
-    md += `**Date:** ${date} | **Handover Time:** ${handoverTime}\n`;
-    md += `**Outgoing:** ${outgoing.join(", ")} | **Incoming:** ${incoming.join(", ")}\n\n`;
-    
-    md += `#### 👥 Candidate Status Headcount\n`;
-    md += `* **Currently Testing:** ${testing}\n`;
-    md += `* **No-Shows:** ${noShow}\n`;
-    if (candidateNotes.trim()) {
-      md += `* **Notes:** ${candidateNotes.trim()}\n`;
-    }
-    md += `\n`;
-    
-    md += `#### 🛠️ Checklist Verification\n`;
-    checklist.forEach(item => {
-      const statusIcon = item.status === 'ok' ? '✅' : item.status === 'attention' ? '⚠️' : item.status === 'critical' ? '🚨' : '⚪';
-      md += `* ${statusIcon} **${item.label}:** ${item.status?.toUpperCase() || 'NOT CHECKED'}`;
-      if (item.note) {
-        md += ` – *"${item.note}"*`;
-      }
-      md += `\n`;
-    });
-    md += `\n`;
-    
-    if (pending.length > 0) {
-      md += `#### ⏳ Pending Work & Incidents\n`;
-      pending.forEach((p, idx) => {
-        const priorityIcon = p.sev === 'high' ? '🔴' : p.sev === 'med' ? '🟡' : '🟢';
-        md += `${idx + 1}. ${priorityIcon} [${p.sev.toUpperCase()}] ${p.text}\n`;
-      });
-      md += `\n`;
-    }
-    
-    if (instructions.trim()) {
-      md += `#### 💡 Instructions for Next Shift\n`;
-      md += `> ${instructions.trim()}\n\n`;
-    }
-    
-    md += `#### ✍️ Digital Sign-off\n`;
-    md += `* **Outgoing:** Verified Digital Signature by *${sigOut?.name}* on ${sigOut?.time}\n`;
-    md += `* **Incoming:** Verified Digital Signature by *${sigIn?.name}* on ${sigIn?.time}\n`;
-
-    // 1. Insert into Supabase
+    // Insert into Supabase with pending status (no Lab post yet — that happens when incoming signs)
     const dbRes = await DB.dbCreateHandover({
       branch: branch === "global" ? "all" : branch,
       date,
@@ -7912,21 +7890,14 @@ function ShiftHandoverPage({ branch, setActive }) {
       checklist,
       pending_items: pending,
       instructions,
-      sig_out: sigOut,
-      sig_in: sigIn
+      sig_out: sigOut
     });
 
-    // 2. Publish to The Lab wall
-    const postRes = await LAB.labCreate({
-      type: "handover",
-      center: branch === "global" ? "all" : branch,
-      text: md
-    });
-
-    if (dbRes || postRes) {
+    if (dbRes) {
       setSubmitted(true);
       handleResetDraft();
-      toast("Handover report submitted successfully", "check");
+      toast(`Handover submitted — ${incoming.join(", ")} will be notified`, "check");
+      window.dispatchEvent(new Event("fets-handover-pending"));
       window.dispatchEvent(new Event("fets-discussion-changed"));
     } else {
       toast("DB sync failed — saved locally", "alert");
@@ -7941,14 +7912,14 @@ function ShiftHandoverPage({ branch, setActive }) {
   
   const signedOut = !!sigOut;
   const signedIn = !!sigIn;
-  const sigCount = (signedOut ? 1 : 0) + (signedIn ? 1 : 0);
-  
-  const totalReq = total + 2;
-  const doneCount = answered + sigCount;
+
+  // Progress: checklist items + outgoing signature only (incoming signs later on My Desk)
+  const totalReq = total + 1;
+  const doneCount = answered + (signedOut ? 1 : 0);
   const percent = totalReq > 0 ? Math.round((doneCount / totalReq) * 100) : 100;
 
-  // Need at least one proctor on each side plus everything checked/signed
-  const canSubmit = percent === 100 && outgoing.length > 0 && incoming.length > 0;
+  // Need checklist 100%, outgoing signed, incoming staff tagged (for notification)
+  const canSubmit = percent === 100 && outgoing.length > 0 && incoming.length > 0 && signedOut;
 
   // Filtered logs for History Log
   const filteredLogs = React.useMemo(() => {
@@ -8246,7 +8217,19 @@ function ShiftHandoverPage({ branch, setActive }) {
             >
               New Handover
             </button>
-            <button 
+            <button
+              onClick={() => { setSubView("pending"); setSelectedLog(null); }}
+              className="tap"
+              style={{
+                padding: "8px 16px", borderRadius: 8, border: "none", font: "700 13px 'Hanken Grotesk'", cursor: "pointer",
+                background: subView === "pending" ? "var(--ho-card-bg)" : "transparent",
+                color: subView === "pending" ? "var(--ho-text)" : "var(--ho-header-muted)",
+                transition: "all .2s ease"
+              }}
+            >
+              Pending
+            </button>
+            <button
               onClick={() => { setSubView("history"); setSelectedLog(null); }}
               className="tap"
               style={{
@@ -8411,6 +8394,20 @@ function ShiftHandoverPage({ branch, setActive }) {
                     )}
                   </div>
                 </div>
+
+                {selectedLog.incoming_comments && (
+                  <div style={{ marginTop: 20, border: "1px solid var(--ho-border)", borderRadius: 12, padding: 16 }}>
+                    <div className="handover-label">Incoming Staff Comments</div>
+                    <div style={{ fontSize: 14, color: "var(--ho-text)", fontStyle: "italic", whiteSpace: "pre-wrap", marginTop: 4 }}>{selectedLog.incoming_comments}</div>
+                  </div>
+                )}
+
+                {selectedLog.completed_at && (
+                  <div style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 8, font: "600 12px 'JetBrains Mono'", color: "var(--ho-success-text)" }}>
+                    <span>✓ Completed</span>
+                    <span style={{ color: "var(--ho-text-muted)" }}>{new Date(selectedLog.completed_at).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                  </div>
+                )}
               </div>
             ) : (
               /* LOGS FILTER LIST */
@@ -8498,14 +8495,56 @@ function ShiftHandoverPage({ branch, setActive }) {
               </div>
             )}
           </div>
+        ) : subView === "pending" ? (
+          /* PENDING HANDOVERS VIEW (outgoing's submitted-but-unsigned) */
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {loadingPending ? (
+              <div style={{ padding: 40, textAlign: "center", color: "var(--ho-text-muted)", font: "600 14px 'Hanken Grotesk'" }}>Loading pending handovers...</div>
+            ) : myPendingOut.length === 0 ? (
+              <div style={{ border: "1.5px dashed var(--ho-border)", borderRadius: 14, padding: 40, textAlign: "center", background: "var(--ho-card-bg)" }}>
+                <div style={{ font: "700 15px 'Hanken Grotesk'", color: "var(--ho-text)", marginBottom: 4 }}>No Pending Handovers</div>
+                <div style={{ font: "500 13px 'Hanken Grotesk'", color: "var(--ho-text-muted)" }}>All your handovers have been signed off by incoming staff.</div>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {myPendingOut.map((h) => {
+                  const isExpired = h.expires_at && new Date(h.expires_at) < new Date();
+                  const ago = timeAgo(h.created_at);
+                  return (
+                    <div key={h.id} className="handover-card" style={{ padding: "18px 22px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ font: "800 15px 'Hanken Grotesk'", color: "var(--ho-text)" }}>
+                            {new Date(h.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} · {h.handover_time}
+                          </span>
+                          <span style={{ padding: "3px 10px", borderRadius: 999, fontSize: 10.5, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.04em",
+                            background: isExpired ? "rgba(255,118,117,0.12)" : "rgba(253,203,110,0.15)",
+                            color: isExpired ? "#D23F3F" : "#C2860F",
+                            border: `1px solid ${isExpired ? "rgba(255,118,117,0.25)" : "rgba(253,203,110,0.3)"}` }}>
+                            {isExpired ? "Expired" : "Awaiting sign-off"}
+                          </span>
+                        </div>
+                        <span style={{ font: "500 13px 'Hanken Grotesk'", color: "var(--ho-text-muted)" }}>
+                          Incoming: {(h.incoming_staff || []).join(", ")} · {ago}
+                        </span>
+                      </div>
+                      <div style={{ font: "600 12px 'JetBrains Mono'", color: "var(--ho-text-muted)" }}>
+                        {h.currently_testing} testing · {h.no_shows} no-shows
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         ) : (
           /* NEW HANDOVER REPORT VIEW */
           <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
             {submitted && (
               <div className="handover-card" style={{ border: "1px solid var(--ho-success-border)", background: "var(--ho-success-bg)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
                 <div>
-                  <div style={{ font: "700 15px 'Hanken Grotesk'", color: "var(--ho-success-text)" }}>Handover report submitted!</div>
-                  <div style={{ font: "500 13px 'Hanken Grotesk'", color: "var(--ho-success-text)", marginTop: 2 }}>The report has been saved to database and published on The Lab coordination wall.</div>
+                  <div style={{ font: "700 15px 'Hanken Grotesk'", color: "var(--ho-success-text)" }}>Handover submitted — awaiting sign-off</div>
+                  <div style={{ font: "500 13px 'Hanken Grotesk'", color: "var(--ho-success-text)", marginTop: 2 }}>Incoming staff will be notified on their My Desk to review and sign off.</div>
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <button onClick={() => { setSubView("history"); loadHistoryLogs(); }} className="tap" style={{ padding: "8px 14px", borderRadius: 8, border: "none", background: "var(--ho-accent)", color: "#fff", font: "600 12.5px 'Hanken Grotesk'", cursor: "pointer" }}>View History</button>
@@ -8769,18 +8808,14 @@ function ShiftHandoverPage({ branch, setActive }) {
                   <div className="handover-label">Incoming staff</div>
                   <div style={{ font: "700 15px 'Hanken Grotesk'", color: "var(--ho-text)", marginTop: 3 }}>{incoming.join(", ") || "—"}</div>
                   <div style={{ height: 1, background: "var(--ho-border)", margin: "14px 0" }}></div>
-                  {signedIn ? (
-                    <div style={{ border: "1px solid var(--ho-success-border)", background: "var(--ho-success-bg)", borderRadius: 10, padding: "14px 16px" }}>
-                      <div className="signature-cursive">{sigIn.name}</div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 12, font: "600 11px 'JetBrains Mono'", color: "var(--ho-success-text)" }}>
-                        <span>✓ Verified digital signature</span>
-                      </div>
-                      <div style={{ font: "500 11px 'JetBrains Mono'", color: "var(--ho-text-muted)", marginTop: 3 }}>{sigIn.time}</div>
-                      <button onClick={() => handleResetSig("in")} className="tap" style={{ marginTop: 10, padding: 0, border: "none", background: "none", color: "#FF7675", font: "600 12px 'Hanken Grotesk'", cursor: "pointer" }}>Reset signature</button>
+                  <div style={{ border: "1px dashed var(--ho-border)", borderRadius: 10, padding: "14px 16px", textAlign: "center" }}>
+                    <div style={{ font: "600 13px 'Hanken Grotesk'", color: "var(--ho-text-muted)" }}>
+                      {incoming.length > 0 ? `${incoming.join(", ")} will be notified on their My Desk to review & sign.` : "Tag incoming staff above to notify them."}
                     </div>
-                  ) : (
-                    <button onClick={() => handleSign("in")} className="tap" style={{ width: "100%", border: "none", borderRadius: 14, padding: 24, background: "var(--ho-card-bg)", cursor: "pointer", color: "var(--ho-accent)", font: "600 13.5px 'Hanken Grotesk'", display: "flex", alignItems: "center", justifyItems: "center", justifyContent: "center", gap: 8, boxShadow: "4px 4px 8px var(--ho-shadow-dark), -4px -4px 8px var(--ho-shadow-light)" }}>✎ Tap to sign as Incoming</button>
-                  )}
+                    <div style={{ font: "500 11px 'JetBrains Mono'", color: "var(--ho-text-muted)", marginTop: 6, opacity: 0.7 }}>
+                      Incoming sign-off happens on My Desk
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -8793,8 +8828,9 @@ function ShiftHandoverPage({ branch, setActive }) {
                 </span>
                 <span style={{ fontSize: 12, color: "var(--ho-text-muted)" }}>
                   {outgoing.length === 0 ? "⚠️ Add outgoing staff. " : ""}
-                  {incoming.length === 0 ? "⚠️ Add incoming staff. " : ""}
-                  {percent < 100 ? "Complete all checklist items & digital sign-offs." : "Ready to submit."}
+                  {incoming.length === 0 ? "⚠️ Tag incoming staff. " : ""}
+                  {!signedOut ? "Sign as outgoing. " : ""}
+                  {percent < 100 ? "Complete all checklist items." : "Ready to submit."}
                 </span>
               </div>
               <div style={{ display: "flex", gap: 10 }}>
@@ -10145,6 +10181,7 @@ function PerformanceSnapshot() {
    MY DESK — workspace presets + compose the cockpit
    ===================================================================== */
 const DESK_TABS = [
+  { id: "handovers", icon: "clipboard", color: "var(--v-prometric)", label: "Handovers" },
   { id: "tasks", icon: "check", color: "var(--accent)", label: "My Task" },
   { id: "checklist", icon: "clipboard", color: "var(--v-prometric)", label: "Checklist" },
   { id: "certs", icon: "shield", color: "var(--ok)", label: "Certificates" },
@@ -10152,8 +10189,269 @@ const DESK_TABS = [
   { id: "readiness", icon: "trend", color: "var(--v-cma)", label: "Readiness" },
 ];
 
+/* =====================================================================
+   HANDOVER INBOX — incoming staff review & sign-off module (My Desk)
+   ===================================================================== */
+function HandoverInbox() {
+  const myName = window.FETS?.user?.name || "";
+  const [pending, setPending] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [selected, setSelected] = React.useState(null);
+  const [comment, setComment] = React.useState("");
+  const [signing, setSigning] = React.useState(false);
+
+  const loadPending = async () => {
+    setLoading(true);
+    try {
+      const items = await DB.dbFetchPendingHandovers(myName);
+      setPending(items);
+    } catch (e) {
+      console.error("HandoverInbox load error:", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    loadPending();
+    const handler = () => loadPending();
+    window.addEventListener("fets-handover-pending", handler);
+    return () => window.removeEventListener("fets-handover-pending", handler);
+  }, []);
+
+  const handleSignOff = async () => {
+    if (!selected || signing) return;
+    setSigning(true);
+    const timeStr = new Date().toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).replace(",", "");
+    const sigIn = { name: myName, time: timeStr };
+
+    const result = await DB.dbCompleteHandover(selected.id, sigIn, comment);
+    if (result) {
+      // Post one-liner to Lab
+      const branchLabel = (selected.branch === "all" || !selected.branch) ? "All centres" : selected.branch.charAt(0).toUpperCase() + selected.branch.slice(1);
+      const outNames = (selected.outgoing_staff || []).join(", ");
+      const inNames = (selected.incoming_staff || []).join(", ");
+      const dateStr = new Date(selected.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+      const oneLiner = `\u{1F504} Shift handover completed: ${outNames} \u2192 ${inNames} at ${selected.handover_time}, ${dateStr} \u00B7 ${branchLabel}`;
+
+      await LAB.labCreate({
+        type: "handover",
+        center: selected.branch === "all" ? "all" : selected.branch,
+        text: oneLiner
+      });
+
+      toast("Handover signed off successfully", "check");
+      setSelected(null);
+      setComment("");
+      loadPending();
+      window.dispatchEvent(new Event("fets-handover-pending"));
+      window.dispatchEvent(new Event("fets-discussion-changed"));
+    }
+    setSigning(false);
+  };
+
+  const activePending = pending.filter(h => h.status === "pending");
+
+  if (loading) {
+    return <div style={{ padding: 40, textAlign: "center", color: "var(--ink-3)", font: "600 14px var(--font)" }}>Loading handovers...</div>;
+  }
+
+  if (selected) {
+    const h = selected;
+    const isExpired = h.expires_at && new Date(h.expires_at) < new Date();
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+        <button onClick={() => { setSelected(null); setComment(""); }} className="tap glass-2"
+          style={{ alignSelf: "flex-start", display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, border: "1px solid var(--hairline)", cursor: "pointer", font: "600 12.5px var(--font)", color: "var(--ink-3)" }}>
+          \u2190 Back to Handovers
+        </button>
+
+        {/* Header */}
+        <div className="glass" style={{ borderRadius: "var(--radius)", padding: "20px 22px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
+            <div>
+              <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: "var(--ink)" }}>Shift Handover Review</h2>
+              <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--ink-3)" }}>
+                From: {(h.outgoing_staff || []).join(", ")} · {new Date(h.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} at {h.handover_time}
+              </p>
+            </div>
+            {isExpired && (
+              <span style={{ padding: "4px 12px", borderRadius: 999, fontSize: 11, fontWeight: 800, background: "rgba(255,118,117,0.12)", color: "#D23F3F", border: "1px solid rgba(255,118,117,0.25)" }}>EXPIRED</span>
+            )}
+          </div>
+        </div>
+
+        {/* Candidate headcount */}
+        <div className="glass" style={{ borderRadius: "var(--radius)", padding: "18px 22px" }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-2)", marginBottom: 12 }}>Candidate Headcount</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            <div className="inset" style={{ padding: 14, borderRadius: 12, textAlign: "center" }}>
+              <div className="tabnum mono" style={{ fontSize: 26, fontWeight: 700, color: "var(--ok)" }}>{h.currently_testing}</div>
+              <div style={{ fontSize: 11.5, color: "var(--ink-3)", fontWeight: 600, marginTop: 2 }}>Currently Testing</div>
+            </div>
+            <div className="inset" style={{ padding: 14, borderRadius: 12, textAlign: "center" }}>
+              <div className="tabnum mono" style={{ fontSize: 26, fontWeight: 700, color: "#FF7675" }}>{h.no_shows}</div>
+              <div style={{ fontSize: 11.5, color: "var(--ink-3)", fontWeight: 600, marginTop: 2 }}>No Shows</div>
+            </div>
+          </div>
+          {h.candidate_notes && (
+            <div style={{ marginTop: 12, fontSize: 13, color: "var(--ink-2)", whiteSpace: "pre-wrap" }}>{h.candidate_notes}</div>
+          )}
+        </div>
+
+        {/* Checklist */}
+        <div className="glass" style={{ borderRadius: "var(--radius)", padding: "18px 22px" }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-2)", marginBottom: 12 }}>Checklist Verification</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {(h.checklist || []).map((item, idx) => {
+              const icon = item.status === 'ok' ? '\u2705' : item.status === 'attention' ? '\u26A0\uFE0F' : item.status === 'critical' ? '\uD83D\uDEA8' : '\u26AA';
+              return (
+                <div key={idx} style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", padding: "9px 12px", borderRadius: 8, background: "var(--inset)", gap: 10 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{item.label}</span>
+                    {item.note && <div style={{ fontSize: 12, fontStyle: "italic", color: "var(--ink-3)", marginTop: 2 }}>"{item.note}"</div>}
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", flexShrink: 0,
+                    color: item.status === 'ok' ? "var(--ok)" : item.status === 'attention' ? "#C2860F" : item.status === 'critical' ? "#D23F3F" : "var(--ink-4)" }}>
+                    {icon} {item.status || "N/A"}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Pending work */}
+        {h.pending_items?.length > 0 && (
+          <div className="glass" style={{ borderRadius: "var(--radius)", padding: "18px 22px" }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-2)", marginBottom: 12 }}>Pending Work & Incidents</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {h.pending_items.map((p, idx) => (
+                <div key={idx} style={{ display: "flex", gap: 10, alignItems: "center", padding: "9px 12px", borderRadius: 8, background: "var(--inset)" }}>
+                  <span style={{ fontSize: 10.5, fontWeight: 800, textTransform: "uppercase", padding: "2px 7px", borderRadius: 4,
+                    background: p.sev === "high" ? "rgba(255,118,117,0.1)" : p.sev === "med" ? "rgba(253,203,110,0.1)" : "rgba(178,190,195,0.1)",
+                    color: p.sev === "high" ? "#D23F3F" : p.sev === "med" ? "#C2860F" : "var(--ink-4)" }}>{p.sev}</span>
+                  <span style={{ fontSize: 13, color: "var(--ink)" }}>{p.text}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Instructions */}
+        {h.instructions && (
+          <div className="glass" style={{ borderRadius: "var(--radius)", padding: "18px 22px" }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-2)", marginBottom: 8 }}>Instructions for Next Shift</div>
+            <div style={{ fontSize: 14, color: "var(--ink)", fontStyle: "italic", whiteSpace: "pre-wrap" }}>{h.instructions}</div>
+          </div>
+        )}
+
+        {/* Outgoing signature */}
+        <div className="glass" style={{ borderRadius: "var(--radius)", padding: "18px 22px" }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-2)", marginBottom: 8 }}>Outgoing Sign-off</div>
+          {h.sig_out ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ fontFamily: "'Homemade Apple', cursive", fontSize: 22, color: "var(--ink)" }}>{h.sig_out.name}</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: "var(--ok)" }}>\u2713 Verified</span>
+              <span className="mono" style={{ fontSize: 10.5, color: "var(--ink-4)" }}>{h.sig_out.time}</span>
+            </div>
+          ) : (
+            <div style={{ fontSize: 13, color: "var(--ink-4)", fontStyle: "italic" }}>No signature</div>
+          )}
+        </div>
+
+        {/* Comment + sign-off section */}
+        {!isExpired && (
+          <div className="glass" style={{ borderRadius: "var(--radius)", padding: "22px", border: "1px solid var(--accent-line)" }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)", marginBottom: 12 }}>Your Sign-off</div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-3)", display: "block", marginBottom: 6 }}>Add comments or observations (optional)</label>
+              <textarea
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                rows={3}
+                placeholder="Any observations, issues noticed, or notes for the record..."
+                style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid var(--hairline)", background: "var(--inset)", color: "var(--ink)", fontFamily: "var(--font)", fontSize: 13, resize: "vertical", lineHeight: 1.5, boxSizing: "border-box" }}
+              />
+            </div>
+            <button
+              onClick={handleSignOff}
+              disabled={signing}
+              className="tap"
+              style={{
+                width: "100%", padding: "14px 24px", borderRadius: 14, border: "none",
+                background: signing ? "var(--ink-4)" : "var(--accent)", color: signing ? "var(--ink-2)" : "var(--accent-ink)",
+                font: "700 14px var(--font)", cursor: signing ? "not-allowed" : "pointer",
+                boxShadow: "0 4px 16px color-mix(in oklch, var(--accent) 40%, transparent)"
+              }}
+            >
+              {signing ? "Signing..." : "I confirm I have reviewed this handover and accept responsibility for the shift"}
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {activePending.length > 0 && (
+        <div style={{
+          padding: "16px 20px", borderRadius: "var(--radius)",
+          background: "linear-gradient(135deg, rgba(253,203,110,0.12), rgba(253,203,110,0.04))",
+          border: "1px solid rgba(253,203,110,0.25)",
+          display: "flex", alignItems: "center", gap: 12
+        }}>
+          <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#FDCB6E", animation: "pulse 2s infinite", flexShrink: 0 }} />
+          <span style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)" }}>
+            You have {activePending.length} handover{activePending.length > 1 ? "s" : ""} awaiting your sign-off
+          </span>
+        </div>
+      )}
+
+      {pending.length === 0 ? (
+        <div className="inset" style={{ padding: 40, borderRadius: "var(--radius)", textAlign: "center" }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: "var(--ink-2)", marginBottom: 4 }}>No Pending Handovers</div>
+          <div style={{ fontSize: 13, color: "var(--ink-4)" }}>You're all caught up. New handovers will appear here.</div>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {pending.map((h) => {
+            const isExpired = h.status === "expired" || (h.expires_at && new Date(h.expires_at) < new Date());
+            const ago = timeAgo(h.created_at);
+            const branchLabel = (h.branch === "all" || !h.branch) ? "All centres" : h.branch.charAt(0).toUpperCase() + h.branch.slice(1);
+            return (
+              <div key={h.id} className="glass tap" onClick={() => setSelected(h)}
+                style={{ borderRadius: "var(--radius)", padding: "16px 20px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)" }}>
+                      {(h.outgoing_staff || []).join(", ")}
+                    </span>
+                    <span style={{ padding: "2px 8px", borderRadius: 999, fontSize: 10, fontWeight: 800,
+                      background: isExpired ? "rgba(255,118,117,0.12)" : "rgba(253,203,110,0.15)",
+                      color: isExpired ? "#D23F3F" : "#C2860F" }}>
+                      {isExpired ? "Expired" : "Pending"}
+                    </span>
+                  </div>
+                  <span style={{ fontSize: 12, color: "var(--ink-3)" }}>
+                    {branchLabel} · {new Date(h.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })} · {h.handover_time} · {ago}
+                  </span>
+                </div>
+                <button className="tap" style={{ padding: "8px 16px", borderRadius: 10, border: "none", background: isExpired ? "var(--inset)" : "var(--accent)", color: isExpired ? "var(--ink-3)" : "var(--accent-ink)", font: "700 12.5px var(--font)", cursor: "pointer" }}>
+                  {isExpired ? "View" : "Review & Sign"}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* preset-device style nav card — name only, big display */
-function PresetCard({ m, idx, on, onClick }) {
+function PresetCard({ m, idx, on, onClick, badge }) {
   return (
     <button onClick={onClick} className="tap" style={{ display: "flex", gap: 12, cursor: "pointer", textAlign: "left", fontFamily: "var(--font)",
       padding: 13, borderRadius: 20, alignItems: "stretch", position: "relative",
@@ -10161,6 +10459,7 @@ function PresetCard({ m, idx, on, onClick }) {
       background: "linear-gradient(155deg, oklch(0.30 0.03 184), oklch(0.215 0.025 184))",
       boxShadow: on ? "inset 0 1px 0 oklch(1 0 0 / .07), 0 10px 24px oklch(0 0 0 / .4)" : "inset 0 1px 0 oklch(1 0 0 / .05), 0 4px 12px oklch(0 0 0 / .3)",
       transition: "border-color .18s, box-shadow .18s" }}>
+      {badge > 0 && <span style={{ position: "absolute", top: 8, right: 8, minWidth: 20, height: 20, padding: "0 5px", borderRadius: 999, display: "grid", placeItems: "center", fontSize: 10, fontWeight: 800, color: "#fff", background: "#FF7675", boxShadow: "0 0 8px rgba(255,118,117,0.5)", zIndex: 2 }}>{badge > 99 ? "99+" : badge}</span>}
       {/* screen */}
       <div style={{ flex: 1, minWidth: 0, minHeight: 104, borderRadius: 13, padding: "11px 13px 12px", display: "flex", flexDirection: "column",
         background: on ? `linear-gradient(160deg, color-mix(in oklch, ${m.color} 16%, oklch(0.12 0.02 184)), oklch(0.1 0.018 184))` : "linear-gradient(160deg, oklch(0.14 0.02 184), oklch(0.1 0.018 184))",
@@ -10187,10 +10486,10 @@ function PresetCard({ m, idx, on, onClick }) {
   );
 }
 
-function DeskMenu({ tab, setTab }) {
+function DeskMenu({ tab, setTab, pendingHandovers }) {
   return (
     <nav className="desk-menu" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(206px, 1fr))", gap: 12 }}>
-      {DESK_TABS.map((m, i) => <PresetCard key={m.id} m={m} idx={i} on={tab === m.id} onClick={() => setTab(m.id)} />)}
+      {DESK_TABS.map((m, i) => <PresetCard key={m.id} m={m} idx={i} on={tab === m.id} onClick={() => setTab(m.id)} badge={m.id === "handovers" ? pendingHandovers : 0} />)}
     </nav>
   );
 }
@@ -10198,7 +10497,21 @@ function DeskMenu({ tab, setTab }) {
 function MyDeskPage({ branch, setActive, setDrawer }) {
   const u = window.FETS.user;
   const gap = "calc(24px * var(--density))";
+  const [pendingCount, setPendingCount] = React.useState(0);
   const [tab, setTab] = React.useState("tasks");
+
+  // Fetch pending handover count + auto-select tab
+  React.useEffect(() => {
+    const refresh = async () => {
+      const n = await DB.dbCountPendingHandovers(u.name);
+      setPendingCount(n);
+      if (n > 0) setTab("handovers");
+    };
+    refresh();
+    const handler = () => refresh();
+    window.addEventListener("fets-handover-pending", handler);
+    return () => window.removeEventListener("fets-handover-pending", handler);
+  }, []);
 
   return (
     <div style={{ maxWidth: 1180, margin: "0 auto", display: "flex", flexDirection: "column", gap }}>
@@ -10214,12 +10527,13 @@ function MyDeskPage({ branch, setActive, setDrawer }) {
 
       {/* workspace presets */}
       <section style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>5 modules</span>}>Your workspace</SectionLabel>
-        <DeskMenu tab={tab} setTab={setTab} />
+        <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>{DESK_TABS.length} modules</span>}>Your workspace</SectionLabel>
+        <DeskMenu tab={tab} setTab={setTab} pendingHandovers={pendingCount} />
       </section>
 
       {/* active feature — full width */}
       <div style={{ minHeight: 300 }}>
+        {tab === "handovers" && <HandoverInbox />}
         {tab === "tasks" && <TasksModule />}
         {tab === "checklist" && <ChecklistModule />}
         {tab === "certs" && <CertsModule />}
@@ -10297,7 +10611,7 @@ function ordinal(n) {
 }
 
 /* ---------- top navigation ---------- */
-function TopNav({ active, onNavigate, branch, setBranch, t, setTweak, onTools, onBurger, onLogout }) {
+function TopNav({ active, onNavigate, branch, setBranch, t, setTweak, onTools, onBurger, onLogout, pendingHandoverBadge }) {
   const candToday = branchSessions(0, branch).reduce((a, s) => a + s.count, 0);
   return (
     <header className="glass" style={{
@@ -10320,8 +10634,13 @@ function TopNav({ active, onNavigate, branch, setBranch, t, setTweak, onTools, o
       {/* primary links */}
       <nav className="topnav-links" style={{ display: "flex", alignItems: "center", gap: "clamp(18px,2.4vw,32px)" }}>
         {NAV.map((n) => (
-          <button key={n.id} className={`topnav-item ${active === n.id ? "active" : ""}`} onClick={() => onNavigate(n)}>
+          <button key={n.id} className={`topnav-item ${active === n.id ? "active" : ""}`} onClick={() => onNavigate(n)} style={{ position: "relative" }}>
             {n.label}
+            {n.id === "desk" && pendingHandoverBadge > 0 && (
+              <span style={{ position: "absolute", top: -6, right: -10, minWidth: 16, height: 16, padding: "0 4px", borderRadius: 999, display: "grid", placeItems: "center", fontSize: 9, fontWeight: 800, color: "#fff", background: "#FF7675", boxShadow: "0 0 6px rgba(255,118,117,0.5)" }}>
+                {pendingHandoverBadge > 9 ? "9+" : pendingHandoverBadge}
+              </span>
+            )}
           </button>
         ))}
       </nav>
@@ -10979,6 +11298,7 @@ function App({ bridge, onLogout }) {
   const [tools, setTools] = React.useState(false);
   const [burger, setBurger] = React.useState(false);
   const [active, setActive] = React.useState("live");
+  const [pendingHandoverBadge, setPendingHandoverBadge] = React.useState(0);
 
   React.useEffect(() => {
     const r = document.getElementById("fets-redesign-root") || document.documentElement;
@@ -10987,6 +11307,17 @@ function App({ bridge, onLogout }) {
     r.style.setProperty("--accent", acc);
     r.style.setProperty("--density", DENSITY_VAL[t.density] ?? 1);
   }, [t]);
+
+  // Pending handover badge for top nav
+  React.useEffect(() => {
+    const refresh = () => {
+      const name = window.FETS?.user?.name;
+      if (name) DB.dbCountPendingHandovers(name).then(setPendingHandoverBadge);
+    };
+    refresh();
+    window.addEventListener("fets-handover-pending", refresh);
+    return () => window.removeEventListener("fets-handover-pending", refresh);
+  }, []);
 
   React.useEffect(() => {
     const channel = supabase.channel("realtime-claims-requests")
@@ -11039,7 +11370,8 @@ function App({ bridge, onLogout }) {
   return (
     <div style={{ position: "relative", zIndex: 2, height: "100%", display: "flex", flexDirection: "column", "--branch": BRANCH_TINT[branch] || "var(--accent)" }}>
       <TopNav active={active} onNavigate={onNavigate} branch={branch} setBranch={setBranch}
-        t={t} setTweak={setTweak} onTools={() => setTools(true)} onBurger={() => setBurger(true)} onLogout={onLogout} />
+        t={t} setTweak={setTweak} onTools={() => setTools(true)} onBurger={() => setBurger(true)} onLogout={onLogout}
+        pendingHandoverBadge={pendingHandoverBadge} />
 
       <main className="scroll-soft main-scroll" style={{
         flex: 1,

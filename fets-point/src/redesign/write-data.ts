@@ -931,6 +931,8 @@ export async function dbMutateHandoverQuestion(action: "add" | "edit" | "delete"
 }
 
 export async function dbCreateHandover(h: any) {
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
   const row = {
     branch: h.branch,
     date: h.date,
@@ -944,7 +946,9 @@ export async function dbCreateHandover(h: any) {
     pending_items: h.pending_items || [],
     instructions: h.instructions || "",
     sig_out: h.sig_out || null,
-    sig_in: h.sig_in || null,
+    sig_in: null,
+    status: "pending",
+    expires_at: expiresAt,
     created_by: F()._meUserId || null
   };
   try {
@@ -954,7 +958,7 @@ export async function dbCreateHandover(h: any) {
       .select()
       .single();
     if (error) throw error;
-    rtoast("Handover saved successfully");
+    rtoast("Handover submitted — awaiting incoming sign-off");
     return data;
   } catch (e) {
     console.error("dbCreateHandover error:", e);
@@ -963,18 +967,85 @@ export async function dbCreateHandover(h: any) {
   }
 }
 
-export async function dbFetchHandovers(branch: string) {
+export async function dbFetchPendingHandovers(staffName: string) {
+  try {
+    const { data, error } = await supabase
+      .from("shift_handovers")
+      .select("*")
+      .eq("status", "pending")
+      .contains("incoming_staff", [staffName])
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    // Auto-expire: mark as expired if past expires_at
+    const now = new Date();
+    const results = (data || []).map(h => {
+      if (h.expires_at && new Date(h.expires_at) < now) {
+        return { ...h, status: "expired" };
+      }
+      return h;
+    });
+    return results;
+  } catch (e) {
+    console.error("dbFetchPendingHandovers error:", e);
+    return [];
+  }
+}
+
+export async function dbCompleteHandover(id: string, sigIn: any, comments: string) {
+  try {
+    const { data, error } = await supabase
+      .from("shift_handovers")
+      .update({
+        status: "completed",
+        sig_in: sigIn,
+        incoming_comments: comments || "",
+        completed_at: new Date().toISOString()
+      })
+      .eq("id", id)
+      .eq("status", "pending")
+      .select()
+      .single();
+    if (error) throw error;
+    rtoast("Handover signed off successfully");
+    return data;
+  } catch (e) {
+    console.error("dbCompleteHandover error:", e);
+    rtoast("Sign-off failed — try again", "alert");
+    return null;
+  }
+}
+
+export async function dbCountPendingHandovers(staffName: string) {
+  try {
+    const { count, error } = await supabase
+      .from("shift_handovers")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "pending")
+      .contains("incoming_staff", [staffName])
+      .gt("expires_at", new Date().toISOString());
+    if (error) throw error;
+    return count || 0;
+  } catch (e) {
+    console.error("dbCountPendingHandovers error:", e);
+    return 0;
+  }
+}
+
+export async function dbFetchHandovers(branch: string, statusFilter?: string) {
   try {
     let query = supabase
       .from("shift_handovers")
       .select("*")
       .order("date", { ascending: false })
       .order("created_at", { ascending: false });
-    
+
     if (branch && branch !== "global") {
       query = query.eq("branch", branch);
     }
-    
+    if (statusFilter) {
+      query = query.eq("status", statusFilter);
+    }
+
     const { data, error } = await query.limit(100);
     if (error) throw error;
     return data || [];
