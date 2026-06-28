@@ -16,6 +16,7 @@ import * as DB from "./write-data";
 import * as LAB from "./lab-data";
 import * as ATT from "./attendance-data";
 import html2canvas from "html2canvas";
+import { FetsChatPopup } from "../components/FetsChatPopup";
 
 /* ============================================================
    SOURCE: data.js
@@ -10962,7 +10963,7 @@ const LAB_TYPES = {
   question: { label: "Question", color: "var(--v-ielts)", icon: "message" },
   general: { label: "General", color: "var(--ink-3)", icon: "users" },
 };
-const LAB_CENTERS = ["all", "calicut", "cochin", "kannur"];
+const LAB_CENTERS = ["all", "calicut", "cochin"];
 const LAB_CLABEL = { all: "All centres", calicut: "Calicut", cochin: "Cochin", kannur: "Kannur" };
 function labCanAnnounce() {
   const e = (window.FETS.user.email || "").toLowerCase();
@@ -10994,8 +10995,6 @@ function labMentionsMe(text) {
 }
 
 function LabPostCard({ p, onChange, onDelete, canMod }) {
-  const t = LAB_TYPES[p.type] || LAB_TYPES.general;
-  const v = p.exam && window.VENDOR_BY_SLUG[p.exam];
   const [open, setOpen] = React.useState(false);
   const [draft, setDraft] = React.useState("");
   const me = window.FETS._meUserId;
@@ -11014,65 +11013,55 @@ function LabPostCard({ p, onChange, onDelete, canMod }) {
   const pin = () => { const np = { ...p, pinned: !p.pinned }; LAB.labSaveMeta(np); onChange(np); };
   return (
     <article className="glass" style={{ borderRadius: "var(--radius)", padding: 0, display: "flex", overflow: "hidden" }}>
-      <span style={{ width: 5, background: t.color, flexShrink: 0 }} />
-      <div style={{ flex: 1, minWidth: 0, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 11 }}>
+      <span style={{ width: 3, background: "var(--accent)", flexShrink: 0, opacity: 0.5 }} />
+      <div style={{ flex: 1, minWidth: 0, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
         {/* header */}
-        <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
-          <Avatar name={p.authorName} size={36} />
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <Avatar name={p.authorName} size={34} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--ink)" }}>{p.authorName}</span>
-              {p.pinned && <span title="Pinned" style={{ color: "var(--accent)" }}><Icon name="pin" size={13} /></span>}
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>{p.authorName}</span>
+              {p.pinned && <span title="Pinned" style={{ color: "var(--accent)" }}><Icon name="pin" size={12} /></span>}
             </div>
-            <span className="mono" style={{ fontSize: 10.5, color: "var(--ink-4)" }}>{timeAgo(p.when)}{p.role ? ` · ${p.role}` : ""}</span>
+            <span className="mono" style={{ fontSize: 10, color: "var(--ink-4)" }}>{timeAgo(p.when)}{p.role ? ` · ${p.role}` : ""}</span>
           </div>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 10.5, fontWeight: 700, padding: "4px 10px", borderRadius: 999, color: t.color, background: `color-mix(in oklch, ${t.color} 15%, transparent)`, border: `1px solid color-mix(in oklch, ${t.color} 30%, transparent)` }}>
-            <Icon name={t.icon} size={12} /> {t.label}
-          </span>
-        </div>
-        {/* tags */}
-        <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
           <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", padding: "3px 9px", borderRadius: 999, color: "var(--ink-3)", background: "var(--inset)" }}>{LAB_CLABEL[p.center] || "All centres"}</span>
-          {v && <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10, fontWeight: 700, padding: "3px 9px", borderRadius: 999, color: v.color, background: `color-mix(in oklch, ${v.color} 15%, transparent)` }}><span style={{ width: 6, height: 6, borderRadius: 2, background: v.color }} />{v.name}</span>}
-          {p.compliance && <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10, fontWeight: 800, padding: "3px 9px", borderRadius: 999, color: "var(--bad)", background: "color-mix(in oklch, var(--bad) 15%, transparent)" }}><Icon name="shield" size={11} /> Compliance</span>}
-          {labMentionsMe(p.text) && <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10, fontWeight: 800, padding: "3px 9px", borderRadius: 999, color: "var(--accent)", background: "var(--accent-soft)" }}><Icon name="at" size={11} /> Mentions you</span>}
         </div>
         {/* body */}
-        {p.text && <div style={{ fontSize: 14.5, color: "var(--ink)", lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{labRich(p.text)}</div>}
+        {p.text && <div style={{ fontSize: 14, color: "var(--ink)", lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{labRich(p.text)}</div>}
         {p.image && <a href={p.image} target="_blank" rel="noopener noreferrer"><img src={p.image} alt="" style={{ maxWidth: "100%", borderRadius: 12, border: "1px solid var(--hairline)" }} /></a>}
         {(p.attachments || []).map((a, i) => (
-          <a key={i} href={a.url} target="_blank" rel="noopener noreferrer" className="tap glass-2" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 10, textDecoration: "none", color: "var(--ink-2)", fontSize: 12.5, alignSelf: "flex-start" }}><Icon name="package" size={14} /> {a.name || "Attachment"}</a>
+          <a key={i} href={a.url} target="_blank" rel="noopener noreferrer" className="tap glass-2" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "7px 11px", borderRadius: 10, textDecoration: "none", color: "var(--ink-2)", fontSize: 12, alignSelf: "flex-start" }}><Icon name="package" size={14} /> {a.name || "Attachment"}</a>
         ))}
         {/* footer */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", paddingTop: 4, borderTop: "1px solid var(--hairline)", marginTop: 2 }}>
           {Object.keys(reacts).filter((e) => reacts[e] && reacts[e].length).map((e) => { const mine = reacts[e].includes(me); return (
-            <button key={e} onClick={() => react(e)} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 999, cursor: "pointer", border: `1px solid ${mine ? "var(--accent-line)" : "var(--hairline)"}`, background: mine ? "var(--accent-soft)" : "transparent", color: mine ? "var(--accent)" : "var(--ink-2)", fontSize: 12.5, fontWeight: 650 }}>{e} {reacts[e].length}</button>
+            <button key={e} onClick={() => react(e)} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 999, cursor: "pointer", border: `1px solid ${mine ? "var(--accent-line)" : "var(--hairline)"}`, background: mine ? "var(--accent-soft)" : "transparent", color: mine ? "var(--accent)" : "var(--ink-2)", fontSize: 12, fontWeight: 650 }}>{e} {reacts[e].length}</button>
           ); })}
           <div style={{ position: "relative" }}>
-            <button onClick={() => setPicker((v) => !v)} className="tap" title="React" style={{ display: "grid", placeItems: "center", width: 30, height: 30, borderRadius: 999, cursor: "pointer", border: "1px solid var(--hairline)", background: "transparent", color: "var(--ink-3)", fontSize: 16, lineHeight: 1 }}>＋</button>
+            <button onClick={() => setPicker((v) => !v)} className="tap" title="React" style={{ display: "grid", placeItems: "center", width: 28, height: 28, borderRadius: 999, cursor: "pointer", border: "1px solid var(--hairline)", background: "transparent", color: "var(--ink-3)", fontSize: 16, lineHeight: 1 }}>＋</button>
             {picker && <div className="glass" style={{ position: "absolute", bottom: 36, left: 0, zIndex: 8, display: "flex", gap: 4, padding: 6, borderRadius: 12, boxShadow: "var(--shadow-lift)" }}>{LAB.LAB_EMOJIS.map((e) => <button key={e} onClick={() => react(e)} className="tap" style={{ fontSize: 18, border: "none", background: "transparent", cursor: "pointer", padding: 4, borderRadius: 8 }}>{e}</button>)}</div>}
           </div>
-          <button onClick={() => setOpen((o) => !o)} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 12px", borderRadius: 999, cursor: "pointer", border: "1px solid var(--hairline)", background: "transparent", color: "var(--ink-3)", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 650 }}><Icon name="message" size={14} /> {p.comments.length}</button>
-          {p.type === "announcement" && <button onClick={ack} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 12px", borderRadius: 999, cursor: "pointer", border: "1px solid var(--hairline)", background: acked ? "color-mix(in oklch, var(--ok) 16%, transparent)" : "transparent", color: acked ? "var(--ok)" : "var(--ink-3)", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 650 }}><Icon name="check" size={13} stroke={3} /> {acked ? "Acknowledged" : "Acknowledge"} · {(p.acks || []).length}</button>}
+          <button onClick={() => setOpen((o) => !o)} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "5px 11px", borderRadius: 999, cursor: "pointer", border: "1px solid var(--hairline)", background: "transparent", color: "var(--ink-3)", fontFamily: "var(--font)", fontSize: 12, fontWeight: 650 }}><Icon name="message" size={14} /> {p.comments.length}</button>
           <div style={{ flex: 1 }} />
-          {canMod && <button onClick={pin} title={p.pinned ? "Unpin" : "Pin"} className="tap glass-2" style={{ width: 32, height: 32, borderRadius: 8, display: "grid", placeItems: "center", cursor: "pointer", color: p.pinned ? "var(--accent)" : "var(--ink-3)", border: "1px solid var(--hairline)" }}><Icon name="pin" size={14} /></button>}
-          {(p.mine || canMod) && <button onClick={() => onDelete(p)} title="Delete" className="tap glass-2" style={{ width: 32, height: 32, borderRadius: 8, display: "grid", placeItems: "center", cursor: "pointer", color: "var(--bad)", border: "1px solid var(--hairline)" }}><Icon name="trash" size={14} /></button>}
+          {canMod && <button onClick={pin} title={p.pinned ? "Unpin" : "Pin"} className="tap glass-2" style={{ width: 30, height: 30, borderRadius: 8, display: "grid", placeItems: "center", cursor: "pointer", color: p.pinned ? "var(--accent)" : "var(--ink-3)", border: "1px solid var(--hairline)" }}><Icon name="pin" size={13} /></button>}
+          {(p.mine || canMod) && <button onClick={() => onDelete(p)} title="Delete" className="tap glass-2" style={{ width: 30, height: 30, borderRadius: 8, display: "grid", placeItems: "center", cursor: "pointer", color: "var(--bad)", border: "1px solid var(--hairline)" }}><Icon name="trash" size={13} /></button>}
         </div>
         {/* comments */}
         {open && (
           <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 4 }}>
             {p.comments.map((c) => (
-              <div key={c.id} style={{ display: "flex", gap: 9, alignItems: "flex-start" }}>
-                <Avatar name={c.name} size={26} />
-                <div className="inset" style={{ flex: 1, padding: "8px 11px", borderRadius: 10 }}>
-                  <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--ink-2)" }}>{c.name}</div>
-                  <div style={{ fontSize: 13, color: "var(--ink)", marginTop: 2, whiteSpace: "pre-wrap" }}>{labRich(c.text)}</div>
+              <div key={c.id} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                <Avatar name={c.name} size={24} />
+                <div className="inset" style={{ flex: 1, padding: "7px 10px", borderRadius: 10 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-2)" }}>{c.name}</div>
+                  <div style={{ fontSize: 12.5, color: "var(--ink)", marginTop: 2, whiteSpace: "pre-wrap" }}>{labRich(c.text)}</div>
                 </div>
               </div>
             ))}
-            <div style={{ display: "flex", gap: 8 }}>
-              <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && comment()} placeholder="Write a comment…" style={{ flex: 1, background: "var(--inset)", border: "1px solid var(--hairline)", borderRadius: 10, color: "var(--ink)", fontFamily: "var(--font)", fontSize: 13, padding: "9px 12px" }} />
-              <button onClick={comment} className="tap" style={{ padding: "0 16px", borderRadius: 10, border: "none", cursor: "pointer", color: "var(--accent-ink)", background: "var(--accent)", fontWeight: 700, fontSize: 12.5 }}>Send</button>
+            <div style={{ display: "flex", gap: 7 }}>
+              <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && comment()} placeholder="Write a comment…" style={{ flex: 1, background: "var(--inset)", border: "1px solid var(--hairline)", borderRadius: 10, color: "var(--ink)", fontFamily: "var(--font)", fontSize: 12.5, padding: "8px 11px" }} />
+              <button onClick={comment} className="tap" style={{ padding: "0 14px", borderRadius: 10, border: "none", cursor: "pointer", color: "var(--accent-ink)", background: "var(--accent)", fontWeight: 700, fontSize: 12 }}>Send</button>
             </div>
           </div>
         )}
@@ -11081,31 +11070,184 @@ function LabPostCard({ p, onChange, onDelete, canMod }) {
   );
 }
 
+/* ========== Group Discussion Panel ========== */
+function LabDiscussionPanel() {
+  const F = window.FETS;
+  const profileId = F._meId;
+  const [messages, setMessages] = React.useState([]);
+  const [draft, setDraft] = React.useState("");
+  const [loading, setLoading] = React.useState(true);
+  const threadRef = React.useRef(null);
+
+  const load = async () => {
+    if (!profileId) return;
+    const msgs = await DB.dbFetchRosterDiscussions(profileId);
+    setMessages(msgs || []);
+    setLoading(false);
+  };
+
+  React.useEffect(() => {
+    load();
+    window.addEventListener("fets-discussion-changed", load);
+    return () => window.removeEventListener("fets-discussion-changed", load);
+  }, [profileId]);
+
+  React.useEffect(() => {
+    if (threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight;
+  }, [messages.length]);
+
+  const send = async () => {
+    if (!draft.trim() || !profileId) return;
+    const msgText = draft.trim();
+    setDraft("");
+    const result = await DB.dbSendRosterDiscussion(profileId, profileId, msgText, "general");
+    if (result) load();
+    else toast("Message failed to send", "alert");
+  };
+
+  return (
+    <div className="glass" style={{ borderRadius: "var(--radius)", display: "flex", flexDirection: "column", overflow: "hidden", height: 340 }}>
+      <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--hairline)", display: "flex", alignItems: "center", gap: 10, background: "var(--glass-2)" }}>
+        <Icon name="message" size={16} style={{ color: "var(--accent)" }} />
+        <span style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>Staff Discussion</span>
+        <span style={{ fontSize: 10, color: "var(--ink-4)", marginLeft: "auto" }}>{messages.length} messages</span>
+      </div>
+      <div ref={threadRef} className="scroll-soft" style={{ flex: 1, overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 12, minHeight: 0 }}>
+        {loading ? (
+          <div style={{ textAlign: "center", color: "var(--ink-4)", fontSize: 13, padding: 20 }}>Loading messages…</div>
+        ) : messages.length === 0 ? (
+          <div style={{ textAlign: "center", color: "var(--ink-4)", fontSize: 13, padding: 30, fontStyle: "italic" }}>
+            No messages yet. Start a discussion with the team!
+          </div>
+        ) : (
+          messages.map((m) => {
+            const isMe = m.sender_id === profileId;
+            const senderName = isMe ? "You" : (m.sender?.full_name || "Admin");
+            const formattedTime = new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            return (
+              <div key={m.id} style={{ display: "flex", flexDirection: "column", alignItems: isMe ? "flex-end" : "flex-start", gap: 3 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 4px" }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: isMe ? "var(--accent)" : "var(--ink-2)" }}>{senderName}</span>
+                  <span className="mono" style={{ fontSize: 9, color: "var(--ink-4)" }}>{formattedTime}</span>
+                </div>
+                <div style={{ maxWidth: "85%", padding: "9px 13px", borderRadius: 12, fontSize: 12.5, lineHeight: 1.45,
+                  borderTopRightRadius: isMe ? 3 : 12, borderTopLeftRadius: isMe ? 12 : 3,
+                  color: isMe ? "var(--accent-ink)" : "var(--ink)", background: isMe ? "var(--accent)" : "var(--glass-2)",
+                  border: isMe ? "none" : "1px solid var(--hairline)" }}>
+                  {m.message}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+      <div style={{ borderTop: "1px solid var(--hairline)", padding: "10px 14px", flexShrink: 0, display: "flex", gap: 8, background: "var(--glass-2)", alignItems: "flex-end" }}>
+        <textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          rows={1}
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+          placeholder="Send a message…"
+          style={{ background: "var(--inset)", border: "1px solid var(--hairline)", borderRadius: 10, color: "var(--ink)",
+            fontFamily: "var(--font)", fontSize: 13, padding: "9px 12px", width: "100%", outline: "none",
+            resize: "none", lineHeight: 1.4, minHeight: 36 }}
+        />
+        <button onClick={send} className="tap" style={{ width: 36, height: 36, borderRadius: 10, border: "none", cursor: "pointer", flexShrink: 0,
+          display: "grid", placeItems: "center", color: "var(--accent-ink)", background: "var(--accent)" }}>
+          <Icon name="arrowR" size={16} stroke={2.4} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ========== Staff Panel (with chat trigger) ========== */
+function LabStaffPanel({ onChat }) {
+  const F = window.FETS;
+  const allStaff = React.useMemo(() => {
+    const s = [];
+    const meId = F._meId;
+    ['calicut', 'cochin'].forEach(branch => {
+      (F.STAFF?.[branch] || []).forEach(person => {
+        if (typeof person === 'string') {
+          if (person !== F.user?.name) s.push({ id: person, full_name: person, role: 'Staff', branch });
+        } else if (person && person.id !== meId) {
+          s.push({ ...person, branch });
+        }
+      });
+    });
+    (F.PEOPLE || []).forEach(name => {
+      if (!s.find(x => x.full_name === name || x.name === name) && name !== F.user?.name) {
+        s.push({ id: name, full_name: name, role: 'Staff', branch: 'unknown' });
+      }
+    });
+    return s;
+  }, [F]);
+
+  const [filterBranch, setFilterBranch] = React.useState("all");
+  const filtered = filterBranch === "all" ? allStaff : allStaff.filter(s => s.branch === filterBranch);
+
+  return (
+    <div className="glass" style={{ borderRadius: "var(--radius)", display: "flex", flexDirection: "column", overflow: "hidden", maxHeight: 300 }}>
+      <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--hairline)", display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--glass-2)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Icon name="users" size={16} style={{ color: "var(--accent)" }} />
+          <span style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>Staff Online</span>
+        </div>
+        <div className="inset" style={{ display: "inline-flex", padding: 2, gap: 2, borderRadius: 999 }}>
+          {["all", "calicut", "cochin"].map(b => {
+            const on = filterBranch === b;
+            return (
+              <button key={b} onClick={() => setFilterBranch(b)} className="tap" style={{ border: "none", cursor: "pointer", padding: "4px 10px", borderRadius: 999,
+                fontFamily: "var(--font)", fontSize: 10, fontWeight: on ? 750 : 550, color: on ? "#1c1305" : "var(--ink-3)", background: on ? "var(--accent)" : "transparent" }}>
+                {b === "all" ? "All" : b === "calicut" ? "CLT" : "COK"}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div className="scroll-soft" style={{ flex: 1, overflowY: "auto", padding: "12px 14px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {filtered.length === 0 ? (
+            <div style={{ textAlign: "center", color: "var(--ink-4)", fontSize: 12.5, padding: 20, fontStyle: "italic" }}>No staff found.</div>
+          ) : (
+            filtered.map((staff, i) => (
+              <div key={staff.id || i} onClick={() => onChat && onChat(staff)} className="tap" style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 10, cursor: "pointer",
+                border: "1px solid var(--hairline)", background: "var(--glass-2)" }}>
+                <div style={{ position: "relative" }}>
+                  <Avatar name={staff.full_name || staff.name} size={32} />
+                  <span style={{ position: "absolute", bottom: 0, right: 0, width: 8, height: 8, borderRadius: 999, background: "var(--ok)", border: "2px solid var(--glass)" }} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{staff.full_name || staff.name}</div>
+                  <div style={{ fontSize: 10, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{staff.role || "Staff"} · {staff.branch === "calicut" ? "Calicut" : staff.branch === "cochin" ? "Cochin" : "Unknown"}</div>
+                </div>
+                <button className="tap" style={{ width: 28, height: 28, borderRadius: 8, border: "none", cursor: "pointer", display: "grid", placeItems: "center",
+                  background: "var(--accent-soft)", color: "var(--accent)" }}>
+                  <Icon name="message" size={13} />
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ========== Main Lab Page ========== */
 function TheLabPage({ branch }) {
-  const canAnnounce = labCanAnnounce();
+  const canMod = labCanAnnounce();
   const [posts, setPosts] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
-  const [type, setType] = React.useState("handover");
   const [text, setText] = React.useState("");
-
-  const isSuperAdmin = !!window.FETS?.isAdmin;
-  const hasDelegation = !!window.FETS?._hasTempCrossAccess;
-  const userProfileBranch = window.FETS?._meBranch || 'cochin';
-
-  const defaultCenter = (isSuperAdmin || hasDelegation)
-    ? (window.FETS.user.shift && window.FETS.user.shift.branch ? window.FETS.user.shift.branch : "all")
-    : userProfileBranch;
-
-  const [center, setCenter] = React.useState(defaultCenter);
-  const [exam, setExam] = React.useState(null);
-  const [compliance, setCompliance] = React.useState(false);
   const [attachments, setAttachments] = React.useState([]);
   const [image, setImage] = React.useState(null);
   const [busy, setBusy] = React.useState(false);
   const [fCenter, setFCenter] = React.useState("all");
-  const [fType, setFType] = React.useState("all");
   const [q, setQ] = React.useState("");
   const fileRef = React.useRef(null);
+  const [chatTarget, setChatTarget] = React.useState(null);
 
   const reload = () => { LAB.labFetch().then((ps) => { setPosts(ps); setLoading(false); }); };
   React.useEffect(() => { reload(); LAB.labMarkRead(); }, []);
@@ -11119,114 +11261,94 @@ function TheLabPage({ branch }) {
     if ((f.type || "").startsWith("image/")) setImage(up.url);
     else setAttachments((a) => [...a, up]);
   };
+
   const submit = async () => {
     if (!text.trim() && !image && attachments.length === 0) return;
     setBusy(true);
-    const created = await LAB.labCreate({ type, text: text.trim(), center, exam, compliance, image, attachments });
+    const created = await LAB.labCreate({ type: "handover", text: text.trim(), center: "all", exam: null, compliance: false, image, attachments });
     setBusy(false);
     if (created) setPosts((ps) => [created, ...ps]);
     else toast("Couldn't post — try again", "alert");
-    setText(""); setExam(null); setCompliance(false); setAttachments([]); setImage(null);
+    setText(""); setAttachments([]); setImage(null);
   };
+
   const updatePost = (np) => setPosts((ps) => ps.map((x) => x.id === np.id ? np : x));
   const removePost = (p) => { if (!window.confirm("Delete this post?")) return; LAB.labDelete(p.id); setPosts((ps) => ps.filter((x) => x.id !== p.id)); };
 
   const match = (p) => (fCenter === "all" || p.center === fCenter || p.center === "all")
-    && (fType === "all" || (fType === "compliance" ? p.compliance : p.type === fType))
     && (!q.trim() || (p.text + " " + p.authorName).toLowerCase().includes(q.toLowerCase()));
   const shown = posts.filter(match);
   const pinned = shown.filter((p) => p.pinned);
   const rest = shown.filter((p) => !p.pinned);
 
   const inp = { background: "var(--inset)", border: "1px solid var(--hairline)", borderRadius: 10, color: "var(--ink)", fontFamily: "var(--font)", fontSize: 14, padding: "10px 12px" };
-  const typeKeys = Object.keys(LAB_TYPES).filter((k) => k !== "announcement" || canAnnounce);
 
   return (
-    <div style={{ maxWidth: 880, margin: "0 auto", display: "flex", flexDirection: "column", gap: "calc(22px * var(--density))" }}>
+    <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", flexDirection: "column", gap: "calc(18px * var(--density))" }}>
       <PageHeader eyebrow="Coordination wall // FETS" title="The Lab" />
 
-      {/* composer */}
-      <div className="glass" style={{ borderRadius: "var(--radius)", padding: 18, display: "flex", flexDirection: "column", gap: 12 }}>
-        <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
-          {typeKeys.map((k) => { const tt = LAB_TYPES[k]; const on = type === k; return (
-            <button key={k} onClick={() => setType(k)} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "7px 13px", borderRadius: 999, cursor: "pointer", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: on ? 750 : 600, border: `1px solid ${on ? `color-mix(in oklch, ${tt.color} 50%, transparent)` : "var(--hairline)"}`, background: on ? `color-mix(in oklch, ${tt.color} 16%, transparent)` : "transparent", color: on ? tt.color : "var(--ink-3)" }}><Icon name={tt.icon} size={13} /> {tt.label}</button>
-          ); })}
-        </div>
-        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} placeholder={type === "handover" ? "End-of-shift note — what should the next shift know?" : type === "question" ? "Ask the team…" : type === "shoutout" ? "Give someone a shoutout 👏" : "Share with the team…"} style={{ ...inp, resize: "vertical", lineHeight: 1.5, width: "100%" }} />
-        {/* exam tags */}
-        <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
-          <span className="eyebrow" style={{ fontSize: 9, color: "var(--ink-4)" }}>Exam</span>
-          {window.FETS.VENDORS.map((vn) => { const on = exam === vn.slug; return (
-            <button key={vn.slug} onClick={() => setExam(on ? null : vn.slug)} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 10px", borderRadius: 999, cursor: "pointer", fontSize: 11, fontWeight: on ? 750 : 600, border: `1px solid ${on ? vn.color : "var(--hairline)"}`, background: on ? `color-mix(in oklch, ${vn.color} 18%, transparent)` : "transparent", color: on ? vn.color : "var(--ink-3)" }}><span style={{ width: 7, height: 7, borderRadius: 2, background: vn.color }} />{vn.short}</button>
-          ); })}
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          {(!isSuperAdmin && !hasDelegation) ? (
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 10, background: "var(--glass-2)", border: "1px solid var(--hairline)", fontSize: 13.5, fontWeight: 650, color: "var(--ink-2)" }}>
-              <Icon name="mapPin" size={13} /> {LAB_CLABEL[center]} Centre
-            </div>
-          ) : (
-            <select 
-              value={center} 
-              onChange={(e) => setCenter(e.target.value)} 
-              disabled={!isSuperAdmin && !hasDelegation}
-              style={{
-                ...inp,
-                opacity: (!isSuperAdmin && !hasDelegation) ? 0.65 : 1,
-                pointerEvents: (isSuperAdmin || hasDelegation) ? "auto" : "none"
-              }}
-            >
-              {LAB_CENTERS.map((c) => <option key={c} value={c}>{LAB_CLABEL[c]}</option>)}
-            </select>
-          )}
-          <button onClick={() => setCompliance((v) => !v)} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 12px", borderRadius: 10, cursor: "pointer", border: `1px solid ${compliance ? "color-mix(in oklch, var(--bad) 45%, transparent)" : "var(--hairline)"}`, background: compliance ? "color-mix(in oklch, var(--bad) 14%, transparent)" : "transparent", color: compliance ? "var(--bad)" : "var(--ink-3)", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 650 }}><Icon name="shield" size={14} /> Compliance</button>
-          <button onClick={() => fileRef.current && fileRef.current.click()} className="tap glass-2" style={{ display: "inline-flex", alignItems: "center", gap: 7, height: 38, padding: "0 13px", borderRadius: 10, cursor: "pointer", color: "var(--ink-2)", border: "1px solid var(--hairline)", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 650 }}><Icon name="camera" size={15} /> Attach</button>
-          <input ref={fileRef} type="file" accept="image/*,application/pdf" onChange={onFile} style={{ display: "none" }} />
-          <select onChange={(e) => { if (e.target.value) { setText((tx) => tx + (tx && !tx.endsWith(" ") ? " " : "") + "@" + e.target.value + " "); e.target.value = ""; } }} defaultValue="" style={inp} title="Mention a teammate">
-            <option value="">@ mention…</option>
-            {(window.FETS.PEOPLE || [...(window.FETS.STAFF.calicut || []), ...(window.FETS.STAFF.cochin || [])]).map((n) => <option key={n} value={n}>{n}</option>)}
-          </select>
-          <div style={{ flex: 1 }} />
-          <button onClick={submit} disabled={busy} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 20px", borderRadius: 11, border: "none", cursor: busy ? "wait" : "pointer", opacity: busy ? 0.6 : 1, fontFamily: "var(--font)", fontSize: 13.5, fontWeight: 750, color: "var(--accent-ink)", background: "var(--accent)" }}><Icon name="arrowR" size={16} /> Post</button>
-        </div>
-        {(image || attachments.length > 0) && (
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {image && <span className="inset" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 10px", borderRadius: 9, fontSize: 11.5, color: "var(--ink-2)" }}><Icon name="camera" size={13} /> image <button onClick={() => setImage(null)} style={{ border: "none", background: "transparent", color: "var(--bad)", cursor: "pointer" }}>×</button></span>}
-            {attachments.map((a, i) => <span key={i} className="inset" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 10px", borderRadius: 9, fontSize: 11.5, color: "var(--ink-2)" }}>{a.name} <button onClick={() => setAttachments((x) => x.filter((_, j) => j !== i))} style={{ border: "none", background: "transparent", color: "var(--bad)", cursor: "pointer" }}>×</button></span>)}
-          </div>
-        )}
-      </div>
-
-      {/* filters */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        {(isSuperAdmin || hasDelegation) && (
-          <Segmented value={fCenter} onChange={setFCenter} size="sm" options={LAB_CENTERS.map((c) => ({ value: c, label: c === "all" ? "All" : LAB_CLABEL[c] }))} />
-        )}
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {["all", ...Object.keys(LAB_TYPES), "compliance"].map((k) => { const on = fType === k; const lab = k === "all" ? "All" : k === "compliance" ? "Compliance" : LAB_TYPES[k].label; return (
-            <button key={k} onClick={() => setFType(k)} className="tap" style={{ padding: "5px 11px", borderRadius: 999, cursor: "pointer", fontSize: 11.5, fontWeight: on ? 750 : 600, border: `1px solid ${on ? "var(--accent-line)" : "var(--hairline)"}`, background: on ? "var(--accent-soft)" : "transparent", color: on ? "var(--accent)" : "var(--ink-3)", fontFamily: "var(--font)" }}>{lab}</button>
-          ); })}
-        </div>
-        <div style={{ flex: 1, minWidth: 150, position: "relative" }}>
+      {/* Top bar: center filter + search */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <Segmented value={fCenter} onChange={setFCenter} size="sm" options={LAB_CENTERS.map((c) => ({ value: c, label: c === "all" ? "All" : LAB_CLABEL[c] }))} />
+        <div style={{ flex: 1, minWidth: 180, position: "relative" }}>
           <Icon name="search" size={14} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "var(--ink-4)" }} />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search the wall…" style={{ ...inp, width: "100%", paddingLeft: 32, fontSize: 13 }} />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search handovers…" style={{ ...inp, width: "100%", paddingLeft: 32, fontSize: 13 }} />
         </div>
       </div>
 
-      {loading ? <div className="glass" style={{ borderRadius: "var(--radius)", padding: 40, textAlign: "center", color: "var(--ink-4)" }}>Loading the wall…</div>
-        : shown.length === 0 ? <div className="glass" style={{ borderRadius: "var(--radius)", padding: 40, textAlign: "center", color: "var(--ink-4)", fontSize: 14 }}>Nothing here yet — be the first to post.</div>
-        : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {pinned.length > 0 && (
-              <React.Fragment>
-                <SectionLabel right={<Icon name="pin" size={13} style={{ color: "var(--accent)" }} />}>Pinned</SectionLabel>
-                {pinned.map((p) => <LabPostCard key={p.id} p={p} onChange={updatePost} onDelete={removePost} canMod={canAnnounce} />)}
-                <SectionLabel>Latest</SectionLabel>
-              </React.Fragment>
+      {/* 2-column layout */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 360px", gap: 20, alignItems: "start" }}>
+        {/* Left: Composer + Feed */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {/* Composer */}
+          <div className="glass" style={{ borderRadius: "var(--radius)", padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+            <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} placeholder="Write a handover note…" style={{ ...inp, resize: "vertical", lineHeight: 1.5, width: "100%" }} />
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <button onClick={() => fileRef.current && fileRef.current.click()} className="tap glass-2" style={{ display: "inline-flex", alignItems: "center", gap: 7, height: 36, padding: "0 12px", borderRadius: 10, cursor: "pointer", color: "var(--ink-2)", border: "1px solid var(--hairline)", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 650 }}><Icon name="camera" size={15} /> Attach</button>
+              <input ref={fileRef} type="file" accept="image/*,application/pdf" onChange={onFile} style={{ display: "none" }} />
+              <select onChange={(e) => { if (e.target.value) { setText((tx) => tx + (tx && !tx.endsWith(" ") ? " " : "") + "@" + e.target.value + " "); e.target.value = ""; } }} defaultValue="" style={inp} title="Mention a teammate">
+                <option value="">@ mention…</option>
+                {(window.FETS.PEOPLE || [...(window.FETS.STAFF.calicut || []), ...(window.FETS.STAFF.cochin || [])]).map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+              <div style={{ flex: 1 }} />
+              <button onClick={submit} disabled={busy} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 18px", borderRadius: 11, border: "none", cursor: busy ? "wait" : "pointer", opacity: busy ? 0.6 : 1, fontFamily: "var(--font)", fontSize: 13, fontWeight: 750, color: "var(--accent-ink)", background: "var(--accent)" }}><Icon name="arrowR" size={16} /> Post</button>
+            </div>
+            {(image || attachments.length > 0) && (
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {image && <span className="inset" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 10px", borderRadius: 9, fontSize: 11.5, color: "var(--ink-2)" }}><Icon name="camera" size={13} /> image <button onClick={() => setImage(null)} style={{ border: "none", background: "transparent", color: "var(--bad)", cursor: "pointer" }}>×</button></span>}
+                {attachments.map((a, i) => <span key={i} className="inset" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 10px", borderRadius: 9, fontSize: 11.5, color: "var(--ink-2)" }}>{a.name} <button onClick={() => setAttachments((x) => x.filter((_, j) => j !== i))} style={{ border: "none", background: "transparent", color: "var(--bad)", cursor: "pointer" }}>×</button></span>)}
+              </div>
             )}
-            {rest.map((p) => <LabPostCard key={p.id} p={p} onChange={updatePost} onDelete={removePost} canMod={canAnnounce} />)}
           </div>
-        )}
+
+          {/* Feed */}
+          {loading ? <div className="glass" style={{ borderRadius: "var(--radius)", padding: 40, textAlign: "center", color: "var(--ink-4)" }}>Loading the wall…</div>
+            : shown.length === 0 ? <div className="glass" style={{ borderRadius: "var(--radius)", padding: 40, textAlign: "center", color: "var(--ink-4)", fontSize: 14 }}>Nothing here yet — be the first to post.</div>
+            : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                {pinned.length > 0 && (
+                  <React.Fragment>
+                    <SectionLabel right={<Icon name="pin" size={13} style={{ color: "var(--accent)" }} />}>Pinned</SectionLabel>
+                    {pinned.map((p) => <LabPostCard key={p.id} p={p} onChange={updatePost} onDelete={removePost} canMod={canMod} />)}
+                    <SectionLabel>Latest</SectionLabel>
+                  </React.Fragment>
+                )}
+                {rest.map((p) => <LabPostCard key={p.id} p={p} onChange={updatePost} onDelete={removePost} canMod={canMod} />)}
+              </div>
+            )}
+        </div>
+
+        {/* Right: Discussion + Staff */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, position: "sticky", top: 20 }}>
+          <LabDiscussionPanel />
+          <LabStaffPanel onChat={(staff) => setChatTarget(staff)} />
+        </div>
+      </div>
+
+      {/* Chat popup */}
+      {chatTarget && (
+        <FetsChatPopup targetUser={chatTarget} onClose={() => setChatTarget(null)} zIndex={2000} />
+      )}
     </div>
   );
 }

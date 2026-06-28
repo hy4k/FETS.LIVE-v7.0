@@ -321,38 +321,38 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({ targetUser, onClos
                 drag
                 dragMomentum={false}
                 style={{ zIndex }}
-                className="fixed bottom-4 right-4 bg-white rounded-2xl shadow-2xl border-2 border-black overflow-hidden flex flex-col"
+                className="fixed bottom-4 right-4 bg-[var(--glass)] rounded-2xl shadow-[var(--shadow-lift)] border border-[var(--hairline)] overflow-hidden flex flex-col"
             >
                 {/* FETSCHAT BANNER */}
-                <div className="bg-[#f4d03f] px-4 py-3 flex items-center justify-between border-b-2 border-black cursor-move">
+                <div className="bg-[var(--accent)] text-[var(--accent-ink)] px-4 py-3 flex items-center justify-between border-b border-[var(--hairline)] cursor-move">
                     <div className="flex items-center gap-2">
                         <div className="flex gap-1">
-                            <div className="w-2.5 h-2.5 rounded-full bg-red-500 border border-black/20" />
-                            <div className="w-2.5 h-2.5 rounded-full bg-yellow-500 border border-black/20" />
-                            <div className="w-2.5 h-2.5 rounded-full bg-green-500 border border-black/20" />
+                            <div className="w-2.5 h-2.5 rounded-full bg-red-500 border border-[var(--hairline)]" />
+                            <div className="w-2.5 h-2.5 rounded-full bg-yellow-500 border border-[var(--hairline)]" />
+                            <div className="w-2.5 h-2.5 rounded-full bg-green-500 border border-[var(--hairline)]" />
                         </div>
-                        <span className="font-black text-xs uppercase tracking-[0.2em] text-black italic">FETSCHAT // <span className="text-black/60">{targetUser.full_name}</span></span>
+                        <span className="font-black text-xs uppercase tracking-[0.2em] italic">FETSCHAT // <span className="opacity-60">{targetUser.full_name}</span></span>
                     </div>
                     <div className="flex items-center gap-2">
                         <button 
                             onClick={handleVoiceCall} 
-                            className="text-black hover:scale-110 transition-transform p-1.5 hover:bg-black/10 rounded-lg" 
+                            className="text-[var(--accent-ink)] hover:scale-110 transition-transform p-1.5 hover:bg-[var(--accent-ink)]/10 rounded-lg" 
                             title="Voice Call"
                         >
                             <Phone size={16} />
                         </button>
                         <button 
                             onClick={handleVideoCall} 
-                            className="text-black hover:scale-110 transition-transform p-1.5 hover:bg-black/10 rounded-lg" 
+                            className="text-[var(--accent-ink)] hover:scale-110 transition-transform p-1.5 hover:bg-[var(--accent-ink)]/10 rounded-lg" 
                             title="Video Call"
                         >
                             <Video size={16} />
                         </button>
-                        <div className="w-px h-4 bg-black/20 mx-1" />
-                        <button onClick={() => setIsMinimized(!isMinimized)} className="text-black hover:bg-black/10 p-1 rounded transition-colors">
+                        <div className="w-px h-4 bg-[var(--accent-ink)]/20 mx-1" />
+                        <button onClick={() => setIsMinimized(!isMinimized)} className="text-[var(--accent-ink)] hover:bg-[var(--accent-ink)]/10 p-1 rounded transition-colors">
                             <Minus size={16} />
                         </button>
-                        <button onClick={onClose} className="text-black hover:bg-black/10 p-1 rounded transition-colors">
+                        <button onClick={onClose} className="text-[var(--accent-ink)] hover:bg-[var(--accent-ink)]/10 p-1 rounded transition-colors">
                             <X size={16} />
                         </button>
                     </div>
@@ -363,7 +363,8 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({ targetUser, onClos
                         {/* CHAT AREA */}
                         <div 
                             ref={scrollRef}
-                            className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#fdfaf3] custom-scrollbar"
+                            className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar"
+                            style={{ background: 'transparent' }}
                             onClick={() => setContextMenuMsgId(null)}
                         >
                             {messages.map((msg, idx) => {
@@ -373,10 +374,10 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({ targetUser, onClos
                                 return (
                                     <div key={msg.id || idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'} group`}>
                                         <div className={`
-                                            max-w-[85%] p-3 rounded-2xl border-2 border-black relative
+                                            max-w-[85%] p-3 rounded-2xl border border-[var(--hairline)] relative
                                             ${isMe 
-                                                ? 'bg-amber-400 rounded-br-none shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]' 
-                                                : 'bg-white rounded-bl-none shadow-[4px_4px_0px_0px_rgba(200,200,200,1)]'}
+                                                ? 'bg-[var(--accent)] text-[var(--accent-ink)] rounded-br-none' 
+                                                : 'bg-[var(--glass-2)] text-[var(--ink)] rounded-bl-none'}
                                             ${isDeleted ? 'opacity-50 italic' : ''}
                                         `}>
                                             {/* Context Menu for Own Messages */}
@@ -384,14 +385,14 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({ targetUser, onClos
                                                 <div className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
                                                     <button 
                                                         onClick={() => { setEditingMsgId(msg.id); setEditContent(msg.content); }}
-                                                        className="p-1 bg-white border border-black rounded-full hover:bg-amber-100 transition-colors"
+                                                        className="p-1 bg-[var(--glass)] border border-[var(--hairline)] rounded-full hover:bg-[var(--accent-soft)] transition-colors"
                                                         title="Edit"
                                                     >
                                                         <Edit3 size={10} />
                                                     </button>
                                                     <button 
                                                         onClick={() => setContextMenuMsgId(msg.id === contextMenuMsgId ? null : msg.id)}
-                                                        className="p-1 bg-white border border-black rounded-full hover:bg-rose-100 transition-colors"
+                                                        className="p-1 bg-[var(--glass)] border border-[var(--hairline)] rounded-full hover:bg-[var(--bad)]/10 transition-colors"
                                                         title="Delete"
                                                     >
                                                         <Trash2 size={10} />
@@ -402,18 +403,18 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({ targetUser, onClos
                                             {/* Delete Options Dropdown */}
                                             {contextMenuMsgId === msg.id && (
                                                 <div 
-                                                    className="absolute top-full right-0 mt-1 bg-white border-2 border-black rounded-xl shadow-lg z-20 overflow-hidden"
+                                                    className="absolute top-full right-0 mt-1 bg-[var(--glass)] border border-[var(--hairline)] rounded-xl shadow-[var(--shadow-lift)] z-20 overflow-hidden"
                                                     onClick={(e) => e.stopPropagation()}
                                                 >
                                                     <button 
                                                         onClick={(e) => { e.stopPropagation(); handleDeleteMessage(msg.id, false); }} 
-                                                        className="w-full px-4 py-2 text-[9px] font-black uppercase text-left hover:bg-slate-100 transition-colors"
+                                                        className="w-full px-4 py-2 text-[9px] font-black uppercase text-left hover:bg-[var(--glass-2)] transition-colors text-[var(--ink)]"
                                                     >
                                                         Delete for me
                                                     </button>
                                                     <button 
                                                         onClick={(e) => { e.stopPropagation(); handleDeleteMessage(msg.id, true); }} 
-                                                        className="w-full px-4 py-2 text-[9px] font-black uppercase text-left hover:bg-rose-100 text-rose-600 transition-colors border-t border-black/10"
+                                                        className="w-full px-4 py-2 text-[9px] font-black uppercase text-left hover:bg-[var(--bad)]/10 text-[var(--bad)] transition-colors border-t border-[var(--hairline)]"
                                                     >
                                                         Delete for everyone
                                                     </button>
@@ -427,21 +428,21 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({ targetUser, onClos
                                                         type="text" 
                                                         value={editContent}
                                                         onChange={e => setEditContent(e.target.value)}
-                                                        className="w-full bg-white border border-black rounded-lg px-2 py-1 text-sm font-bold outline-none"
+                                                        className="w-full bg-[var(--glass)] border border-[var(--hairline)] rounded-lg px-2 py-1 text-sm font-bold outline-none text-[var(--ink)]"
                                                         autoFocus
                                                     />
                                                     <div className="flex gap-2 justify-end">
-                                                        <button onClick={() => setEditingMsgId(null)} className="text-[9px] font-black uppercase text-slate-500 hover:text-black">Cancel</button>
-                                                        <button onClick={() => handleEditMessage(msg.id)} className="text-[9px] font-black uppercase text-amber-700 hover:text-amber-900">Save</button>
+                                                        <button onClick={() => setEditingMsgId(null)} className="text-[9px] font-black uppercase text-[var(--ink-4)] hover:text-[var(--ink)]">Cancel</button>
+                                                        <button onClick={() => handleEditMessage(msg.id)} className="text-[9px] font-black uppercase text-[var(--accent)] hover:text-[var(--accent-ink)]">Save</button>
                                                     </div>
                                                 </div>
                                             ) : (
                                                 <>
                                                     {msg.type === 'text' && (
-                                                        <p className="text-sm font-bold text-black leading-snug">{msg.content}</p>
+                                                        <p className={`text-sm font-bold leading-snug ${isMe ? 'text-[var(--accent-ink)]' : 'text-[var(--ink)]'}`}>{msg.content}</p>
                                                     )}
                                                     {msg.type === 'image' && (
-                                                        <img src={msg.content} alt="Attachment" className="rounded-lg max-w-full border border-black/10" />
+                                                        <img src={msg.content} alt="Attachment" className="rounded-lg max-w-full border border-[var(--hairline)]" />
                                                     )}
                                                     {msg.type === 'video' && (
                                                         <video src={msg.content} controls className="rounded-lg max-w-full" />
@@ -450,12 +451,12 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({ targetUser, onClos
                                                         <audio src={msg.content} controls className="w-full h-8" />
                                                     )}
                                                     {msg.type === 'file' && (
-                                                        <a href={msg.content} target="_blank" className="flex items-center gap-2 text-xs font-black underline"><FileText size={14} /> {msg.file_path || 'Document'}</a>
+                                                        <a href={msg.content} target="_blank" className={`flex items-center gap-2 text-xs font-bold underline ${isMe ? 'text-[var(--accent-ink)]' : 'text-[var(--ink)]'}`}><FileText size={14} /> {msg.file_path || 'Document'}</a>
                                                     )}
                                                 </>
                                             )}
                                             
-                                            <div className="flex items-center justify-end gap-1 mt-1 opacity-40">
+                                            <div className={`flex items-center justify-end gap-1 mt-1 opacity-40 ${isMe ? 'text-[var(--accent-ink)]' : 'text-[var(--ink)]'}`}>
                                                 <span className="text-[9px] font-bold">{format(new Date(msg.created_at), 'HH:mm')}</span>
                                                 {isMe && (msg.status === 'seen' ? <CheckCheck size={10} /> : <Check size={10} />)}
                                             </div>
@@ -466,14 +467,14 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({ targetUser, onClos
                         </div>
 
                         {/* INPUT AREA */}
-                        <div className="p-3 border-t-2 border-black bg-white">
+                        <div className="p-3 border-t border-[var(--hairline)] bg-[var(--glass-2)]">
                             {isRecording ? (
-                                <div className="flex items-center justify-between bg-rose-50 border-2 border-rose-500 p-3 rounded-xl animate-pulse">
-                                    <div className="flex items-center gap-3 text-rose-600 font-black text-xs uppercase">
-                                        <div className="w-2 h-2 rounded-full bg-rose-600 animate-ping" />
+                                <div className="flex items-center justify-between p-3 rounded-xl animate-pulse" style={{ background: 'color-mix(in oklch, var(--bad) 15%, transparent)', border: '1px solid var(--bad)' }}>
+                                    <div className="flex items-center gap-3 text-[var(--bad)] font-black text-xs uppercase">
+                                        <div className="w-2 h-2 rounded-full bg-[var(--bad)] animate-ping" />
                                         Recording {isRecording}... {recordingTime}s
                                     </div>
-                                    <button onClick={stopRecording} className="bg-rose-600 text-white p-2 rounded-lg hover:bg-rose-700 transition-colors"><Square size={16} /></button>
+                                    <button onClick={stopRecording} className="bg-[var(--bad)] text-white p-2 rounded-lg hover:opacity-90 transition-colors"><Square size={16} /></button>
                                 </div>
                             ) : (
                                 <form onSubmit={handleSendMessage} className="flex flex-col gap-2">
@@ -483,21 +484,21 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({ targetUser, onClos
                                             value={newMessage}
                                             onChange={e => setNewMessage(e.target.value)}
                                             placeholder="Type a secure message..."
-                                            className="flex-1 bg-slate-50 border-2 border-black rounded-xl px-4 py-2 text-sm font-bold outline-none focus:bg-white transition-all shadow-inner"
+                                            className="flex-1 bg-[var(--inset)] border border-[var(--hairline)] rounded-xl px-4 py-2 text-sm font-bold outline-none focus:bg-[var(--glass)] transition-all text-[var(--ink)] placeholder-[var(--ink-4)]"
                                         />
                                         <button 
                                             type="submit"
                                             disabled={!newMessage.trim()}
-                                            className="bg-black text-white p-2.5 rounded-xl border-2 border-black hover:bg-slate-800 disabled:opacity-30 transition-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                                            className="bg-[var(--accent)] text-[var(--accent-ink)] p-2.5 rounded-xl border border-[var(--hairline)] hover:opacity-90 disabled:opacity-30 transition-all"
                                         >
                                             <Send size={18} fill="currentColor" />
                                         </button>
                                     </div>
                                     <div className="flex items-center justify-between px-1">
                                         <div className="flex items-center gap-1">
-                                            <button type="button" onClick={() => fileInputRef.current?.click()} className="p-2 text-slate-400 hover:text-black hover:bg-slate-100 rounded-lg transition-all" title="Attach Files"><Paperclip size={18} /></button>
-                                            <button type="button" onClick={() => startRecording('audio')} className="p-2 text-slate-400 hover:text-black hover:bg-slate-100 rounded-lg transition-all" title="Voice Message"><Mic size={18} /></button>
-                                            <button type="button" onClick={() => startRecording('video')} className="p-2 text-slate-400 hover:text-black hover:bg-slate-100 rounded-lg transition-all" title="Video Message"><Video size={18} /></button>
+                                            <button type="button" onClick={() => fileInputRef.current?.click()} className="p-2 text-[var(--ink-4)] hover:text-[var(--ink)] hover:bg-[var(--glass-2)] rounded-lg transition-all" title="Attach Files"><Paperclip size={18} /></button>
+                                            <button type="button" onClick={() => startRecording('audio')} className="p-2 text-[var(--ink-4)] hover:text-[var(--ink)] hover:bg-[var(--glass-2)] rounded-lg transition-all" title="Voice Message"><Mic size={18} /></button>
+                                            <button type="button" onClick={() => startRecording('video')} className="p-2 text-[var(--ink-4)] hover:text-[var(--ink)] hover:bg-[var(--glass-2)] rounded-lg transition-all" title="Video Message"><Video size={18} /></button>
                                         </div>
                                         <input 
                                             type="file" 
@@ -505,7 +506,7 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({ targetUser, onClos
                                             className="hidden" 
                                             onChange={handleFileUpload}
                                         />
-                                        {isUploading && <div className="text-[10px] font-black text-amber-600 animate-pulse uppercase tracking-widest">Encrypting...</div>}
+                                        {isUploading && <div className="text-[10px] font-black text-[var(--accent)] animate-pulse uppercase tracking-widest">Encrypting...</div>}
                                     </div>
                                 </form>
                             )}
@@ -516,7 +517,7 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({ targetUser, onClos
                 <style>{`
                     .custom-scrollbar::-webkit-scrollbar { width: 4px; }
                     .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-                    .custom-scrollbar::-webkit-scrollbar-thumb { background: #000; border-radius: 10px; }
+                    .custom-scrollbar::-webkit-scrollbar-thumb { background: var(--ink-4); border-radius: 10px; }
                 `}</style>
             </motion.div>
         </>
