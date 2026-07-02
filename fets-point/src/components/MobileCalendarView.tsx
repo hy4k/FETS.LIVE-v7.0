@@ -72,7 +72,20 @@ export function MobileCalendarView({ setActiveTab }: MobileCalendarViewProps) {
           .lte('date', end)
           .order('start_time', { ascending: true });
         if (error) throw error;
-        setSessions(data || []);
+        const mapped = (data || []).map((s: any) => {
+          const clientUpper = (s.client_name || '').toUpperCase().trim();
+          const examUpper = (s.exam_name || '').toUpperCase().trim();
+          if (clientUpper === 'PROMETRIC') {
+            if (examUpper.includes('CMA US') || examUpper.includes('CMA')) {
+              return { ...s, client_name: 'CMA US' };
+            }
+            if (examUpper.includes('CELPIP')) {
+              return { ...s, client_name: 'CELPIP' };
+            }
+          }
+          return s;
+        });
+        setSessions(mapped);
       } catch (err) {
         console.error('Error fetching sessions:', err);
       } finally {

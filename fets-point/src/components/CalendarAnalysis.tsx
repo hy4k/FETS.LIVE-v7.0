@@ -18,7 +18,10 @@ import {
     Zap,
     FileText,
     Globe,
-    MapPin
+    MapPin,
+    BarChart3,
+    Activity,
+    Target
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
@@ -83,6 +86,8 @@ export const CalendarAnalysis: React.FC<CalendarAnalysisProps> = ({ onClose, act
     const [loading, setLoading] = useState(true);
     const [sessions, setSessions] = useState<CalendarSession[]>([]);
     const [currentMonth, setCurrentMonth] = useState(new Date());
+    const [rangeEndMonth, setRangeEndMonth] = useState(new Date());
+    const [isRangeMode, setIsRangeMode] = useState(false);
     const [selectedView, setSelectedView] = useState<'overview' | 'clients' | 'overlaps'>('overview');
 
     // Elegant Neumorphic Styles with Rich Colors
@@ -104,15 +109,24 @@ export const CalendarAnalysis: React.FC<CalendarAnalysisProps> = ({ onClose, act
 
     useEffect(() => {
         fetchSessionData();
-    }, [currentMonth, activeBranch]);
+    }, [currentMonth, rangeEndMonth, isRangeMode, activeBranch]);
 
     const isGlobalView = activeBranch === 'global' || !activeBranch;
+
+    const effectiveEndMonth = isRangeMode ? rangeEndMonth : currentMonth;
+
+    const getRangeLabel = () => {
+        if (!isRangeMode) return currentMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+        const s = currentMonth.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+        const e = rangeEndMonth.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+        return `${s} – ${e}`;
+    };
 
     const fetchSessionData = async () => {
         setLoading(true);
         try {
             const startOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
-            const endOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
+            const endOfMonth = new Date(effectiveEndMonth.getFullYear(), effectiveEndMonth.getMonth() + 1, 0);
 
             let query = supabase
                 .from('calendar_sessions')
@@ -166,10 +180,13 @@ export const CalendarAnalysis: React.FC<CalendarAnalysisProps> = ({ onClose, act
 
     const normalizeClientName = (name: string): string => {
         const upper = name.toUpperCase();
+        if (upper.includes('CELPIP')) return 'CELPIP';
+        if (upper.includes('CMA')) return 'CMA';
         if (upper.includes('PEARSON') || upper.includes('VUE')) return 'PEARSON';
-        if (upper.includes('PSI')) return 'PSI';
         if (upper.includes('PROMETRIC')) return 'PROMETRIC';
+        if (upper.includes('PSI')) return 'PSI';
         if (upper.includes('ITTS')) return 'ITTS';
+        if (upper.includes('IELTS')) return 'IELTS';
         return 'OTHER';
     };
 
@@ -432,6 +449,91 @@ export const CalendarAnalysis: React.FC<CalendarAnalysisProps> = ({ onClose, act
         };
     }, [sessions]);
 
+    // Advanced computed metrics
+    const advancedMetrics = useMemo(() => {
+        if (sessions.length === 0) return null;
+
+        const activeDays = totals.dailyBreakdown.length;
+        const avgPaxPerDay = activeDays > 0 ? Math.round(totals.totalCandidates / activeDays * 10) / 10 : 0;
+
+        // Peak day
+        const peakDay = totals.dailyBreakdown.reduce((max, day) =>
+            day.booked > max.booked ? day : max, totals.dailyBreakdown[0]);
+
+        // Day-of-week patterns
+        const dowTotals = [0, 0, 0, 0, 0, 0, 0]; // Sun-Sat
+        const dowCounts = [0, 0, 0, 0, 0, 0, 0];
+        totals.dailyBreakdown.forEach(day => {
+            const dow = new Date(day.date).getDay();
+            dowTotals[dow] += day.booked;
+            dowCounts[dow] += 1;
+        });
+        const dowAvg = dowTotals.map((total, i) => dowCounts[i] > 0 ? Math.round(total / dowCounts[i] * 10) / 10 : 0);
+        const dowMax = Math.max(...dowAvg, 1);
+
+        // Client share %
+        const clientShare = clientAnalysis.map(c => ({
+            name: c.clientName,
+            candidates: c.totalCandidates,
+            pct: totals.totalCandidates > 0 ? Math.round(c.totalCandidates / totals.totalCandidates * 1000) / 10 : 0
+        }));
+
+        // Utilization rate
+        const totalSeats = totals.dailyBreakdown.reduce((sum, day) => sum + day.seats, 0);
+        const totalBooked = totals.dailyBreakdown.reduce((sum, day) => sum + day.booked, 0);
+        const utilization = totalSeats > 0 ? Math.round(totalBooked / totalSeats * 1000) / 10 : 0;
+
+        // Exam name breakdown within each client
+        const examBreakdown: { [client: string]: { exam: string; sessions: number; candidates: number }[] } = {};
+        sessions.forEach(s => {
+            const client = normalizeClientName(s.client_name);
+            if (!examBreakdown[client]) examBreakdown[client] = [];
+            const existing = examBreakdown[client].find(e => e.exam === s.exam_name);
+            if (existing) {
+                existing.sessions += 1;
+                existing.candidates += s.candidate_count;
+            } else {
+                examBreakdown[client].push({ exam: s.exam_name, sessions: 1, candidates: s.candidate_count });
+            }
+        });
+        Object.values(examBreakdown).forEach(list => list.sort((a, b) => b.candidates - a.candidates));
+
+        // Month-over-month comparison (range mode)
+        let monthComparison: { month: string; candidates: number; sessions: number }[] = [];
+        if (isRangeMode) {
+            const monthMap: { [key: string]: { candidates: number; sessions: number } } = {};
+            sessions.forEach(s => {
+                const d = new Date(s.date);
+                const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                if (!monthMap[key]) monthMap[key] = { candidates: 0, sessions: 0 };
+                monthMap[key].candidates += s.candidate_count;
+                monthMap[key].sessions += 1;
+            });
+            monthComparison = Object.entries(monthMap)
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([key, data]) => {
+                    const [y, m] = key.split('-');
+                    const label = new Date(parseInt(y), parseInt(m) - 1).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+                    return { month: label, ...data };
+                });
+        }
+
+        const activeClients = new Set(sessions.map(s => normalizeClientName(s.client_name))).size;
+
+        return {
+            avgPaxPerDay,
+            peakDay: peakDay ? { date: peakDay.date, count: peakDay.booked } : null,
+            dowAvg,
+            dowMax,
+            clientShare,
+            utilization,
+            examBreakdown,
+            monthComparison,
+            activeClients,
+            activeDays
+        };
+    }, [sessions, totals, clientAnalysis, isRangeMode]);
+
     // Export functions
     const exportAsCSV = () => {
         const headers = ['Client', 'Branch', 'Total Candidates', 'Sessions', 'Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5'];
@@ -463,13 +565,16 @@ export const CalendarAnalysis: React.FC<CalendarAnalysisProps> = ({ onClose, act
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `FETS_Invoice_${isGlobalView ? 'Global' : activeBranch.charAt(0).toUpperCase() + activeBranch.slice(1)}_${currentMonth.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }).replace(' ', '_')}.csv`;
+        const rangeFileLabel = isRangeMode
+            ? `${currentMonth.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}_to_${rangeEndMonth.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}`.replace(/ /g, '_')
+            : currentMonth.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }).replace(' ', '_');
+        a.download = `FETS_Invoice_${isGlobalView ? 'Global' : activeBranch.charAt(0).toUpperCase() + activeBranch.slice(1)}_${rangeFileLabel}.csv`;
         a.click();
         toast.success('CSV exported for invoice generation!');
     };
 
     const exportDetailedReport = () => {
-        const monthName = currentMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+        const monthName = isRangeMode ? getRangeLabel() : currentMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
         const centerName = isGlobalView ? 'ALL CENTERS (GLOBAL)' : activeBranch.toUpperCase();
 
         let report = `
@@ -585,7 +690,10 @@ ${overlap.suggestions.map(s => `      → ${s}`).join('\n')}
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `FETS_Report_${isGlobalView ? 'Global' : activeBranch.charAt(0).toUpperCase() + activeBranch.slice(1)}_${currentMonth.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }).replace(' ', '_')}.txt`;
+        const reportRangeLabel = isRangeMode
+            ? `${currentMonth.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}_to_${rangeEndMonth.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}`.replace(/ /g, '_')
+            : currentMonth.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }).replace(' ', '_');
+        a.download = `FETS_Report_${isGlobalView ? 'Global' : activeBranch.charAt(0).toUpperCase() + activeBranch.slice(1)}_${reportRangeLabel}.txt`;
         a.click();
         toast.success('Detailed report exported & copied to clipboard!');
     };
@@ -629,7 +737,7 @@ ${overlap.suggestions.map(s => `      → ${s}`).join('\n')}
                         <div>
                             <div className="flex items-center gap-3 mb-2">
                                 <h1 className="text-4xl md:text-5xl font-black text-white uppercase tracking-tight">
-                                    Invoice <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#92cdb3] to-[#388087]">Analytics</span>
+                                    Calendar <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#92cdb3] to-[#388087]">Analysis</span>
                                 </h1>
                                 {/* Center Badge */}
                                 <div className={`px-4 py-2 rounded-xl font-bold text-sm uppercase tracking-widest ${
@@ -644,16 +752,34 @@ ${overlap.suggestions.map(s => `      → ${s}`).join('\n')}
                                 </div>
                             </div>
                             <p className="text-gray-400 font-medium text-lg">
-                                {isGlobalView 
-                                    ? 'Combined analysis from all centers for invoice generation'
-                                    : `${activeBranch.charAt(0).toUpperCase() + activeBranch.slice(1)} center analysis for invoice generation`
+                                {isGlobalView
+                                    ? 'Combined analysis from all centers'
+                                    : `${activeBranch.charAt(0).toUpperCase() + activeBranch.slice(1)} center analysis`
                                 }
                             </p>
                         </div>
                     </div>
 
                     {/* Month Navigation & Export */}
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-4 flex-wrap">
+                        {/* Range Toggle */}
+                        <button
+                            onClick={() => {
+                                setIsRangeMode(!isRangeMode);
+                                if (!isRangeMode) setRangeEndMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 2, 1));
+                            }}
+                            className={`px-4 py-2.5 rounded-xl font-bold text-sm transition-all border ${
+                                isRangeMode
+                                    ? 'bg-gradient-to-br from-[#92cdb3]/20 to-[#388087]/20 text-[#92cdb3] border-[#92cdb3]/30'
+                                    : 'bg-gradient-to-br from-[#388087] to-[#27575b] text-gray-400 border-white/5 hover:text-white'
+                            }`}
+                        >
+                            <div className="flex items-center gap-2">
+                                <Calendar size={14} />
+                                {isRangeMode ? 'Range' : 'Single'}
+                            </div>
+                        </button>
+
                         <div className={`${neumorphicInset} px-3 py-2 flex items-center gap-3`}>
                             <button
                                 onClick={() => navigateMonth('prev')}
@@ -662,7 +788,10 @@ ${overlap.suggestions.map(s => `      → ${s}`).join('\n')}
                                 <ChevronLeft size={18} />
                             </button>
                             <span className="text-white font-bold min-w-[140px] text-center">
-                                {currentMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
+                                {isRangeMode
+                                    ? currentMonth.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })
+                                    : currentMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
+                                }
                             </span>
                             <button
                                 onClick={() => navigateMonth('next')}
@@ -671,6 +800,27 @@ ${overlap.suggestions.map(s => `      → ${s}`).join('\n')}
                                 <ChevronRight size={18} />
                             </button>
                         </div>
+
+                        {isRangeMode && (
+                            <div className={`${neumorphicInset} px-3 py-2 flex items-center gap-3`}>
+                                <span className="text-gray-500 text-sm font-bold">to</span>
+                                <button
+                                    onClick={() => { const d = new Date(rangeEndMonth); d.setMonth(d.getMonth() - 1); setRangeEndMonth(d); }}
+                                    className="p-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors"
+                                >
+                                    <ChevronLeft size={18} />
+                                </button>
+                                <span className="text-white font-bold min-w-[100px] text-center">
+                                    {rangeEndMonth.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
+                                </span>
+                                <button
+                                    onClick={() => { const d = new Date(rangeEndMonth); d.setMonth(d.getMonth() + 1); setRangeEndMonth(d); }}
+                                    className="p-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors"
+                                >
+                                    <ChevronRight size={18} />
+                                </button>
+                            </div>
+                        )}
 
                         <button onClick={exportAsCSV} className={neumorphicBtn}>
                             <FileSpreadsheet size={18} />
@@ -686,7 +836,7 @@ ${overlap.suggestions.map(s => `      → ${s}`).join('\n')}
                 {/* View Tabs */}
                 <div className={`${neumorphicCard} p-2 flex gap-2 mb-8 w-fit`}>
                     {[
-                        { key: 'overview', label: 'Overview', icon: TrendingUp },
+                        { key: 'overview', label: 'Analysis', icon: TrendingUp },
                         { key: 'clients', label: 'Client Details', icon: Users },
                         { key: 'overlaps', label: 'Overlap Analysis', icon: Layers }
                     ].map(tab => (
@@ -775,6 +925,165 @@ ${overlap.suggestions.map(s => `      → ${s}`).join('\n')}
                                             <p className="text-xs text-gray-500 mt-2 font-medium">Capacity Conflicts</p>
                                         </div>
                                     </div>
+
+                                    {/* Advanced KPI Cards Row */}
+                                    {advancedMetrics && (
+                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                                            <div className={`${neumorphicCard} p-6 relative overflow-hidden group`}>
+                                                <div className="absolute top-0 right-0 p-4 opacity-10 text-amber-500 group-hover:opacity-20 transition-opacity">
+                                                    <Activity size={80} />
+                                                </div>
+                                                <h3 className="text-gray-500 font-bold uppercase tracking-widest text-xs mb-2">Avg PAX / Day</h3>
+                                                <div className="text-5xl font-black text-amber-400">{advancedMetrics.avgPaxPerDay}</div>
+                                                <p className="text-xs text-gray-500 mt-2 font-medium">{advancedMetrics.activeDays} active days</p>
+                                            </div>
+
+                                            <div className={`${neumorphicCard} p-6 relative overflow-hidden group`}>
+                                                <div className="absolute top-0 right-0 p-4 opacity-10 text-orange-500 group-hover:opacity-20 transition-opacity">
+                                                    <TrendingUp size={80} />
+                                                </div>
+                                                <h3 className="text-gray-500 font-bold uppercase tracking-widest text-xs mb-2">Peak Day</h3>
+                                                <div className="text-5xl font-black text-orange-400">{advancedMetrics.peakDay?.count ?? 0}</div>
+                                                <p className="text-xs text-gray-500 mt-2 font-medium">
+                                                    {advancedMetrics.peakDay ? formatDateLabel(advancedMetrics.peakDay.date) : '—'}
+                                                </p>
+                                            </div>
+
+                                            <div className={`${neumorphicCard} p-6 relative overflow-hidden group`}>
+                                                <div className="absolute top-0 right-0 p-4 opacity-10 text-cyan-500 group-hover:opacity-20 transition-opacity">
+                                                    <Target size={80} />
+                                                </div>
+                                                <h3 className="text-gray-500 font-bold uppercase tracking-widest text-xs mb-2">Utilization %</h3>
+                                                <div className="text-5xl font-black text-cyan-400">{advancedMetrics.utilization}%</div>
+                                                <p className="text-xs text-gray-500 mt-2 font-medium">Seats occupied</p>
+                                            </div>
+
+                                            <div className={`${neumorphicCard} p-6 relative overflow-hidden group`}>
+                                                <div className="absolute top-0 right-0 p-4 opacity-10 text-violet-500 group-hover:opacity-20 transition-opacity">
+                                                    <Users size={80} />
+                                                </div>
+                                                <h3 className="text-gray-500 font-bold uppercase tracking-widest text-xs mb-2">Active Clients</h3>
+                                                <div className="text-5xl font-black text-violet-400">{advancedMetrics.activeClients}</div>
+                                                <p className="text-xs text-gray-500 mt-2 font-medium">Unique exam providers</p>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Client Share Horizontal Bars */}
+                                    {advancedMetrics && advancedMetrics.clientShare.length > 0 && (
+                                        <div className={`${neumorphicCard} p-8`}>
+                                            <div className="flex items-center gap-3 mb-6">
+                                                <div className="p-2 bg-gradient-to-br from-amber-500/20 to-amber-600/20 rounded-lg text-amber-400">
+                                                    <BarChart3 size={24} />
+                                                </div>
+                                                <h3 className="text-xl font-black text-white">Client Share</h3>
+                                            </div>
+                                            <div className="space-y-4">
+                                                {advancedMetrics.clientShare.map(client => (
+                                                    <div key={client.name}>
+                                                        <div className="flex items-center justify-between mb-1.5">
+                                                            <span className="text-sm font-bold text-white">{client.name}</span>
+                                                            <div className="flex items-center gap-3">
+                                                                <span className="text-sm font-black text-[#92cdb3] tabular-nums">{client.candidates}</span>
+                                                                <span className="text-xs text-gray-500 font-bold w-14 text-right tabular-nums">{client.pct}%</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="h-3 w-full bg-[#0d1d1f] rounded-full overflow-hidden">
+                                                            <motion.div
+                                                                initial={{ width: 0 }}
+                                                                animate={{ width: `${client.pct}%` }}
+                                                                transition={{ duration: 0.8 }}
+                                                                className="h-full bg-gradient-to-r from-[#92cdb3] to-[#388087] rounded-full"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Day-of-Week Heatmap */}
+                                    {advancedMetrics && (
+                                        <div className={`${neumorphicCard} p-8`}>
+                                            <div className="flex items-center gap-3 mb-6">
+                                                <div className="p-2 bg-gradient-to-br from-cyan-500/20 to-cyan-600/20 rounded-lg text-cyan-400">
+                                                    <Calendar size={24} />
+                                                </div>
+                                                <div>
+                                                    <h3 className="text-xl font-black text-white">Day-of-Week Pattern</h3>
+                                                    <p className="text-xs text-gray-500 font-medium">Average candidates per weekday</p>
+                                                </div>
+                                            </div>
+                                            <div className="grid grid-cols-7 gap-3">
+                                                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, i) => {
+                                                    const intensity = advancedMetrics.dowMax > 0 ? advancedMetrics.dowAvg[i] / advancedMetrics.dowMax : 0;
+                                                    return (
+                                                        <div key={day} className="text-center">
+                                                            <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">{day}</div>
+                                                            <div
+                                                                className="rounded-xl p-4 border border-white/5 transition-all"
+                                                                style={{
+                                                                    backgroundColor: intensity > 0
+                                                                        ? `rgba(146, 205, 179, ${0.05 + intensity * 0.3})`
+                                                                        : 'rgba(13, 29, 31, 0.6)',
+                                                                    boxShadow: intensity > 0.5 ? `0 0 12px rgba(146, 205, 179, ${intensity * 0.2})` : 'none'
+                                                                }}
+                                                            >
+                                                                <div className="text-2xl font-black text-white tabular-nums">{advancedMetrics.dowAvg[i]}</div>
+                                                                <div className="text-[9px] text-gray-500 font-bold uppercase">avg</div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Month Comparison Table (range mode) */}
+                                    {isRangeMode && advancedMetrics && advancedMetrics.monthComparison.length > 1 && (
+                                        <div className={`${neumorphicCard} p-8`}>
+                                            <div className="flex items-center gap-3 mb-6">
+                                                <div className="p-2 bg-gradient-to-br from-violet-500/20 to-violet-600/20 rounded-lg text-violet-400">
+                                                    <BarChart3 size={24} />
+                                                </div>
+                                                <h3 className="text-xl font-black text-white">Month-over-Month Comparison</h3>
+                                            </div>
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full">
+                                                    <thead>
+                                                        <tr className="border-b border-white/10">
+                                                            <th className="text-left py-3 px-4 text-xs font-bold text-gray-500 uppercase tracking-widest">Month</th>
+                                                            <th className="text-right py-3 px-4 text-xs font-bold text-gray-500 uppercase tracking-widest">Sessions</th>
+                                                            <th className="text-right py-3 px-4 text-xs font-bold text-gray-500 uppercase tracking-widest">Candidates</th>
+                                                            <th className="text-left py-3 px-4 text-xs font-bold text-gray-500 uppercase tracking-widest w-1/3">Distribution</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {advancedMetrics.monthComparison.map((m, idx) => {
+                                                            const maxCand = Math.max(...advancedMetrics.monthComparison.map(x => x.candidates), 1);
+                                                            return (
+                                                                <tr key={idx} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                                                                    <td className="py-3 px-4 text-sm font-bold text-white">{m.month}</td>
+                                                                    <td className="py-3 px-4 text-sm font-bold text-gray-400 text-right tabular-nums">{m.sessions}</td>
+                                                                    <td className="py-3 px-4 text-sm font-black text-[#92cdb3] text-right tabular-nums">{m.candidates}</td>
+                                                                    <td className="py-3 px-4">
+                                                                        <div className="h-3 w-full bg-[#0d1d1f] rounded-full overflow-hidden">
+                                                                            <motion.div
+                                                                                initial={{ width: 0 }}
+                                                                                animate={{ width: `${(m.candidates / maxCand) * 100}%` }}
+                                                                                transition={{ duration: 0.6, delay: idx * 0.1 }}
+                                                                                className="h-full bg-gradient-to-r from-violet-500 to-violet-400 rounded-full"
+                                                                            />
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                            );
+                                                        })}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {/* Branch & Weekly Summary */}
                                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -923,6 +1232,24 @@ ${overlap.suggestions.map(s => `      → ${s}`).join('\n')}
                                                         ))}
                                                     </div>
                                                 </div>
+
+                                                {/* Exam Name Breakdown */}
+                                                {advancedMetrics?.examBreakdown[client.clientName] && advancedMetrics.examBreakdown[client.clientName].length > 0 && (
+                                                    <div className="mt-6 pt-6 border-t border-white/10">
+                                                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Exam Breakdown</h4>
+                                                        <div className="space-y-2">
+                                                            {advancedMetrics.examBreakdown[client.clientName].map(exam => (
+                                                                <div key={exam.exam} className="flex items-center justify-between rounded-lg bg-[#0d1d1f]/60 px-3 py-2.5">
+                                                                    <span className="text-sm font-semibold text-white truncate flex-1 mr-4">{exam.exam}</span>
+                                                                    <div className="flex items-center gap-4 shrink-0">
+                                                                        <span className="text-xs text-gray-500 font-bold">{exam.sessions} sess</span>
+                                                                        <span className="text-sm font-black text-[#92cdb3] tabular-nums w-10 text-right">{exam.candidates}</span>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         );
                                     })}

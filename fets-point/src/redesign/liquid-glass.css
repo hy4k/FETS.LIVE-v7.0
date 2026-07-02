@@ -619,3 +619,18 @@
     inset 2px 2px 4px #ffffff !important;
 }
 
+/* Roster Premium Cells Hover Effect */
+.fets-redesign-root .roster-cell-btn {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.fets-redesign-root .roster-cell-btn:hover {
+  transform: translateY(-2px) scale(1.04) !important;
+  filter: brightness(1.15);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15) !important;
+  z-index: 10;
+}
+.fets-redesign-root .roster-cell-btn:active {
+  transform: translateY(0) scale(0.96) !important;
+}
+
+

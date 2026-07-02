@@ -254,7 +254,7 @@ export async function loadLiveData(F: any) {
 
   /* ---- cases (incidents) ---- */
   try {
-    const { data, error } = await supabase.from("incidents").select("*").order("created_at", { ascending: false }).limit(1000);
+    const { data, error } = await supabase.from("incidents").select("*, incident_comments(*)").order("created_at", { ascending: false }).limit(1000);
     if (!error && data) {
       const mapStatus = (s: string) => { s = lc(s); if (s.includes("resolv") || s.includes("close") || s.includes("done")) return "resolved"; if (s.includes("progress")) return "progress"; return "open"; };
       const mapPrio = (p: string) => { p = lc(p); if (p.includes("urgent") || p.includes("critical")) return "Urgent"; if (p.includes("high")) return "High"; if (p.includes("low")) return "Low"; return "Medium"; };
@@ -272,7 +272,15 @@ export async function loadLiveData(F: any) {
         age: "",
         detail: c.description || c.details || "",
         contact: null,
-        thread: [],
+        thread: (c.incident_comments || []).map((m: any) => ({
+          id: m.id,
+          kind: "comment",
+          role: m.author_id === F._meUserId ? "user" : "proctor",
+          author: m.author_full_name,
+          text: m.body,
+          when: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          rawTime: m.created_at
+        })).sort((a: any, b: any) => new Date(a.rawTime).getTime() - new Date(b.rawTime).getTime()),
       }));
     }
   } catch (e) { /* keep seed */ }
@@ -413,9 +421,19 @@ export async function ensureMonth(d: Date) {
       data.forEach((s: any) => {
         const dt = new Date(`${s.date}T00:00:00`); if (isNaN(dt.getTime())) return;
         const k = `${dt.getFullYear()}-${dt.getMonth()}-${dt.getDate()}`;
+        let clientName = s.client_name || '';
+        const clientUpper = clientName.toUpperCase().trim();
+        const examUpper = (s.exam_name || '').toUpperCase().trim();
+        if (clientUpper === 'PROMETRIC') {
+          if (examUpper.includes('CMA US') || examUpper.includes('CMA')) {
+            clientName = 'CMA US';
+          } else if (examUpper.includes('CELPIP')) {
+            clientName = 'CELPIP';
+          }
+        }
         (F._liveSessions[k] || (F._liveSessions[k] = [])).push({
-          id: s.id, vendor: clientToSlug(s.client_name || s.exam_name),
-          exam: s.exam_name || s.client_name || "Exam session", count: Number(s.candidate_count) || 0,
+          id: s.id, vendor: clientToSlug(clientName || s.exam_name),
+          exam: s.exam_name || clientName || "Exam session", count: Number(s.candidate_count) || 0,
           start: (s.start_time || "09:00").slice(0, 5), end: (s.end_time || s.start_time || "").slice(0, 5),
           branch: branchOf(s.branch_location || s.branch),
         });

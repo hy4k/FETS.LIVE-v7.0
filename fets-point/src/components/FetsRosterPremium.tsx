@@ -610,6 +610,23 @@ export function FetsRosterPremium() {
   const [mainView, setMainView] = useState<MainView>('roster')
   const [searchQuery, setSearchQuery] = useState('')
 
+  // New States for TE OP-XY Layout
+  const [activeMenu, setActiveMenu] = useState<'roster' | 'check-in' | 'my-attendance' | 'leave' | 'shift-swap' | 'tool'>('roster')
+  const [timelineViewMode, setTimelineViewMode] = useState<'month' | '7day'>('month')
+  const [activeToolTab, setActiveToolTab] = useState<'staff-grid' | 'analysis' | 'list' | 'manage-requests'>('staff-grid')
+
+  const [leaveDate, setLeaveDate] = useState('')
+  const [leaveReason, setLeaveReason] = useState('')
+  const [leaveSubmitting, setLeaveSubmitting] = useState(false)
+
+  const [swapDate, setSwapDate] = useState('')
+  const [swapTargetStaff, setSwapTargetStaff] = useState('')
+  const [swapReason, setSwapReason] = useState('')
+  const [swapSubmitting, setSwapSubmitting] = useState(false)
+
+  const [myAttendanceLogs, setMyAttendanceLogs] = useState<any[]>([])
+  const [myAttendanceLoading, setMyAttendanceLoading] = useState(false)
+
   // UI state
   const [selectedCell, setSelectedCell] = useState<{ profileId: string; date: string } | null>(null)
   const [selectedStaffFilter, setSelectedStaffFilter] = useState<string>('')
@@ -707,9 +724,34 @@ export function FetsRosterPremium() {
       setSchedules(relevantSchedules)
 
       const { data: requestData, error: requestError } = await supabase
-        .from('leave_requests').select('*').order('created_at', { ascending: false })
+        .from('leave_requests')
+        .select(`
+          *,
+          requestor:staff_profiles!leave_requests_user_id_fkey(full_name),
+          target:staff_profiles!leave_requests_swap_with_user_id_fkey(full_name)
+        `)
+        .order('created_at', { ascending: false })
+
       if (requestError) throw requestError
-      setRequests(requestData || [])
+
+      const mappedRequests: LeaveRequest[] = (requestData || []).map(req => ({
+        id: req.id,
+        user_id: req.user_id,
+        request_type: req.request_type,
+        requested_date: req.requested_date,
+        swap_with_user_id: req.swap_with_user_id,
+        reason: req.reason,
+        status: req.status,
+        created_at: req.created_at,
+        approved_at: req.approved_at,
+        approved_by: req.approved_by,
+        swap_date: req.swap_date,
+        updated_at: req.updated_at,
+        requestor_name: (req.requestor as any)?.full_name || 'Unknown',
+        target_name: (req.target as any)?.full_name || 'Unknown'
+      }))
+
+      setRequests(mappedRequests)
     } catch (err) {
       console.error('Error loading data:', err)
       showNotification('error', `Failed to load data: ${err instanceof Error ? err.message : 'Unknown error'}`)
@@ -725,7 +767,11 @@ export function FetsRosterPremium() {
 
   const navigateDate = (dir: 'prev' | 'next') => {
     const d = new Date(currentDate)
-    d.setMonth(d.getMonth() + (dir === 'next' ? 1 : -1))
+    if (timelineViewMode === '7day') {
+      d.setDate(d.getDate() + (dir === 'next' ? 7 : -7))
+    } else {
+      d.setMonth(d.getMonth() + (dir === 'next' ? 1 : -1))
+    }
     setCurrentDate(d)
   }
 
@@ -847,7 +893,191 @@ export function FetsRosterPremium() {
     } catch (err) { console.error(err) }
   }
 
-  useEffect(() => { loadData() }, [activeBranch, currentDate, viewMode, loadData])
+  const loadMyAttendance = useCallback(async () => {
+    if (!profile?.id) return
+    try {
+      setMyAttendanceLoading(true)
+      const { data, error } = await supabase
+        .from('staff_attendance')
+        .select('*')
+        .eq('staff_id', profile.id)
+        .order('date', { ascending: false })
+        .limit(30)
+      if (error) throw error
+      setMyAttendanceLogs(data || [])
+    } catch (e) {
+      console.error('Error fetching personal attendance:', e)
+    } finally {
+      setMyAttendanceLoading(false)
+    }
+  }, [profile?.id])
+
+  useEffect(() => {
+    if (activeMenu === 'my-attendance') {
+      loadMyAttendance()
+    }
+  }, [activeMenu, loadMyAttendance])
+
+  const handleCreateLeave = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!leaveDate || !profile?.id) return
+    setLeaveSubmitting(true)
+    try {
+      const { error } = await supabase.from('leave_requests').insert({
+        user_id: profile.id,
+        request_type: 'leave',
+        requested_date: leaveDate,
+        reason: leaveReason || null,
+        status: 'pending'
+      })
+      if (error) throw error
+      showNotification('success', 'Leave request created successfully')
+      setLeaveDate('')
+      setLeaveReason('')
+      loadData()
+    } catch (err) {
+      console.error(err)
+      showNotification('error', 'Failed to create leave request')
+    } finally {
+      setLeaveSubmitting(false)
+    }
+  }
+
+  const handleCreateSwap = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!swapDate || !swapTargetStaff || !profile?.id) return
+    setSwapSubmitting(true)
+    try {
+      const { error } = await supabase.from('leave_requests').insert({
+        user_id: profile.id,
+        request_type: 'shift_swap',
+        requested_date: swapDate,
+        swap_with_user_id: swapTargetStaff,
+        reason: swapReason || null,
+        status: 'pending'
+      })
+      if (error) throw error
+      showNotification('success', 'Shift swap request created successfully')
+      setSwapDate('')
+      setSwapTargetStaff('')
+      setSwapReason('')
+      loadData()
+    } catch (err) {
+      console.error(err)
+      showNotification('error', 'Failed to create shift swap request')
+    } finally {
+      setSwapSubmitting(false)
+    }
+  }
+
+  const performShiftSwap = async (user1Id: string, user2Id: string, date: string) => {
+    const { data: shifts, error: fetchError } = await supabase
+      .from('roster_schedules')
+      .select('*')
+      .in('profile_id', [user1Id, user2Id])
+      .eq('date', date)
+
+    if (fetchError) throw fetchError
+
+    const user1Shift = shifts?.find(s => s.profile_id === user1Id)
+    const user2Shift = shifts?.find(s => s.profile_id === user2Id)
+
+    if (shifts && shifts.length > 0) {
+      const { error: deleteError } = await supabase
+        .from('roster_schedules')
+        .delete()
+        .in('id', shifts.map(s => s.id))
+
+      if (deleteError) throw deleteError
+    }
+
+    const newShifts = []
+    const scheduleBranch = activeBranch === 'global' ? 'calicut' : activeBranch
+    if (user1Shift) {
+      newShifts.push({
+        profile_id: user2Id,
+        date: date,
+        shift_code: user1Shift.shift_code,
+        overtime_hours: user1Shift.overtime_hours || 0,
+        status: 'confirmed',
+        branch_location: scheduleBranch
+      })
+    }
+    if (user2Shift) {
+      newShifts.push({
+        profile_id: user1Id,
+        date: date,
+        shift_code: user2Shift.shift_code,
+        overtime_hours: user2Shift.overtime_hours || 0,
+        status: 'confirmed',
+        branch_location: scheduleBranch
+      })
+    }
+    if (newShifts.length > 0) {
+      const { error: insertError } = await supabase
+        .from('roster_schedules')
+        .insert(newShifts)
+
+      if (insertError) throw insertError
+    }
+  }
+
+  const handleApproveRequest = async (req: LeaveRequest) => {
+    try {
+      const { error: updateError } = await supabase
+        .from('leave_requests')
+        .update({
+          status: 'approved',
+          approved_by: profile?.id,
+          approved_at: new Date().toISOString()
+        })
+        .eq('id', req.id)
+
+      if (updateError) throw updateError
+
+      if (req.request_type === 'shift_swap' && req.swap_with_user_id) {
+        await performShiftSwap(req.user_id, req.swap_with_user_id, req.requested_date)
+      }
+      showNotification('success', 'Request approved successfully')
+      loadData()
+    } catch (err) {
+      console.error(err)
+      showNotification('error', 'Failed to approve request')
+    }
+  }
+
+  const handleRejectRequest = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('leave_requests')
+        .update({
+          status: 'rejected',
+          approved_by: profile?.id,
+          approved_at: new Date().toISOString()
+        })
+        .eq('id', id)
+      if (error) throw error
+      showNotification('success', 'Request rejected')
+      loadData()
+    } catch (err) {
+      console.error(err)
+      showNotification('error', 'Failed to reject request')
+    }
+  }
+
+  const handleDeleteRequest = async (id: string) => {
+    try {
+      const { error } = await supabase.from('leave_requests').delete().eq('id', id)
+      if (error) throw error
+      showNotification('success', 'Request deleted successfully')
+      loadData()
+    } catch (err) {
+      console.error(err)
+      showNotification('error', 'Failed to delete request')
+    }
+  }
+
+  useEffect(() => { loadData() }, [activeBranch, currentDate, loadData])
 
   // ── Loading ──────────────────────────────────────────────────────────────
   if (loading) return (
@@ -878,11 +1108,8 @@ export function FetsRosterPremium() {
           notification.type === 'success' ? 'border-emerald-500/50 text-emerald-400' :
           notification.type === 'error' ? 'border-rose-500/50 text-rose-400' : 'border-[#f6c810]/50 text-[#f6c810]'
         }`}>
-          <div className="flex items-center gap-2 text-sm font-medium">
-            {notification.type === 'success' && <CheckCircle className="h-4 w-4" />}
-            {notification.type === 'error' && <XCircle className="h-4 w-4" />}
-            {notification.type === 'warning' && <AlertTriangle className="h-4 w-4" />}
-            {notification.message}
+          <div className="flex items-center gap-3">
+            <span className="font-bold text-sm tracking-wide">{notification.message}</span>
           </div>
         </div>
       )}
@@ -893,247 +1120,263 @@ export function FetsRosterPremium() {
         onNavigate={navigateDate}
         onCellClick={handleCellClick}
       />
-      <ShiftCellPopup
-        isOpen={showShiftCellPopup}
-        onClose={() => setShowShiftCellPopup(false)}
-        onSave={handleShiftCellSave}
-        onDelete={handleShiftCellDelete}
-        currentShift={selectedCellData?.currentShift}
-        currentOvertimeHours={selectedCellData?.currentOvertimeHours}
-        staffName={selectedCellData?.staffName || ''}
-        date={selectedCellData?.date || ''}
-      />
     </div>
   )
 
   // ── Desktop ──────────────────────────────────────────────────────────────
-  const NAV_ITEMS: { id: MainView; icon: React.ReactNode; label: string }[] = [
-    { id: 'roster',      icon: <Calendar size={15} />,    label: 'Schedule' },
-    { id: 'staff-grid',  icon: <LayoutGrid size={15} />,  label: 'Staff' },
-    { id: 'attendance',  icon: <CheckCheck size={15} />,  label: 'Attendance' },
-    { id: 'analysis',    icon: <BarChart3 size={15} />,   label: 'Analysis' },
-  ]
-
   return (
-    <div className={`min-h-screen bg-gradient-to-br from-[#0A0A0B] via-[#121214] to-[#0A0A0B] -mt-32 pt-56 px-6`}
+    <div className="min-h-screen bg-[#de5827] -mt-32 pt-56 px-6 pb-24"
       style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}>
       <div className="max-w-[1800px] mx-auto">
 
-        {/* ── HEADER (same centre selector placement as FETS LIVE) ── */}
+        {/* ── HEADER ── */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8 mb-8 mt-4 relative z-50"
+          className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8 mb-6 mt-4 relative z-40"
         >
           <div className="relative min-w-0">
-            <div className="flex items-center gap-4 mb-3">
-              <div className="h-[1px] w-12 bg-[#FACC15]" />
-              <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-[#FACC15]">
+            <div className="flex items-center gap-4 mb-2">
+              <div className="h-[2px] w-12 bg-black" />
+              <span className="text-[11px] uppercase tracking-[0.2em] font-black text-black">
                 Roster {activeBranch !== 'global' && `// ${activeBranch.toUpperCase()}`}
               </span>
             </div>
-            <div className="text-4xl md:text-6xl font-black text-[#FACC15] tracking-tighter leading-none">
-              SCHEDULE
+            <div className="text-5xl md:text-7xl font-black text-black tracking-tighter leading-none uppercase">
+              Roster
             </div>
           </div>
 
-          <div className="hidden lg:block lg:flex-1" />
-
           <div className="flex items-center gap-4 flex-wrap justify-end w-full lg:w-auto">
-            <div className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 text-white/60 rounded-xl text-xs font-bold uppercase tracking-widest shadow-lg">
-              <Users size={14} className="text-[#f6c810]" />
-              <span>{staffProfiles.length} staff members</span>
+            {/* Centre Selector Thread for Desktop */}
+            <div className="bg-[#f4f3ef] border border-[#d5d4ce] rounded-2xl p-1 shadow-sm">
+              <LocationSelectorThread
+                activeBranch={activeBranch}
+                setActiveBranch={setActiveBranch as (b: string) => void}
+                availableBranches={centreOptions}
+                canSwitch={canSwitchCentre}
+              />
             </div>
-            <div className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 text-white/60 rounded-xl text-xs font-bold uppercase tracking-widest shadow-lg">
-              <Calendar size={14} className="text-[#f6c810]" />
-              <span>{new Date().toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+            <div className="flex items-center gap-2 px-4 py-3 bg-[#f4f3ef] border border-[#d5d4ce] text-black font-bold rounded-2xl text-xs uppercase tracking-wider shadow-sm">
+              <Users size={14} className="text-black" />
+              <span>{staffProfiles.length} staff</span>
+            </div>
+            <div className="flex items-center gap-2 px-4 py-3 bg-[#f4f3ef] border border-[#d5d4ce] text-black font-bold rounded-2xl text-xs uppercase tracking-wider shadow-sm">
+              <Calendar size={14} className="text-black" />
+              <span>{new Date().toLocaleDateString('en-GB', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}</span>
             </div>
           </div>
         </motion.div>
 
         {/* ── NOTIFICATION ── */}
         {notification && (
-          <div className={`fixed top-4 right-4 z-50 p-4 rounded-xl bg-[#121214] shadow-xl border ${
-            notification.type === 'success' ? 'border-emerald-500/40 text-emerald-400' :
-            notification.type === 'error' ? 'border-rose-500/40 text-rose-400' : 'border-[#f6c810]/40 text-[#f6c810]'
+          <div className={`fixed top-4 right-4 z-50 p-4 rounded-xl bg-[#f4f3ef] shadow-xl border ${
+            notification.type === 'success' ? 'border-emerald-500 text-emerald-800' :
+            notification.type === 'error' ? 'border-rose-500 text-rose-800' : 'border-amber-500 text-amber-800'
           }`}>
             <div className="flex items-center gap-3">
-              {notification.type === 'success' && <CheckCircle className="h-5 w-5" />}
-              {notification.type === 'error' && <XCircle className="h-5 w-5" />}
-              {notification.type === 'warning' && <AlertTriangle className="h-5 w-5" />}
-              <span className="font-medium text-sm tracking-wide">{notification.message}</span>
+              {notification.type === 'success' && <CheckCircle className="h-5 w-5 text-emerald-600" />}
+              {notification.type === 'error' && <XCircle className="h-5 w-5 text-rose-600" />}
+              {notification.type === 'warning' && <AlertTriangle className="h-5 w-5 text-amber-600" />}
+              <span className="font-bold text-sm tracking-wide">{notification.message}</span>
             </div>
           </div>
         )}
 
-        {/* ── CONTROL TOOLBAR ── */}
-        <div className="bg-[#121214] border border-white/10 rounded-2xl p-4 mb-8 flex flex-wrap items-center justify-between gap-4 shadow-2xl">
-          <div className="flex items-center gap-4 flex-wrap">
-            {/* Main view tabs */}
-            <div className="flex items-center bg-white/5 rounded-xl border border-white/10 p-1 gap-1">
-              {NAV_ITEMS.map(({ id, icon, label }) => (
-                <button key={id}
-                  onClick={() => setMainView(id)}
-                  className={`flex items-center gap-1.5 px-5 py-3 rounded-lg text-sm font-bold uppercase tracking-widest transition-all ${
-                    mainView === id
-                      ? 'bg-[#f6c810] text-black shadow-[0_0_12px_rgba(246,200,16,0.4)]'
-                      : 'text-white/40 hover:text-white/80 hover:bg-white/5'}`}>
-                  {icon} {label}
-                </button>
-              ))}
-            </div>
+        {/* ── SUB-HEADER MENU HEADER ── */}
+        <div className="flex items-center gap-2 bg-[#eae9e4] border border-[#d5d4ce] rounded-3xl p-2 mb-4 w-full justify-start overflow-x-auto no-scrollbar shadow-md">
+          {[
+            { id: 'roster', label: 'Roster Grid', icon: <Calendar size={15} /> },
+            { id: 'check-in', label: 'Check-in', icon: <LogIn size={15} /> },
+            { id: 'my-attendance', label: 'My Attendance', icon: <Clock size={15} /> },
+            { id: 'leave', label: 'Leave', icon: <Calendar size={15} /> },
+            { id: 'shift-swap', label: 'Shift Swap', icon: <RefreshCw size={15} /> },
+            { id: 'tool', label: 'Tool', icon: <Shield size={15} />, adminOnly: true },
+          ].map(item => {
+            if (item.adminOnly && !canEdit) return null
+            const isActive = activeMenu === item.id
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveMenu(item.id as any)}
+                className={`flex items-center gap-2 px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap ${
+                  isActive
+                    ? 'bg-black text-[#f4f3ef] shadow-sm'
+                    : 'text-black/60 hover:text-black hover:bg-black/5'
+                }`}
+              >
+                {item.icon}
+                <span>{item.label}</span>
+              </button>
+            )
+          })}
+          {activeMenu !== 'roster' && (
+            <button
+              onClick={() => setActiveMenu('roster')}
+              className="ml-auto flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-[10px] font-black text-rose-700 hover:bg-rose-50 border border-rose-200/50 uppercase tracking-widest transition-colors"
+            >
+              <X size={12} /> Close
+            </button>
+          )}
+        </div>
 
-            {/* Date navigation (roster view only) */}
-            {(mainView === 'roster' || mainView === 'attendance') && (
-              <div className="flex items-center gap-3">
-                <div className="flex items-center bg-white/5 rounded-xl border border-white/10">
-                  <button onClick={() => navigateDate('prev')}
-                    className="p-2 hover:bg-white/10 rounded-l-xl transition-colors">
-                    <ChevronLeft className="h-5 w-5 text-white/40" />
-                  </button>
-                  <h2 className="text-sm font-bold text-white min-w-[180px] text-center uppercase tracking-widest">{getViewTitle()}</h2>
-                  <button onClick={() => navigateDate('next')}
-                    className="p-2 hover:bg-white/10 rounded-r-xl transition-colors">
-                    <ChevronRight className="h-5 w-5 text-white/40" />
-                  </button>
-                </div>
-                <button onClick={() => setCurrentDate(new Date())}
-                  className="px-4 py-2.5 text-sm font-bold text-white/60 bg-white/5 border border-white/10 rounded-xl hover:border-[#f6c810]/50 hover:text-[#f6c810] transition-colors uppercase tracking-widest">
-                  Today
-                </button>
-              </div>
-            )}
-
-            {/* Search (staff grid) */}
-            {mainView === 'staff-grid' && (
-              <div className="relative">
-                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Search staff…"
-                  className="pl-8 pr-3 py-2 bg-white/5 border border-white/10 rounded-xl text-xs text-white placeholder-white/40 focus:outline-none focus:border-[#f6c810]/50 w-44 transition-all uppercase tracking-widest"
-                />
-              </div>
-            )}
+        {/* ── HELLO USER BANNER ── */}
+        <div className="bg-[#f4f3ef] border border-[#d5d4ce] rounded-3xl p-6 mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-md">
+          <div>
+            <h2 className="text-2xl font-black text-[#1a1a1a]">Hello, {profile?.full_name || 'User'}!</h2>
+            <p className="text-sm text-black/60 font-bold mt-1">
+              {profile?.role ? `${profile.role.replace('_', ' ').toUpperCase()} // ` : ''}Welcome back to your shift roster.
+            </p>
           </div>
-
-          <div className="flex items-center gap-3 flex-wrap">
-            {/* View mode toggle (roster only) */}
-            {mainView === 'roster' && (
-              <div className="flex items-center bg-white/5 border border-white/10 rounded-xl p-1 gap-1">
-                <button onClick={() => setViewMode('month')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${viewMode === 'month' ? 'bg-[#f6c810] text-black shadow-[0_0_12px_rgba(246,200,16,0.4)]' : 'text-white/40 hover:text-white/80 hover:bg-white/5'}`}>
-                  Timeline
-                </button>
-                <button onClick={() => setViewMode('list')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${viewMode === 'list' ? 'bg-[#f6c810] text-black shadow-[0_0_12px_rgba(246,200,16,0.4)]' : 'text-white/40 hover:text-white/80 hover:bg-white/5'}`}>
-                  List
-                </button>
-              </div>
-            )}
-
-            {/* Staff filter */}
-            <div className="relative">
-              <button onClick={() => setShowFilter(!showFilter)}
-                className={`p-2 rounded-xl border transition-colors ${showFilter ? 'bg-[#f6c810]/10 border-[#f6c810]/40 text-[#f6c810]' : 'bg-[#0A0A0B] border-[rgba(255, 255, 255, 0.1)] text-slate-400 hover:text-slate-200'}`}>
-                <Filter className="h-4 w-4" />
-              </button>
-              <AnimatePresence>
-                {showFilter && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                    className="absolute right-0 mt-2 w-56 bg-[#121214] border border-[rgba(255, 255, 255, 0.1)] rounded-xl shadow-2xl z-20 max-h-80 overflow-y-auto"
-                  >
-                    <div className="p-3">
-                      <div className="text-[10px] font-bold text-slate-500 uppercase mb-2 tracking-wider">Filter by Staff</div>
-                      <button onClick={() => { setSelectedStaffFilter(''); setShowFilter(false) }}
-                        className="block w-full text-left px-4 py-2.5 text-sm text-slate-200 hover:bg-[rgba(255, 255, 255, 0.1)] rounded-lg mb-1 font-semibold transition-colors">
-                        All Staff
-                      </button>
-                      {staffProfiles.map(s => (
-                        <button key={s.id} onClick={() => { setSelectedStaffFilter(s.id); setShowFilter(false) }}
-                          className={`block w-full text-left px-4 py-2.5 text-sm rounded-lg transition-colors ${selectedStaffFilter === s.id ? 'bg-[#f6c810]/10 text-[#f6c810]' : 'text-slate-300 hover:bg-[rgba(255, 255, 255, 0.1)]'}`}>
-                          {s.full_name}
-                        </button>
-                      ))}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
-            {/* Quick Add */}
-            {mainView === 'roster' && (
-              <button onClick={() => setShowQuickAddModal(true)} disabled={!canEdit}
-                className="flex items-center gap-2 px-4 py-2 bg-[#f6c810] hover:bg-[#eab308] text-black text-xs font-bold rounded-xl shadow transition-all disabled:opacity-40 disabled:cursor-not-allowed">
-                <Plus className="h-4 w-4" />
-                <span className="hidden sm:inline">Quick Add</span>
-              </button>
-            )}
-
-            {/* Requests */}
-            <button onClick={() => setShowRequestsModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-[rgba(255, 255, 255, 0.1)] hover:bg-[rgba(255, 255, 255, 0.2)] text-white text-xs font-bold rounded-xl shadow transition-all">
-              <Calendar className="h-4 w-4" />
-              <span className="hidden sm:inline">Requests</span>
-            </button>
-
-            {/* Refresh */}
-            <button onClick={loadData}
-              className="p-2 bg-[#0A0A0B] border border-[rgba(255, 255, 255, 0.1)] rounded-xl text-slate-400 hover:text-slate-200 hover:border-zinc-600 transition-colors">
-              <RefreshCw className="h-4 w-4" />
-            </button>
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-black px-4 py-2 rounded-full bg-black text-[#f4f3ef] uppercase tracking-wider">
+              {activeBranch.toUpperCase()} BRANCH
+            </span>
           </div>
         </div>
 
-        {/* ── MAIN CONTENT ── */}
-        <div className="bg-[#121214] border border-[rgba(255, 255, 255, 0.1)] rounded-2xl p-6 min-h-[600px]">
+        {/* ── MAIN CONTENT CONTAINER ── */}
+        <div className="bg-[#f4f3ef] border border-[#d5d4ce] rounded-3xl p-6 min-h-[600px] shadow-lg">
           <AnimatePresence mode="wait">
-            {/* SCHEDULE TIMELINE / LIST */}
-            {mainView === 'roster' && (
-              <motion.div key="roster"
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                {viewMode === 'month' ? (
-                  <MonthlyRosterTimeline
-                    staffProfiles={filteredStaff}
-                    schedules={schedules}
-                    currentDate={currentDate}
-                    onCellClick={handleCellClick}
-                  />
-                ) : (
-                  <RosterListView schedules={schedules} staffProfiles={staffProfiles} />
-                )}
-              </motion.div>
-            )}
 
-            {/* STAFF GRID */}
-            {mainView === 'staff-grid' && (
-              <motion.div key="staff-grid"
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <div className="mb-4 flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-slate-200">
-                    {filteredStaff.length} Staff Members
-                    {activeBranch && activeBranch !== 'global' ? ` · ${activeBranch}` : ' · All Branches'}
-                  </h3>
+            {/* DEFAULT ROSTER VIEW */}
+            {activeMenu === 'roster' && (
+              <motion.div
+                key="roster"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="space-y-6"
+              >
+                {/* Control bar for roster grid */}
+                <div className="flex flex-wrap items-center justify-between gap-4 bg-[#eae9e4] border border-[#d5d4ce] rounded-2xl p-4">
+                  <div className="flex items-center gap-4 flex-wrap">
+                    {/* 30 Days / 7 Days view switcher */}
+                    <div className="flex items-center bg-[#f4f3ef] border border-[#d5d4ce] rounded-xl p-1 gap-1">
+                      <button
+                        onClick={() => setTimelineViewMode('month')}
+                        className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${
+                          timelineViewMode === 'month'
+                            ? 'bg-black text-[#f4f3ef] shadow-sm'
+                            : 'text-black/60 hover:text-black hover:bg-black/5'
+                        }`}
+                      >
+                        30 Days
+                      </button>
+                      <button
+                        onClick={() => setTimelineViewMode('7day')}
+                        className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${
+                          timelineViewMode === '7day'
+                            ? 'bg-black text-[#f4f3ef] shadow-sm'
+                            : 'text-black/60 hover:text-black hover:bg-black/5'
+                        }`}
+                      >
+                        7 Days
+                      </button>
+                    </div>
+
+                    {/* Date pager */}
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center bg-[#f4f3ef] border border-[#d5d4ce] rounded-xl">
+                        <button onClick={() => navigateDate('prev')} className="p-2 hover:bg-black/5 rounded-l-xl transition-colors">
+                          <ChevronLeft className="h-5 w-5 text-black/60" />
+                        </button>
+                        <h2 className="text-xs font-black text-[#1a1a1a] min-w-[180px] text-center uppercase tracking-wider">
+                          {timelineViewMode === '7day' ? `Week of ${currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : getViewTitle()}
+                        </h2>
+                        <button onClick={() => navigateDate('next')} className="p-2 hover:bg-black/5 rounded-r-xl transition-colors">
+                          <ChevronRight className="h-5 w-5 text-black/60" />
+                        </button>
+                      </div>
+                      <button
+                        onClick={() => setCurrentDate(new Date())}
+                        className="px-4 py-2.5 text-xs font-black text-black/60 bg-[#f4f3ef] border border-[#d5d4ce] rounded-xl hover:bg-black hover:text-white transition-all uppercase tracking-wider"
+                      >
+                        Today
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 flex-wrap">
+                    {/* Staff filter */}
+                    <div className="relative">
+                      <button
+                        onClick={() => setShowFilter(!showFilter)}
+                        className={`p-2 rounded-xl border transition-colors ${
+                          showFilter ? 'bg-black text-white border-black' : 'bg-[#f4f3ef] border-[#d5d4ce] text-black/60 hover:text-black'
+                        }`}
+                      >
+                        <Filter className="h-4 w-4" />
+                      </button>
+                      <AnimatePresence>
+                        {showFilter && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -8 }}
+                            className="absolute right-0 mt-2 w-56 bg-[#f4f3ef] border border-[#d5d4ce] rounded-2xl shadow-xl z-20 max-h-80 overflow-y-auto"
+                          >
+                            <div className="p-3">
+                              <div className="text-[10px] font-black text-black/40 uppercase mb-2 tracking-wider">Filter by Staff</div>
+                              <button
+                                onClick={() => { setSelectedStaffFilter(''); setShowFilter(false) }}
+                                className="block w-full text-left px-4 py-2.5 text-xs text-black/80 hover:bg-black/5 rounded-lg mb-1 font-bold transition-colors uppercase tracking-wider"
+                              >
+                                All Staff
+                              </button>
+                              {staffProfiles.map(s => (
+                                <button
+                                  key={s.id}
+                                  onClick={() => { setSelectedStaffFilter(s.id); setShowFilter(false) }}
+                                  className={`block w-full text-left px-4 py-2.5 text-xs rounded-lg transition-colors uppercase tracking-wider font-bold ${
+                                    selectedStaffFilter === s.id ? 'bg-black text-white' : 'text-black/80 hover:bg-black/5'
+                                  }`}
+                                >
+                                  {s.full_name}
+                                </button>
+                              ))}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+
+                    <button
+                      onClick={loadData}
+                      className="p-2 bg-[#f4f3ef] border border-[#d5d4ce] rounded-xl text-black/60 hover:text-black hover:bg-black/5 transition-colors"
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
-                <StaffGridView
+
+                <MonthlyRosterTimeline
                   staffProfiles={filteredStaff}
                   schedules={schedules}
-                  attendance={attendance}
-                  searchQuery={searchQuery}
-                  onViewProfile={setSelectedProfileForModal}
+                  currentDate={currentDate}
+                  onCellClick={handleCellClick}
+                  viewType={timelineViewMode}
                 />
               </motion.div>
             )}
 
-            {/* ATTENDANCE */}
-            {mainView === 'attendance' && (
-              <motion.div key="attendance"
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            {/* CHECK-IN VIEW */}
+            {activeMenu === 'check-in' && (
+              <motion.div
+                key="check-in"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+              >
+                <div className="mb-4 flex items-center justify-between">
+                  <h3 className="text-lg font-black text-[#1a1a1a] uppercase tracking-tight">Staff Attendance Check-In</h3>
+                  <button
+                    onClick={() => setActiveMenu('roster')}
+                    className="text-xs font-black text-rose-700 uppercase tracking-wider hover:underline"
+                  >
+                    Back to Roster
+                  </button>
+                </div>
                 <AttendanceView
                   staffProfiles={filteredStaff}
                   attendance={attendance}
@@ -1146,18 +1389,376 @@ export function FetsRosterPremium() {
               </motion.div>
             )}
 
-            {/* ANALYSIS */}
-            {mainView === 'analysis' && (
-              <motion.div key="analysis"
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <EnhancedAnalysisView
-                  schedules={schedules}
-                  staffProfiles={filteredStaff}
-                  requests={requests}
-                  currentDate={currentDate}
-                />
+            {/* MY ATTENDANCE VIEW */}
+            {activeMenu === 'my-attendance' && (
+              <motion.div
+                key="my-attendance"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+              >
+                <div className="mb-6 flex items-center justify-between">
+                  <h3 className="text-lg font-black text-[#1a1a1a] uppercase tracking-tight">My Attendance Log</h3>
+                  <button
+                    onClick={() => setActiveMenu('roster')}
+                    className="text-xs font-black text-rose-700 uppercase tracking-wider hover:underline"
+                  >
+                    Back to Roster
+                  </button>
+                </div>
+                <MyAttendancePanel myLogs={myAttendanceLogs} loading={myAttendanceLoading} />
               </motion.div>
             )}
+
+            {/* LEAVE REQUESTS VIEW */}
+            {activeMenu === 'leave' && (
+              <motion.div
+                key="leave"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="space-y-6"
+              >
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-black text-[#1a1a1a] uppercase tracking-tight">Leave Management</h3>
+                  <button
+                    onClick={() => setActiveMenu('roster')}
+                    className="text-xs font-black text-rose-700 uppercase tracking-wider hover:underline"
+                  >
+                    Back to Roster
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                  {/* Form */}
+                  <div className="bg-[#eae9e4] border border-[#d5d4ce] rounded-3xl p-6 h-fit space-y-4">
+                    <h4 className="text-sm font-black uppercase tracking-wider">Request Leave</h4>
+                    <form onSubmit={handleCreateLeave} className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-black uppercase tracking-wider text-black/60 mb-2">Leave Date</label>
+                        <input
+                          type="date"
+                          required
+                          value={leaveDate}
+                          onChange={e => setLeaveDate(e.target.value)}
+                          min={new Date().toISOString().split('T')[0]}
+                          className="w-full px-4 py-3 bg-white border border-[#d5d4ce] rounded-xl outline-none text-black font-bold focus:ring-1 focus:ring-black"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-black uppercase tracking-wider text-black/60 mb-2">Reason</label>
+                        <textarea
+                          value={leaveReason}
+                          onChange={e => setLeaveReason(e.target.value)}
+                          placeholder="Provide a brief reason for time off..."
+                          rows={4}
+                          className="w-full px-4 py-3 bg-white border border-[#d5d4ce] rounded-xl outline-none text-black font-medium focus:ring-1 focus:ring-black resize-none"
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={leaveSubmitting || !leaveDate}
+                        className="w-full py-3 bg-black hover:bg-zinc-800 disabled:bg-black/20 text-[#f4f3ef] font-black uppercase tracking-wider rounded-xl transition-colors text-xs"
+                      >
+                        {leaveSubmitting ? 'Submitting...' : 'Submit Leave Request'}
+                      </button>
+                    </form>
+                  </div>
+
+                  {/* History */}
+                  <div className="lg:col-span-2 bg-white border border-[#d5d4ce] rounded-3xl overflow-hidden shadow-sm">
+                    <div className="px-6 py-4 bg-[#eae9e4] border-b border-[#d5d4ce]">
+                      <h4 className="text-sm font-black uppercase tracking-wider">My Leave Request History</h4>
+                    </div>
+                    <div className="divide-y divide-[#d5d4ce] max-h-[450px] overflow-y-auto">
+                      {requests.filter(r => r.user_id === profile?.id && r.request_type === 'leave').length === 0 ? (
+                        <div className="p-8 text-center text-black/40 font-medium">No leave requests found.</div>
+                      ) : (
+                        requests.filter(r => r.user_id === profile?.id && r.request_type === 'leave').map(req => (
+                          <div key={req.id} className="p-5 flex items-center justify-between hover:bg-black/5 transition-colors">
+                            <div>
+                              <div className="text-sm font-bold">{new Date(req.requested_date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</div>
+                              {req.reason && <p className="text-xs text-black/60 mt-1 italic">"{req.reason}"</p>}
+                              <span className="text-[10px] text-black/40 font-bold block mt-1">Submitted: {new Date(req.created_at || '').toLocaleDateString()}</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider ${
+                                req.status === 'pending' ? 'bg-amber-100 text-amber-800 border border-amber-200/50' :
+                                req.status === 'approved' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200/50' :
+                                'bg-rose-100 text-rose-800 border border-rose-200/50'
+                              }`}>
+                                {req.status}
+                              </span>
+                              {req.status === 'pending' && (
+                                <button
+                                  onClick={() => handleDeleteRequest(req.id)}
+                                  className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg border border-rose-200/20 transition-colors"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {/* SHIFT SWAP VIEW */}
+            {activeMenu === 'shift-swap' && (
+              <motion.div
+                key="shift-swap"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="space-y-6"
+              >
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-black text-[#1a1a1a] uppercase tracking-tight">Shift Swap Requests</h3>
+                  <button
+                    onClick={() => setActiveMenu('roster')}
+                    className="text-xs font-black text-rose-700 uppercase tracking-wider hover:underline"
+                  >
+                    Back to Roster
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                  {/* Form */}
+                  <div className="bg-[#eae9e4] border border-[#d5d4ce] rounded-3xl p-6 h-fit space-y-4">
+                    <h4 className="text-sm font-black uppercase tracking-wider">Request Swap</h4>
+                    <form onSubmit={handleCreateSwap} className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-black uppercase tracking-wider text-black/60 mb-2">Shift Date</label>
+                        <input
+                          type="date"
+                          required
+                          value={swapDate}
+                          onChange={e => setSwapDate(e.target.value)}
+                          min={new Date().toISOString().split('T')[0]}
+                          className="w-full px-4 py-3 bg-white border border-[#d5d4ce] rounded-xl outline-none text-black font-bold focus:ring-1 focus:ring-black"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-black uppercase tracking-wider text-black/60 mb-2">Swap With Colleague</label>
+                        <select
+                          required
+                          value={swapTargetStaff}
+                          onChange={e => setSwapTargetStaff(e.target.value)}
+                          className="w-full px-4 py-3 bg-white border border-[#d5d4ce] rounded-xl outline-none text-black font-bold focus:ring-1 focus:ring-black"
+                        >
+                          <option value="">Select colleague...</option>
+                          {staffProfiles.filter(p => p.id !== profile?.id).map(p => (
+                            <option key={p.id} value={p.id}>{p.full_name} ({p.role})</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-black uppercase tracking-wider text-black/60 mb-2">Reason</label>
+                        <textarea
+                          value={swapReason}
+                          onChange={e => setSwapReason(e.target.value)}
+                          placeholder="Explain why you want to swap shifts..."
+                          rows={3}
+                          className="w-full px-4 py-3 bg-white border border-[#d5d4ce] rounded-xl outline-none text-black font-medium focus:ring-1 focus:ring-black resize-none"
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={swapSubmitting || !swapDate || !swapTargetStaff}
+                        className="w-full py-3 bg-black hover:bg-zinc-800 disabled:bg-black/20 text-[#f4f3ef] font-black uppercase tracking-wider rounded-xl transition-colors text-xs"
+                      >
+                        {swapSubmitting ? 'Submitting...' : 'Submit Swap Request'}
+                      </button>
+                    </form>
+                  </div>
+
+                  {/* History */}
+                  <div className="lg:col-span-2 bg-white border border-[#d5d4ce] rounded-3xl overflow-hidden shadow-sm">
+                    <div className="px-6 py-4 bg-[#eae9e4] border-b border-[#d5d4ce]">
+                      <h4 className="text-sm font-black uppercase tracking-wider">My Swap History</h4>
+                    </div>
+                    <div className="divide-y divide-[#d5d4ce] max-h-[450px] overflow-y-auto">
+                      {requests.filter(r => r.user_id === profile?.id && r.request_type === 'shift_swap').length === 0 ? (
+                        <div className="p-8 text-center text-black/40 font-medium">No swap requests found.</div>
+                      ) : (
+                        requests.filter(r => r.user_id === profile?.id && r.request_type === 'shift_swap').map(req => (
+                          <div key={req.id} className="p-5 flex items-center justify-between hover:bg-black/5 transition-colors">
+                            <div>
+                              <div className="text-sm font-bold">Swap for {new Date(req.requested_date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</div>
+                              <p className="text-xs text-black/60 font-bold mt-1">Colleague: {req.target_name}</p>
+                              {req.reason && <p className="text-xs text-black/50 mt-0.5 italic">"{req.reason}"</p>}
+                              <span className="text-[10px] text-black/40 font-bold block mt-1">Submitted: {new Date(req.created_at || '').toLocaleDateString()}</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider ${
+                                req.status === 'pending' ? 'bg-amber-100 text-amber-800 border border-amber-200/50' :
+                                req.status === 'approved' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200/50' :
+                                'bg-rose-100 text-rose-800 border border-rose-200/50'
+                              }`}>
+                                {req.status}
+                              </span>
+                              {req.status === 'pending' && (
+                                <button
+                                  onClick={() => handleDeleteRequest(req.id)}
+                                  className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg border border-rose-200/20 transition-colors"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {/* ADMIN TOOL PANELS */}
+            {activeMenu === 'tool' && canEdit && (
+              <motion.div
+                key="tool"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="space-y-6"
+              >
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#d5d4ce] pb-4">
+                  <h3 className="text-lg font-black text-[#1a1a1a] uppercase tracking-tight">Roster Administrative Tools</h3>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setShowQuickAddModal(true)}
+                      className="flex items-center gap-1.5 px-4 py-2.5 bg-black hover:bg-zinc-800 text-[#f4f3ef] text-xs font-black uppercase tracking-wider rounded-xl shadow-sm"
+                    >
+                      <Plus className="h-4 w-4" /> Quick Add Shift
+                    </button>
+                    <button
+                      onClick={() => setShowRequestsModal(true)}
+                      className="flex items-center gap-1.5 px-4 py-2.5 bg-transparent border border-black/20 hover:bg-black/5 text-black text-xs font-black uppercase tracking-wider rounded-xl"
+                    >
+                      Requests Manager
+                    </button>
+                  </div>
+                </div>
+
+                {/* Sub tabs for Tools */}
+                <div className="flex items-center bg-[#eae9e4] border border-[#d5d4ce] rounded-2xl p-1 gap-1 w-fit">
+                  {[
+                    { id: 'staff-grid', label: 'Staff Cards' },
+                    { id: 'analysis', label: 'Analytics' },
+                    { id: 'list', label: 'Schedule List' },
+                    { id: 'manage-requests', label: `Pending Requests (${requests.filter(r => r.status === 'pending').length})` }
+                  ].map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveToolTab(tab.id as any)}
+                      className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+                        activeToolTab === tab.id
+                          ? 'bg-black text-[#f4f3ef]'
+                          : 'text-black/60 hover:text-black hover:bg-black/5'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Sub tabs content panel */}
+                <div className="pt-2">
+                  {activeToolTab === 'staff-grid' && (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-xs font-black uppercase tracking-wider text-black/60">Staff profiles ({filteredStaff.length})</h4>
+                        {/* Search bar inside tools */}
+                        <div className="relative">
+                          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-black/40" />
+                          <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={e => setSearchQuery(e.target.value)}
+                            placeholder="Search staff…"
+                            className="pl-8 pr-3 py-2 bg-white border border-[#d5d4ce] rounded-xl text-xs text-black placeholder-black/40 focus:outline-none focus:border-black w-48 transition-all uppercase tracking-widest"
+                          />
+                        </div>
+                      </div>
+                      <StaffGridView
+                        staffProfiles={filteredStaff}
+                        schedules={schedules}
+                        attendance={attendance}
+                        searchQuery={searchQuery}
+                        onViewProfile={setSelectedProfileForModal}
+                      />
+                    </div>
+                  )}
+
+                  {activeToolTab === 'analysis' && (
+                    <EnhancedAnalysisView
+                      schedules={schedules}
+                      staffProfiles={filteredStaff}
+                      requests={requests}
+                      currentDate={currentDate}
+                    />
+                  )}
+
+                  {activeToolTab === 'list' && (
+                    <RosterListView schedules={schedules} staffProfiles={staffProfiles} />
+                  )}
+
+                  {activeToolTab === 'manage-requests' && (
+                    <div className="bg-white border border-[#d5d4ce] rounded-3xl overflow-hidden shadow-sm">
+                      <div className="px-6 py-4 bg-[#eae9e4] border-b border-[#d5d4ce]">
+                        <h4 className="text-sm font-black uppercase tracking-wider">Pending Roster Approvals</h4>
+                      </div>
+                      <div className="divide-y divide-[#d5d4ce]">
+                        {requests.filter(r => r.status === 'pending').length === 0 ? (
+                          <div className="p-8 text-center text-black/40 font-medium">No pending requests awaiting approval.</div>
+                        ) : (
+                          requests.filter(r => r.status === 'pending').map(req => (
+                            <div key={req.id} className="p-5 flex flex-col md:flex-row md:items-center md:justify-between hover:bg-black/5 transition-colors gap-4">
+                              <div>
+                                <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest inline-block mb-1.5 ${
+                                  req.request_type === 'leave' ? 'bg-rose-100 text-rose-800' : 'bg-blue-100 text-blue-800'
+                                }`}>
+                                  {req.request_type === 'leave' ? 'Leave' : 'Shift Swap'}
+                                </span>
+                                <div className="text-sm font-bold text-black">
+                                  {req.requestor_name} requests {req.request_type === 'leave' ? 'leave' : 'swap'} for {new Date(req.requested_date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
+                                </div>
+                                {req.request_type === 'shift_swap' && (
+                                  <p className="text-xs font-bold text-black/60 mt-1">Swap target colleague: {req.target_name}</p>
+                                )}
+                                {req.reason && <p className="text-xs text-black/50 mt-1 italic">"{req.reason}"</p>}
+                                <span className="text-[9px] text-black/40 font-bold block mt-1.5">Submitted: {new Date(req.created_at || '').toLocaleDateString()}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => handleApproveRequest(req)}
+                                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase tracking-wider rounded-xl text-[10px] transition-colors shadow-sm"
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  onClick={() => handleRejectRequest(req.id)}
+                                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-black uppercase tracking-wider rounded-xl text-[10px] transition-colors shadow-sm"
+                                >
+                                  Reject
+                                </button>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+
           </AnimatePresence>
         </div>
       </div>
@@ -1196,6 +1797,94 @@ export function FetsRosterPremium() {
           />
         )}
       </AnimatePresence>
+    </div>
+  )
+}
+
+// Sub-component for personal attendance summary logs list
+function MyAttendancePanel({
+  myLogs,
+  loading
+}: {
+  myLogs: any[]
+  loading: boolean
+}) {
+  const stats = useMemo(() => {
+    return {
+      present: myLogs.filter(l => l.status === 'present').length,
+      late: myLogs.filter(l => l.status === 'late').length,
+      absent: myLogs.filter(l => l.status === 'absent').length,
+      total: myLogs.length
+    }
+  }, [myLogs])
+
+  return (
+    <div className="space-y-6 text-[#1a1a1a]">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-[#eae9e4] border border-[#d5d4ce] rounded-2xl p-4 text-center">
+          <div className="text-2xl font-black text-emerald-700">{stats.present}</div>
+          <div className="text-[9px] text-black/50 font-black uppercase tracking-wider mt-1">Days Present</div>
+        </div>
+        <div className="bg-[#eae9e4] border border-[#d5d4ce] rounded-2xl p-4 text-center">
+          <div className="text-2xl font-black text-amber-600">{stats.late}</div>
+          <div className="text-[9px] text-black/50 font-black uppercase tracking-wider mt-1">Days Late</div>
+        </div>
+        <div className="bg-[#eae9e4] border border-[#d5d4ce] rounded-2xl p-4 text-center">
+          <div className="text-2xl font-black text-rose-600">{stats.absent}</div>
+          <div className="text-[9px] text-black/50 font-black uppercase tracking-wider mt-1">Days Absent</div>
+        </div>
+        <div className="bg-[#eae9e4] border border-[#d5d4ce] rounded-2xl p-4 text-center">
+          <div className="text-2xl font-black text-black">{stats.total}</div>
+          <div className="text-[9px] text-black/50 font-black uppercase tracking-wider mt-1">Total Logs</div>
+        </div>
+      </div>
+
+      <div className="bg-white border border-[#d5d4ce] rounded-3xl overflow-hidden shadow-sm">
+        <div className="px-6 py-4 bg-[#eae9e4] border-b border-[#d5d4ce] flex items-center justify-between">
+          <h4 className="text-sm font-black uppercase tracking-wider">My Attendance Logs</h4>
+          <span className="text-xs text-black/50 font-bold">Last 30 Logs</span>
+        </div>
+
+        {loading ? (
+          <div className="p-8 text-center text-black/50 font-medium">Loading logs...</div>
+        ) : myLogs.length === 0 ? (
+          <div className="p-8 text-center text-black/40 font-medium">No attendance logs found.</div>
+        ) : (
+          <div className="divide-y divide-[#d5d4ce] max-h-[400px] overflow-y-auto">
+            {myLogs.map((log, index) => {
+              const dateStr = new Date(log.date).toLocaleDateString('en-GB', {
+                weekday: 'short',
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric'
+              })
+              return (
+                <div key={index} className="px-6 py-4 flex items-center justify-between hover:bg-black/5 transition-colors">
+                  <div>
+                    <div className="text-sm font-bold">{dateStr}</div>
+                    <div className="text-xs text-black/50 mt-0.5">
+                      {log.branch_location ? `${log.branch_location.toUpperCase()} branch` : 'Global'}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-6">
+                    <div className="text-right">
+                      <div className="text-xs font-mono font-bold">In: {log.check_in || '—'}</div>
+                      <div className="text-xs font-mono text-black/50">Out: {log.check_out || '—'}</div>
+                    </div>
+                    <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider ${
+                      log.status === 'present' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200/50' :
+                      log.status === 'late' ? 'bg-amber-100 text-amber-800 border border-amber-200/50' :
+                      'bg-rose-100 text-rose-800 border border-rose-200/50'
+                    }`}>
+                      {log.status}
+                    </span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
