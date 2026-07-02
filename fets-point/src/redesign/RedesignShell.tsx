@@ -5838,17 +5838,364 @@ function QuickAddRoster({ branch, onClose }) {
   );
 }
 
+/* ---------- Styled Wrapper styles for Check In / Out button and Neon Tabs ---------- */
+function RosterStyleBlock() {
+  return (
+    <style>{`
+      /* Set complementing dark forest-teal-green background for Roster Page scroll region */
+      .main-scroll {
+        background: radial-gradient(120% 120% at 50% 10%, oklch(0.20 0.025 162) 0%, oklch(0.14 0.015 162) 100%) !important;
+      }
+      .wallpaper {
+        opacity: 0.15 !important;
+      }
+
+      .attendance-hero-btn {
+        --main-color: var(--accent);
+        --main-bg-color: var(--accent-soft);
+        --pattern-color: oklch(0.82 0.15 162 / 0.03);
+        filter: hue-rotate(0deg);
+        cursor: pointer;
+        text-transform: uppercase;
+        letter-spacing: 0.5rem;
+        background: radial-gradient(
+            circle,
+            var(--main-bg-color) 0%,
+            rgba(0, 0, 0, 0) 95%
+          ),
+          linear-gradient(var(--pattern-color) 1px, transparent 1px),
+          linear-gradient(to right, var(--pattern-color) 1px, transparent 1px);
+        background-size: cover, 15px 15px, 15px 15px;
+        background-position: center center, center center, center center;
+        border-image: radial-gradient(
+            circle,
+            var(--main-color) 0%,
+            rgba(0, 0, 0, 0) 100%
+          ) 1;
+        border-width: 1px 0 1px 0;
+        color: var(--main-color);
+        padding: 1.25rem 3.5rem;
+        font-weight: 800;
+        font-size: 1.75rem;
+        transition: background-size 0.2s ease-in-out, transform 0.1s ease;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-left: none;
+        border-right: none;
+        outline: none;
+      }
+      .attendance-hero-btn:hover {
+        background-size: cover, 10px 10px, 10px 10px;
+      }
+      .attendance-hero-btn:active {
+        filter: hue-rotate(250deg);
+        transform: scale(0.95);
+      }
+
+      .fets-menu-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 24px;
+        padding: 8px 8px 8px 24px;
+        border: 2px solid var(--hairline);
+        border-radius: 16px;
+        background: transparent;
+        cursor: pointer;
+        transition: background-color 0.3s ease, border-color 0.3s ease, transform 0.1s ease;
+      }
+      .fets-menu-btn.active {
+        background-color: var(--panel);
+        border-color: var(--accent);
+      }
+      .fets-menu-btn:hover {
+        background-color: var(--panel);
+        border-color: var(--accent);
+      }
+      .fets-menu-btn:active {
+        transform: scale(0.95);
+      }
+      .fets-btn-text {
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--ink);
+        transition: color 0.3s ease;
+      }
+      .fets-menu-btn.active .fets-btn-text {
+        color: var(--accent);
+      }
+      .fets-menu-btn:hover .fets-btn-text {
+        color: var(--accent);
+      }
+      .fets-btn-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: var(--accent);
+        padding: 8px;
+        border-radius: 8px;
+        transition: transform 0.3s ease;
+      }
+      .fets-menu-btn:hover .fets-btn-icon {
+        transform: rotate(45deg);
+      }
+      .fets-menu-btn.active .fets-btn-icon {
+        transform: rotate(45deg);
+      }
+      .fets-btn-icon svg {
+        width: 20px;
+        height: 20px;
+        color: #000;
+        transition: transform 0.3s ease;
+      }
+      .fets-menu-btn:hover .fets-btn-icon svg {
+        transform: rotate(-45deg);
+      }
+      .fets-menu-btn.active .fets-btn-icon svg {
+        transform: rotate(-45deg);
+      }
+    `}</style>
+  );
+}
+
+/* ---------- attendance check in / out button on top right ---------- */
+function AttendanceHeroButton({ branch }) {
+  const [row, setRow] = React.useState(undefined);
+  const [nowTime, setNowTime] = React.useState(new Date());
+  const [showDropdown, setShowDropdown] = React.useState(false);
+  const dropdownRef = React.useRef(null);
+
+  const load = () => ATT.attToday().then((r) => setRow(r || null));
+
+  React.useEffect(() => {
+    load();
+    const handleRefresh = () => load();
+    window.addEventListener("fets-roster-changed", handleRefresh);
+    return () => window.removeEventListener("fets-roster-changed", handleRefresh);
+  }, []);
+
+  const checkedIn = row && row.check_in && !row.check_out;
+  const onBreak = row && ATT.attOnBreak(row);
+  const done = !!(row && row.check_out);
+
+  React.useEffect(() => {
+    if (checkedIn) {
+      const interval = setInterval(() => {
+        setNowTime(new Date());
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [checkedIn]);
+
+  React.useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
+
+  const act = async (fn, okMessage) => {
+    const r = await fn();
+    if (r && r.error) {
+      toast(r.error, "alert");
+    } else {
+      toast(okMessage, "check");
+      window.dispatchEvent(new Event("fets-roster-changed"));
+      load();
+    }
+    setShowDropdown(false);
+  };
+
+  const handleClick = () => {
+    if (done) return;
+    if (!row) {
+      act(() => ATT.attCheckIn(branch), "Checked in");
+    } else {
+      setShowDropdown(!showDropdown);
+    }
+  };
+
+  let workedSeconds = 0;
+  if (row && row.check_in) {
+    const checkInDate = new Date(row.date + 'T' + row.check_in + ':00');
+    const endTime = row.check_out 
+      ? new Date(row.date + 'T' + row.check_out + ':00')
+      : nowTime;
+    const elapsedSeconds = Math.max(0, Math.floor((endTime.getTime() - checkInDate.getTime()) / 1000));
+    
+    const notes = row.notes ? (typeof row.notes === "string" ? JSON.parse(row.notes) : row.notes) : {};
+    const completedBreakMins = notes.breakMins || 0;
+    
+    let currentBreakSeconds = 0;
+    const steps = notes.steps || [];
+    const lastStep = steps[steps.length - 1];
+    const isOnBreak = !!(lastStep && lastStep.out && !lastStep.in);
+    if (isOnBreak) {
+      const breakStartDate = new Date(row.date + 'T' + lastStep.out + ':00');
+      currentBreakSeconds = Math.max(0, Math.floor((endTime.getTime() - breakStartDate.getTime()) / 1000));
+    }
+    
+    const totalBreakSeconds = (completedBreakMins * 60) + currentBreakSeconds;
+    workedSeconds = Math.max(0, elapsedSeconds - totalBreakSeconds);
+  }
+
+  const formatSeconds = (totalSecs) => {
+    const h = Math.floor(totalSecs / 3600);
+    const m = Math.floor((totalSecs % 3600) / 60);
+    const s = totalSecs % 60;
+    return [h, m, s].map(v => String(v).padStart(2, '0')).join(':');
+  };
+
+  let btnLabel = "Start";
+  let activeHue = "0deg";
+  if (row === undefined) btnLabel = "Loading";
+  else if (done) {
+    btnLabel = "Done";
+    activeHue = "120deg";
+  } else if (onBreak) {
+    btnLabel = "On Break";
+    activeHue = "45deg";
+  } else if (checkedIn) {
+    btnLabel = "On Shift";
+    activeHue = "250deg";
+  }
+
+  return (
+    <div ref={dropdownRef} style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", position: "relative" }}>
+      <button 
+        onClick={handleClick} 
+        disabled={row === undefined}
+        className="attendance-hero-btn"
+        style={{ filter: `hue-rotate(${activeHue})` }}
+      >
+        {btnLabel}
+      </button>
+
+      {showDropdown && row && !done && (
+        <div className="glass" style={{
+          position: "absolute",
+          top: "100%",
+          right: 0,
+          marginTop: 10,
+          borderRadius: 14,
+          border: "1px solid var(--hairline)",
+          background: "oklch(0.18 0.024 184 / 0.95)",
+          padding: 8,
+          display: "flex",
+          flexDirection: "column",
+          gap: 6,
+          minWidth: 160,
+          boxShadow: "var(--shadow-lift)",
+          zIndex: 120
+        }}>
+          {checkedIn && !onBreak && (
+            <button 
+              onClick={() => act(ATT.attStepOut, "Stepped out")} 
+              className="tap" 
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "10px 14px",
+                borderRadius: 10,
+                border: "none",
+                background: "transparent",
+                color: "var(--ink)",
+                cursor: "pointer",
+                fontWeight: 600,
+                fontSize: 13,
+                textAlign: "left",
+                transition: "background 0.2s"
+              }}
+            >
+              <Icon name="coffee" size={14} style={{ color: "var(--accent)" }} /> Step Out
+            </button>
+          )}
+          {onBreak && (
+            <button 
+              onClick={() => act(ATT.attBack, "Back on shift")} 
+              className="tap" 
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "10px 14px",
+                borderRadius: 10,
+                border: "none",
+                background: "transparent",
+                color: "var(--ink)",
+                cursor: "pointer",
+                fontWeight: 600,
+                fontSize: 13,
+                textAlign: "left",
+                transition: "background 0.2s"
+              }}
+            >
+              <Icon name="arrowR" size={14} style={{ color: "var(--accent)" }} /> Resume Shift
+            </button>
+          )}
+          {checkedIn && (
+            <button 
+              onClick={() => act(ATT.attCheckOut, "Checked out")} 
+              className="tap" 
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "10px 14px",
+                borderRadius: 10,
+                border: "none",
+                background: "transparent",
+                color: "var(--bad)",
+                cursor: "pointer",
+                fontWeight: 650,
+                fontSize: 13,
+                textAlign: "left",
+                transition: "background 0.2s"
+              }}
+            >
+              <Icon name="power" size={14} style={{ color: "var(--bad)" }} /> Check Out
+            </button>
+          )}
+        </div>
+      )}
+
+      {row && row.check_in && (
+        <div style={{ 
+          marginTop: 10, 
+          textAlign: "right",
+          color: done ? "var(--ink-3)" : "var(--accent)",
+          textShadow: done ? "none" : "0 0 10px var(--accent-soft)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "flex-end",
+          gap: 2
+        }}>
+          <div style={{ fontSize: 18, fontFamily: "monospace", fontWeight: 800, letterSpacing: "1px" }}>
+            {formatSeconds(workedSeconds)}
+          </div>
+          <div className="mono" style={{ fontSize: 10, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+            Worked today {done && " (Ended)"}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function RosterPage({ branch }) {
+  const [activeRosterTab, setActiveRosterTab] = React.useState("duty"); // duty | time | shift | work | review
   const [view, setView] = React.useState("days");   // days | analysis
   const win = useWindow(10);
   const [quickOpen, setQuickOpen] = React.useState(false);
   const [dayDrawer, setDayDrawer] = React.useState(null);
-  const [showHours, setShowHours] = React.useState(false);
   const mc = monthCtx();
   const isAdmin = F().user.role === "Super Admin";
 
   const reqsAll = F().staffReqList().filter((r) => branch === "global" || r.branch === branch);
-  const pending = reqsAll.filter((r) => r.status === "Submitted").length;
   const onDutyToday = window.branchRoster(0, branch).length;
   const poolSize = branch === "global"
     ? F().STAFF.calicut.length + F().STAFF.cochin.length
@@ -5860,16 +6207,261 @@ function RosterPage({ branch }) {
   const gap = "calc(28px * var(--density))";
   useLiveSync(win.offsets.map((o) => F().ISO(o)));
 
+  // Review Desk state
+  const [reviewMonth, setReviewMonth] = React.useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  });
+  const [reviewData, setReviewData] = React.useState([]);
+  const [loadingReview, setLoadingReview] = React.useState(false);
+
+  const loadReviewData = async () => {
+    setLoadingReview(true);
+    try {
+      const start = `${reviewMonth}-01`;
+      const [y, m] = reviewMonth.split("-").map(Number);
+      const nextY = m === 12 ? y + 1 : y;
+      const nextM = m === 12 ? 1 : m + 1;
+      const end = `${nextY}-${String(nextM).padStart(2, '0')}-01`;
+
+      const { data, error } = await supabase
+        .from("staff_attendance")
+        .select("*, staff:staff_profiles!staff_attendance_staff_id_fkey(full_name, branch_assigned)")
+        .gte("date", start)
+        .lt("date", end)
+        .order("date", { ascending: true });
+      
+      if (error) throw error;
+      setReviewData(data || []);
+    } catch (err) {
+      console.error("Error loading review data:", err);
+    } finally {
+      setLoadingReview(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (activeRosterTab === "review") {
+      loadReviewData();
+    }
+  }, [reviewMonth, activeRosterTab]);
+
   const divider = (
     <div style={{ height: 1, background: "var(--hairline)", margin: "4px 0" }} />
   );
 
+  const meName = F()._meName || (F().user && F().user.name);
+
+  // Aggregated review stats helper
+  const parseNotesObj = (n) => { try { return typeof n === "string" ? JSON.parse(n) : n || {}; } catch (e) { return {}; } };
+  const padNum = (num) => String(num).padStart(2, '0');
+
+  // Group by branch & staff for Review Desk
+  const branchStats = {};
+  const staffStats = {};
+
+  reviewData.forEach(row => {
+    const staffName = row.staff?.full_name || row.staff_name || "Unknown Staff";
+    const br = row.branch_location || row.staff?.branch_assigned || "unassigned";
+    const isLate = row.status === "late";
+    const isPresent = row.status === "present" || isLate;
+    
+    let workedMins = 0;
+    if (row.check_in) {
+      const checkOutVal = row.check_out || (row.date === ATT.attDateStr() ? new Date().toTimeString().slice(0, 5) : row.check_in);
+      const [ih, im] = row.check_in.split(':').map(Number);
+      const [oh, om] = checkOutVal.split(':').map(Number);
+      const notes = parseNotesObj(row.notes);
+      const breakMins = notes.breakMins || 0;
+      workedMins = Math.max(0, (oh * 60 + om) - (ih * 60 + im) - breakMins);
+    }
+    
+    const notes = parseNotesObj(row.notes);
+    const breakMins = notes.breakMins || 0;
+
+    if (!branchStats[br]) {
+      branchStats[br] = { workedMins: 0, shiftsCount: 0, lateCount: 0 };
+    }
+    if (isPresent) {
+      branchStats[br].shiftsCount++;
+      branchStats[br].workedMins += workedMins;
+      if (isLate) branchStats[br].lateCount++;
+    }
+
+    if (!staffStats[staffName]) {
+      staffStats[staffName] = { name: staffName, branch: br, shiftsCount: 0, lateCount: 0, breakMins: 0, workedMins: 0 };
+    }
+    if (isPresent) {
+      staffStats[staffName].shiftsCount++;
+      staffStats[staffName].workedMins += workedMins;
+      staffStats[staffName].breakMins += breakMins;
+      if (isLate) staffStats[staffName].lateCount++;
+    }
+  });
+
+  const [sortKey, setSortKey] = React.useState("shiftsCount");
+  const [sortAsc, setSortAsc] = React.useState(false);
+
+  const sortedStaff = React.useMemo(() => {
+    return Object.values(staffStats).sort((a: any, b: any) => {
+      let valA = a[sortKey];
+      let valB = b[sortKey];
+      if (typeof valA === "string") {
+        return sortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+      }
+      return sortAsc ? valA - valB : valB - valA;
+    });
+  }, [staffStats, sortKey, sortAsc]);
+
+  const toggleSort = (key) => {
+    if (sortKey === key) {
+      setSortAsc(!sortAsc);
+    } else {
+      setSortKey(key);
+      setSortAsc(false);
+    }
+  };
+
+  // Work Desk Metrics
+  const monthlyOffsets = Array.from({ length: 30 }, (_, i) => i - 5);
+  let workedDays = 0;
+  let restDays = 0;
+  let leaveDays = 0;
+  
+  const ov = F().rosterGet(meName) || {};
+  monthlyOffsets.forEach((o) => {
+    const c = ov[o];
+    const code = c ? (typeof c === "string" ? c : c.code) : F().rosterOn(F().ISO(o), branch).includes(meName) ? "D" : "RD";
+    if (["D", "E", "HD"].includes(code)) workedDays++;
+    if (code === "RD") restDays++;
+    if (code === "L") leaveDays++;
+  });
+  
+  const toilBalance = F()._meToilBalance || 0;
+  const toilEarned = F()._meToilEarned || 0;
+  const toilRedeemed = F()._meToilRedeemed || 0;
+  const totalMonthOt = F()._meTotalMonthOt || 0;
+
+  const totalDays = workedDays + restDays + leaveDays;
+  const workedPercent = totalDays > 0 ? Math.round((workedDays / totalDays) * 100) : 0;
+  const restPercent = totalDays > 0 ? Math.round((restDays / totalDays) * 100) : 0;
+  const leavePercent = totalDays > 0 ? Math.round((leaveDays / totalDays) * 100) : 0;
+
+  // Daily Attendance log view for Time Desk
+  const DailyAttendanceLog = () => {
+    const [logDate, setLogDate] = React.useState(ATT.attDateStr());
+    const [rows, setRows] = React.useState(null);
+    React.useEffect(() => { setRows(null); ATT.attAllForDate(logDate).then(setRows); }, [logDate]);
+    const totalWorked = (rows || []).reduce((a, r) => a + (r.worked || 0), 0);
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>branch logs</span>}>Daily Attendance (All Staff)</SectionLabel>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 6 }}>
+          <input type="date" value={logDate} onChange={(e) => setLogDate(e.target.value)} style={{ background: "var(--inset)", border: "1px solid var(--hairline)", borderRadius: 10, color: "var(--ink)", fontFamily: "var(--font)", fontSize: 14, padding: "8px 12px" }} />
+          <div style={{ flex: 1 }} />
+          <StatPill value={(rows || []).length} label="Records" />
+          <StatPill value={ATT.attFmtMins(totalWorked)} label="Total worked" tone="var(--accent)" />
+        </div>
+        <div className="glass" style={{ borderRadius: "var(--radius)", padding: "8px 4px", overflow: "auto" }}>
+          <div style={{ minWidth: 640 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr 0.9fr 0.9fr 0.8fr 1fr", gap: 8, padding: "8px 14px" }}>
+              {["Staff", "Branch", "In", "Out", "Break", "Worked"].map((h) => <div key={h} className="eyebrow" style={{ fontSize: 9, color: "var(--ink-4)" }}>{h}</div>)}
+            </div>
+            {!rows ? <div style={{ padding: 20, color: "var(--ink-4)" }}>Loading…</div>
+              : rows.length === 0 ? <div style={{ padding: 20, color: "var(--ink-4)" }}>No attendance recorded for this day.</div>
+              : rows.map((r, i) => (
+                <div key={i} style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr 0.9fr 0.9fr 0.8fr 1fr", gap: 8, padding: "11px 14px", borderTop: "1px solid var(--hairline)", alignItems: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 9 }}><Avatar name={r.name} size={26} /><span style={{ fontSize: 13, fontWeight: 650, color: "var(--ink)" }}>{r.name}</span></div>
+                  <div style={{ fontSize: 12, color: "var(--ink-3)", textTransform: "capitalize" }}>{r.branch || "—"}</div>
+                  <div className="mono" style={{ fontSize: 12.5 }}>{r.check_in || "—"}</div>
+                  <div className="mono" style={{ fontSize: 12.5 }}>{r.check_out || "—"}</div>
+                  <div className="mono" style={{ fontSize: 12, color: "var(--ink-3)" }}>{r.breakMins ? r.breakMins + "m" : "—"}</div>
+                  <div className="mono" style={{ fontSize: 12.5, color: "var(--accent)", fontWeight: 700 }}>{r.worked ? ATT.attFmtMins(r.worked) : "—"}</div>
+                </div>
+              ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // User requests list for Shift Desk
+  const UserRequestsList = () => {
+    const mine = F()._staffRequests?.filter(r => r.who === meName) || [];
+    const SCOL = { Submitted: "var(--warn)", Approved: "var(--ok)", Rejected: "var(--bad)" };
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 24 }}>
+        <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>{mine.length} requests</span>}>Your Shift & Leave Requests</SectionLabel>
+        <div className="glass" style={{ borderRadius: "var(--radius)", padding: "16px 18px" }}>
+          {mine.length === 0 ? (
+            <div style={{ color: "var(--ink-4)", fontSize: 13, padding: 8 }}>No requests submitted yet.</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {mine.map((r, i) => (
+                <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", borderTop: i > 0 ? "1px solid var(--hairline)" : "none", flexWrap: "wrap", gap: 10 }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>
+                      {r.kind.toUpperCase()} {r.leaveType ? `(${r.leaveType})` : ""}
+                    </div>
+                    <div style={{ fontSize: 11.5, color: "var(--ink-3)", marginTop: 2 }}>
+                      Target Date: <strong style={{ color: "var(--ink-2)" }}>{r.date}</strong>
+                      {r.with && <span> swap with <strong>{r.with}</strong>{r.swapDate ? ` on ${r.swapDate}` : ""}</span>}
+                      {r.reason && ` · Reason: ${r.reason}`}
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", padding: "3px 8px", borderRadius: 999, color: SCOL[r.status] || "var(--ink-3)", background: `color-mix(in oklch, ${SCOL[r.status] || "var(--ink-3)"} 15%, transparent)`, border: `1px solid ${SCOL[r.status] || "var(--ink-3)"}40` }}>
+                    {r.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div style={{ maxWidth: 1180, margin: "0 auto", display: "flex", flexDirection: "column", gap: "20px" }}>
-      <PageHeader eyebrow={`Staffing // ${capBranch(branch)}`} title="Roster" />
+    <div style={{
+      maxWidth: 1180,
+      margin: "0 auto",
+      display: "flex",
+      flexDirection: "column",
+      gap: "20px",
+      position: "relative",
+      // Force whole roster page theme override to complementing forest-green
+      "--accent": "oklch(0.82 0.15 162)",
+      "--accent-2": "oklch(0.76 0.14 162)",
+      "--accent-soft": "oklch(0.82 0.15 162 / 0.15)",
+      "--accent-line": "oklch(0.82 0.15 162 / 0.40)",
+      "--accent-ink": "#000",
+      
+      // Override panels and borders to use green hues for maximum integration
+      "--panel": "oklch(0.24 0.025 162)",
+      "--panel-2": "oklch(0.28 0.025 162)",
+      "--panel-3": "oklch(0.17 0.02 162)",
+      "--glass": "var(--panel)",
+      "--glass-2": "var(--panel-2)",
+      "--inset": "var(--panel-3)",
+      "--hairline": "oklch(0.82 0.15 162 / 0.10)",
+      "--glass-edge": "oklch(0.82 0.15 162 / 0.10)",
+
+      "--v-cma": "oklch(0.82 0.15 162)",
+      "--v-prometric": "oklch(0.82 0.15 162)"
+    } as React.CSSProperties}>
+      <RosterStyleBlock />
+
+      {/* Roster Header and Top-Right Check-in button */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 20 }}>
+        <PageHeader eyebrow={`Staffing // ${capBranch(branch)}`} title="Roster" />
+        
+        {/* Check in / out button widget on the right, but positioned slightly down */}
+        <div style={{ marginTop: 24, display: "flex", flexDirection: "column", alignItems: "flex-end", position: "relative", zIndex: 110 }}>
+          <AttendanceHeroButton branch={branch} />
+        </div>
+      </div>
 
       {(() => {
-        const meName = F()._meName || (F().user && F().user.name);
         const myUnseenResolutions = F()._staffRequests?.filter(r => 
           r.who === meName && 
           (r.status === "Approved" || r.status === "Rejected") && 
@@ -5932,80 +6524,259 @@ function RosterPage({ branch }) {
         );
       })()}
 
-      {/* ─── Section 1: Personal Stats Overview ─── */}
-      <section>
-        <PersonalizedRosterOverview branch={branch} />
-      </section>
+      {/* Desk Tab Selection using Custom Neon Menu Button design */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 12 }}>
+        {[
+          { id: "duty", label: "Duty" },
+          { id: "time", label: "Time" },
+          { id: "shift", label: "Shift" },
+          { id: "work", label: "Work" },
+          { id: "review", label: "Review" }
+        ].map((t) => {
+          const isActive = activeRosterTab === t.id;
+          return (
+            <button 
+              key={t.id} 
+              onClick={() => setActiveRosterTab(t.id)} 
+              className={`fets-menu-btn ${isActive ? "active" : ""}`}
+            >
+              <span className="fets-btn-text">{t.label}</span>
+              <span className="fets-btn-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" viewBox="0 0 24 24">
+                  <path fill="currentColor" d="M5 13h11.17l-4.88 4.88c-.39.39-.39 1.03 0 1.42s1.02.39 1.41 0l6.59-6.59a.996.996 0 0 0 0-1.41l-6.58-6.6a.996.996 0 1 0-1.41 1.41L16.17 11H5c-.55 0-1 .45-1 1s.45 1 1 1" />
+                </svg>
+              </span>
+            </button>
+          );
+        })}
+      </div>
 
       {divider}
 
-      {/* ─── Section 2: My Attendance ─── */}
-      <section style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
-          <SectionLabel style={{ margin: 0 }}>My Attendance</SectionLabel>
-          <button onClick={() => setShowHours((v) => !v)} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 13px", borderRadius: 999, cursor: "pointer", border: "1px solid var(--hairline)", background: showHours ? "var(--accent-soft)" : "transparent", color: showHours ? "var(--accent)" : "var(--ink-3)", fontFamily: "var(--font)", fontSize: 11.5, fontWeight: 650 }}>
-            <Icon name="clock" size={13} /> Shift hours {showHours ? "▴" : "▾"}
-          </button>
-        </div>
-        <AttendanceConsole branch={branch} />
-        {showHours && <ShiftHistory />}
-      </section>
-
-      {divider}
-
-      {/* ─── Section 3: Roster Calendar ─── */}
-      <section style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-            <span style={{ width: 22, height: 3, background: "var(--accent)", borderRadius: 99 }} />
-            <SectionLabel style={{ margin: 0 }}>{wide ? `Roster — ${mc.monthName} ${mc.y}` : `Roster — ${rangeLabel(win.offsets)}`}</SectionLabel>
-          </div>
-          <div style={{ flex: 1 }} />
-          {/* Action buttons grouped neatly on the right */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            {view === "days" && <RangeNav win={win} />}
-            <Segmented value={view} onChange={setView} size="sm" options={[
-              { value: "days", label: "10 Days" }, { value: "analysis", label: "Overview" },
-            ]} />
-            {isAdmin && (
-              <button onClick={() => setQuickOpen(true)} className="tap" title="Quick add roster (6+1 pattern)"
-                style={{ display: "inline-flex", alignItems: "center", gap: 7, height: 36, padding: "0 14px", borderRadius: 10,
-                  cursor: "pointer", border: "none", fontFamily: "var(--font)", fontSize: 12, fontWeight: 750, color: "var(--accent-ink)", background: "var(--accent)" }}>
-                <Icon name="plus" size={14} /> Quick add
-              </button>
-            )}
-          </div>
-        </div>
-
-        {view === "days" && <RosterGrid key={branch} offsets={win.offsets} branch={branch} />}
-        {view === "analysis" && (
-          <React.Fragment>
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-              <StatPill value={onDutyToday} label="On duty today" />
-              <StatPill value={poolSize} label="Staff in pool" tone="var(--v-cma)" />
-              <StatPill value={avgCover} unit="/day" label="Avg cover this month" tone="var(--v-prometric)" />
-              <StatPill value={busy.n} unit={`· ${busy.label}`} label="Busiest day" tone="var(--v-ielts)" />
+      {/* Desk Subviews */}
+      {activeRosterTab === "duty" && (
+        <section style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+              <span style={{ width: 22, height: 3, background: "var(--accent)", borderRadius: 99 }} />
+              <SectionLabel style={{ margin: 0 }}>{wide ? `Roster — ${mc.monthName} ${mc.y}` : `Roster — ${rangeLabel(win.offsets)}`}</SectionLabel>
             </div>
-            <RosterAnalysis offsets={offs} branch={branch} />
-          </React.Fragment>
-        )}
-        {view === "days" && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>
-              {window.FETS.isAdmin
-                ? "Tap any cell to change shift · Quick add fills a 6+1 week block"
-                : "Your shift schedule — editing is restricted to the administrator"}
-            </span>
+            <div style={{ flex: 1 }} />
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              {view === "days" && <RangeNav win={win} />}
+              <Segmented value={view} onChange={setView} size="sm" options={[
+                { value: "days", label: "10 Days" }, { value: "analysis", label: "Overview" },
+              ]} />
+              {isAdmin && (
+                <button onClick={() => setQuickOpen(true)} className="tap" title="Quick add roster (6+1 pattern)"
+                  style={{ display: "inline-flex", alignItems: "center", gap: 7, height: 36, padding: "0 14px", borderRadius: 10,
+                    cursor: "pointer", border: "none", fontFamily: "var(--font)", fontSize: 12, fontWeight: 750, color: "var(--accent-ink)", background: "var(--accent)" }}>
+                  <Icon name="plus" size={14} /> Quick add
+                </button>
+              )}
+            </div>
           </div>
-        )}
-      </section>
 
-      {divider}
+          {view === "days" && <RosterGrid key={branch} offsets={win.offsets} branch={branch} />}
+          {view === "analysis" && (
+            <React.Fragment>
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                <StatPill value={onDutyToday} label="On duty today" />
+                <StatPill value={poolSize} label="Staff in pool" tone="var(--v-cma)" />
+                <StatPill value={avgCover} unit="/day" label="Avg cover this month" tone="var(--v-prometric)" />
+                <StatPill value={busy.n} unit={`· ${busy.label}`} label="Busiest day" tone="var(--v-ielts)" />
+              </div>
+              <RosterAnalysis offsets={offs} branch={branch} />
+            </React.Fragment>
+          )}
+          {view === "days" && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>
+                {window.FETS.isAdmin
+                  ? "Tap any cell to change shift · Quick add fills a 6+1 week block"
+                  : "Your shift schedule — editing is restricted to the administrator"}
+              </span>
+            </div>
+          )}
+        </section>
+      )}
 
-      {/* ─── Section 4: Apply for Leave / Swap / TOIL ─── */}
-      <section>
-        <RosterRequestForm branch={branch} />
-      </section>
+      {activeRosterTab === "time" && (
+        <section style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+          <ShiftHistory />
+          <DailyAttendanceLog />
+        </section>
+      )}
+
+      {activeRosterTab === "shift" && (
+        <section style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <RosterRequestForm branch={branch} />
+          <UserRequestsList />
+        </section>
+      )}
+
+      {activeRosterTab === "work" && (
+        <section>
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>real-time metrics</span>}>Your Shift & Leave Breakdown</SectionLabel>
+            
+            <div className="glass" style={{ padding: 24, borderRadius: "var(--radius)", display: "flex", flexDirection: "column", gap: 20 }}>
+              <div>
+                <div style={{ fontSize: 17, fontWeight: 800, color: "var(--accent)" }}>Hello, {meName.split(" ")[0]}!</div>
+                <div style={{ fontSize: 13, color: "var(--ink-3)", marginTop: 4 }}>Here is a comprehensive overview of your attendance activity and time-off balance for this monthly period.</div>
+              </div>
+
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontWeight: 700, color: "var(--ink-3)", marginBottom: 8, textTransform: "uppercase" }}>
+                  <span>Monthly Allocation Ratio</span>
+                  <span>{workedDays} worked / {restDays} rest / {leaveDays} leave ({totalDays} days tracked)</span>
+                </div>
+                <div style={{ height: 28, borderRadius: 8, overflow: "hidden", display: "flex", background: "var(--inset)", border: "1px solid var(--hairline)" }}>
+                  {workedDays > 0 && <div style={{ width: `${workedPercent}%`, background: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", color: "#000", fontSize: 11, fontWeight: 850 }} title={`${workedDays} Days Worked`}>Worked {workedPercent}%</div>}
+                  {restDays > 0 && <div style={{ width: `${restPercent}%`, background: "var(--ink-4)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--ink)", fontSize: 11, fontWeight: 800 }} title={`${restDays} Rest Days`}>Rest {restPercent}%</div>}
+                  {leaveDays > 0 && <div style={{ width: `${leavePercent}%`, background: "var(--bad)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11, fontWeight: 800 }} title={`${leaveDays} Leave Days`}>Leave {leavePercent}%</div>}
+                </div>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 12, borderBottom: "1px solid var(--hairline)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--accent)" }} />
+                    <span style={{ fontSize: 14, fontWeight: 650, color: "var(--ink)" }}>Fulfillment Contribution</span>
+                  </div>
+                  <span style={{ fontSize: 15, fontWeight: 800, color: "var(--accent)" }}>{workedDays} Shifts Worked</span>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 12, borderBottom: "1px solid var(--hairline)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--ink-4)" }} />
+                    <span style={{ fontSize: 14, fontWeight: 650, color: "var(--ink)" }}>Scheduled Recovery</span>
+                  </div>
+                  <span style={{ fontSize: 15, fontWeight: 800, color: "var(--ink-2)" }}>{restDays} Rest Days Taken</span>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 12, borderBottom: "1px solid var(--hairline)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--bad)" }} />
+                    <span style={{ fontSize: 14, fontWeight: 650, color: "var(--ink)" }}>Time Off / Leave</span>
+                  </div>
+                  <span style={{ fontSize: 15, fontWeight: 800, color: "var(--bad)" }}>{leaveDays} Days On Leave</span>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 12, borderBottom: "1px solid var(--hairline)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <Icon name="refresh" size={14} style={{ color: "var(--accent)" }} />
+                    <div>
+                      <span style={{ fontSize: 14, fontWeight: 650, color: "var(--ink)" }}>TOIL Balance</span>
+                      <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>{toilEarned} earned days · {toilRedeemed} redeemed days</div>
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 15, fontWeight: 800, color: "var(--accent)" }}>{toilBalance} Days Available</span>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <Icon name="clock" size={14} style={{ color: "var(--v-ielts)" }} />
+                    <span style={{ fontSize: 14, fontWeight: 650, color: "var(--ink)" }}>Approved Overtime (OT)</span>
+                  </div>
+                  <span style={{ fontSize: 15, fontWeight: 800, color: "var(--v-ielts)" }}>{totalMonthOt.toFixed(1)} Accrued Hours</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {activeRosterTab === "review" && (
+        <section style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>performance & presence study</span>}>Centre & Staff Monthly Review</SectionLabel>
+          
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <input type="month" value={reviewMonth} onChange={(e) => setReviewMonth(e.target.value)} style={{ background: "var(--inset)", border: "1px solid var(--hairline)", borderRadius: 10, color: "var(--ink)", fontFamily: "var(--font)", fontSize: 14, padding: "8px 12px" }} />
+            <div style={{ flex: 1 }} />
+            <button onClick={loadReviewData} disabled={loadingReview} className="tap glass-2" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 10, cursor: "pointer", border: "1px solid var(--hairline)", color: "var(--ink-2)", fontSize: 12, fontWeight: 700 }}>
+              <Icon name="refresh" size={13} /> {loadingReview ? "Loading..." : "Refresh"}
+            </button>
+          </div>
+
+          {loadingReview ? (
+            <div style={{ color: "var(--ink-4)", fontSize: 14, padding: 24, textAlign: "center" }}>Loading monthly records...</div>
+          ) : (
+            <React.Fragment>
+              {/* Centre-wise stats */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
+                {Object.keys(branchStats).length === 0 ? (
+                  <div style={{ gridColumn: "1 / -1", color: "var(--ink-4)", fontSize: 13, padding: 12, textAlign: "center" }}>No activity recorded for this period.</div>
+                ) : (
+                  Object.entries(branchStats).map(([brName, stats]: [string, any]) => {
+                    const lateRate = stats.shiftsCount > 0 ? Math.round((stats.lateCount / stats.shiftsCount) * 100) : 0;
+                    const avgMins = stats.shiftsCount > 0 ? Math.round(stats.workedMins / stats.shiftsCount) : 0;
+                    return (
+                      <div key={brName} className="glass" style={{ padding: "16px 18px", borderRadius: "var(--radius)" }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: "1px" }}>{brName} Centre</div>
+                        <div style={{ fontSize: 24, fontWeight: 800, color: "var(--accent)", marginTop: 6 }}>{stats.shiftsCount} Shifts</div>
+                        <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 6, display: "flex", flexDirection: "column", gap: 3 }}>
+                          <div>Lates: <strong style={{ color: "var(--warn)" }}>{stats.lateCount}</strong> ({lateRate}% rate)</div>
+                          <div>Worked: <strong>{ATT.attFmtMins(stats.workedMins)}</strong> (Avg: {ATT.attFmtMins(avgMins)}/sh)</div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Staff-wise list */}
+              {Object.keys(staffStats).length > 0 && (
+                <div className="glass" style={{ borderRadius: "var(--radius)", padding: "10px 4px", overflow: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
+                    <thead>
+                      <tr style={{ borderBottom: "1px solid var(--hairline)" }}>
+                        <th onClick={() => toggleSort("name")} style={{ textAlign: "left", padding: "10px 14px", fontSize: 10, color: "var(--ink-4)", cursor: "pointer", textTransform: "uppercase" }}>
+                          Staff {sortKey === "name" && (sortAsc ? "▲" : "▼")}
+                        </th>
+                        <th onClick={() => toggleSort("branch")} style={{ textAlign: "left", padding: "10px 14px", fontSize: 10, color: "var(--ink-4)", cursor: "pointer", textTransform: "uppercase" }}>
+                          Home Branch {sortKey === "branch" && (sortAsc ? "▲" : "▼")}
+                        </th>
+                        <th onClick={() => toggleSort("shiftsCount")} style={{ textAlign: "right", padding: "10px 14px", fontSize: 10, color: "var(--ink-4)", cursor: "pointer", textTransform: "uppercase" }}>
+                          Shifts {sortKey === "shiftsCount" && (sortAsc ? "▲" : "▼")}
+                        </th>
+                        <th onClick={() => toggleSort("lateCount")} style={{ textAlign: "right", padding: "10px 14px", fontSize: 10, color: "var(--ink-4)", cursor: "pointer", textTransform: "uppercase" }}>
+                          Lates {sortKey === "lateCount" && (sortAsc ? "▲" : "▼")}
+                        </th>
+                        <th onClick={() => toggleSort("breakMins")} style={{ textAlign: "right", padding: "10px 14px", fontSize: 10, color: "var(--ink-4)", cursor: "pointer", textTransform: "uppercase" }}>
+                          Breaks {sortKey === "breakMins" && (sortAsc ? "▲" : "▼")}
+                        </th>
+                        <th onClick={() => toggleSort("workedMins")} style={{ textAlign: "right", padding: "10px 14px", fontSize: 10, color: "var(--ink-4)", cursor: "pointer", textTransform: "uppercase" }}>
+                          Worked Hours {sortKey === "workedMins" && (sortAsc ? "▲" : "▼")}
+                        </th>
+                        <th style={{ textAlign: "right", padding: "10px 14px", fontSize: 10, color: "var(--ink-4)", textTransform: "uppercase" }}>
+                          Avg Shift
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sortedStaff.map((s: any, idx) => {
+                        const avgMins = s.shiftsCount > 0 ? Math.round(s.workedMins / s.shiftsCount) : 0;
+                        return (
+                          <tr key={idx} style={{ borderBottom: "1px solid var(--hairline)", verticalAlign: "middle" }}>
+                            <td style={{ padding: "12px 14px", fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>{s.name}</td>
+                            <td style={{ padding: "12px 14px", fontSize: 12.5, color: "var(--ink-3)", textTransform: "capitalize" }}>{s.branch}</td>
+                            <td style={{ padding: "12px 14px", fontSize: 13, color: "var(--ink)", textAlign: "right", fontWeight: 600 }}>{s.shiftsCount}</td>
+                            <td style={{ padding: "12px 14px", fontSize: 13, color: s.lateCount > 0 ? "var(--warn)" : "var(--ink-3)", textAlign: "right", fontWeight: 650 }}>{s.lateCount}</td>
+                            <td style={{ padding: "12px 14px", fontSize: 12, color: "var(--ink-3)", textAlign: "right", fontFamily: "monospace" }}>{s.breakMins ? `${s.breakMins}m` : "—"}</td>
+                            <td style={{ padding: "12px 14px", fontSize: 13, color: "var(--accent)", textAlign: "right", fontWeight: 700, fontFamily: "monospace" }}>{ATT.attFmtMins(s.workedMins)}</td>
+                            <td style={{ padding: "12px 14px", fontSize: 12.5, color: "var(--ink-2)", textAlign: "right", fontFamily: "monospace" }}>{ATT.attFmtMins(avgMins)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </React.Fragment>
+          )}
+        </section>
+      )}
 
       {isAdmin && quickOpen && <QuickAddRoster branch={branch} onClose={() => setQuickOpen(false)} />}
       <Drawer open={!!dayDrawer} onClose={() => setDayDrawer(null)} icon="users"
@@ -7950,8 +8721,7 @@ function MyDeskPage({ branch, setActive, setDrawer }) {
           fontSize: "clamp(30px,4vw,48px)", lineHeight: 1, letterSpacing: "-0.03em", color: "var(--ink)" }}>{u.name}</h1>
       </header>
 
-      {/* attendance — DB-persisted check in / out (also lives on the Roster page) */}
-      <AttendanceConsole branch={u.shift.branch} />
+      {/* attendance console removed as requested */}
 
       {/* workspace presets */}
       <section style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -8657,39 +9427,378 @@ function TheLabPage({ branch }) {
 function ToolsSheet({ open, onClose, onPick, includeNav }) {
   const isAdmin = !!window.FETS.isAdmin;
   const tools = isAdmin ? TOOLS : [];
-  const items = includeNav ? [...NAV.map((n) => ({ ...n, nav: true })), ...tools] : tools;
+
+  // If includeNav is true, render the sidebar drawer (ideal for mobile menu).
+  if (includeNav) {
+    const items = [...NAV.map((n) => ({ ...n, nav: true })), ...tools];
+    return (
+      <React.Fragment>
+        <div className={`drawer-backdrop ${open ? "open" : ""}`} onClick={onClose} />
+        <aside className={`drawer ${open ? "open" : ""}`} aria-hidden={!open} style={{ width: "min(420px, 92vw)" }}>
+          <div className="drawer-grip" />
+          <header style={{ display: "flex", alignItems: "center", gap: 13, padding: "18px 20px", borderBottom: "1px solid var(--hairline)", flexShrink: 0 }}>
+            <div style={{ flex: 1 }}>
+              <div className="eyebrow" style={{ color: "var(--accent)" }}>FETS · Live</div>
+              <h2 style={{ margin: "3px 0 0", fontSize: 19, fontWeight: 800, letterSpacing: "-0.02em", color: "var(--ink)" }}>All tools</h2>
+            </div>
+            <button onClick={onClose} className="tap glass-2" style={{ width: 36, height: 36, borderRadius: 999, display: "grid", placeItems: "center", cursor: "pointer", color: "var(--ink-2)" }}>
+              <Icon name="x" size={17} />
+            </button>
+          </header>
+          <div className="scroll-soft" style={{ flex: 1, overflowY: "auto", padding: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+            {items.map((it) => (
+              <button key={it.id} onClick={() => { onPick(it); onClose(); }} className="tap glass-2"
+                style={{ display: "flex", alignItems: "center", gap: 14, padding: "13px 15px", borderRadius: 12, cursor: "pointer",
+                  border: "1px solid var(--hairline)", textAlign: "left", fontFamily: "var(--font)" }}>
+                <span style={{ width: 38, height: 38, borderRadius: 10, display: "grid", placeItems: "center", flexShrink: 0,
+                  color: "var(--accent)", background: "var(--accent-soft)", border: "1px solid var(--accent-line)" }}>
+                  <Icon name={it.nav ? "arrowR" : it.icon} size={18} />
+                </span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: "block", fontSize: 14.5, fontWeight: 700, color: "var(--ink)" }}>{it.label}</span>
+                  {it.sub && <span style={{ display: "block", fontSize: 12, color: "var(--ink-3)", marginTop: 1 }}>{it.sub}</span>}
+                </span>
+                <Icon name="chevronR" size={16} style={{ color: "var(--ink-4)" }} />
+              </button>
+            ))}
+          </div>
+        </aside>
+      </React.Fragment>
+    );
+  }
+
+  // If includeNav is false, render the super premium grand pop-up modules console!
+  const allModules = [
+    ...NAV.map((n) => ({ 
+      ...n, 
+      icon: n.id === "live" ? "globe" : n.id === "calendar" ? "calendar" : n.id === "roster" ? "layers" : "briefcase", 
+      nav: true,
+      sub: n.id === "live" ? "Operations monitor & live queue" : n.id === "calendar" ? "Centre booking calendar & sessions" : n.id === "roster" ? "Shift schedules, time desk & metrics" : "Personal tasks, checklists & leave"
+    })), 
+    ...tools
+  ];
+
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const [selectedCat, setSelectedCat] = React.useState("all");
+
+  const nativeIds = ["live", "calendar", "roster", "desk", "attn-admin", "business", "staff-requests", "staff-ot"];
+
+  const getModuleStatus = (it) => {
+    if (nativeIds.includes(it.id)) {
+      return { label: "Native React", color: "oklch(0.78 0.15 162)", isNative: true };
+    } else {
+      return { label: "Legacy Bridged", color: "oklch(0.86 0.16 92)", isNative: false };
+    }
+  };
+
+  const filtered = allModules.filter(it => {
+    const matchesSearch = it.label.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          (it.sub && it.sub.toLowerCase().includes(searchQuery.toLowerCase()));
+    const status = getModuleStatus(it);
+    const matchesCategory = selectedCat === "all" || 
+                            (selectedCat === "native" && status.isNative) ||
+                            (selectedCat === "legacy" && !status.isNative);
+    return matchesSearch && matchesCategory;
+  });
+
   return (
     <React.Fragment>
-      <div className={`drawer-backdrop ${open ? "open" : ""}`} onClick={onClose} />
-      <aside className={`drawer ${open ? "open" : ""}`} aria-hidden={!open} style={{ width: "min(420px, 92vw)" }}>
-        <div className="drawer-grip" />
-        <header style={{ display: "flex", alignItems: "center", gap: 13, padding: "18px 20px", borderBottom: "1px solid var(--hairline)", flexShrink: 0 }}>
-          <div style={{ flex: 1 }}>
-            <div className="eyebrow" style={{ color: "var(--accent)" }}>FETS · Live</div>
-            <h2 style={{ margin: "3px 0 0", fontSize: 19, fontWeight: 800, letterSpacing: "-0.02em", color: "var(--ink)" }}>All tools</h2>
-          </div>
-          <button onClick={onClose} className="tap glass-2" style={{ width: 36, height: 36, borderRadius: 999, display: "grid", placeItems: "center", cursor: "pointer", color: "var(--ink-2)" }}>
-            <Icon name="x" size={17} />
-          </button>
-        </header>
-        <div className="scroll-soft" style={{ flex: 1, overflowY: "auto", padding: 14, display: "flex", flexDirection: "column", gap: 8 }}>
-          {items.map((it) => (
-            <button key={it.id} onClick={() => { onPick(it); onClose(); }} className="tap glass-2"
-              style={{ display: "flex", alignItems: "center", gap: 14, padding: "13px 15px", borderRadius: 12, cursor: "pointer",
-                border: "1px solid var(--hairline)", textAlign: "left", fontFamily: "var(--font)" }}>
-              <span style={{ width: 38, height: 38, borderRadius: 10, display: "grid", placeItems: "center", flexShrink: 0,
-                color: "var(--accent)", background: "var(--accent-soft)", border: "1px solid var(--accent-line)" }}>
-                <Icon name={it.nav ? "arrowR" : it.icon} size={18} />
-              </span>
-              <span style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ display: "block", fontSize: 14.5, fontWeight: 700, color: "var(--ink)" }}>{it.label}</span>
-                {it.sub && <span style={{ display: "block", fontSize: 12, color: "var(--ink-3)", marginTop: 1 }}>{it.sub}</span>}
-              </span>
-              <Icon name="chevronR" size={16} style={{ color: "var(--ink-4)" }} />
+      {/* Premium backdrop blur */}
+      <div className={`fets-console-backdrop ${open ? "open" : ""}`} onClick={onClose} />
+      
+      <div className={`fets-console-modal ${open ? "open" : ""}`} aria-hidden={!open}>
+        <style>{`
+          .fets-console-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+            background: rgba(0, 0, 0, 0.45);
+            backdrop-filter: blur(12px);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+          }
+          .fets-console-backdrop.open {
+            opacity: 1;
+            pointer-events: auto;
+          }
+
+          .fets-console-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -46%) scale(0.96);
+            width: min(1040px, 95vw);
+            height: min(720px, 86vh);
+            z-index: 1001;
+            background: linear-gradient(160deg, oklch(0.18 0.02 180) 0%, oklch(0.12 0.015 180) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 24px;
+            box-shadow: 0 30px 90px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+            display: flex;
+            flex-direction: column;
+            opacity: 0;
+            pointer-events: none;
+            overflow: hidden;
+            transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+          }
+          .fets-console-modal.open {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translate(-50%, -50%) scale(1);
+          }
+
+          /* Ambient neon light inside the modal */
+          .fets-console-glow {
+            position: absolute;
+            top: -200px;
+            left: 20%;
+            width: 600px;
+            height: 400px;
+            background: radial-gradient(circle, rgba(168, 255, 57, 0.05) 0%, rgba(0,0,0,0) 70%);
+            pointer-events: none;
+            z-index: 0;
+          }
+
+          .fets-module-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 16px;
+            padding: 24px;
+            overflow-y: auto;
+            flex: 1;
+          }
+
+          .fets-module-card {
+            position: relative;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 18px;
+            padding: 20px;
+            cursor: pointer;
+            text-align: left;
+            font-family: var(--font);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            min-height: 154px;
+            overflow: hidden;
+          }
+          .fets-module-card::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, transparent 100%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+          }
+          .fets-module-card:hover {
+            transform: translateY(-4px);
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(168, 255, 57, 0.2);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3), 0 0 1px 1px rgba(168, 255, 57, 0.15);
+          }
+          .fets-module-card:hover::before {
+            opacity: 1;
+          }
+          
+          .fets-module-card-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            display: grid;
+            place-items: center;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: var(--ink-2);
+            transition: all 0.3s ease;
+          }
+          .fets-module-card:hover .fets-module-card-icon {
+            background: rgba(168, 255, 57, 0.12);
+            border-color: rgba(168, 255, 57, 0.3);
+            color: #a8ff39;
+            box-shadow: 0 0 15px rgba(168, 255, 57, 0.25);
+          }
+
+          .fets-cat-tab {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--ink-3);
+            background: transparent;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 99px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+          }
+          .fets-cat-tab:hover {
+            color: var(--ink);
+            background: rgba(255, 255, 255, 0.04);
+          }
+          .fets-cat-tab.active {
+            color: #000;
+            background: #a8ff39;
+          }
+        `}</style>
+        
+        <div className="fets-console-glow" />
+
+        {/* Console Header */}
+        <header style={{ 
+          display: "flex", 
+          flexDirection: "column",
+          gap: 16,
+          padding: "24px 28px", 
+          borderBottom: "1px solid rgba(255, 255, 255, 0.06)", 
+          position: "relative",
+          zIndex: 1,
+          flexShrink: 0 
+        }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div>
+              <div className="eyebrow" style={{ color: "#a8ff39", letterSpacing: "2px" }}>OPERATIONS CONSOLE</div>
+              <h2 style={{ margin: "4px 0 0", fontSize: 24, fontWeight: 900, letterSpacing: "-0.02em", color: "var(--ink)" }}>All Modules</h2>
+            </div>
+            <button onClick={onClose} className="tap" style={{ 
+              width: 40, 
+              height: 40, 
+              borderRadius: "50%", 
+              display: "grid", 
+              placeItems: "center", 
+              cursor: "pointer", 
+              border: "1px solid rgba(255, 255, 255, 0.1)",
+              background: "rgba(255,255,255,0.03)", 
+              color: "var(--ink-2)",
+              transition: "all 0.2s"
+            }}>
+              <Icon name="x" size={20} />
             </button>
-          ))}
+          </div>
+
+          {/* Filters and Search Bar */}
+          <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+            {/* Category selection */}
+            <div style={{ 
+              display: "flex", 
+              background: "rgba(0,0,0,0.2)", 
+              padding: 4, 
+              borderRadius: 99, 
+              border: "1px solid rgba(255, 255, 255, 0.04)" 
+            }}>
+              <button 
+                onClick={() => setSelectedCat("all")}
+                className={`fets-cat-tab ${selectedCat === "all" ? "active" : ""}`}
+              >
+                All Modules
+              </button>
+              <button 
+                onClick={() => setSelectedCat("native")}
+                className={`fets-cat-tab ${selectedCat === "native" ? "active" : ""}`}
+              >
+                Native React
+              </button>
+              <button 
+                onClick={() => setSelectedCat("legacy")}
+                className={`fets-cat-tab ${selectedCat === "legacy" ? "active" : ""}`}
+              >
+                Legacy Bridged
+              </button>
+            </div>
+
+            {/* Search Input */}
+            <div style={{ flex: 1, minWidth: 260, position: "relative" }}>
+              <Icon name="search" size={16} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "var(--ink-4)" }} />
+              <input 
+                value={searchQuery} 
+                onChange={(e) => setSearchQuery(e.target.value)} 
+                placeholder="Search operations, analytics, settings..." 
+                style={{ 
+                  background: "rgba(0, 0, 0, 0.2)",
+                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                  borderRadius: 99,
+                  color: "var(--ink)",
+                  fontFamily: "var(--font)",
+                  fontSize: 14,
+                  padding: "10px 14px 10px 42px",
+                  width: "100%",
+                  outline: "none"
+                }} 
+              />
+            </div>
+          </div>
+        </header>
+
+        {/* Modules Grid */}
+        <div className="scroll-soft fets-module-grid">
+          {filtered.length === 0 ? (
+            <div style={{ gridColumn: "1 / -1", padding: 60, textAlign: "center", color: "var(--ink-4)", fontSize: 15 }}>
+              No modules match your query. Try searching for something else.
+            </div>
+          ) : (
+            filtered.map((it) => {
+              const status = getModuleStatus(it);
+              return (
+                <button 
+                  key={it.id} 
+                  onClick={() => { onPick(it); onClose(); }} 
+                  className="fets-module-card"
+                  style={{ border: "1px solid rgba(255, 255, 255, 0.04)" }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", width: "100%" }}>
+                    <div className="fets-module-card-icon">
+                      <Icon name={it.icon} size={20} />
+                    </div>
+                    {/* Status badge */}
+                    <span style={{ 
+                      fontSize: 10, 
+                      fontWeight: 800, 
+                      textTransform: "uppercase", 
+                      letterSpacing: "0.5px",
+                      padding: "4px 10px", 
+                      borderRadius: 999, 
+                      color: status.color, 
+                      background: `color-mix(in oklch, ${status.color} 12%, transparent)`, 
+                      border: `1px solid color-mix(in oklch, ${status.color} 24%, transparent)`
+                    }}>
+                      {status.label}
+                    </span>
+                  </div>
+
+                  <div style={{ marginTop: 24, zIndex: 1 }}>
+                    <h3 style={{ fontSize: 16.5, fontWeight: 800, color: "var(--ink)", margin: 0 }}>
+                      {it.label}
+                    </h3>
+                    <p style={{ fontSize: 12.5, color: "var(--ink-3)", marginTop: 6, lineHeight: 1.4, marginBlockEnd: 0 }}>
+                      {it.sub}
+                    </p>
+                  </div>
+                </button>
+              );
+            })
+          )}
         </div>
-      </aside>
+
+        {/* Footer */}
+        <footer style={{ 
+          padding: "16px 28px", 
+          borderTop: "1px solid rgba(255, 255, 255, 0.06)", 
+          display: "flex", 
+          justifyContent: "space-between", 
+          alignItems: "center",
+          background: "rgba(0, 0, 0, 0.15)",
+          flexShrink: 0,
+          zIndex: 1
+        }}>
+          <span style={{ fontSize: 12.5, color: "var(--ink-4)" }}>
+            Showing {filtered.length} of {allModules.length} modules
+          </span>
+          <span style={{ fontSize: 12.5, color: "var(--ink-3)", display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#a8ff39", boxShadow: "0 0 8px #a8ff39" }} />
+            FETS · LIVE Ops Console
+          </span>
+        </footer>
+      </div>
     </React.Fragment>
   );
 }
