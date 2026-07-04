@@ -4231,24 +4231,91 @@ function AttendanceConsole({ branch }) {
 }
 
 function ShiftHistory() {
-  const [rows, setRows] = React.useState(null);
+  const [rows, setRows] = React.useState<any[] | null>(null);
   React.useEffect(() => { ATT.attHistory(45).then(setRows); }, []);
+
+  const totalShifts = rows ? rows.length : 0;
+  const totalWorkedMins = rows ? rows.reduce((sum, r) => sum + (r.worked || 0), 0) : 0;
+  const latesCount = rows ? rows.filter(r => String(r.status).toLowerCase() === "late").length : 0;
+  const punctuality = totalShifts > 0 ? Math.round(((totalShifts - latesCount) / totalShifts) * 100) : 100;
+
   return (
-    <div className="glass" style={{ borderRadius: "var(--radius)", padding: "16px 18px" }}>
-      <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>last 45 days</span>}>My shift hours</SectionLabel>
-      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr 0.9fr 1fr", gap: 7, marginTop: 12, alignItems: "center" }}>
-        {["Date", "In", "Out", "Break", "Worked"].map((h) => <div key={h} className="eyebrow" style={{ fontSize: 9, color: "var(--ink-4)" }}>{h}</div>)}
-        {!rows ? <div style={{ gridColumn: "1 / -1", color: "var(--ink-4)", padding: 10, fontSize: 13 }}>Loading…</div>
-          : rows.length === 0 ? <div style={{ gridColumn: "1 / -1", color: "var(--ink-4)", padding: 10, fontSize: 13 }}>No shifts recorded yet.</div>
-          : rows.map((r, i) => (
-            <React.Fragment key={i}>
-              <div style={{ fontSize: 12.5, color: "var(--ink-2)" }}>{r.date}</div>
-              <div className="mono" style={{ fontSize: 12.5 }}>{r.check_in || "—"}</div>
-              <div className="mono" style={{ fontSize: 12.5 }}>{r.check_out || "—"}</div>
-              <div className="mono" style={{ fontSize: 12, color: "var(--ink-3)" }}>{r.breakMins ? r.breakMins + "m" : "—"}</div>
-              <div className="mono" style={{ fontSize: 12.5, color: "var(--accent)", fontWeight: 700 }}>{r.worked ? ATT.attFmtMins(r.worked) : "—"}</div>
-            </React.Fragment>
-          ))}
+    <div className="glass rise" style={{ borderRadius: "var(--radius)", padding: "20px 22px", display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <SectionLabel style={{ margin: 0 }} right={<span className="mono" style={{ fontSize: 11, color: "var(--accent)" }}>individual timesheet</span>}>My Shift Hours</SectionLabel>
+        <span style={{ fontSize: 11, color: "var(--ink-3)", fontWeight: 700, padding: "3px 8px", borderRadius: 6, background: "var(--glass-2)", border: "1px solid var(--hairline)" }}>Last 45 Days</span>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+        <div className="inset" style={{ padding: "10px 12px", borderRadius: 10, textAlign: "center" }}>
+          <div style={{ fontSize: 9, color: "var(--ink-4)", fontWeight: 700, textTransform: "uppercase" }}>Shifts</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: "var(--ink)", marginTop: 4 }}>{totalShifts}</div>
+        </div>
+        <div className="inset" style={{ padding: "10px 12px", borderRadius: 10, textAlign: "center" }}>
+          <div style={{ fontSize: 9, color: "var(--ink-4)", fontWeight: 700, textTransform: "uppercase" }}>Total Hours</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: "var(--accent)", marginTop: 4 }}>{Math.floor(totalWorkedMins / 60)}h</div>
+        </div>
+        <div className="inset" style={{ padding: "10px 12px", borderRadius: 10, textAlign: "center" }}>
+          <div style={{ fontSize: 9, color: "var(--ink-4)", fontWeight: 700, textTransform: "uppercase" }}>Punctuality</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: punctuality >= 90 ? "var(--ok)" : "var(--warn)", marginTop: 4 }}>{punctuality}%</div>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 380, overflowY: "auto", paddingRight: 4 }}>
+        {!rows ? (
+          <div style={{ textAlign: "center", padding: 24, color: "var(--ink-4)", fontSize: 13 }}>Loading shifts...</div>
+        ) : rows.length === 0 ? (
+          <div style={{ textAlign: "center", padding: 24, color: "var(--ink-4)", fontSize: 13 }}>No shifts recorded.</div>
+        ) : (
+          rows.map((r, i) => {
+            const isLate = String(r.status).toLowerCase() === "late";
+            const dateObj = new Date(r.date);
+            const dateStr = dateObj.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+            const dayName = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][dateObj.getDay()];
+            return (
+              <div key={i} className="glass-2 hover-lift" style={{ 
+                borderRadius: 12, 
+                padding: "10px 14px", 
+                border: "1px solid var(--hairline)", 
+                display: "flex", 
+                justifyContent: "space-between", 
+                alignItems: "center",
+                gap: 12,
+                transition: "all 0.2s"
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ textAlign: "center", minWidth: 42, padding: "4px 6px", borderRadius: 8, background: "var(--inset)" }}>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: "var(--ink)" }}>{dateStr.split(" ")[0]}</div>
+                    <div style={{ fontSize: 9, color: "var(--ink-3)", fontWeight: 700, textTransform: "uppercase", marginTop: 1 }}>{dayName}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12.5, fontWeight: 650, color: "var(--ink-2)", display: "flex", alignItems: "center", gap: 6 }}>
+                      <span>{r.check_in || "—"}</span>
+                      <span style={{ color: "var(--ink-4)" }}>→</span>
+                      <span>{r.check_out || "—"}</span>
+                    </div>
+                    {r.breakMins > 0 && (
+                      <div style={{ fontSize: 10.5, color: "var(--ink-4)", marginTop: 2 }}>
+                        Break: {r.breakMins}m
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  {isLate && (
+                    <span style={{ fontSize: 9.5, fontWeight: 750, textTransform: "uppercase", padding: "2px 7px", borderRadius: 99, background: "rgba(253,203,110,0.12)", color: "#C2860F", border: "1px solid rgba(253,203,110,0.25)" }}>
+                      Late
+                    </span>
+                  )}
+                  <div className="mono" style={{ fontSize: 13, color: "var(--accent)", fontWeight: 750 }}>
+                    {r.worked ? ATT.attFmtMins(r.worked) : "—"}
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
     </div>
   );
@@ -4359,7 +4426,6 @@ function RosterRequestForm({ branch }) {
     );
   }
 
-  // list of colleagues for shift swap
   const pool = branch === "global"
     ? [...F.STAFF.calicut, ...F.STAFF.cochin]
     : F.STAFF[branch] || [];
@@ -4422,123 +4488,145 @@ function RosterRequestForm({ branch }) {
     toil:  { icon: "clock",    label: "Redeem TOIL", desc: "Use accrued time-off-in-lieu balance", color: "var(--v-cma)" },
   };
 
-  const activeKind = KIND_META[kind];
-
   return (
-    <div className="glass" style={{ borderRadius: "var(--radius)", padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
+    <div className="glass rise" style={{ borderRadius: "var(--radius)", padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <div style={{ width: 38, height: 38, borderRadius: 11, background: `color-mix(in oklch, ${activeKind.color} 16%, transparent)`, display: "grid", placeItems: "center", flexShrink: 0, border: `1px solid color-mix(in oklch, ${activeKind.color} 30%, transparent)` }}>
-          <Icon name={activeKind.icon} size={18} style={{ color: activeKind.color }} />
+      <div style={{ display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid var(--hairline)", paddingBottom: 14 }}>
+        <div style={{ width: 38, height: 38, borderRadius: 11, background: "rgba(255, 255, 255, 0.05)", display: "grid", placeItems: "center", border: "1px solid var(--hairline)" }}>
+          <Icon name="edit" size={18} style={{ color: "var(--accent)" }} />
         </div>
         <div>
-          <div style={{ fontSize: 15, fontWeight: 750, color: "var(--ink)", letterSpacing: "-0.01em" }}>Apply for Leave / Swap / TOIL</div>
-          <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 1 }}>{activeKind.desc}</div>
+          <div style={{ fontSize: 15, fontWeight: 750, color: "var(--ink)", letterSpacing: "-0.01em" }}>Staff Request Portal</div>
+          <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 1 }}>Submit requests directly to Super Admins. Real-time status shows below.</div>
         </div>
       </div>
 
-      {/* Type selector pills */}
-      <div className="inset" style={{ display: "flex", padding: 4, gap: 4, borderRadius: 14, width: "fit-content" }}>
-        {(Object.entries(KIND_META) as [string, any][]).map(([k, m]) => {
-          const on = kind === k;
-          return (
-            <button type="button" key={k} onClick={() => setKind(k)} className="tap" style={{
-              display: "inline-flex", alignItems: "center", gap: 7,
-              border: on ? `1px solid color-mix(in oklch, ${m.color} 35%, transparent)` : "1px solid transparent",
-              cursor: "pointer", padding: "8px 15px", borderRadius: 10,
-              fontFamily: "var(--font)", fontSize: 13, fontWeight: on ? 750 : 600,
-              color: on ? m.color : "var(--ink-3)",
-              background: on ? `color-mix(in oklch, ${m.color} 14%, var(--panel-2))` : "transparent",
-              transition: "all .15s"
-            }}>
-              <Icon name={m.icon} size={14} />
-              {m.label}
-            </button>
-          );
-        })}
-      </div>
+      {/* Main dual-pane layout */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.5fr", gap: 24 }} className="request-portal-grid">
+        {/* Left selector pane */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {(Object.entries(KIND_META) as [string, any][]).map(([k, m]) => {
+            const on = kind === k;
+            return (
+              <button 
+                type="button" 
+                key={k} 
+                onClick={() => setKind(k)} 
+                className="tap hover-lift" 
+                style={{
+                  display: "flex", 
+                  alignItems: "center", 
+                  gap: 12,
+                  padding: "16px 18px", 
+                  borderRadius: 14,
+                  border: `1px solid ${on ? m.color : "var(--hairline)"}`,
+                  background: on ? `color-mix(in oklch, ${m.color} 8%, var(--inset))` : "var(--inset)",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  width: "100%",
+                  transition: "all 0.2s"
+                }}
+              >
+                <div style={{ 
+                  width: 32, 
+                  height: 32, 
+                  borderRadius: 8, 
+                  background: on ? `color-mix(in oklch, ${m.color} 20%, transparent)` : "rgba(255,255,255,0.04)", 
+                  display: "grid", 
+                  placeItems: "center",
+                  color: on ? m.color : "var(--ink-3)",
+                  border: `1px solid ${on ? m.color : "var(--hairline)"}`
+                }}>
+                  <Icon name={m.icon} size={15} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 750, color: on ? m.color : "var(--ink)" }}>{m.label}</div>
+                  <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2 }}>{m.desc}</div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
 
-      {/* Form fields */}
-      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        {/* Leave fields */}
-        {kind === "leave" && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }} className="case-2col">
-            <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
-              Leave Date
-              <input type="date" value={reqDate} onChange={(e) => setReqDate(e.target.value)} style={inpStyle} />
-            </label>
-            <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
-              Leave Type
-              <select value={leaveType} onChange={(e) => setLeaveType(e.target.value)} style={inpStyle}>
-                <option value="Full-day leave">Full-day leave</option>
-                <option value="Half day">Half day</option>
-              </select>
-            </label>
-          </div>
-        )}
+        {/* Right input pane */}
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {kind === "leave" && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }} className="case-2col">
+              <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
+                Leave Date
+                <input type="date" value={reqDate} onChange={(e) => setReqDate(e.target.value)} style={inpStyle} />
+              </label>
+              <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
+                Leave Type
+                <select value={leaveType} onChange={(e) => setLeaveType(e.target.value)} style={inpStyle}>
+                  <option value="Full-day leave">Full-day leave</option>
+                  <option value="Half day">Half day</option>
+                </select>
+              </label>
+            </div>
+          )}
 
-        {/* Swap fields */}
-        {kind === "swap" && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }} className="case-cols">
-            <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
-              Your Shift Date
-              <input type="date" value={reqDate} onChange={(e) => setReqDate(e.target.value)} style={inpStyle} />
-            </label>
-            <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
-              Swap With
-              <select value={withWho} onChange={(e) => setWithWho(e.target.value)} style={inpStyle}>
-                <option value="">Select colleague…</option>
-                {colleagues.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </label>
-            <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
-              Their Shift Date
-              <input type="date" value={swapDate} onChange={(e) => setSwapDate(e.target.value)} style={inpStyle} />
-            </label>
-          </div>
-        )}
+          {kind === "swap" && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }} className="case-cols">
+              <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 650, color: "var(--ink-2)", gridColumn: "1 / -1" }}>
+                Swap With
+                <select value={withWho} onChange={(e) => setWithWho(e.target.value)} style={inpStyle}>
+                  <option value="">Select colleague…</option>
+                  {colleagues.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </label>
+              <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
+                Your Shift Date
+                <input type="date" value={reqDate} onChange={(e) => setReqDate(e.target.value)} style={inpStyle} />
+              </label>
+              <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
+                Their Shift Date
+                <input type="date" value={swapDate} onChange={(e) => setSwapDate(e.target.value)} style={inpStyle} />
+              </label>
+            </div>
+          )}
 
-        {/* TOIL fields */}
-        {kind === "toil" && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-            <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
-              Date to Redeem TOIL
-              <input type="date" value={reqDate} onChange={(e) => setReqDate(e.target.value)} style={inpStyle} />
-            </label>
-            <div className="inset" style={{ borderRadius: 10, padding: "10px 14px", display: "flex", flexDirection: "column", gap: 4, justifyContent: "center" }}>
-              <div style={{ fontSize: 11, fontWeight: 650, color: "var(--ink-4)" }}>TOIL Balance</div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: "var(--v-cma)" }}>
-                {(window.FETS._meToilBalance || 0)} <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-3)" }}>days</span>
-              </div>
-              <div className="mono" style={{ fontSize: 10, color: "var(--ink-4)" }}>
-                {(window.FETS._meToilEarned || 0)} earned · {(window.FETS._meToilRedeemed || 0)} used
+          {kind === "toil" && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr", gap: 14 }}>
+              <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
+                Date to Redeem TOIL
+                <input type="date" value={reqDate} onChange={(e) => setReqDate(e.target.value)} style={inpStyle} />
+              </label>
+              <div className="inset" style={{ borderRadius: 10, padding: "10px 14px", display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ width: 28, height: 28, borderRadius: 999, background: "rgba(0, 184, 148, 0.1)", display: "grid", placeItems: "center", color: "var(--ok)" }}>
+                  <Icon name="clock" size={14} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 650, color: "var(--ink-4)", textTransform: "uppercase" }}>TOIL Balance</div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: "var(--v-cma)", marginTop: 2 }}>
+                    {(window.FETS._meToilBalance || 0)} <span style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)" }}>days left</span>
+                  </div>
+                </div>
               </div>
             </div>
+          )}
+
+          <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
+            Reason / Comments
+            <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2}
+              placeholder="Briefly explain your request (optional)…"
+              style={{ ...inpStyle, resize: "vertical", lineHeight: 1.55 }} />
+          </label>
+
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <button type="submit" disabled={submitting} className="tap" style={{
+              height: 42, borderRadius: 11, border: "none", cursor: submitting ? "not-allowed" : "pointer",
+              fontFamily: "var(--font)", fontSize: 13, fontWeight: 780,
+              color: "var(--accent-ink)", background: submitting ? "var(--ink-4)" : "var(--accent)",
+              padding: "0 28px", display: "inline-flex", alignItems: "center", gap: 9,
+              transition: "background .2s", opacity: submitting ? 0.7 : 1
+            }}>
+              <Icon name={submitting ? "loader" : "check"} size={14} stroke={2.5} />
+              {submitting ? "Submitting…" : "Submit Request"}
+            </button>
           </div>
-        )}
-
-        {/* Reason field */}
-        <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
-          Reason / Comments
-          <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2}
-            placeholder="Briefly explain your request (optional)…"
-            style={{ ...inpStyle, resize: "vertical", lineHeight: 1.55 }} />
-        </label>
-
-        {/* Submit */}
-        <div style={{ display: "flex", justifyContent: "flex-end" }}>
-          <button type="submit" disabled={submitting} className="tap" style={{
-            height: 44, borderRadius: 11, border: "none", cursor: submitting ? "not-allowed" : "pointer",
-            fontFamily: "var(--font)", fontSize: 13.5, fontWeight: 780,
-            color: "var(--accent-ink)", background: submitting ? "var(--ink-4)" : "var(--accent)",
-            padding: "0 28px", display: "inline-flex", alignItems: "center", gap: 9,
-            transition: "background .2s", opacity: submitting ? 0.7 : 1
-          }}>
-            <Icon name={submitting ? "loader" : "check"} size={16} stroke={2.5} />
-            {submitting ? "Submitting…" : "Submit Request"}
-          </button>
-        </div>
-      </form>
+        </form>
+      </div>
     </div>
   );
 }
@@ -6184,11 +6272,21 @@ function AttendanceHeroButton({ branch }) {
     }
   };
 
+  const parseDateTime = (dateStr: string, timeStr: string) => {
+    if (!dateStr || !timeStr) return new Date();
+    const [year, month, day] = dateStr.split("-").map(Number);
+    const parts = timeStr.split(":");
+    const hours = Number(parts[0]) || 0;
+    const minutes = Number(parts[1]) || 0;
+    const seconds = Number(parts[2]) || 0;
+    return new Date(year, month - 1, day, hours, minutes, seconds);
+  };
+
   let workedSeconds = 0;
   if (row && row.check_in) {
-    const checkInDate = new Date(row.date + 'T' + row.check_in + ':00');
+    const checkInDate = parseDateTime(row.date, row.check_in);
     const endTime = row.check_out 
-      ? new Date(row.date + 'T' + row.check_out + ':00')
+      ? parseDateTime(row.date, row.check_out)
       : nowTime;
     const elapsedSeconds = Math.max(0, Math.floor((endTime.getTime() - checkInDate.getTime()) / 1000));
     
@@ -6200,7 +6298,7 @@ function AttendanceHeroButton({ branch }) {
     const lastStep = steps[steps.length - 1];
     const isOnBreak = !!(lastStep && lastStep.out && !lastStep.in);
     if (isOnBreak) {
-      const breakStartDate = new Date(row.date + 'T' + lastStep.out + ':00');
+      const breakStartDate = parseDateTime(row.date, lastStep.out);
       currentBreakSeconds = Math.max(0, Math.floor((endTime.getTime() - breakStartDate.getTime()) / 1000));
     }
     
@@ -6360,6 +6458,20 @@ function RosterPage({ branch }) {
   const [dayDrawer, setDayDrawer] = React.useState(null);
   const [showHours, setShowHours] = React.useState(false);
   const isAdmin = F().user.role === "Super Admin";
+  const [tick, setTick] = React.useState(0);
+  const [workLogs, setWorkLogs] = React.useState<any[] | null>(null);
+
+  React.useEffect(() => {
+    const handler = () => setTick((t) => t + 1);
+    window.addEventListener("fets-roster-changed", handler);
+    return () => window.removeEventListener("fets-roster-changed", handler);
+  }, []);
+
+  React.useEffect(() => {
+    if (activeRosterTab === "work") {
+      ATT.attHistory(45).then(setWorkLogs);
+    }
+  }, [activeRosterTab, tick]);
 
   const reqsAll = F().staffReqList().filter((r) => branch === "global" || r.branch === branch);
   const onDutyToday = window.branchRoster(0, branch).length;
@@ -6410,7 +6522,7 @@ function RosterPage({ branch }) {
     if (activeRosterTab === "review") {
       loadReviewData();
     }
-  }, [reviewMonth, activeRosterTab]);
+  }, [reviewMonth, activeRosterTab, tick]);
 
   const divider = (
     <div style={{ height: 1, background: "var(--hairline)", margin: "4px 0" }} />
@@ -6516,36 +6628,131 @@ function RosterPage({ branch }) {
   // Daily Attendance log view for Time Desk
   const DailyAttendanceLog = () => {
     const [logDate, setLogDate] = React.useState(ATT.attDateStr());
-    const [rows, setRows] = React.useState(null);
-    React.useEffect(() => { setRows(null); ATT.attAllForDate(logDate).then(setRows); }, [logDate]);
+    const [rows, setRows] = React.useState<any[] | null>(null);
+    const [searchQ, setSearchQ] = React.useState("");
+
+    React.useEffect(() => { 
+      setRows(null); 
+      ATT.attAllForDate(logDate).then(setRows); 
+    }, [logDate]);
+
     const totalWorked = (rows || []).reduce((a, r) => a + (r.worked || 0), 0);
+    const activeStaffCount = (rows || []).filter(r => r.check_in && !r.check_out).length;
+
+    const filtered = (rows || []).filter(r => 
+      !searchQ.trim() || String(r.name).toLowerCase().includes(searchQ.toLowerCase())
+    );
+
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>branch logs</span>}>Daily Attendance (All Staff)</SectionLabel>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 6 }}>
-          <input type="date" value={logDate} onChange={(e) => setLogDate(e.target.value)} style={{ background: "var(--inset)", border: "1px solid var(--hairline)", borderRadius: 10, color: "var(--ink)", fontFamily: "var(--font)", fontSize: 14, padding: "8px 12px" }} />
-          <div style={{ flex: 1 }} />
-          <StatPill value={(rows || []).length} label="Records" />
-          <StatPill value={ATT.attFmtMins(totalWorked)} label="Total worked" tone="var(--accent)" />
+      <div className="glass rise" style={{ borderRadius: "var(--radius)", padding: "20px 22px", display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+          <SectionLabel style={{ margin: 0 }} right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>centre logs</span>}>Daily Attendance</SectionLabel>
+          <input 
+            type="date" 
+            value={logDate} 
+            onChange={(e) => setLogDate(e.target.value)} 
+            style={{ 
+              background: "var(--inset)", 
+              border: "1px solid var(--hairline)", 
+              borderRadius: 10, 
+              color: "var(--ink)", 
+              fontFamily: "var(--font)", 
+              fontSize: 13, 
+              padding: "6px 12px",
+              outline: "none"
+            }} 
+          />
         </div>
-        <div className="glass" style={{ borderRadius: "var(--radius)", padding: "8px 4px", overflow: "auto" }}>
-          <div style={{ minWidth: 640 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr 0.9fr 0.9fr 0.8fr 1fr", gap: 8, padding: "8px 14px" }}>
-              {["Staff", "Branch", "In", "Out", "Break", "Worked"].map((h) => <div key={h} className="eyebrow" style={{ fontSize: 9, color: "var(--ink-4)" }}>{h}</div>)}
-            </div>
-            {!rows ? <div style={{ padding: 20, color: "var(--ink-4)" }}>Loading…</div>
-              : rows.length === 0 ? <div style={{ padding: 20, color: "var(--ink-4)" }}>No attendance recorded for this day.</div>
-              : rows.map((r, i) => (
-                <div key={i} style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr 0.9fr 0.9fr 0.8fr 1fr", gap: 8, padding: "11px 14px", borderTop: "1px solid var(--hairline)", alignItems: "center" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 9 }}><Avatar name={r.name} size={26} /><span style={{ fontSize: 13, fontWeight: 650, color: "var(--ink)" }}>{r.name}</span></div>
-                  <div style={{ fontSize: 12, color: "var(--ink-3)", textTransform: "capitalize" }}>{r.branch || "—"}</div>
-                  <div className="mono" style={{ fontSize: 12.5 }}>{r.check_in || "—"}</div>
-                  <div className="mono" style={{ fontSize: 12.5 }}>{r.check_out || "—"}</div>
-                  <div className="mono" style={{ fontSize: 12, color: "var(--ink-3)" }}>{r.breakMins ? r.breakMins + "m" : "—"}</div>
-                  <div className="mono" style={{ fontSize: 12.5, color: "var(--accent)", fontWeight: 700 }}>{r.worked ? ATT.attFmtMins(r.worked) : "—"}</div>
-                </div>
-              ))}
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+          <div className="inset" style={{ padding: "10px 12px", borderRadius: 10, textAlign: "center" }}>
+            <div style={{ fontSize: 9, color: "var(--ink-4)", fontWeight: 700, textTransform: "uppercase" }}>Total Present</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: "var(--ink)", marginTop: 4 }}>{rows ? rows.length : 0}</div>
           </div>
+          <div className="inset" style={{ padding: "10px 12px", borderRadius: 10, textAlign: "center" }}>
+            <div style={{ fontSize: 9, color: "var(--ink-4)", fontWeight: 700, textTransform: "uppercase" }}>Active Shifts</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: "var(--accent)", marginTop: 4 }}>{activeStaffCount}</div>
+          </div>
+          <div className="inset" style={{ padding: "10px 12px", borderRadius: 10, textAlign: "center" }}>
+            <div style={{ fontSize: 9, color: "var(--ink-4)", fontWeight: 700, textTransform: "uppercase" }}>Hours Worked</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: "var(--v-ielts)", marginTop: 4 }}>{Math.floor(totalWorked / 60)}h</div>
+          </div>
+        </div>
+
+        <div style={{ position: "relative" }}>
+          <Icon name="search" size={13} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--ink-4)" }} />
+          <input 
+            type="text" 
+            placeholder="Search staff logs..." 
+            value={searchQ} 
+            onChange={(e) => setSearchQ(e.target.value)} 
+            style={{
+              background: "var(--inset)",
+              border: "1px solid var(--hairline)",
+              borderRadius: 10,
+              color: "var(--ink)",
+              fontFamily: "var(--font)",
+              fontSize: 12.5,
+              padding: "8px 12px 8px 30px",
+              width: "100%",
+              outline: "none",
+              boxSizing: "border-box"
+            }}
+          />
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 320, overflowY: "auto", paddingRight: 4 }}>
+          {!rows ? (
+            <div style={{ textAlign: "center", padding: 24, color: "var(--ink-4)", fontSize: 13 }}>Loading team logs...</div>
+          ) : filtered.length === 0 ? (
+            <div style={{ textAlign: "center", padding: 24, color: "var(--ink-4)", fontSize: 13 }}>No records found.</div>
+          ) : (
+            filtered.map((r, i) => {
+              const isActive = r.check_in && !r.check_out;
+              const isLate = String(r.status).toLowerCase() === "late";
+              return (
+                <div key={i} className="glass-2" style={{
+                  borderRadius: 12,
+                  padding: "12px 14px",
+                  border: "1px solid var(--hairline)",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 12
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <Avatar name={r.name} size={32} />
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>{r.name}</div>
+                      <div style={{ fontSize: 10.5, color: "var(--ink-3)", textTransform: "capitalize", marginTop: 2 }}>
+                        {r.branch || "unassigned"}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      {isLate && (
+                        <span style={{ fontSize: 8.5, fontWeight: 750, textTransform: "uppercase", padding: "1px 5px", borderRadius: 4, background: "rgba(253,203,110,0.12)", color: "#C2860F" }}>L</span>
+                      )}
+                      {isActive ? (
+                        <span style={{ fontSize: 9.5, fontWeight: 750, textTransform: "uppercase", padding: "2px 7px", borderRadius: 99, background: "rgba(0,184,148,0.12)", color: "var(--ok)", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                          <span style={{ width: 6, height: 6, borderRadius: 999, background: "var(--ok)", display: "inline-block" }} className="pulse" /> On Shift
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: 12, color: "var(--ink-2)", fontFamily: "monospace" }}>
+                          {r.check_in || "—"} - {r.check_out || "—"}
+                        </span>
+                      )}
+                    </div>
+                    <div className="mono" style={{ fontSize: 11, color: "var(--accent)", fontWeight: 700 }}>
+                      {r.worked ? ATT.attFmtMins(r.worked) : "—"} {r.breakMins > 0 && `(${r.breakMins}m break)`}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
     );
@@ -6554,33 +6761,112 @@ function RosterPage({ branch }) {
   // User requests list for Shift Desk
   const UserRequestsList = () => {
     const mine = F()._staffRequests?.filter(r => r.who === meName) || [];
-    const SCOL = { Submitted: "var(--warn)", Approved: "var(--ok)", Rejected: "var(--bad)" };
+    const statusMeta = {
+      Submitted: { color: "var(--warn)", label: "Awaiting Admin Review", icon: "clock" },
+      Approved: { color: "var(--ok)", label: "Approved & Synced", icon: "check" },
+      Rejected: { color: "var(--bad)", label: "Rejected", icon: "x" }
+    };
+
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 24 }}>
         <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>{mine.length} requests</span>}>Your Shift & Leave Requests</SectionLabel>
-        <div className="glass" style={{ borderRadius: "var(--radius)", padding: "16px 18px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {mine.length === 0 ? (
-            <div style={{ color: "var(--ink-4)", fontSize: 13, padding: 8 }}>No requests submitted yet.</div>
+            <div className="glass" style={{ borderRadius: "var(--radius)", padding: "24px", textAlign: "center", color: "var(--ink-4)", fontSize: 13.5 }}>
+              No requests submitted yet.
+            </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {mine.map((r, i) => (
-                <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", borderTop: i > 0 ? "1px solid var(--hairline)" : "none", flexWrap: "wrap", gap: 10 }}>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>
-                      {r.kind.toUpperCase()} {r.leaveType ? `(${r.leaveType})` : ""}
+            mine.map((r, i) => {
+              const meta = statusMeta[r.status] || { color: "var(--ink-3)", label: r.status, icon: "info" };
+              const isSwap = r.kind === "swap";
+              const isToil = r.kind === "toil";
+              
+              return (
+                <div key={r.id || i} className="glass rise hover-lift" style={{ 
+                  borderRadius: "var(--radius)", 
+                  padding: "16px 20px", 
+                  borderLeft: `4px solid ${meta.color}`,
+                  display: "flex", 
+                  justifyContent: "space-between", 
+                  alignItems: "center", 
+                  flexWrap: "wrap", 
+                  gap: 16,
+                  transition: "all 0.2s"
+                }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+                    <div style={{ 
+                      width: 36, 
+                      height: 36, 
+                      borderRadius: 10, 
+                      background: "rgba(255,255,255,0.04)", 
+                      display: "grid", 
+                      placeItems: "center",
+                      color: meta.color,
+                      border: "1px solid var(--hairline)",
+                      flexShrink: 0
+                    }}>
+                      <Icon name={r.kind === "swap" ? "refresh" : (r.kind === "toil" ? "clock" : "calendar")} size={16} />
                     </div>
-                    <div style={{ fontSize: 11.5, color: "var(--ink-3)", marginTop: 2 }}>
-                      Target Date: <strong style={{ color: "var(--ink-2)" }}>{r.date}</strong>
-                      {r.with && <span> swap with <strong>{r.with}</strong>{r.swapDate ? ` on ${r.swapDate}` : ""}</span>}
-                      {r.reason && ` · Reason: ${r.reason}`}
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 750, color: "var(--ink)", display: "flex", alignItems: "center", gap: 8 }}>
+                        <span>{r.kind.toUpperCase()}</span>
+                        {r.leaveType && (
+                          <span style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", background: "var(--glass-2)", padding: "1px 6px", borderRadius: 4 }}>
+                            {r.leaveType}
+                          </span>
+                        )}
+                      </div>
+                      
+                      <div style={{ fontSize: 12.5, color: "var(--ink-2)", marginTop: 6, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
+                        <span>Target:</span>
+                        <strong style={{ color: "var(--ink)" }}>{r.date}</strong>
+                        {isSwap && r.with && (
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                            <span style={{ color: "var(--ink-4)" }}>⇄</span>
+                            <span>colleague</span>
+                            <strong style={{ color: "var(--ink)" }}>{r.with}</strong>
+                            <span>(shift: {r.swapDate || r.date})</span>
+                          </span>
+                        )}
+                      </div>
+
+                      {r.reason && (
+                        <div style={{ fontSize: 12, color: "var(--ink-3)", fontStyle: "italic", marginTop: 6, display: "flex", alignItems: "flex-start", gap: 4 }}>
+                          <span style={{ opacity: 0.5 }}>“</span>
+                          <span>{r.reason}</span>
+                          <span style={{ opacity: 0.5 }}>”</span>
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", padding: "3px 8px", borderRadius: 999, color: SCOL[r.status] || "var(--ink-3)", background: `color-mix(in oklch, ${SCOL[r.status] || "var(--ink-3)"} 15%, transparent)`, border: `1px solid ${SCOL[r.status] || "var(--ink-3)"}40` }}>
-                    {r.status}
-                  </span>
+
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+                    <span style={{ 
+                      fontSize: 10.5, 
+                      fontWeight: 800, 
+                      textTransform: "uppercase", 
+                      letterSpacing: "0.06em",
+                      padding: "4px 10px", 
+                      borderRadius: 99, 
+                      color: meta.color, 
+                      background: `color-mix(in oklch, ${meta.color} 12%, transparent)`, 
+                      border: `1px solid color-mix(in oklch, ${meta.color} 20%, transparent)`,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6
+                    }}>
+                      {r.status === "Submitted" && <span style={{ width: 6, height: 6, borderRadius: 999, background: "var(--warn)", display: "inline-block" }} className="pulse" />}
+                      {meta.label}
+                    </span>
+                    {r.status !== "Submitted" && (
+                      <span style={{ fontSize: 10, color: "var(--ink-4)" }}>
+                        Processed in Real-time
+                      </span>
+                    )}
+                  </div>
                 </div>
-              ))}
-            </div>
+              );
+            })
           )}
         </div>
       </div>
@@ -6768,7 +7054,7 @@ function RosterPage({ branch }) {
       )}
 
       {activeRosterTab === "time" && (
-        <section style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+        <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: 20 }}>
           <ShiftHistory />
           <DailyAttendanceLog />
         </section>
@@ -6781,84 +7067,179 @@ function RosterPage({ branch }) {
         </section>
       )}
 
-      {activeRosterTab === "work" && (
-        <section>
-          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-            <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>real-time metrics</span>}>Your Shift & Leave Breakdown</SectionLabel>
-            
-            <div className="glass" style={{ padding: 24, borderRadius: "var(--radius)", display: "flex", flexDirection: "column", gap: 20 }}>
-              <div>
-                <div style={{ fontSize: 17, fontWeight: 800, color: "var(--accent)" }}>Hello, {meName.split(" ")[0]}!</div>
-                <div style={{ fontSize: 13, color: "var(--ink-3)", marginTop: 4 }}>Here is a comprehensive overview of your attendance activity and time-off balance for this monthly period.</div>
-              </div>
+      {activeRosterTab === "work" && (() => {
+        const totalShifts = workLogs ? workLogs.length : 0;
+        const latesCount = workLogs ? workLogs.filter(r => String(r.status).toLowerCase() === "late").length : 0;
+        const punctuality = totalShifts > 0 ? Math.round(((totalShifts - latesCount) / totalShifts) * 100) : 100;
+        
+        let currentStreak = 0;
+        if (workLogs) {
+          const sorted = [...workLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+          for (const r of sorted) {
+            if (r.check_in && String(r.status).toLowerCase() !== "late") {
+              currentStreak++;
+            } else {
+              break;
+            }
+          }
+        }
 
-              <div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontWeight: 700, color: "var(--ink-3)", marginBottom: 8, textTransform: "uppercase" }}>
-                  <span>Monthly Allocation Ratio</span>
-                  <span>{workedDays} worked / {restDays} rest / {leaveDays} leave ({totalDays} days tracked)</span>
-                </div>
-                <div style={{ height: 28, borderRadius: 8, overflow: "hidden", display: "flex", background: "var(--inset)", border: "1px solid var(--hairline)" }}>
-                  {workedDays > 0 && <div style={{ width: `${workedPercent}%`, background: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", color: "#000", fontSize: 11, fontWeight: 850 }} title={`${workedDays} Days Worked`}>Worked {workedPercent}%</div>}
-                  {restDays > 0 && <div style={{ width: `${restPercent}%`, background: "var(--ink-4)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--ink)", fontSize: 11, fontWeight: 800 }} title={`${restDays} Rest Days`}>Rest {restPercent}%</div>}
-                  {leaveDays > 0 && <div style={{ width: `${leavePercent}%`, background: "var(--bad)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11, fontWeight: 800 }} title={`${leaveDays} Leave Days`}>Leave {leavePercent}%</div>}
-                </div>
-              </div>
+        // SVG Circle properties
+        const radius = 36;
+        const circumference = 2 * Math.PI * radius;
+        const strokeDashoffset = circumference - (punctuality / 100) * circumference;
 
-              <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 8 }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 12, borderBottom: "1px solid var(--hairline)" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <span style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--accent)" }} />
-                    <span style={{ fontSize: 14, fontWeight: 650, color: "var(--ink)" }}>Fulfillment Contribution</span>
+        // Goals calculation
+        const goalPunctuality = 95;
+        const goalShifts = 20;
+        const goalOt = 5;
+
+        // Badges check
+        const badges = [
+          { id: "early", name: "Early Bird", desc: ">= 95% Punctuality", icon: "zap", active: punctuality >= 95, color: "var(--warn)" },
+          { id: "perfect", name: "Perfect Month", desc: "15+ shifts, 0 lates", active: totalShifts >= 15 && latesCount === 0, icon: "award", color: "var(--ok)" },
+          { id: "toil", name: "TOIL Collector", desc: "TOIL balance >= 3 days", active: toilBalance >= 3, icon: "clock", color: "var(--accent)" },
+          { id: "iron", name: "Iron Staff", desc: "Worked >= 20 shifts", active: workedDays >= 20, icon: "shield", color: "var(--v-ielts)" }
+        ];
+
+        return (
+          <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: 20 }}>
+            {/* Left Column: Presence & Streak */}
+            <div className="glass rise" style={{ padding: 24, borderRadius: "var(--radius)", display: "flex", flexDirection: "column", gap: 20 }}>
+              <SectionLabel style={{ margin: 0 }} right={<span className="mono" style={{ fontSize: 11, color: "var(--accent)" }}>gamified performance</span>}>Presence & Streaks</SectionLabel>
+              
+              <div style={{ display: "flex", alignItems: "center", gap: 24, padding: "10px 0" }}>
+                <div style={{ position: "relative", width: 90, height: 90, flexShrink: 0 }}>
+                  <svg width="90" height="90" viewBox="0 0 90 90">
+                    <circle cx="45" cy="45" r={radius} stroke="var(--hairline)" strokeWidth="6" fill="transparent" />
+                    <circle cx="45" cy="45" r={radius} stroke={punctuality >= 90 ? "var(--ok)" : "var(--warn)"} strokeWidth="6" fill="transparent" 
+                            strokeDasharray={circumference} strokeDashoffset={strokeDashoffset} strokeLinecap="round"
+                            transform="rotate(-90 45 45)" style={{ transition: "stroke-dashoffset 0.5s ease" }} />
+                  </svg>
+                  <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+                    <span style={{ fontSize: 16, fontWeight: 850, color: "var(--ink)" }}>{punctuality}%</span>
+                    <span style={{ fontSize: 8, color: "var(--ink-4)", fontWeight: 700, textTransform: "uppercase" }}>on time</span>
                   </div>
-                  <span style={{ fontSize: 15, fontWeight: 800, color: "var(--accent)" }}>{workedDays} Shifts Worked</span>
                 </div>
 
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 12, borderBottom: "1px solid var(--hairline)" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <span style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--ink-4)" }} />
-                    <span style={{ fontSize: 14, fontWeight: 650, color: "var(--ink)" }}>Scheduled Recovery</span>
-                  </div>
-                  <span style={{ fontSize: 15, fontWeight: 800, color: "var(--ink-2)" }}>{restDays} Rest Days Taken</span>
-                </div>
-
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 12, borderBottom: "1px solid var(--hairline)" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <span style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--bad)" }} />
-                    <span style={{ fontSize: 14, fontWeight: 650, color: "var(--ink)" }}>Time Off / Leave</span>
-                  </div>
-                  <span style={{ fontSize: 15, fontWeight: 800, color: "var(--bad)" }}>{leaveDays} Days On Leave</span>
-                </div>
-
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 12, borderBottom: "1px solid var(--hairline)" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <Icon name="refresh" size={14} style={{ color: "var(--accent)" }} />
+                <div>
+                  <div style={{ fontSize: 13, color: "var(--ink-3)", fontWeight: 600 }}>Active Attendance Streak</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(255, 121, 63, 0.12)", display: "grid", placeItems: "center", color: "#FF793F" }}>
+                      <Icon name="zap" size={16} />
+                    </div>
                     <div>
-                      <span style={{ fontSize: 14, fontWeight: 650, color: "var(--ink)" }}>TOIL Balance</span>
-                      <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>{toilEarned} earned days · {toilRedeemed} redeemed days</div>
+                      <div style={{ fontSize: 18, fontWeight: 850, color: "var(--ink)" }}>{currentStreak} Day{currentStreak === 1 ? "" : "s"}</div>
+                      <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 1 }}>Consecutive shifts on-time</div>
                     </div>
                   </div>
-                  <span style={{ fontSize: 15, fontWeight: 800, color: "var(--accent)" }}>{toilBalance} Days Available</span>
                 </div>
+              </div>
 
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <Icon name="clock" size={14} style={{ color: "var(--v-ielts)" }} />
-                    <span style={{ fontSize: 14, fontWeight: 650, color: "var(--ink)" }}>Approved Overtime (OT)</span>
-                  </div>
-                  <span style={{ fontSize: 15, fontWeight: 800, color: "var(--v-ielts)" }}>{totalMonthOt.toFixed(1)} Accrued Hours</span>
+              {/* Allocation bar */}
+              <div style={{ borderTop: "1px solid var(--hairline)", paddingTop: 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, fontWeight: 750, color: "var(--ink-4)", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                  <span>Monthly Allocation Ratio</span>
+                  <span>{workedDays}W / {restDays}R / {leaveDays}L</span>
+                </div>
+                <div style={{ height: 16, borderRadius: 99, overflow: "hidden", display: "flex", background: "var(--inset)", border: "1px solid var(--hairline)" }}>
+                  {workedDays > 0 && <div style={{ width: `${workedPercent}%`, background: "var(--accent)" }} title={`${workedDays} Days Worked`} />}
+                  {restDays > 0 && <div style={{ width: `${restPercent}%`, background: "var(--ink-4)" }} title={`${restDays} Rest Days`} />}
+                  {leaveDays > 0 && <div style={{ width: `${leavePercent}%`, background: "var(--bad)" }} title={`${leaveDays} Leave Days`} />}
+                </div>
+                <div style={{ display: "flex", gap: 12, marginTop: 10, fontSize: 11, color: "var(--ink-3)" }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: 99, background: "var(--accent)" }} /> Worked ({workedPercent}%)</span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: 99, background: "var(--ink-4)" }} /> Rest ({restPercent}%)</span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: 99, background: "var(--bad)" }} /> Leave ({leavePercent}%)</span>
                 </div>
               </div>
             </div>
-          </div>
-        </section>
-      )}
+
+            {/* Middle Column: Performance Goals */}
+            <div className="glass rise" style={{ padding: 24, borderRadius: "var(--radius)", display: "flex", flexDirection: "column", gap: 20 }}>
+              <SectionLabel style={{ margin: 0 }} right={<span className="mono" style={{ fontSize: 11, color: "var(--v-ielts)" }}>monthly focus</span>}>Active Performance Goals</SectionLabel>
+              
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                {/* Goal 1: Punctuality */}
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5, marginBottom: 6 }}>
+                    <span style={{ fontWeight: 650, color: "var(--ink)" }}>Punctuality Target</span>
+                    <span style={{ fontSize: 11.5, color: "var(--ink-3)" }}><strong style={{ color: "var(--ink)" }}>{punctuality}%</strong> / {goalPunctuality}%</span>
+                  </div>
+                  <div style={{ height: 6, background: "var(--inset)", borderRadius: 99, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${Math.min(100, (punctuality / goalPunctuality) * 100)}%`, background: punctuality >= goalPunctuality ? "var(--ok)" : "var(--warn)", borderRadius: 99 }} />
+                  </div>
+                </div>
+
+                {/* Goal 2: Shift Fulfillment */}
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5, marginBottom: 6 }}>
+                    <span style={{ fontWeight: 650, color: "var(--ink)" }}>Shift Fulfillment</span>
+                    <span style={{ fontSize: 11.5, color: "var(--ink-3)" }}><strong style={{ color: "var(--ink)" }}>{workedDays}</strong> / {goalShifts} shifts</span>
+                  </div>
+                  <div style={{ height: 6, background: "var(--inset)", borderRadius: 99, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${Math.min(100, (workedDays / goalShifts) * 100)}%`, background: "var(--accent)", borderRadius: 99 }} />
+                  </div>
+                </div>
+
+                {/* Goal 3: Overtime Contribution */}
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5, marginBottom: 6 }}>
+                    <span style={{ fontWeight: 650, color: "var(--ink)" }}>Overtime Contribution</span>
+                    <span style={{ fontSize: 11.5, color: "var(--ink-3)" }}><strong style={{ color: "var(--ink)" }}>{totalMonthOt.toFixed(1)}h</strong> / {goalOt}h</span>
+                  </div>
+                  <div style={{ height: 6, background: "var(--inset)", borderRadius: 99, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${Math.min(100, (totalMonthOt / goalOt) * 100)}%`, background: "var(--v-ielts)", borderRadius: 99 }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column: Achievements & Badges */}
+            <div className="glass rise" style={{ padding: 24, borderRadius: "var(--radius)", display: "flex", flexDirection: "column", gap: 16 }}>
+              <SectionLabel style={{ margin: 0 }} right={<span className="mono" style={{ fontSize: 11, color: "var(--ok)" }}>staff credentials</span>}>Unlocked Achievements</SectionLabel>
+              
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                {badges.map((b) => (
+                  <div key={b.id} className="inset" style={{ 
+                    padding: "12px", 
+                    borderRadius: 12, 
+                    display: "flex", 
+                    flexDirection: "column", 
+                    alignItems: "center", 
+                    textAlign: "center",
+                    opacity: b.active ? 1 : 0.45,
+                    border: b.active ? `1px solid ${b.color}40` : "1px solid transparent",
+                    background: b.active ? `color-mix(in oklch, ${b.color} 5%, var(--inset))` : "var(--inset)"
+                  }}>
+                    <div style={{ 
+                      width: 32, 
+                      height: 32, 
+                      borderRadius: 999, 
+                      background: b.active ? `color-mix(in oklch, ${b.color} 15%, transparent)` : "rgba(255,255,255,0.03)", 
+                      display: "grid", 
+                      placeItems: "center",
+                      color: b.active ? b.color : "var(--ink-4)",
+                      border: `1px solid ${b.active ? b.color : "var(--hairline)"}30`
+                    }}>
+                      <Icon name={b.icon} size={15} />
+                    </div>
+                    <div style={{ fontSize: 11.5, fontWeight: 750, color: b.active ? "var(--ink)" : "var(--ink-3)", marginTop: 8 }}>{b.name}</div>
+                    <div style={{ fontSize: 9, color: "var(--ink-4)", marginTop: 2 }}>{b.desc}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        );
+      })()}
 
       {activeRosterTab === "review" && (
         <section style={{ display: "flex", flexDirection: "column", gap: 20 }}>
           <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>performance & presence study</span>}>Centre & Staff Monthly Review</SectionLabel>
           
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-            <input type="month" value={reviewMonth} onChange={(e) => setReviewMonth(e.target.value)} style={{ background: "var(--inset)", border: "1px solid var(--hairline)", borderRadius: 10, color: "var(--ink)", fontFamily: "var(--font)", fontSize: 14, padding: "8px 12px" }} />
+            <input type="month" value={reviewMonth} onChange={(e) => setReviewMonth(e.target.value)} style={{ background: "var(--inset)", border: "1px solid var(--hairline)", borderRadius: 10, color: "var(--ink)", fontFamily: "var(--font)", fontSize: 14, padding: "8px 12px", outline: "none" }} />
             <div style={{ flex: 1 }} />
             <button onClick={loadReviewData} disabled={loadingReview} className="tap glass-2" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 10, cursor: "pointer", border: "1px solid var(--hairline)", color: "var(--ink-2)", fontSize: 12, fontWeight: 700 }}>
               <Icon name="refresh" size={13} /> {loadingReview ? "Loading..." : "Refresh"}
@@ -6869,6 +7250,93 @@ function RosterPage({ branch }) {
             <div style={{ color: "var(--ink-4)", fontSize: 14, padding: 24, textAlign: "center" }}>Loading monthly records...</div>
           ) : (
             <React.Fragment>
+              {/* Leaderboard Podium & Weekly Spotlight */}
+              {sortedStaff.length > 0 && (
+                <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: 20 }} className="review-dashboard-grid">
+                  {/* Leaderboard Podium Card */}
+                  <div className="glass rise" style={{ padding: 24, borderRadius: "var(--radius)", display: "flex", flexDirection: "column", gap: 16 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <SectionLabel style={{ margin: 0 }} right={<span className="mono" style={{ fontSize: 11, color: "var(--warn)" }}>top performers</span>}>Monthly Leaderboard</SectionLabel>
+                      <Icon name="award" size={16} style={{ color: "var(--warn)" }} />
+                    </div>
+                    
+                    {/* Podium Grid */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr 1fr", gap: 12, alignItems: "end", padding: "16px 0 10px 0", minHeight: 180 }}>
+                      {/* Rank 2 */}
+                      {sortedStaff[1] && (
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+                          <Avatar name={sortedStaff[1].name} size={42} />
+                          <div style={{ fontSize: 12, fontWeight: 750, color: "var(--ink)", textAlign: "center" }}>{sortedStaff[1].name.split(" ")[0]}</div>
+                          <div className="mono" style={{ fontSize: 10.5, color: "var(--ink-3)" }}>{ATT.attFmtMins(sortedStaff[1].workedMins)}</div>
+                          <div style={{ height: 50, width: "100%", background: "var(--glass-2)", border: "1px solid var(--hairline)", borderBottom: "none", borderRadius: "8px 8px 0 0", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <span style={{ fontSize: 13, fontWeight: 850, color: "var(--ink-3)" }}>2nd</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Rank 1 */}
+                      {sortedStaff[0] && (
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+                          <div style={{ position: "relative" }}>
+                            <Avatar name={sortedStaff[0].name} size={54} />
+                            <div style={{ position: "absolute", top: -14, left: "50%", transform: "translateX(-50%)", fontSize: 14 }}>👑</div>
+                          </div>
+                          <div style={{ fontSize: 13.5, fontWeight: 850, color: "var(--accent)", textAlign: "center" }}>{sortedStaff[0].name.split(" ")[0]}</div>
+                          <div className="mono" style={{ fontSize: 11, color: "var(--accent)", fontWeight: 750 }}>{ATT.attFmtMins(sortedStaff[0].workedMins)}</div>
+                          <div style={{ height: 75, width: "100%", background: "color-mix(in oklch, var(--warn) 10%, var(--glass-2))", border: "1px solid var(--warn)", borderBottom: "none", borderRadius: "10px 10px 0 0", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <span style={{ fontSize: 16, fontWeight: 900, color: "var(--warn)" }}>1st</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Rank 3 */}
+                      {sortedStaff[2] && (
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+                          <Avatar name={sortedStaff[2].name} size={38} />
+                          <div style={{ fontSize: 11.5, fontWeight: 750, color: "var(--ink)", textAlign: "center" }}>{sortedStaff[2].name.split(" ")[0]}</div>
+                          <div className="mono" style={{ fontSize: 10, color: "var(--ink-3)" }}>{ATT.attFmtMins(sortedStaff[2].workedMins)}</div>
+                          <div style={{ height: 35, width: "100%", background: "var(--glass-2)", border: "1px solid var(--hairline)", borderBottom: "none", borderRadius: "6px 6px 0 0", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <span style={{ fontSize: 12, fontWeight: 800, color: "var(--ink-4)" }}>3rd</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Spotlight Card */}
+                  <div className="glass rise" style={{ padding: 24, borderRadius: "var(--radius)", display: "flex", flexDirection: "column", gap: 14 }}>
+                    <SectionLabel style={{ margin: 0 }} right={<span className="mono" style={{ fontSize: 11, color: "var(--ok)" }}>excellence</span>}>Spotlight Staff</SectionLabel>
+                    
+                    {(() => {
+                      const perfectPresence = [...sortedStaff]
+                        .filter(s => s.shiftsCount >= 5)
+                        .sort((a, b) => (a.lateCount - b.lateCount) || (b.shiftsCount - a.shiftsCount))[0] || sortedStaff[0];
+                      
+                      if (!perfectPresence) return <div style={{ color: "var(--ink-4)", fontSize: 12 }}>No records.</div>;
+                      
+                      return (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 12, height: "100%", justifyContent: "center" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                            <Avatar name={perfectPresence.name} size={42} />
+                            <div>
+                              <div style={{ fontSize: 14, fontWeight: 750, color: "var(--ink)" }}>{perfectPresence.name}</div>
+                              <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2, textTransform: "capitalize" }}>{perfectPresence.branch} Centre</div>
+                            </div>
+                          </div>
+                          
+                          <div className="inset" style={{ padding: "10px 12px", borderRadius: 10 }}>
+                            <div style={{ fontSize: 10, color: "var(--ink-4)", fontWeight: 700, textTransform: "uppercase" }}>Monthly Highlight</div>
+                            <div style={{ fontSize: 12.5, fontWeight: 650, color: "var(--ink-2)", marginTop: 6 }}>
+                              Completed <strong style={{ color: "var(--accent)" }}>{perfectPresence.shiftsCount} shifts</strong> with <strong style={{ color: "var(--ok)" }}>{perfectPresence.lateCount} lates</strong>. Outstanding punctuality!
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
+
               {/* Centre-wise stats */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
                 {Object.keys(branchStats).length === 0 ? (
@@ -6881,8 +7349,8 @@ function RosterPage({ branch }) {
                       <div key={brName} className="glass" style={{ padding: "16px 18px", borderRadius: "var(--radius)" }}>
                         <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: "1px" }}>{brName} Centre</div>
                         <div style={{ fontSize: 24, fontWeight: 800, color: "var(--accent)", marginTop: 6 }}>{stats.shiftsCount} Shifts</div>
-                        <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 6, display: "flex", flexDirection: "column", gap: 3 }}>
-                          <div>Lates: <strong style={{ color: "var(--warn)" }}>{stats.lateCount}</strong> ({lateRate}% rate)</div>
+                        <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
+                          <div>Lates: <strong style={{ color: lateRate > 15 ? "var(--warn)" : "var(--ok)" }}>{stats.lateCount}</strong> ({lateRate}% rate)</div>
                           <div>Worked: <strong>{ATT.attFmtMins(stats.workedMins)}</strong> (Avg: {ATT.attFmtMins(avgMins)}/sh)</div>
                         </div>
                       </div>
@@ -6897,25 +7365,25 @@ function RosterPage({ branch }) {
                   <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
                     <thead>
                       <tr style={{ borderBottom: "1px solid var(--hairline)" }}>
-                        <th onClick={() => toggleSort("name")} style={{ textAlign: "left", padding: "10px 14px", fontSize: 10, color: "var(--ink-4)", cursor: "pointer", textTransform: "uppercase" }}>
+                        <th onClick={() => toggleSort("name")} style={{ textAlign: "left", padding: "12px 14px", fontSize: 10, color: "var(--ink-4)", cursor: "pointer", textTransform: "uppercase" }}>
                           Staff {sortKey === "name" && (sortAsc ? "▲" : "▼")}
                         </th>
-                        <th onClick={() => toggleSort("branch")} style={{ textAlign: "left", padding: "10px 14px", fontSize: 10, color: "var(--ink-4)", cursor: "pointer", textTransform: "uppercase" }}>
+                        <th onClick={() => toggleSort("branch")} style={{ textAlign: "left", padding: "12px 14px", fontSize: 10, color: "var(--ink-4)", cursor: "pointer", textTransform: "uppercase" }}>
                           Home Branch {sortKey === "branch" && (sortAsc ? "▲" : "▼")}
                         </th>
-                        <th onClick={() => toggleSort("shiftsCount")} style={{ textAlign: "right", padding: "10px 14px", fontSize: 10, color: "var(--ink-4)", cursor: "pointer", textTransform: "uppercase" }}>
+                        <th onClick={() => toggleSort("shiftsCount")} style={{ textAlign: "right", padding: "12px 14px", fontSize: 10, color: "var(--ink-4)", cursor: "pointer", textTransform: "uppercase" }}>
                           Shifts {sortKey === "shiftsCount" && (sortAsc ? "▲" : "▼")}
                         </th>
-                        <th onClick={() => toggleSort("lateCount")} style={{ textAlign: "right", padding: "10px 14px", fontSize: 10, color: "var(--ink-4)", cursor: "pointer", textTransform: "uppercase" }}>
+                        <th onClick={() => toggleSort("lateCount")} style={{ textAlign: "right", padding: "12px 14px", fontSize: 10, color: "var(--ink-4)", cursor: "pointer", textTransform: "uppercase" }}>
                           Lates {sortKey === "lateCount" && (sortAsc ? "▲" : "▼")}
                         </th>
-                        <th onClick={() => toggleSort("breakMins")} style={{ textAlign: "right", padding: "10px 14px", fontSize: 10, color: "var(--ink-4)", cursor: "pointer", textTransform: "uppercase" }}>
+                        <th onClick={() => toggleSort("breakMins")} style={{ textAlign: "right", padding: "12px 14px", fontSize: 10, color: "var(--ink-4)", cursor: "pointer", textTransform: "uppercase" }}>
                           Breaks {sortKey === "breakMins" && (sortAsc ? "▲" : "▼")}
                         </th>
-                        <th onClick={() => toggleSort("workedMins")} style={{ textAlign: "right", padding: "10px 14px", fontSize: 10, color: "var(--ink-4)", cursor: "pointer", textTransform: "uppercase" }}>
+                        <th onClick={() => toggleSort("workedMins")} style={{ textAlign: "right", padding: "12px 14px", fontSize: 10, color: "var(--ink-4)", cursor: "pointer", textTransform: "uppercase" }}>
                           Worked Hours {sortKey === "workedMins" && (sortAsc ? "▲" : "▼")}
                         </th>
-                        <th style={{ textAlign: "right", padding: "10px 14px", fontSize: 10, color: "var(--ink-4)", textTransform: "uppercase" }}>
+                        <th style={{ textAlign: "right", padding: "12px 14px", fontSize: 10, color: "var(--ink-4)", textTransform: "uppercase" }}>
                           Avg Shift
                         </th>
                       </tr>
@@ -6924,11 +7392,14 @@ function RosterPage({ branch }) {
                       {sortedStaff.map((s: any, idx) => {
                         const avgMins = s.shiftsCount > 0 ? Math.round(s.workedMins / s.shiftsCount) : 0;
                         return (
-                          <tr key={idx} style={{ borderBottom: "1px solid var(--hairline)", verticalAlign: "middle" }}>
-                            <td style={{ padding: "12px 14px", fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>{s.name}</td>
+                          <tr key={idx} className="hover-lift-subtle" style={{ borderBottom: "1px solid var(--hairline)", verticalAlign: "middle" }}>
+                            <td style={{ padding: "12px 14px", fontSize: 13, fontWeight: 700, color: "var(--ink)", display: "flex", alignItems: "center", gap: 8 }}>
+                              <Avatar name={s.name} size={24} />
+                              <span>{s.name}</span>
+                            </td>
                             <td style={{ padding: "12px 14px", fontSize: 12.5, color: "var(--ink-3)", textTransform: "capitalize" }}>{s.branch}</td>
                             <td style={{ padding: "12px 14px", fontSize: 13, color: "var(--ink)", textAlign: "right", fontWeight: 600 }}>{s.shiftsCount}</td>
-                            <td style={{ padding: "12px 14px", fontSize: 13, color: s.lateCount > 0 ? "var(--warn)" : "var(--ink-3)", textAlign: "right", fontWeight: 650 }}>{s.lateCount}</td>
+                            <td style={{ padding: "12px 14px", fontSize: 13, color: s.lateCount > 0 ? "var(--warn)" : "var(--ok)", textAlign: "right", fontWeight: 650 }}>{s.lateCount}</td>
                             <td style={{ padding: "12px 14px", fontSize: 12, color: "var(--ink-3)", textAlign: "right", fontFamily: "monospace" }}>{s.breakMins ? `${s.breakMins}m` : "—"}</td>
                             <td style={{ padding: "12px 14px", fontSize: 13, color: "var(--accent)", textAlign: "right", fontWeight: 700, fontFamily: "monospace" }}>{ATT.attFmtMins(s.workedMins)}</td>
                             <td style={{ padding: "12px 14px", fontSize: 12.5, color: "var(--ink-2)", textAlign: "right", fontFamily: "monospace" }}>{ATT.attFmtMins(avgMins)}</td>
