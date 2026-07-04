@@ -51,15 +51,24 @@ const fetchCalendarSessions = async (currentDate: Date, activeBranch: string, ap
   return sessions.map(s => {
     const clientUpper = (s.client_name || '').toUpperCase().trim();
     const examUpper = (s.exam_name || '').toUpperCase().trim();
-    if (clientUpper === 'PROMETRIC') {
-      if (examUpper.includes('CMA US') || examUpper.includes('CMA')) {
-        return { ...s, client_name: 'CMA US' };
-      }
-      if (examUpper.includes('CELPIP')) {
-        return { ...s, client_name: 'CELPIP' };
-      }
+
+    // 1. CELPIP: seen as CEL, only for CELPIP, no other exam
+    if (examUpper.includes('CELPIP') || clientUpper.includes('CELPIP') || examUpper.includes('CEL') || clientUpper.includes('CEL')) {
+      return { ...s, client_name: 'CELPIP' };
     }
-    return s;
+
+    // 2. CMA US: only for Prometric/PRO
+    if (examUpper.includes('CMA') || clientUpper.includes('CMA') || examUpper.includes('IMA') || clientUpper.includes('IMA')) {
+      return { ...s, client_name: 'CMA US' };
+    }
+
+    // 3. PSI
+    if (clientUpper.includes('PSI') || examUpper.includes('PSI')) {
+      return { ...s, client_name: 'PSI' };
+    }
+
+    // 4. Default: all rest of the exams are Pearson VUE
+    return { ...s, client_name: 'PEARSON VUE' };
   });
 }
 

@@ -1040,7 +1040,7 @@ export async function dbFetchHandovers(branch: string, statusFilter?: string) {
       .order("created_at", { ascending: false });
 
     if (branch && branch !== "global") {
-      query = query.eq("branch", branch);
+      query = query.in("branch", [branch, "all"]);
     }
     if (statusFilter) {
       query = query.eq("status", statusFilter);
@@ -1053,4 +1053,37 @@ export async function dbFetchHandovers(branch: string, statusFilter?: string) {
     console.error("dbFetchHandovers error:", e);
     return [];
   }
+}
+
+export async function dbFetchIncomingHandovers(userName: string) {
+  try {
+    const since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+    const { data, error } = await supabase
+      .from("shift_handovers")
+      .select("*")
+      .contains("incoming_staff", [userName])
+      .gte("created_at", since)
+      .order("created_at", { ascending: false })
+      .limit(10);
+    if (error) throw error;
+    return data || [];
+  } catch (e) {
+    console.error("dbFetchIncomingHandovers error:", e);
+    return [];
+  }
+}
+
+export function getSeenHandoverIds(): string[] {
+  try {
+    const raw = localStorage.getItem("fets_seen_handovers");
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+export function markHandoverSeen(id: string) {
+  try {
+    const seen = getSeenHandoverIds();
+    if (!seen.includes(id)) seen.push(id);
+    localStorage.setItem("fets_seen_handovers", JSON.stringify(seen.slice(-200)));
+  } catch {}
 }

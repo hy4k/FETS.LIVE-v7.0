@@ -22,15 +22,27 @@ const keyOf = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 const lc = (s: any) => String(s || "").toLowerCase();
 
 // map a free-text client / exam name onto one of the prototype vendor slugs
-const VENDOR_HINTS: [string, string][] = [
-  ["prometric", "prometric"], ["pearson", "pearson"], ["vue", "pearson"],
-  ["psi", "psi"], ["celpip", "celpip"], ["cma", "cma"], ["ima", "cma"],
-  ["ielts", "ielts"],
-];
-function clientToSlug(name: string) {
-  const n = lc(name);
-  for (const [hint, slug] of VENDOR_HINTS) if (n.includes(hint)) return slug;
-  return "prometric";
+function clientToSlug(clientName: string, examName: string = "") {
+  const c = lc(clientName);
+  const e = lc(examName);
+
+  // 1. CELPIP: seen as CEL, only for CELPIP, no other exam
+  if (c.includes("celpip") || e.includes("celpip") || c.includes("cel") || e.includes("cel")) {
+    return "celpip";
+  }
+
+  // 2. Prometric / PRO: ONLY used for CMA US exam.
+  if (e.includes("cma") || e.includes("ima") || c.includes("cma") || c.includes("ima")) {
+    return "prometric"; // maps to "PRO"
+  }
+
+  // 3. PSI
+  if (c.includes("psi") || e.includes("psi")) {
+    return "psi";
+  }
+
+  // 4. Default: all rest of the exams are Pearson VUE
+  return "pearson";
 }
 const branchOf = (v: string) => {
   const b = lc(v);
@@ -421,18 +433,10 @@ export async function ensureMonth(d: Date) {
       data.forEach((s: any) => {
         const dt = new Date(`${s.date}T00:00:00`); if (isNaN(dt.getTime())) return;
         const k = `${dt.getFullYear()}-${dt.getMonth()}-${dt.getDate()}`;
-        let clientName = s.client_name || '';
-        const clientUpper = clientName.toUpperCase().trim();
-        const examUpper = (s.exam_name || '').toUpperCase().trim();
-        if (clientUpper === 'PROMETRIC') {
-          if (examUpper.includes('CMA US') || examUpper.includes('CMA')) {
-            clientName = 'CMA US';
-          } else if (examUpper.includes('CELPIP')) {
-            clientName = 'CELPIP';
-          }
-        }
+        const clientName = s.client_name || '';
+        const resolvedVendor = clientToSlug(clientName, s.exam_name || '');
         (F._liveSessions[k] || (F._liveSessions[k] = [])).push({
-          id: s.id, vendor: clientToSlug(clientName || s.exam_name),
+          id: s.id, vendor: resolvedVendor,
           exam: s.exam_name || clientName || "Exam session", count: Number(s.candidate_count) || 0,
           start: (s.start_time || "09:00").slice(0, 5), end: (s.end_time || s.start_time || "").slice(0, 5),
           branch: branchOf(s.branch_location || s.branch),

@@ -72,6 +72,7 @@ export const CandidateAnalysis: React.FC<CandidateAnalysisProps> = ({ onClose })
         'PROMETRIC': { bg: 'from-rose-600/20 to-rose-800/20', text: 'text-rose-400', border: 'border-rose-500/30' },
         'PSI': { bg: 'from-emerald-600/20 to-emerald-800/20', text: 'text-emerald-400', border: 'border-emerald-500/30' },
         'PEARSON': { bg: 'from-sky-600/20 to-sky-800/20', text: 'text-sky-400', border: 'border-sky-500/30' },
+        'CELPIP': { bg: 'from-rose-600/20 to-rose-800/20', text: 'text-rose-400', border: 'border-rose-500/30' },
         'ITTS': { bg: 'from-amber-600/20 to-amber-800/20', text: 'text-amber-400', border: 'border-amber-500/30' },
         'OTHER': { bg: 'from-slate-600/20 to-slate-800/20', text: 'text-slate-400', border: 'border-slate-500/30' }
     };
@@ -134,13 +135,27 @@ export const CandidateAnalysis: React.FC<CandidateAnalysisProps> = ({ onClose })
         }
     };
 
-    const normalizeClientName = (name: string): string => {
-        const upper = (name || '').toUpperCase();
-        if (upper.includes('PEARSON') || upper.includes('VUE')) return 'PEARSON';
-        if (upper.includes('PSI')) return 'PSI';
-        if (upper.includes('PROMETRIC')) return 'PROMETRIC';
-        if (upper.includes('ITTS')) return 'ITTS';
-        return 'OTHER';
+    const normalizeClientName = (name: string, examName: string = ""): string => {
+        const c = (name || '').toUpperCase().trim();
+        const e = (examName || '').toUpperCase().trim();
+
+        // 1. CELPIP: seen as CEL, only for CELPIP, no other exam
+        if (c.includes('CELPIP') || e.includes('CELPIP') || c.includes('CEL') || e.includes('CEL')) {
+            return 'CELPIP';
+        }
+
+        // 2. Prometric / PRO: only used for CMA US exam
+        if (e.includes('CMA') || c.includes('CMA') || e.includes('IMA') || c.includes('IMA')) {
+            return 'PROMETRIC';
+        }
+
+        // 3. PSI
+        if (c.includes('PSI') || e.includes('PSI')) {
+            return 'PSI';
+        }
+
+        // 4. Default: all rest of the exams are Pearson VUE
+        return 'PEARSON';
     };
 
     const getClientColor = (client: string) => {
@@ -179,7 +194,7 @@ export const CandidateAnalysis: React.FC<CandidateAnalysisProps> = ({ onClose })
         // Process ALL candidates for totals
         candidates.forEach(c => {
             // Client stats
-            const client = normalizeClientName(c.client_name);
+            const client = normalizeClientName(c.client_name, c.exam_name);
             clientStats[client] = (clientStats[client] || 0) + 1;
 
             // Exam stats
@@ -226,10 +241,10 @@ export const CandidateAnalysis: React.FC<CandidateAnalysisProps> = ({ onClose })
 
         // Group calendar sessions by client + exam
         calendarSessions.forEach(session => {
-            const key = `${normalizeClientName(session.client_name)}_${session.exam_name || 'General'}`;
+            const key = `${normalizeClientName(session.client_name, session.exam_name)}_${session.exam_name || 'General'}`;
             if (!calendarMap[key]) {
                 calendarMap[key] = {
-                    client: normalizeClientName(session.client_name),
+                    client: normalizeClientName(session.client_name, session.exam_name),
                     exam: session.exam_name || 'General',
                     count: 0
                 };
@@ -240,7 +255,7 @@ export const CandidateAnalysis: React.FC<CandidateAnalysisProps> = ({ onClose })
         // Group register candidates by client + exam for the same month
         const registerMap: Record<string, number> = {};
         monthCandidates.forEach(c => {
-            const key = `${normalizeClientName(c.client_name)}_${c.exam_name || 'General'}`;
+            const key = `${normalizeClientName(c.client_name, c.exam_name)}_${c.exam_name || 'General'}`;
             registerMap[key] = (registerMap[key] || 0) + 1;
         });
 
@@ -392,7 +407,7 @@ Discrepancies Found:         ${discrepancies.filter(d => d.status !== 'match').l
             .sort(([, a], [, b]) => b.count - a.count)
             .forEach(([exam, data]) => {
                 rows.push([
-                    normalizeClientName(data.client),
+                    normalizeClientName(data.client, exam),
                     exam,
                     data.count.toString(),
                     ''

@@ -74,12 +74,12 @@ describe('useCalendarSessions mapping logic', () => {
     expect(data[1].client_name).toBe('CELPIP')
     expect(data[1].exam_name).toBe('CELPIP General')
 
-    // Other exams under Prometric retain Prometric client name
-    expect(data[2].client_name).toBe('PROMETRIC')
+    // Other exams under Prometric map to PEARSON VUE
+    expect(data[2].client_name).toBe('PEARSON VUE')
     expect(data[2].exam_name).toBe('USMLE Step 1')
 
-    // Exams under other clients (e.g. Pearson Vue) retain their original client name
-    expect(data[3].client_name).toBe('PEARSON VUE')
+    // Exams under other clients (e.g. Pearson Vue) that are CELPIP get mapped to CELPIP client
+    expect(data[3].client_name).toBe('CELPIP')
     expect(data[3].exam_name).toBe('CELPIP General')
   })
 })

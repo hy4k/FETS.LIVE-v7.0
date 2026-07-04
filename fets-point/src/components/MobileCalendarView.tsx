@@ -24,29 +24,36 @@ const CLIENT_COLORS: Record<string, { bg: string; text: string; dot: string; bad
 }
 
 const resolveExamKind = (s: { client_name?: string; exam_name?: string }) => {
-  const ex = (s.exam_name || '').toUpperCase()
-  const cl = (s.client_name || '').toUpperCase()
-  if (ex.includes('CELPIP') || cl.includes('CELPIP')) return 'CELPIP'
-  if (ex.includes('CMA') || cl.includes('CMA')) return 'CMA'
-  if (ex.includes('PEARSON') || ex.includes('VUE') || cl.includes('PEARSON') || cl.includes('VUE')) return 'PEARSON'
-  if (cl.includes('PROMETRIC') || ex.includes('PROMETRIC')) return 'PROMETRIC'
-  if (cl.includes('PSI') || ex.includes('PSI')) return 'PSI'
-  if (cl.includes('ITTS') || ex.includes('ITTS')) return 'ITTS'
-  if (cl.includes('IELTS') || ex.includes('IELTS')) return 'IELTS'
-  return 'OTHER'
+  const ex = (s.exam_name || '').toUpperCase().trim()
+  const cl = (s.client_name || '').toUpperCase().trim()
+
+  // 1. CELPIP: seen as CEL, only for CELPIP, no other exam
+  if (ex.includes('CELPIP') || cl.includes('CELPIP') || ex.includes('CEL') || cl.includes('CEL')) {
+    return 'CELPIP'
+  }
+
+  // 2. Prometric / PRO: ONLY used for CMA US exam.
+  if (ex.includes('CMA') || cl.includes('CMA') || ex.includes('IMA') || cl.includes('IMA')) {
+    return 'PROMETRIC'
+  }
+
+  // 3. PSI
+  if (cl.includes('PSI') || ex.includes('PSI')) {
+    return 'PSI'
+  }
+
+  // 4. Default: all rest of the exams are Pearson VUE
+  return 'PEARSON'
 }
 
 const getBadgeLabel = (s: { client_name?: string; exam_name?: string }) => {
   const k = resolveExamKind(s)
   switch (k) {
-    case 'PEARSON': return 'PV'
-    case 'PROMETRIC': return 'PMT'
+    case 'PEARSON': return 'VUE'
+    case 'PROMETRIC': return 'PRO'
     case 'PSI': return 'PSI'
-    case 'ITTS': return 'ITTS'
-    case 'CELPIP': return 'CELPIP'
-    case 'CMA': return 'CMA'
-    case 'IELTS': return 'IELTS'
-    default: return (s.client_name || '—').trim().slice(0, 12)
+    case 'CELPIP': return 'CEL'
+    default: return 'VUE'
   }
 }
 
@@ -75,15 +82,24 @@ export function MobileCalendarView({ setActiveTab }: MobileCalendarViewProps) {
         const mapped = (data || []).map((s: any) => {
           const clientUpper = (s.client_name || '').toUpperCase().trim();
           const examUpper = (s.exam_name || '').toUpperCase().trim();
-          if (clientUpper === 'PROMETRIC') {
-            if (examUpper.includes('CMA US') || examUpper.includes('CMA')) {
-              return { ...s, client_name: 'CMA US' };
-            }
-            if (examUpper.includes('CELPIP')) {
-              return { ...s, client_name: 'CELPIP' };
-            }
+
+          // 1. CELPIP: seen as CEL, only for CELPIP, no other exam
+          if (examUpper.includes('CELPIP') || clientUpper.includes('CELPIP') || examUpper.includes('CEL') || clientUpper.includes('CEL')) {
+            return { ...s, client_name: 'CELPIP' };
           }
-          return s;
+
+          // 2. CMA US: only for Prometric/PRO
+          if (examUpper.includes('CMA') || clientUpper.includes('CMA') || examUpper.includes('IMA') || clientUpper.includes('IMA')) {
+            return { ...s, client_name: 'CMA US' };
+          }
+
+          // 3. PSI
+          if (clientUpper.includes('PSI') || examUpper.includes('PSI')) {
+            return { ...s, client_name: 'PSI' };
+          }
+
+          // 4. Default: all rest of the exams are Pearson VUE
+          return { ...s, client_name: 'PEARSON VUE' };
         });
         setSessions(mapped);
       } catch (err) {

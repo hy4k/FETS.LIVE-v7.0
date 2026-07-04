@@ -89,10 +89,10 @@ const EXAM_COLORS: Record<string, {
 type ExamKind = keyof typeof EXAM_COLORS
 
 const KIND_SECTION_LABEL: Record<ExamKind, string> = {
-  PROMETRIC: 'CMA US',
-  PEARSON: 'Pearson Vue (PV)',
+  PROMETRIC: 'CMA US (PRO)',
+  PEARSON: 'Pearson VUE (VUE)',
   PSI: 'PSI',
-  CELPIP: 'CELPIP',
+  CELPIP: 'CELPIP (CEL)',
   CMA: 'CMA',
   ITTS: 'ITTS',
   IELTS: 'IELTS',
@@ -101,16 +101,26 @@ const KIND_SECTION_LABEL: Record<ExamKind, string> = {
 
 /** Uses exam title + client so CMA / CELPIP / Paragon-hosted exams don’t all read as “Prometric”. */
 const resolveExamKind = (s: Pick<Session, 'client_name' | 'exam_name'>): ExamKind => {
-  const ex = (s.exam_name || '').toUpperCase()
-  const cl = (s.client_name || '').toUpperCase()
-  if (ex.includes('CELPIP') || cl.includes('CELPIP')) return 'CELPIP'
-  if (ex.includes('CMA') || cl.includes('CMA')) return 'CMA'
-  if (ex.includes('PEARSON') || ex.includes('VUE') || cl.includes('PEARSON') || cl.includes('VUE')) return 'PEARSON'
-  if (cl.includes('PROMETRIC') || ex.includes('PROMETRIC')) return 'PROMETRIC'
-  if (cl.includes('PSI') || ex.includes('PSI')) return 'PSI'
-  if (cl.includes('ITTS') || ex.includes('ITTS')) return 'ITTS'
-  if (cl.includes('IELTS') || ex.includes('IELTS')) return 'IELTS'
-  return 'OTHER'
+  const ex = (s.exam_name || '').toUpperCase().trim()
+  const cl = (s.client_name || '').toUpperCase().trim()
+
+  // 1. CELPIP: only for CELPIP, seen as CEL
+  if (ex.includes('CELPIP') || cl.includes('CELPIP') || ex.includes('CEL') || cl.includes('CEL')) {
+    return 'CELPIP'
+  }
+
+  // 2. Prometric / PRO: only used for CMA US exam
+  if (ex.includes('CMA') || cl.includes('CMA') || ex.includes('IMA') || cl.includes('IMA')) {
+    return 'PROMETRIC'
+  }
+
+  // 3. PSI
+  if (cl.includes('PSI') || ex.includes('PSI')) {
+    return 'PSI'
+  }
+
+  // 4. Default: all rest of the exams are Pearson VUE
+  return 'PEARSON'
 }
 
 const groupSessionsByKind = (list: Session[]) => {
@@ -133,30 +143,20 @@ const getExamColor = (kind: ExamKind) => EXAM_COLORS[kind] ?? EXAM_COLORS.OTHER
 const getClientBadgeLabel = (s: Pick<Session, 'client_name' | 'exam_name'>) => {
   const k = resolveExamKind(s)
   switch (k) {
-    case 'PEARSON': return 'PV'
-    case 'PROMETRIC': return 'CMA US'
+    case 'PEARSON': return 'VUE'
+    case 'PROMETRIC': return 'PRO'
     case 'PSI': return 'PSI'
-    case 'ITTS': return 'ITTS'
-    case 'CELPIP': return 'CELPIP'
-    case 'CMA': return 'CMA'
-    case 'IELTS': return 'IELTS'
-    default: {
-      const n = (s.client_name || '—').trim()
-      return n.length > 10 ? `${n.slice(0, 9)}…` : n
-    }
+    case 'CELPIP': return 'CEL'
+    default: return 'VUE'
   }
 }
 
 const normalizeClientName = (name: string): ExamKind => {
-  const u = (name || '').toUpperCase()
-  if (u.includes('CELPIP')) return 'CELPIP'
-  if (u.includes('CMA')) return 'CMA'
-  if (u.includes('PEARSON') || u.includes('VUE')) return 'PEARSON'
-  if (u.includes('PROMETRIC')) return 'PROMETRIC'
+  const u = (name || '').toUpperCase().trim()
+  if (u.includes('CELPIP') || u.includes('CEL')) return 'CELPIP'
+  if (u.includes('CMA') || u.includes('IMA')) return 'PROMETRIC'
   if (u.includes('PSI')) return 'PSI'
-  if (u.includes('ITTS')) return 'ITTS'
-  if (u.includes('IELTS')) return 'IELTS'
-  return 'OTHER'
+  return 'PEARSON'
 }
 
 const formatTime = (time: string) => {
@@ -347,12 +347,14 @@ export function FetsCalendarPremium() {
       const examNameUpper = formData.exam_name.toUpperCase().trim();
       const clientNameUpper = clientName.toUpperCase().trim();
       
-      if (clientNameUpper === 'PROMETRIC') {
-        if (examNameUpper.includes('CMA US') || examNameUpper.includes('CMA')) {
-          clientName = 'CMA US';
-        } else if (examNameUpper.includes('CELPIP')) {
-          clientName = 'CELPIP';
-        }
+      if (examNameUpper.includes('CELPIP') || clientNameUpper.includes('CELPIP') || examNameUpper.includes('CEL') || clientNameUpper.includes('CEL')) {
+        clientName = 'CELPIP';
+      } else if (examNameUpper.includes('CMA') || clientNameUpper.includes('CMA') || examNameUpper.includes('IMA') || clientNameUpper.includes('IMA')) {
+        clientName = 'CMA US';
+      } else if (clientNameUpper.includes('PSI') || examNameUpper.includes('PSI')) {
+        clientName = 'PSI';
+      } else {
+        clientName = 'PEARSON VUE';
       }
 
       const data: any = { 

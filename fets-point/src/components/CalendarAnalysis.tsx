@@ -103,6 +103,7 @@ export const CalendarAnalysis: React.FC<CalendarAnalysisProps> = ({ onClose, act
         'PEARSON': { bg: 'from-[#FFD633]/20 to-[#FFD633]/10', text: 'text-[#FFD633]', border: 'border-[#FFD633]/30' },
         'PSI': { bg: 'from-[#FFD633]/20 to-[#FFD633]/10', text: 'text-[#FFD633]', border: 'border-[#FFD633]/30' },
         'PROMETRIC': { bg: 'from-[#FFD633]/20 to-[#FFD633]/10', text: 'text-[#FFD633]', border: 'border-[#FFD633]/30' },
+        'CELPIP': { bg: 'from-[#FFD633]/20 to-[#FFD633]/10', text: 'text-[#FFD633]', border: 'border-[#FFD633]/30' },
         'ITTS': { bg: 'from-[#FFD633]/20 to-[#FFD633]/10', text: 'text-[#FFD633]', border: 'border-[#FFD633]/30' },
         'OTHER': { bg: 'from-[#FFD633]/20 to-[#FFD633]/10', text: 'text-[#FFD633]', border: 'border-[#FFD633]/30' }
     };
@@ -178,16 +179,27 @@ export const CalendarAnalysis: React.FC<CalendarAnalysisProps> = ({ onClose, act
         }
     };
 
-    const normalizeClientName = (name: string): string => {
-        const upper = name.toUpperCase();
-        if (upper.includes('CELPIP')) return 'CELPIP';
-        if (upper.includes('CMA')) return 'CMA';
-        if (upper.includes('PEARSON') || upper.includes('VUE')) return 'PEARSON';
-        if (upper.includes('PROMETRIC')) return 'PROMETRIC';
-        if (upper.includes('PSI')) return 'PSI';
-        if (upper.includes('ITTS')) return 'ITTS';
-        if (upper.includes('IELTS')) return 'IELTS';
-        return 'OTHER';
+    const normalizeClientName = (name: string, examName: string = ""): string => {
+        const c = (name || '').toUpperCase().trim();
+        const e = (examName || '').toUpperCase().trim();
+
+        // 1. CELPIP: seen as CEL, only for CELPIP, no other exam
+        if (c.includes('CELPIP') || e.includes('CELPIP') || c.includes('CEL') || e.includes('CEL')) {
+            return 'CELPIP';
+        }
+
+        // 2. Prometric / PRO: only used for CMA US exam
+        if (e.includes('CMA') || c.includes('CMA') || e.includes('IMA') || c.includes('IMA')) {
+            return 'PROMETRIC';
+        }
+
+        // 3. PSI
+        if (c.includes('PSI') || e.includes('PSI')) {
+            return 'PSI';
+        }
+
+        // 4. Default: all rest of the exams are Pearson VUE
+        return 'PEARSON';
     };
 
     const getClientColor = (client: string) => {
@@ -243,7 +255,7 @@ export const CalendarAnalysis: React.FC<CalendarAnalysisProps> = ({ onClose, act
         const clientMap: { [key: string]: ClientAnalysis } = {};
 
         sessions.forEach(session => {
-            const normalizedClient = normalizeClientName(session.client_name);
+            const normalizedClient = normalizeClientName(session.client_name, session.exam_name);
             const branch = session.branch_location || 'calicut';
 
             if (!clientMap[normalizedClient]) {
@@ -268,7 +280,7 @@ export const CalendarAnalysis: React.FC<CalendarAnalysisProps> = ({ onClose, act
 
         // Calculate weekly breakdown for each client
         Object.keys(clientMap).forEach(clientKey => {
-            const clientSessions = sessions.filter(s => normalizeClientName(s.client_name) === clientKey);
+            const clientSessions = sessions.filter(s => normalizeClientName(s.client_name, s.exam_name) === clientKey);
             const weeklyMap: { [key: number]: { candidates: number; weekStart: string; weekEnd: string } } = {};
 
             clientSessions.forEach(session => {
