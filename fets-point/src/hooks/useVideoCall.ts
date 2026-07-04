@@ -23,7 +23,8 @@ const ICE_SERVERS = {
 };
 
 export function useVideoCall() {
-    const { user } = useAuth();
+    const { user, profile } = useAuth();
+    const myId = profile?.id || user?.id;
     const [callState, setCallState] = useState<CallState>({
         isInCall: false,
         isCalling: false,
@@ -82,12 +83,12 @@ export function useVideoCall() {
             type: 'broadcast',
             event: 'video-signal',
             payload: {
-                from: user?.id,
+                from: myId,
                 to: targetUserId,
                 ...payload
             }
         });
-    }, [user?.id]);
+    }, [myId]);
 
     // --- Create Peer Connection ---
     const createPC = useCallback((targetUserId: string) => {
@@ -228,7 +229,7 @@ export function useVideoCall() {
 
     // --- Signaling Subscription ---
     useEffect(() => {
-        if (!user?.id) return;
+        if (!myId) return;
 
         // Use a global signaling channel so users can message each other
         const channel = supabase.channel('fets-global-signaling');
@@ -236,7 +237,7 @@ export function useVideoCall() {
 
         channel.on('broadcast', { event: 'video-signal' }, async ({ payload }) => {
             const { from, to, type, offer, answer, candidate } = payload;
-            if (to !== user.id) return; // Not for me
+            if (to !== myId) return; // Not for me
 
             switch (type) {
                 case 'offer':
@@ -294,7 +295,7 @@ export function useVideoCall() {
             channel.unsubscribe();
             channelRef.current = null;
         };
-    }, [user?.id, callState.isInCall, callState.isCalling, callState.isReceivingCall, sendSignal, cleanup]);
+    }, [myId, callState.isInCall, callState.isCalling, callState.isReceivingCall, sendSignal, cleanup]);
 
     return {
         callState,

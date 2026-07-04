@@ -11803,6 +11803,7 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 }/*EDITMODE-END*/;
 
 const ACCENTS = [
+  { key: "sage", color: "#88BDA4" },
   { key: "gold", color: "oklch(0.86 0.16 92)" },
   { key: "amber", color: "oklch(0.80 0.15 64)" },
   { key: "lime", color: "oklch(0.84 0.16 122)" },
@@ -12254,60 +12255,67 @@ function LabPostCard({ p, onChange, onDelete, canMod }) {
   const ack = () => { const next = acked ? p.acks.filter((x) => x !== me) : [...p.acks, me]; const np = { ...p, acks: next }; LAB.labSaveMeta(np); onChange(np); };
   const pin = () => { const np = { ...p, pinned: !p.pinned }; LAB.labSaveMeta(np); onChange(np); };
   return (
-    <article className="glass" style={{ borderRadius: "var(--radius)", padding: 0, display: "flex", overflow: "hidden" }}>
-      <span style={{ width: 3, background: "var(--accent)", flexShrink: 0, opacity: 0.5 }} />
-      <div style={{ flex: 1, minWidth: 0, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
-        {/* header */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <Avatar name={p.authorName} size={34} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>{p.authorName}</span>
+    <article className="glass rise" style={{ borderRadius: "var(--radius)", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14, border: "1px solid var(--hairline)", boxShadow: "var(--shadow)" }}>
+      {/* header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <Avatar name={p.authorName} size={36} />
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ fontSize: 13.5, fontWeight: 750, color: "var(--ink)" }}>{p.authorName}</span>
               {p.pinned && <span title="Pinned" style={{ color: "var(--accent)" }}><Icon name="pin" size={12} /></span>}
             </div>
-            <span className="mono" style={{ fontSize: 10, color: "var(--ink-4)" }}>{timeAgo(p.when)}{p.role ? ` · ${p.role}` : ""}</span>
+            <span style={{ fontSize: 10.5, color: "var(--ink-4)", fontWeight: 550 }}>{timeAgo(p.when)}{p.role ? ` · ${p.role}` : ""}</span>
           </div>
-          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", padding: "3px 9px", borderRadius: 999, color: "var(--ink-3)", background: "var(--inset)" }}>{LAB_CLABEL[p.center] || "All centres"}</span>
         </div>
-        {/* body */}
-        {p.text && <div style={{ fontSize: 14, color: "var(--ink)", lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{labRich(p.text)}</div>}
-        {p.image && <a href={p.image} target="_blank" rel="noopener noreferrer"><img src={p.image} alt="" style={{ maxWidth: "100%", borderRadius: 12, border: "1px solid var(--hairline)" }} /></a>}
-        {(p.attachments || []).map((a, i) => (
-          <a key={i} href={a.url} target="_blank" rel="noopener noreferrer" className="tap glass-2" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "7px 11px", borderRadius: 10, textDecoration: "none", color: "var(--ink-2)", fontSize: 12, alignSelf: "flex-start" }}><Icon name="package" size={14} /> {a.name || "Attachment"}</a>
-        ))}
-        {/* footer */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", paddingTop: 4, borderTop: "1px solid var(--hairline)", marginTop: 2 }}>
+        <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.05em", textTransform: "uppercase", padding: "4px 10px", borderRadius: 999, color: "var(--accent)", background: "var(--accent-soft)", border: "1px solid var(--accent-line)" }}>{LAB_CLABEL[p.center] || "All centres"}</span>
+      </div>
+      {/* body */}
+      {p.text && <div style={{ fontSize: 14, color: "var(--ink)", lineHeight: 1.6, whiteSpace: "pre-wrap", fontWeight: 550 }}>{labRich(p.text)}</div>}
+      {p.image && <div style={{ width: "100%", borderRadius: "var(--radius-sm)", overflow: "hidden", border: "1px solid var(--hairline)", background: "var(--inset)", display: "flex", justifyContent: "center", alignItems: "center" }}><a href={p.image} target="_blank" rel="noopener noreferrer" style={{ width: "100%" }}><img src={p.image} alt="" style={{ width: "100%", maxHeight: 420, objectFit: "contain", display: "block" }} /></a></div>}
+      {(p.attachments || []).map((a, i) => (
+        <a key={i} href={a.url} target="_blank" rel="noopener noreferrer" className="tap glass-2" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 10, textDecoration: "none", color: "var(--ink-2)", fontSize: 12, fontWeight: 650, border: "1px solid var(--hairline)" }}><Icon name="package" size={13} /> <span>{a.name || "Attachment"}</span></a>
+      ))}
+      {/* divider */}
+      <div style={{ height: 1, background: "var(--hairline)" }} />
+      {/* footer */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {Object.keys(reacts).filter((e) => reacts[e] && reacts[e].length).map((e) => { const mine = reacts[e].includes(me); return (
-            <button key={e} onClick={() => react(e)} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 999, cursor: "pointer", border: `1px solid ${mine ? "var(--accent-line)" : "var(--hairline)"}`, background: mine ? "var(--accent-soft)" : "transparent", color: mine ? "var(--accent)" : "var(--ink-2)", fontSize: 12, fontWeight: 650 }}>{e} {reacts[e].length}</button>
+            <button key={e} onClick={() => react(e)} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 999, cursor: "pointer", border: `1px solid ${mine ? "var(--accent-line)" : "var(--hairline)"}`, background: mine ? "var(--accent-soft)" : "var(--glass-2)", color: mine ? "var(--accent)" : "var(--ink-2)", fontSize: 12, fontWeight: 700 }}><span>{e}</span> <span style={{ fontSize: 11, opacity: 0.9 }}>{reacts[e].length}</span></button>
           ); })}
           <div style={{ position: "relative" }}>
-            <button onClick={() => setPicker((v) => !v)} className="tap" title="React" style={{ display: "grid", placeItems: "center", width: 28, height: 28, borderRadius: 999, cursor: "pointer", border: "1px solid var(--hairline)", background: "transparent", color: "var(--ink-3)", fontSize: 16, lineHeight: 1 }}>＋</button>
-            {picker && <div className="glass" style={{ position: "absolute", bottom: 36, left: 0, zIndex: 8, display: "flex", gap: 4, padding: 6, borderRadius: 12, boxShadow: "var(--shadow-lift)" }}>{LAB.LAB_EMOJIS.map((e) => <button key={e} onClick={() => react(e)} className="tap" style={{ fontSize: 18, border: "none", background: "transparent", cursor: "pointer", padding: 4, borderRadius: 8 }}>{e}</button>)}</div>}
+            <button onClick={() => setPicker((v) => !v)} className="tap glass-2" title="React" style={{ display: "grid", placeItems: "center", width: 30, height: 30, borderRadius: 999, cursor: "pointer", border: "1px solid var(--hairline)", color: "var(--ink-3)", fontSize: 15 }}>＋</button>
+            {picker && <div className="glass" style={{ position: "absolute", bottom: 38, left: 0, zIndex: 8, display: "flex", gap: 6, padding: 8, borderRadius: 12, boxShadow: "var(--shadow-lift)", border: "1px solid var(--hairline)" }}>{LAB.LAB_EMOJIS.map((e) => <button key={e} onClick={() => react(e)} className="tap" style={{ fontSize: 18, border: "none", background: "transparent", cursor: "pointer", padding: 4, borderRadius: 8 }}>{e}</button>)}</div>}
           </div>
-          <button onClick={() => setOpen((o) => !o)} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "5px 11px", borderRadius: 999, cursor: "pointer", border: "1px solid var(--hairline)", background: "transparent", color: "var(--ink-3)", fontFamily: "var(--font)", fontSize: 12, fontWeight: 650 }}><Icon name="message" size={14} /> {p.comments.length}</button>
-          <div style={{ flex: 1 }} />
-          {canMod && <button onClick={pin} title={p.pinned ? "Unpin" : "Pin"} className="tap glass-2" style={{ width: 30, height: 30, borderRadius: 8, display: "grid", placeItems: "center", cursor: "pointer", color: p.pinned ? "var(--accent)" : "var(--ink-3)", border: "1px solid var(--hairline)" }}><Icon name="pin" size={13} /></button>}
-          {(p.mine || canMod) && <button onClick={() => onDelete(p)} title="Delete" className="tap glass-2" style={{ width: 30, height: 30, borderRadius: 8, display: "grid", placeItems: "center", cursor: "pointer", color: "var(--bad)", border: "1px solid var(--hairline)" }}><Icon name="trash" size={13} /></button>}
+          <button onClick={() => setOpen((o) => !o)} className="tap glass-2" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 14px", borderRadius: 999, cursor: "pointer", border: "1px solid var(--hairline)", color: "var(--ink-2)", fontFamily: "var(--font)", fontSize: 12, fontWeight: 700 }}><Icon name="message" size={13} /> <span>Comments</span> <span style={{ opacity: 0.7, fontSize: 11 }}>{p.comments.length}</span></button>
         </div>
-        {/* comments */}
-        {open && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 4 }}>
-            {p.comments.map((c) => (
-              <div key={c.id} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                <Avatar name={c.name} size={24} />
-                <div className="inset" style={{ flex: 1, padding: "7px 10px", borderRadius: 10 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-2)" }}>{c.name}</div>
-                  <div style={{ fontSize: 12.5, color: "var(--ink)", marginTop: 2, whiteSpace: "pre-wrap" }}>{labRich(c.text)}</div>
-                </div>
-              </div>
-            ))}
-            <div style={{ display: "flex", gap: 7 }}>
-              <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && comment()} placeholder="Write a comment…" style={{ flex: 1, background: "var(--inset)", border: "1px solid var(--hairline)", borderRadius: 10, color: "var(--ink)", fontFamily: "var(--font)", fontSize: 12.5, padding: "8px 11px" }} />
-              <button onClick={comment} className="tap" style={{ padding: "0 14px", borderRadius: 10, border: "none", cursor: "pointer", color: "var(--accent-ink)", background: "var(--accent)", fontWeight: 700, fontSize: 12 }}>Send</button>
-            </div>
-          </div>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {canMod && <button onClick={pin} title={p.pinned ? "Unpin" : "Pin"} className="tap glass-2" style={{ width: 32, height: 32, borderRadius: 10, display: "grid", placeItems: "center", cursor: "pointer", color: p.pinned ? "var(--accent)" : "var(--ink-3)", border: "1px solid var(--hairline)" }}><Icon name="pin" size={14} /></button>}
+          {(p.mine || canMod) && <button onClick={() => onDelete(p)} title="Delete" className="tap glass-2" style={{ width: 32, height: 32, borderRadius: 10, display: "grid", placeItems: "center", cursor: "pointer", color: "var(--bad)", border: "1px solid var(--hairline)" }}><Icon name="trash" size={14} /></button>}
+        </div>
       </div>
+      {/* comments */}
+      {open && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingTop: 4, borderTop: "1px solid var(--hairline)" }}>
+          {p.comments.map((c) => (
+            <div key={c.id} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+              <Avatar name={c.name} size={28} />
+              <div className="inset" style={{ flex: 1, padding: "10px 14px", borderRadius: "var(--radius-sm)", border: "1px solid var(--hairline)" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                  <span style={{ fontSize: 11.5, fontWeight: 750, color: "var(--ink-2)" }}>{c.name}</span>
+                  <span style={{ fontSize: 9.5, color: "var(--ink-4)" }}>{timeAgo(c.at)}</span>
+                </div>
+                <div style={{ fontSize: 13, color: "var(--ink)", marginTop: 4, whiteSpace: "pre-wrap", fontWeight: 500, lineHeight: 1.5 }}>{labRich(c.text)}</div>
+              </div>
+            </div>
+          ))}
+          <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+            <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && comment()} placeholder="Write a comment…" style={{ flex: 1, background: "var(--inset)", border: "1px solid var(--hairline)", borderRadius: 10, color: "var(--ink)", fontFamily: "var(--font)", fontSize: 13, padding: "10px 14px", outline: "none" }} />
+            <button onClick={comment} className="tap" style={{ padding: "0 18px", borderRadius: 10, border: "none", cursor: "pointer", color: "var(--accent-ink)", background: "var(--accent)", fontWeight: 800, fontSize: 13 }}>Send</button>
+          </div>
+        </div>
+      )}
     </article>
   );
 }
@@ -12316,43 +12324,107 @@ function LabPostCard({ p, onChange, onDelete, canMod }) {
 function LabDiscussionPanel() {
   const F = window.FETS;
   const profileId = F._meId;
+  const isAdmin = F.isAdmin || labCanAnnounce();
+  const [convId, setConvId] = React.useState(null);
   const [messages, setMessages] = React.useState([]);
   const [draft, setDraft] = React.useState("");
   const [loading, setLoading] = React.useState(true);
   const threadRef = React.useRef(null);
 
-  const load = async () => {
-    if (!profileId) return;
-    const msgs = await DB.dbFetchRosterDiscussions(profileId);
-    setMessages(msgs || []);
-    setLoading(false);
+  const initDiscussion = async () => {
+    try {
+      let { data: conv } = await supabase.from('conversations').select('id, name').eq('is_group', true).eq('name', 'Staff Discussion').maybeSingle();
+      if (!conv) {
+        const { data } = await supabase.from('conversations').insert({ name: 'Staff Discussion', is_group: true }).select('id, name').single();
+        conv = data;
+      }
+      if (conv) {
+        setConvId(conv.id);
+        const { data: msgs } = await supabase.from('messages')
+          .select('*, sender:staff_profiles(full_name)')
+          .eq('conversation_id', conv.id)
+          .order('created_at', { ascending: true });
+        setMessages(msgs || []);
+      }
+    } catch (e) {
+      console.error("initDiscussion error:", e);
+    } finally {
+      setLoading(false);
+    }
   };
 
   React.useEffect(() => {
-    load();
-    window.addEventListener("fets-discussion-changed", load);
-    return () => window.removeEventListener("fets-discussion-changed", load);
-  }, [profileId]);
+    initDiscussion();
+  }, []);
+
+  React.useEffect(() => {
+    if (!convId) return;
+    const channel = supabase.channel(`lab_discussion:${convId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `conversation_id=eq.${convId}` },
+        async (payload) => {
+          if (payload.eventType === 'INSERT') {
+            const { data: profileData } = await supabase.from('staff_profiles').select('full_name').eq('id', payload.new.sender_id).single();
+            const newMsg = { ...payload.new, sender: profileData };
+            setMessages(prev => {
+              if (prev.some(m => m.id === payload.new.id)) return prev;
+              return [...prev, newMsg];
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            setMessages(prev => prev.map(m => m.id === payload.new.id ? { ...m, ...payload.new } : m));
+          } else if (payload.eventType === 'DELETE') {
+            setMessages(prev => prev.filter(m => m.id !== payload.old.id));
+          }
+        })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [convId]);
 
   React.useEffect(() => {
     if (threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight;
   }, [messages.length]);
 
-  const send = async () => {
-    if (!draft.trim() || !profileId) return;
-    const msgText = draft.trim();
-    setDraft("");
-    const result = await DB.dbSendRosterDiscussion(profileId, profileId, msgText, "general");
-    if (result) load();
-    else toast("Message failed to send", "alert");
+  const lastMsg = messages[messages.length - 1]?.content || "";
+  const isLocked = lastMsg.startsWith("🚫 Discussion has been stopped");
+
+  const send = async (textToSend?: string) => {
+    const msgText = textToSend || draft.trim();
+    if (!msgText || !profileId || !convId) return;
+    if (!textToSend) setDraft("");
+    
+    try {
+      await supabase.from('messages').insert({
+        conversation_id: convId,
+        sender_id: profileId,
+        content: msgText,
+        type: 'text'
+      });
+    } catch (err) {
+      toast("Message failed to send", "alert");
+    }
+  };
+
+  const toggleLock = () => {
+    if (isLocked) {
+      send("🔓 Discussion has been resumed by admin");
+    } else {
+      send("🚫 Discussion has been stopped by admin");
+    }
   };
 
   return (
-    <div className="glass" style={{ borderRadius: "var(--radius)", display: "flex", flexDirection: "column", overflow: "hidden", height: 340 }}>
+    <div className="glass" style={{ borderRadius: "var(--radius)", display: "flex", flexDirection: "column", overflow: "hidden", height: 340, border: "1px solid var(--hairline)" }}>
       <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--hairline)", display: "flex", alignItems: "center", gap: 10, background: "var(--glass-2)" }}>
         <Icon name="message" size={16} style={{ color: "var(--accent)" }} />
         <span style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>Staff Discussion</span>
-        <span style={{ fontSize: 10, color: "var(--ink-4)", marginLeft: "auto" }}>{messages.length} messages</span>
+        {isAdmin && convId && (
+          <button onClick={toggleLock} className="tap" style={{ marginLeft: "auto", fontSize: 9.5, fontWeight: 800, padding: "3px 8px", borderRadius: 6, border: "1px solid var(--hairline)", background: isLocked ? "var(--bad)" : "transparent", color: isLocked ? "#fff" : "var(--ink-3)" }}>
+            {isLocked ? "Resume Chat" : "Stop Chat"}
+          </button>
+        )}
+        <span style={{ fontSize: 10, color: "var(--ink-4)", marginLeft: !isAdmin ? "auto" : 0 }}>{messages.length} messages</span>
       </div>
       <div ref={threadRef} className="scroll-soft" style={{ flex: 1, overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 12, minHeight: 0 }}>
         {loading ? (
@@ -12365,7 +12437,17 @@ function LabDiscussionPanel() {
           messages.map((m) => {
             const isMe = m.sender_id === profileId;
             const senderName = isMe ? "You" : (m.sender?.full_name || "Admin");
+            const isSystem = m.content.startsWith("🚫 Discussion has been stopped") || m.content.startsWith("🔓 Discussion has been resumed");
             const formattedTime = new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            
+            if (isSystem) {
+              return (
+                <div key={m.id} style={{ alignSelf: "center", margin: "6px 0", background: "var(--inset)", border: "1px solid var(--hairline)", padding: "4px 12px", borderRadius: 8, fontSize: 11, fontWeight: 700, color: "var(--ink-3)", display: "flex", alignItems: "center", gap: 6 }}>
+                  <span>{m.content}</span>
+                </div>
+              );
+            }
+
             return (
               <div key={m.id} style={{ display: "flex", flexDirection: "column", alignItems: isMe ? "flex-end" : "flex-start", gap: 3 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 4px" }}>
@@ -12376,7 +12458,7 @@ function LabDiscussionPanel() {
                   borderTopRightRadius: isMe ? 3 : 12, borderTopLeftRadius: isMe ? 12 : 3,
                   color: isMe ? "var(--accent-ink)" : "var(--ink)", background: isMe ? "var(--accent)" : "var(--glass-2)",
                   border: isMe ? "none" : "1px solid var(--hairline)" }}>
-                  {m.message}
+                  {m.content}
                 </div>
               </div>
             );
@@ -12388,20 +12470,22 @@ function LabDiscussionPanel() {
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           rows={1}
+          disabled={isLocked && !isAdmin}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-          placeholder="Send a message…"
+          placeholder={isLocked ? "Discussion has been stopped." : "Send a message…"}
           style={{ background: "var(--inset)", border: "1px solid var(--hairline)", borderRadius: 10, color: "var(--ink)",
             fontFamily: "var(--font)", fontSize: 13, padding: "9px 12px", width: "100%", outline: "none",
-            resize: "none", lineHeight: 1.4, minHeight: 36 }}
+            resize: "none", lineHeight: 1.4, minHeight: 36, opacity: isLocked && !isAdmin ? 0.5 : 1 }}
         />
-        <button onClick={send} className="tap" style={{ width: 36, height: 36, borderRadius: 10, border: "none", cursor: "pointer", flexShrink: 0,
-          display: "grid", placeItems: "center", color: "var(--accent-ink)", background: "var(--accent)" }}>
+        <button onClick={() => send()} disabled={isLocked && !isAdmin} className="tap" style={{ width: 36, height: 36, borderRadius: 10, border: "none", cursor: (isLocked && !isAdmin) ? "not-allowed" : "pointer", flexShrink: 0,
+          display: "grid", placeItems: "center", color: "var(--accent-ink)", background: "var(--accent)", opacity: isLocked && !isAdmin ? 0.5 : 1 }}>
           <Icon name="arrowR" size={16} stroke={2.4} />
         </button>
       </div>
     </div>
   );
 }
+
 
 /* ========== Staff Panel (with chat trigger) ========== */
 function LabStaffPanel({ onChat }) {

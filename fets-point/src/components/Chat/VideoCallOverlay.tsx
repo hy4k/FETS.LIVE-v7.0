@@ -26,7 +26,11 @@ const RemoteVideoTile = ({ stream, userId, callType }: { stream: MediaStream, us
 
     useEffect(() => {
         const fetchName = async () => {
-            const { data } = await supabase.from('staff_profiles').select('full_name, avatar_url').eq('user_id', userId).single();
+            let { data } = await supabase.from('staff_profiles').select('full_name, avatar_url').eq('id', userId).single();
+            if (!data) {
+                const res = await supabase.from('staff_profiles').select('full_name, avatar_url').eq('user_id', userId).single();
+                data = res.data;
+            }
             if (data) {
                 setUserName(data.full_name);
                 setAvatarUrl(data.avatar_url);

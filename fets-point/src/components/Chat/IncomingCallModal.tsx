@@ -15,7 +15,11 @@ export const IncomingCallModal: React.FC<IncomingCallModalProps> = ({ callerName
 
     useEffect(() => {
         const fetchProfile = async () => {
-            const { data } = await supabase.from('staff_profiles').select('*').eq('user_id', callerId).single();
+            let { data } = await supabase.from('staff_profiles').select('*').eq('id', callerId).single();
+            if (!data) {
+                const res = await supabase.from('staff_profiles').select('*').eq('user_id', callerId).single();
+                data = res.data;
+            }
             if (data) setProfile(data);
         };
         fetchProfile();

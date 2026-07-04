@@ -3,12 +3,12 @@
    ============================================================ */
 
 .fets-redesign-root {
-  /* ---- accent (gold) ---- */
-  --accent: oklch(0.86 0.16 92);             /* FETS gold ≈ #FBD117 */
-  --accent-2: oklch(0.78 0.15 78);           /* warmer gold for gradients */
-  --accent-soft: color-mix(in oklch, var(--accent) 16%, transparent);
-  --accent-line: color-mix(in oklch, var(--accent) 42%, transparent);
-  --accent-ink: oklch(0.27 0.04 180);        /* dark teal text on gold fills */
+  /* ---- accent (sage/mint) ---- */
+  --accent: #88BDA4;                         /* Soothing sage */
+  --accent-2: #6FBEB2;                       /* Aqua green for gradients */
+  --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
+  --accent-line: color-mix(in srgb, var(--accent) 42%, transparent);
+  --accent-ink: #1d302c;                     /* Dark teal text on mint/sage fills */
 
   --radius: 18px;
   --radius-sm: 12px;
@@ -19,7 +19,7 @@
   --font-mono: "Space Mono", ui-monospace, "SF Mono", Menlo, monospace;
   --font-serif: "Newsreader", Georgia, "Times New Roman", serif;
 
-  /* vendor accents (kept distinct, tuned for teal ground) */
+  /* vendor accents */
   --v-prometric: oklch(0.74 0.13 235);
   --v-pearson:   oklch(0.72 0.15 300);
   --v-psi:       oklch(0.72 0.18 14);
@@ -27,12 +27,12 @@
   --v-cma:       oklch(0.76 0.15 162);
   --v-ielts:     oklch(0.74 0.16 322);
 
-  --ok: oklch(0.78 0.15 162);
-  --warn: oklch(0.82 0.15 80);
+  --ok: #B1D3B9;                             /* Soft green */
+  --warn: #FDF4AF;                           /* Light yellow warning */
   --bad: oklch(0.68 0.20 22);
 }
 
-/* ---------- DARK / primary (editorial teal) ---------- */
+/* ---------- DARK / primary (editorial teal + sage) ---------- */
 .fets-redesign-root,
 .fets-redesign-root[data-theme="dark"] {
   --ink: oklch(0.96 0.01 180);
@@ -40,51 +40,51 @@
   --ink-3: oklch(0.70 0.025 190);
   --ink-4: oklch(0.58 0.025 192);
 
-  /* surfaces — flat solid teal, layered by lightness */
-  --wall-base: oklch(0.255 0.034 182);
-  --panel:     oklch(0.305 0.036 183);   /* card / .glass */
-  --panel-2:   oklch(0.345 0.038 184);   /* raised inner / .glass-2 */
-  --panel-3:   oklch(0.225 0.030 182);   /* recessed / .inset */
+  /* surfaces — flat solid dark-teal based on #34908B, layered by lightness */
+  --wall-base: #1b2f2c;                      /* Dark forest teal */
+  --panel:     #243e3a;                      /* Card / .glass */
+  --panel-2:   #2e4e49;                      /* Raised inner / .glass-2 */
+  --panel-3:   #152522;                      /* Recessed / .inset */
 
   --glass: var(--panel);
   --glass-2: var(--panel-2);
-  --glass-strong: oklch(0.30 0.036 183);
-  --glass-edge: oklch(0.92 0.03 185 / 0.10);
-  --glass-edge-lo: oklch(0 0 0 / 0.30);
-  --hairline: oklch(0.92 0.03 185 / 0.10);
+  --glass-strong: #243e3a;
+  --glass-edge: rgba(255, 255, 255, 0.06);
+  --glass-edge-lo: rgba(0, 0, 0, 0.25);
+  --hairline: rgba(255, 255, 255, 0.08);
   --inset: var(--panel-3);
 
-  --shadow: 0 1px 0 oklch(1 0 0 / 0.04),
-            0 8px 24px oklch(0.10 0.03 182 / 0.45);
-  --shadow-lift: 0 2px 0 oklch(1 0 0 / 0.05),
-                 0 20px 48px oklch(0.08 0.03 182 / 0.6);
+  --shadow: 0 1px 0 rgba(255, 255, 255, 0.04),
+            0 8px 24px rgba(27, 47, 44, 0.45);
+  --shadow-lift: 0 2px 0 rgba(255, 255, 255, 0.05),
+                 0 20px 48px rgba(27, 47, 44, 0.6);
 }
 
-/* ---------- LIGHT (optional, warm paper + teal ink) ---------- */
+/* ---------- LIGHT (optional, warm cream paper + sage ink) ---------- */
 .fets-redesign-root[data-theme="light"] {
-  --ink: oklch(0.28 0.03 188);
-  --ink-2: oklch(0.42 0.03 188);
-  --ink-3: oklch(0.52 0.025 190);
-  --ink-4: oklch(0.62 0.02 192);
-  --accent-ink: oklch(0.27 0.04 180);
+  --ink: #1b2f2c;
+  --ink-2: #243e3a;
+  --ink-3: #526f6a;
+  --ink-4: #75928d;
+  --accent-ink: #ffffff;
 
-  --wall-base: oklch(0.95 0.014 96);
-  --panel:     oklch(0.99 0.008 96);
-  --panel-2:   oklch(0.97 0.012 96);
-  --panel-3:   oklch(0.93 0.016 100);
+  --wall-base: #E6F2DD;                      /* Soothing cream green */
+  --panel:     #ffffff;
+  --panel-2:   #f6faf4;
+  --panel-3:   #dcead3;
 
   --glass: var(--panel);
   --glass-2: var(--panel-2);
-  --glass-strong: oklch(0.995 0.006 96);
-  --glass-edge: oklch(0.40 0.03 188 / 0.12);
-  --glass-edge-lo: oklch(0.40 0.03 188 / 0.10);
-  --hairline: oklch(0.40 0.03 188 / 0.12);
+  --glass-strong: #ffffff;
+  --glass-edge: rgba(27, 47, 44, 0.12);
+  --glass-edge-lo: rgba(27, 47, 44, 0.10);
+  --hairline: rgba(27, 47, 44, 0.12);
   --inset: var(--panel-3);
 
-  --shadow: 0 1px 2px oklch(0.4 0.04 188 / 0.06),
-            0 10px 30px oklch(0.4 0.05 188 / 0.10);
-  --shadow-lift: 0 2px 4px oklch(0.4 0.04 188 / 0.08),
-                 0 22px 50px oklch(0.4 0.05 188 / 0.14);
+  --shadow: 0 1px 2px rgba(27, 47, 44, 0.06),
+            0 10px 30px rgba(27, 47, 44, 0.10);
+  --shadow-lift: 0 2px 4px rgba(27, 47, 44, 0.08),
+                 0 22px 50px rgba(27, 47, 44, 0.14);
 }
 
 .fets-redesign-root *, .fets-redesign-root *::before, .fets-redesign-root *::after { box-sizing: border-box; }
