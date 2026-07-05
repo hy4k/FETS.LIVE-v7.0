@@ -4742,6 +4742,7 @@ function OtToilClaimsHub({ branch }) {
   const [claims, setClaims] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [tab, setTab] = React.useState("pending");
+  const [refreshKey, setRefreshKey] = React.useState(0);
   
   // Selected month for payroll calculation and month-wise summaries (Format: 'YYYY-MM')
   const today = new Date();
@@ -4777,7 +4778,29 @@ function OtToilClaimsHub({ branch }) {
     const { loadMonthlyPayroll } = await import("./live-data");
     await loadLiveData(F);
     await loadMonthlyPayroll(F);
-    setClaims(F._otClaims || []);
+    
+    const cl = F._otClaims || [];
+    setClaims(cl);
+    
+    // Find all unique months in claims to load their roster data
+    const uniqueMonths = new Set();
+    cl.forEach((c) => {
+      if (c.date) {
+        const m = c.date.slice(0, 7);
+        uniqueMonths.add(m);
+      }
+    });
+    uniqueMonths.add(selectedMonth);
+
+    // Call ensureMonth for each unique month concurrently
+    const promises = Array.from(uniqueMonths).map((mStr) => {
+      const [year, month] = mStr.split("-").map(Number);
+      const d = new Date(year, month - 1, 1);
+      return ensureMonth(d);
+    });
+    await Promise.all(promises);
+
+    setRefreshKey(prev => prev + 1);
     setLoading(false);
   };
   
@@ -4793,6 +4816,12 @@ function OtToilClaimsHub({ branch }) {
       window.removeEventListener("fets-payroll-changed", load);
     };
   }, []);
+
+  React.useEffect(() => {
+    const [year, month] = selectedMonth.split("-").map(Number);
+    const d = new Date(year, month - 1, 1);
+    ensureMonth(d).then(() => load());
+  }, [selectedMonth]);
   
   const resolve = async (id, status, approvedHours) => {
     await DB.dbResolveOtClaim(id, status, approvedHours);
@@ -4921,7 +4950,8 @@ function OtToilClaimsHub({ branch }) {
   // Claims filters
   const pendingClaims = claims.filter(c => {
     const matchesBranch = branch === "global" || c.branch === branch;
-    return matchesBranch && c.status === "pending" && filterNiyas(c.name);
+    const matchesMonth = c.date && c.date.startsWith(selectedMonth);
+    return matchesBranch && matchesMonth && c.status === "pending" && filterNiyas(c.name);
   });
   
   // Grouping approved/rejected claims by month for history view
@@ -4946,24 +4976,36 @@ function OtToilClaimsHub({ branch }) {
       };
       
       grouped[mStr][c.profile_id].claims.push(c);
-      if (c.status === "approved") {
-        if (c.toil_payout) {
-          let list = [];
-          try {
-            list = typeof c.toil_dates === 'string' ? JSON.parse(c.toil_dates) : (c.toil_dates || []);
-          } catch (e) {
-            list = c.toil_dates || [];
-          }
-          grouped[mStr][c.profile_id].toilDays += Array.isArray(list) ? list.length : 1;
-        } else {
-          grouped[mStr][c.profile_id].otHours += c.ot_hours;
-        }
-      }
     });
-    return grouped;
-  }, [claims, branch]);
 
-  // Aggregate stats of approved claims for selected month
+    // Populate approved OT hours and TOIL days directly from the roster for each month and employee!
+    Object.keys(grouped).forEach(mStr => {
+      const offsets = getOffsetsForMonth(mStr);
+      Object.keys(grouped[mStr]).forEach(profileId => {
+        const name = grouped[mStr][profileId].name;
+        const dbRoster = F._dbRoster?.[name] || {};
+        let otHours = 0;
+        let toilDays = 0;
+        offsets.forEach(off => {
+          const cell = dbRoster[off];
+          if (cell) {
+            if (typeof cell === "object" && cell.ot) {
+              otHours += cell.ot;
+            }
+            const code = typeof cell === "string" ? cell : cell.code;
+            if (String(code).toUpperCase() === "TP") {
+              toilDays++;
+            }
+          }
+        });
+        grouped[mStr][profileId].otHours = otHours;
+        grouped[mStr][profileId].toilDays = toilDays;
+      });
+    });
+
+    return grouped;
+  }, [claims, branch, refreshKey]);
+
   // Aggregate stats of approved claims for selected month directly from Roster
   const monthApprovedOt = React.useMemo(() => {
     let totalOt = 0;
@@ -4980,7 +5022,7 @@ function OtToilClaimsHub({ branch }) {
         });
       });
     return totalOt;
-  }, [claims, F._dbRoster, F._staffRatesByName, selectedMonth, branch]);
+  }, [claims, selectedMonth, branch, refreshKey]);
   
   const monthApprovedToilDays = React.useMemo(() => {
     let totalToil = 0;
@@ -4998,7 +5040,7 @@ function OtToilClaimsHub({ branch }) {
         });
       });
     return totalToil;
-  }, [claims, F._dbRoster, F._staffRatesByName, selectedMonth, branch]);
+  }, [claims, selectedMonth, branch, refreshKey]);
 
   const calcClaimPayout = (c) => {
     if (c.toil_payout) {
@@ -5045,7 +5087,7 @@ function OtToilClaimsHub({ branch }) {
         cost += (otHours * hourlyRate) + (toilDays * dailyRate * 1.5);
       });
     return cost;
-  }, [claims, F._dbRoster, F._staffRatesByName, F._staffRatesByProfileId, F._monthlyPayroll, selectedMonth, branch]);
+  }, [claims, selectedMonth, branch, refreshKey]);
 
   const totalPendingMonthCost = pendingMonthClaims.reduce((sum, c) => sum + calcClaimPayout(c), 0);
 
@@ -5330,45 +5372,49 @@ function OtToilClaimsHub({ branch }) {
       <PageHeader eyebrow="Modules // Admin" title="OT & TOIL Claims Manager" />
       
       {/* Selector Month for payroll and cost cards */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, justifyContent: "flex-end", flexWrap: "wrap" }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-2)" }}>Target Payroll Month:</span>
-        <select 
-          value={selectedMonth} 
-          onChange={(e) => setSelectedMonth(e.target.value)} 
-          className="glass-2"
-          style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--hairline)", color: "var(--ink)", background: "transparent", fontSize: 13.5, fontWeight: 650, outline: "none", cursor: "pointer" }}
-        >
-          {monthsOptions.map(opt => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
-          ))}
-        </select>
-      </div>
+      {tab !== "history" && (
+        <div style={{ display: "flex", alignItems: "center", gap: 12, justifyContent: "flex-end", flexWrap: "wrap" }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-2)" }}>Target Payroll Month:</span>
+          <select 
+            value={selectedMonth} 
+            onChange={(e) => setSelectedMonth(e.target.value)} 
+            className="glass-2"
+            style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--hairline)", color: "var(--ink)", background: "transparent", fontSize: 13.5, fontWeight: 650, outline: "none", cursor: "pointer" }}
+          >
+            {monthsOptions.map(opt => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
-        <div className="glass" style={{ padding: 20, borderRadius: 16, borderLeft: "4px solid var(--accent)", position: "relative" }}>
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--ink-4)", letterSpacing: "0.05em" }}>Month Approved Cost</div>
-          <div style={{ fontSize: 24, fontWeight: 800, color: "var(--ink)", marginTop: 8 }}>₹{totalApprovedMonthCost.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</div>
-          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 6 }}>For approved OT & TOIL in {formatMonthName(selectedMonth)}</div>
+      {tab !== "history" && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
+          <div className="glass" style={{ padding: 20, borderRadius: 16, borderLeft: "4px solid var(--accent)", position: "relative" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--ink-4)", letterSpacing: "0.05em" }}>Month Approved Cost</div>
+            <div style={{ fontSize: 24, fontWeight: 800, color: "var(--ink)", marginTop: 8 }}>₹{totalApprovedMonthCost.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</div>
+            <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 6 }}>For approved OT & TOIL in {formatMonthName(selectedMonth)}</div>
+          </div>
+          
+          <div className="glass" style={{ padding: 20, borderRadius: 16, borderLeft: "4px solid var(--warn)", position: "relative" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--ink-4)", letterSpacing: "0.05em" }}>Month Pending Cost</div>
+            <div style={{ fontSize: 24, fontWeight: 800, color: "var(--warn)", marginTop: 8 }}>₹{totalPendingMonthCost.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</div>
+            <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 6 }}>Estimated payout for pending claims</div>
+          </div>
+          
+          <div className="glass" style={{ padding: 20, borderRadius: 16, borderLeft: "4px solid var(--v-ielts)", position: "relative" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--ink-4)", letterSpacing: "0.05em" }}>Month Approved OT</div>
+            <div style={{ fontSize: 24, fontWeight: 800, color: "var(--v-ielts)", marginTop: 8 }}>{monthApprovedOt.toFixed(1)} hrs</div>
+            <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 6 }}>1.75x pay multiplier applied</div>
+          </div>
+          
+          <div className="glass" style={{ padding: 20, borderRadius: 16, borderLeft: "4px solid var(--v-pearson)", position: "relative" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--ink-4)", letterSpacing: "0.05em" }}>Month TOIL Payouts</div>
+            <div style={{ fontSize: 24, fontWeight: 800, color: "var(--v-pearson)", marginTop: 8 }}>{monthApprovedToilDays} days</div>
+            <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 6 }}>1.5x daily rate paid out</div>
+          </div>
         </div>
-        
-        <div className="glass" style={{ padding: 20, borderRadius: 16, borderLeft: "4px solid var(--warn)", position: "relative" }}>
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--ink-4)", letterSpacing: "0.05em" }}>Month Pending Cost</div>
-          <div style={{ fontSize: 24, fontWeight: 800, color: "var(--warn)", marginTop: 8 }}>₹{totalPendingMonthCost.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</div>
-          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 6 }}>Estimated payout for pending claims</div>
-        </div>
-        
-        <div className="glass" style={{ padding: 20, borderRadius: 16, borderLeft: "4px solid var(--v-ielts)", position: "relative" }}>
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--ink-4)", letterSpacing: "0.05em" }}>Month Approved OT</div>
-          <div style={{ fontSize: 24, fontWeight: 800, color: "var(--v-ielts)", marginTop: 8 }}>{monthApprovedOt.toFixed(1)} hrs</div>
-          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 6 }}>1.75x pay multiplier applied</div>
-        </div>
-        
-        <div className="glass" style={{ padding: 20, borderRadius: 16, borderLeft: "4px solid var(--v-pearson)", position: "relative" }}>
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--ink-4)", letterSpacing: "0.05em" }}>Month TOIL Payouts</div>
-          <div style={{ fontSize: 24, fontWeight: 800, color: "var(--v-pearson)", marginTop: 8 }}>{monthApprovedToilDays} days</div>
-          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 6 }}>1.5x daily rate paid out</div>
-        </div>
-      </div>
+      )}
       
       <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
         <Segmented value={tab} onChange={setTab} size="sm" options={[

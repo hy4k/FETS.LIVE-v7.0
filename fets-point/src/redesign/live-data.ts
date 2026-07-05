@@ -106,7 +106,7 @@ export async function loadLiveData(F: any) {
         }
         if (p.full_name && p.id) {
           idByName[p.full_name] = p.id;
-          F._staffRatesByName[p.full_name] = { id: p.id, user_id: p.user_id, role: p.role, hourly_rate: Number(p.hourly_rate) || 0, daily_rate: Number(p.daily_rate) || 0, monthly_salary: calculatedSalary, is_active: p.is_active };
+          F._staffRatesByName[p.full_name] = { id: p.id, user_id: p.user_id, role: p.role, branch: b, hourly_rate: Number(p.hourly_rate) || 0, daily_rate: Number(p.daily_rate) || 0, monthly_salary: calculatedSalary, is_active: p.is_active };
         }
         if (p.full_name && p.user_id) userIdByName[p.full_name] = p.user_id;
         if (p.id && p.user_id) {
