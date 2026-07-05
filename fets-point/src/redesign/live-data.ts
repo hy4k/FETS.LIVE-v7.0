@@ -62,35 +62,28 @@ export async function loadLiveData(F: any) {
   F._userIdToProfileId = F._userIdToProfileId || {};
   F._profileIdToUserId = F._profileIdToUserId || {};
   const today = new Date();
-  const from = new Date(today); from.setDate(from.getDate() - 35);
-  const to = new Date(today); to.setDate(to.getDate() + 70);
 
-  /* ---- calendar + roster load per-month on demand — see ensureMonth() below ---- */
-
-  /* ---- current user (for write-back: profile_id / user_id) ---- */
-  try { const { data: au } = await supabase.auth.getUser(); F._meUserId = au?.user?.id || null; } catch (e) { F._meUserId = null; }
-
-  /* ---- staff pool (for roster grid + quick-add) + name→id map ---- */
-  let profileBranch: Record<string, string> = {};
+  // Load foundation metadata concurrently
   try {
-    const { data, error } = await supabase
-      .from("staff_profiles").select("id, user_id, full_name, role, branch_assigned, is_active, hourly_rate, daily_rate, permissions, joining_date, hire_date").order("full_name");
-    if (!error && data && data.length) {
+    const [authRes, staffRes, newsRes] = await Promise.all([
+      supabase.auth.getUser().catch(() => ({ data: { user: null } })),
+      supabase.from("staff_profiles").select("id, user_id, full_name, role, branch_assigned, is_active, hourly_rate, daily_rate, permissions, joining_date, hire_date").order("full_name").catch(() => ({ data: null, error: true })),
+      supabase.from("news_ticker").select("*").order("created_at", { ascending: false }).catch(() => ({ data: null, error: true }))
+    ]);
+
+    F._meUserId = authRes.data?.user?.id || null;
+
+    if (staffRes.data && staffRes.data.length) {
       const pool: Record<string, string[]> = { calicut: [], cochin: [] };
       const idByName: Record<string, any> = {};
       const userIdByName: Record<string, any> = {};
       const userIdToProfileId: Record<string, string> = {};
       const profileIdToUserId: Record<string, string> = {};
-      
-      F._staffRatesByProfileId = F._staffRatesByProfileId || {};
-      F._staffRatesByName = F._staffRatesByName || {};
-      F._staffDays = F._staffDays || {};
+      let profileBranch: Record<string, string> = {};
 
-      data.forEach((p: any) => {
+      staffRes.data.forEach((p: any) => {
         if (p.is_active === false) return;
         const b = branchOf(p.branch_assigned);
-        // Super admins (global branch) are excluded from the roster staff pool rows —
-        // they manage the roster but don't appear as scheduleable staff rows.
         if (p.branch_assigned !== 'global') {
           const list = pool[b] || (pool[b] = []);
           if (p.full_name) list.push(p.full_name);
@@ -133,7 +126,7 @@ export async function loadLiveData(F: any) {
       F._userIdToProfileId = userIdToProfileId;
       F._profileIdToUserId = profileIdToUserId;
       F._profileBranch = profileBranch;
-      const activeStaff = data
+      const activeStaff = staffRes.data
         .filter((p: any) => p.is_active !== false && p.full_name)
         .map((p: any) => p.full_name.trim());
       F.PEOPLE = Array.from(new Set(activeStaff)).sort((x, y) => x.localeCompare(y));
@@ -141,41 +134,34 @@ export async function loadLiveData(F: any) {
         F.STAFF = { calicut: pool.calicut.length ? pool.calicut : F.STAFF.calicut, cochin: pool.cochin.length ? pool.cochin : F.STAFF.cochin };
       }
     }
-  } catch (e) { /* keep seed */ }
+
+    if (newsRes.data) {
+      F._news = newsRes.data.map((n: any) => ({
+        id: n.id,
+        body: n.content || n.message || n.text || n.title || "",
+        priority: lc(n.priority) || "normal",
+        active: n.is_active !== false,
+        when: n.created_at ? new Date(n.created_at).toLocaleDateString() : "",
+      })).filter((n: any) => n.body);
+    }
+  } catch (e) {
+    console.error("Foundation load error:", e);
+  }
 
   /* ---- branch delegations ---- */
   try {
+    const nowIso = new Date().toISOString();
     if (F._meId) {
-      const nowIso = new Date().toISOString();
-      const { data: delegations, error } = await supabase
-        .from("staff_branch_delegations")
-        .select("id")
-        .eq("profile_id", F._meId)
-        .lte("start_date", nowIso)
-        .gte("end_date", nowIso);
-      F._hasTempCrossAccess = !error && delegations && delegations.length > 0;
+      const [myDelegations, allDelegations] = await Promise.all([
+        supabase.from("staff_branch_delegations").select("id").eq("profile_id", F._meId).lte("start_date", nowIso).gte("end_date", nowIso),
+        F.user?.role === 'Super Admin'
+          ? supabase.from("staff_branch_delegations").select(`id, profile_id, allowed_branch, start_date, end_date, created_at, staff_profiles (full_name, email)`).order("created_at", { ascending: false })
+          : Promise.resolve({ data: [], error: null })
+      ]);
+      F._hasTempCrossAccess = !myDelegations.error && myDelegations.data && myDelegations.data.length > 0;
+      F._branchDelegations = (!allDelegations.error && allDelegations.data) ? allDelegations.data : [];
     } else {
       F._hasTempCrossAccess = false;
-    }
-
-    if (F.user && F.user.role === 'Super Admin') {
-      const { data, error } = await supabase
-        .from("staff_branch_delegations")
-        .select(`
-          id,
-          profile_id,
-          allowed_branch,
-          start_date,
-          end_date,
-          created_at,
-          staff_profiles (
-            full_name,
-            email
-          )
-        `)
-        .order("created_at", { ascending: false });
-      F._branchDelegations = (!error && data) ? data : [];
-    } else {
       F._branchDelegations = [];
     }
   } catch (e) {
@@ -183,7 +169,7 @@ export async function loadLiveData(F: any) {
     F._branchDelegations = [];
   }
 
-  /* ---- install live roster override, then load nearby months ---- */
+  /* ---- install live roster override ---- */
   if (!F._rosterPatched) {
     F.rosterOn = (d: Date, branch: string) => {
       const cell = F._liveRoster && F._liveRoster[keyOf(d)];
@@ -216,25 +202,6 @@ export async function loadLiveData(F: any) {
     };
     F._reqPatched = true;
   }
-
-  await ensureMonth(today);
-  ensureMonth(new Date(today.getFullYear(), today.getMonth() - 1, 1));
-  ensureMonth(new Date(today.getFullYear(), today.getMonth() + 1, 1));
-
-  /* ---- news ticker (powers the redesigned News page) ---- */
-  try {
-    const { data, error } = await supabase
-      .from("news_ticker").select("*").order("created_at", { ascending: false });
-    if (!error && data) {
-      F._news = data.map((n: any) => ({
-        id: n.id,
-        body: n.content || n.message || n.text || n.title || "",
-        priority: lc(n.priority) || "normal",
-        active: n.is_active !== false,
-        when: n.created_at ? new Date(n.created_at).toLocaleDateString() : "",
-      })).filter((n: any) => n.body);
-    }
-  } catch (e) { /* leave undefined → empty state */ }
 
   /* ---- lost & found ---- */
   try {
@@ -335,7 +302,6 @@ export async function loadLiveData(F: any) {
         F._meToilRedeemed = toilRedeemed;
         F._meToilPaid = toilPaid;
 
-        const today = new Date();
         const currentYear = today.getFullYear();
         const currentMonth = today.getMonth() + 1;
         
@@ -392,12 +358,18 @@ export async function loadLiveData(F: any) {
     }
   } catch (e) { /* keep empty */ }
 
-  try {
-    await loadOtClaims(F);
-    await loadMonthlyPayroll(F);
-  } catch (e) {
-    console.error("Error loading OT claims/payroll on startup:", e);
-  }
+  // Load heavy calendar, roster, claims, and payroll in background asynchronously!
+  Promise.all([
+    ensureMonth(today),
+    ensureMonth(new Date(today.getFullYear(), today.getMonth() - 1, 1)),
+    ensureMonth(new Date(today.getFullYear(), today.getMonth() + 1, 1)),
+    loadOtClaims(F).catch(() => {}),
+    loadMonthlyPayroll(F).catch(() => {})
+  ]).then(() => {
+    // Notify application updates
+    window.dispatchEvent(new Event("fets-data-loaded"));
+    window.dispatchEvent(new Event("fets-roster-changed"));
+  });
 
   F._liveLoaded = true;
 }
@@ -427,10 +399,13 @@ export async function ensureMonth(d: Date) {
   }
   let ok = false;
   try {
-    const { data, error } = await supabase.from("calendar_sessions").select("*")
-      .gte("date", ymd(first)).lte("date", ymd(last));
-    if (!error && data) {
-      data.forEach((s: any) => {
+    const [sessRes, rosterRes] = await Promise.all([
+      supabase.from("calendar_sessions").select("*").gte("date", ymd(first)).lte("date", ymd(last)),
+      supabase.from("roster_schedules").select("date, shift_code, overtime_hours, profile_id, branch_location, staff_profiles(full_name, branch_assigned)").gte("date", ymd(first)).lte("date", ymd(last))
+    ]);
+
+    if (!sessRes.error && sessRes.data) {
+      sessRes.data.forEach((s: any) => {
         const dt = new Date(`${s.date}T00:00:00`); if (isNaN(dt.getTime())) return;
         const k = `${dt.getFullYear()}-${dt.getMonth()}-${dt.getDate()}`;
         const clientName = s.client_name || '';
@@ -445,14 +420,10 @@ export async function ensureMonth(d: Date) {
       Object.keys(F._liveSessions).forEach((k) => { const a = F._liveSessions[k]; if (Array.isArray(a)) a.sort((x: any, z: any) => x.start.localeCompare(z.start)); });
       ok = true;
     }
-  } catch (e) {}
-  try {
-    const { data, error } = await supabase.from("roster_schedules")
-      .select("date, shift_code, overtime_hours, profile_id, branch_location, staff_profiles(full_name, branch_assigned)")
-      .gte("date", ymd(first)).lte("date", ymd(last));
-    if (!error && data) {
+
+    if (!rosterRes.error && rosterRes.data) {
       F._dbRoster = F._dbRoster || {};
-      data.forEach((r: any) => {
+      rosterRes.data.forEach((r: any) => {
         const sp = r.staff_profiles || {}; const name = sp.full_name; if (!name) return;
         const dt = new Date(`${r.date}T00:00:00`); if (isNaN(dt.getTime())) return;
         

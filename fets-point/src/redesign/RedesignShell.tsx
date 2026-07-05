@@ -12780,7 +12780,6 @@ function TheLabPage({ branch }) {
   const [fCenter, setFCenter] = React.useState("all");
   const [q, setQ] = React.useState("");
   const fileRef = React.useRef(null);
-  const [chatTarget, setChatTarget] = React.useState(null);
   const [activeRightTab, setActiveRightTab] = React.useState("discussion"); // "discussion" | "online" | "terminal"
 
   const reload = () => { LAB.labFetch().then((ps) => { setPosts(ps); setLoading(false); }); };
@@ -12885,15 +12884,10 @@ function TheLabPage({ branch }) {
             ]} 
           />
           {activeRightTab === "discussion" && <LabDiscussionPanel />}
-          {activeRightTab === "online" && <LabStaffPanel onChat={(staff) => setChatTarget(staff)} />}
+          {activeRightTab === "online" && <LabStaffPanel onChat={(staff) => window.dispatchEvent(new CustomEvent("fets-open-chat", { detail: staff }))} />}
           {activeRightTab === "terminal" && <LabTerminalPanel />}
         </div>
       </div>
-
-      {/* Chat popup */}
-      {chatTarget && (
-        <FetsChatPopup targetUser={chatTarget} onClose={() => setChatTarget(null)} zIndex={2000} />
-      )}
     </div>
   );
 }
@@ -13305,6 +13299,101 @@ function App({ bridge, onLogout }) {
   const [burger, setBurger] = React.useState(false);
   const [active, setActive] = React.useState("live");
   const [pendingHandoverBadge, setPendingHandoverBadge] = React.useState(0);
+  const [chatTarget, setChatTarget] = React.useState(null);
+
+  // Open chat event listener
+  React.useEffect(() => {
+    const handler = (e: any) => setChatTarget(e.detail);
+    window.addEventListener("fets-open-chat", handler);
+    return () => window.removeEventListener("fets-open-chat", handler);
+  }, []);
+
+  // Global chat notification listener
+  React.useEffect(() => {
+    const myId = window.FETS?._meId;
+    if (!myId) return;
+    const channel = supabase.channel("global-chat-notifs")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, async (payload) => {
+        if (payload.new.sender_id !== myId) {
+          const senderId = payload.new.sender_id;
+          let senderName = "Teammate";
+          const { data } = await supabase.from('staff_profiles').select('full_name').eq('id', senderId).single();
+          if (data) senderName = data.full_name;
+
+          toast.success(
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              <div style={{ fontWeight: 800 }}>Message from {senderName}</div>
+              <div style={{ fontSize: 11, opacity: 0.8, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 180 }}>{payload.new.content}</div>
+              <button onClick={() => {
+                setChatTarget({ id: senderId, full_name: senderName });
+                toast.dismiss();
+              }} style={{ alignSelf: "flex-end", border: "none", background: "transparent", color: "var(--accent)", fontSize: 10, fontWeight: 900, cursor: "pointer", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 4 }}>
+                Reply
+              </button>
+            </div>,
+            { duration: 6000 }
+          );
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // Check unread messages on boot
+  React.useEffect(() => {
+    const checkUnread = async () => {
+      const myId = window.FETS?._meId;
+      if (!myId) return;
+      try {
+        const { data: members } = await supabase
+          .from('conversation_members')
+          .select('conversation_id')
+          .eq('user_id', myId);
+          
+        if (!members || members.length === 0) return;
+        const convIds = members.map(m => m.conversation_id);
+        
+        for (const cid of convIds) {
+          const { data: msgs } = await supabase
+            .from('messages')
+            .select('id, sender_id, content, status, created_at')
+            .eq('conversation_id', cid)
+            .order('created_at', { ascending: false })
+            .limit(1);
+            
+          if (msgs && msgs.length > 0) {
+            const lastMsg = msgs[0];
+            if (lastMsg.sender_id !== myId && lastMsg.status !== 'seen') {
+              const { data: sender } = await supabase
+                .from('staff_profiles')
+                .select('full_name')
+                .eq('id', lastMsg.sender_id)
+                .single();
+                
+              const senderName = sender?.full_name || "Teammate";
+              toast(
+                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                  <div style={{ fontWeight: 800 }}>Unread message from {senderName}</div>
+                  <div style={{ fontSize: 11, opacity: 0.8, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 180 }}>{lastMsg.content}</div>
+                  <button onClick={() => {
+                    setChatTarget({ id: lastMsg.sender_id, full_name: senderName });
+                    toast.dismiss();
+                  }} style={{ alignSelf: "flex-end", border: "none", background: "transparent", color: "var(--accent)", fontSize: 10, fontWeight: 900, cursor: "pointer", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 4 }}>
+                    Open Chat
+                  </button>
+                </div>,
+                { duration: 10000, icon: '✉️' }
+              );
+            }
+          }
+        }
+      } catch (e) {}
+    };
+    setTimeout(checkUnread, 1500); // Check shortly after loading
+  }, []);
 
   React.useEffect(() => {
     const r = document.getElementById("fets-redesign-root") || document.documentElement;
@@ -13427,6 +13516,9 @@ function App({ bridge, onLogout }) {
       </TweaksPanel>
 
       <ToastHost />
+      {chatTarget && (
+        <FetsChatPopup targetUser={chatTarget} onClose={() => setChatTarget(null)} zIndex={2000} />
+      )}
     </div>
   );
 }

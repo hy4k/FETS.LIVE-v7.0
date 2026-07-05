@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import {
     Send, Mic, Paperclip, X, Minus, Edit3, Trash2,
-    Phone, Video, FileText, Square, UserPlus, Check, CheckCheck, Loader2
+    Phone, Video, FileText, Square, UserPlus, Check, CheckCheck, Loader2, MoreVertical
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
@@ -70,6 +70,10 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
     // Recording
     const [isRecording, setIsRecording] = useState<'audio' | 'video' | null>(null)
     const [recordingTime, setRecordingTime] = useState(0)
+    const [recordedBlob, setRecordedBlob] = useState<{ blob: Blob, type: 'audio' | 'video', url: string } | null>(null)
+
+    // Options Menu
+    const [showMenu, setShowMenu] = useState(false)
 
     // Edit
     const [editingMsgId, setEditingMsgId] = useState<string | null>(null)
@@ -234,6 +238,25 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
         }
     }, [messages, isMinimized])
 
+    // Mark messages as seen
+    useEffect(() => {
+        if (!currentConvId || !profile?.id || messages.length === 0) return
+        
+        const markAsSeen = async () => {
+            const unseenIds = messages
+                .filter(m => m.sender_id !== profile.id && m.status !== 'seen')
+                .map(m => m.id)
+                
+            if (unseenIds.length > 0) {
+                await supabase
+                    .from('messages')
+                    .update({ status: 'seen' })
+                    .in('id', unseenIds)
+            }
+        }
+        markAsSeen()
+    }, [messages, currentConvId, profile?.id])
+
     const handleSendMessage = async (e?: React.FormEvent) => {
         if (e) e.preventDefault()
         if (!newMessage.trim() || !currentConvId || !profile?.id) return
@@ -365,25 +388,10 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
             chunksRef.current = []
 
             recorder.ondataavailable = e => chunksRef.current.push(e.data)
-            recorder.onstop = async () => {
+            recorder.onstop = () => {
                 const blob = new Blob(chunksRef.current, { type: type === 'audio' ? 'audio/webm' : 'video/webm' })
-                const file = new File([blob], 'recording.webm', { type: blob.type })
-                setIsUploading(true)
-                try {
-                    const path = `chat/${currentConvId}/rec_${Date.now()}.webm`
-                    await supabase.storage.from('chat-uploads').upload(path, file)
-                    const { data } = supabase.storage.from('chat-uploads').getPublicUrl(path)
-                    await supabase.rpc('send_chat_message', {
-                        p_conversation_id: currentConvId,
-                        p_sender_id: profile?.id,
-                        p_content: data.publicUrl,
-                        p_type: type === 'audio' ? 'voice' : 'video'
-                    })
-                } catch {
-                    toast.error('Failed to send recording')
-                } finally {
-                    setIsUploading(false)
-                }
+                const url = URL.createObjectURL(blob)
+                setRecordedBlob({ blob, type, url })
                 stream.getTracks().forEach(t => t.stop())
             }
 
@@ -400,6 +408,68 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
         mediaRecorderRef.current?.stop()
         setIsRecording(null)
         clearInterval(timerRef.current)
+    }
+
+    const sendRecordedBlob = async () => {
+        if (!recordedBlob || !currentConvId) return
+        const { blob, type } = recordedBlob
+        const file = new File([blob], `recording.${type === 'audio' ? 'webm' : 'webm'}`, { type: blob.type })
+        setIsUploading(true)
+        setRecordedBlob(null)
+        try {
+            const path = `chat/${currentConvId}/rec_${Date.now()}.webm`
+            await supabase.storage.from('chat-uploads').upload(path, file)
+            const { data } = supabase.storage.from('chat-uploads').getPublicUrl(path)
+            await supabase.rpc('send_chat_message', {
+                p_conversation_id: currentConvId,
+                p_sender_id: profile?.id,
+                p_content: data.publicUrl,
+                p_type: type === 'audio' ? 'voice' : 'video'
+            })
+        } catch {
+            toast.error('Failed to send recording')
+        } finally {
+            setIsUploading(false)
+        }
+    }
+
+    const cancelRecordedBlob = () => {
+        if (recordedBlob) {
+            URL.revokeObjectURL(recordedBlob.url)
+            setRecordedBlob(null)
+        }
+    }
+
+    const handleLeaveGroup = async () => {
+        if (!currentConvId) return
+        if (confirm("Are you sure you want to leave this group chat?")) {
+            try {
+                const { error } = await supabase.rpc('leave_conversation', { p_conversation_id: currentConvId })
+                if (error) throw error
+                toast.success("You left the group.")
+                onClose()
+            } catch (e) {
+                console.error(e)
+                toast.error("Failed to leave group")
+            }
+        }
+        setShowMenu(false)
+    }
+
+    const handleDeleteChat = async () => {
+        if (!currentConvId) return
+        if (confirm("Are you sure you want to delete this chat history? This will remove all messages for everyone.")) {
+            try {
+                const { error } = await supabase.rpc('delete_conversation', { p_conversation_id: currentConvId })
+                if (error) throw error
+                toast.success("Chat deleted.")
+                onClose()
+            } catch (e) {
+                console.error(e)
+                toast.error("Failed to delete chat")
+            }
+        }
+        setShowMenu(false)
     }
 
     // Call handlers via global context
@@ -457,8 +527,8 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
 
     return (
         <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0, height: isMinimized ? 48 : 520, width: 380 }}
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1, height: isMinimized ? 48 : 520, width: 380 }}
             drag
             dragMomentum={false}
             style={{ zIndex }}
@@ -486,6 +556,9 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
                     <button onClick={handleVideoCall} className="hover:scale-110 transition-transform p-1.5 hover:bg-[var(--accent-ink)]/10 rounded-lg" title="Video Call">
                         <Video size={15} />
                     </button>
+                    <button onClick={() => setShowMenu(v => !v)} className="hover:scale-110 transition-transform p-1.5 hover:bg-[var(--accent-ink)]/10 rounded-lg" title="Options">
+                        <MoreVertical size={15} />
+                    </button>
                     <div className="w-px h-4 bg-[var(--accent-ink)]/20" />
                     <button onClick={() => setIsMinimized(!isMinimized)} className="hover:bg-[var(--accent-ink)]/10 p-1 rounded transition-colors">
                         <Minus size={15} />
@@ -495,6 +568,22 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
                     </button>
                 </div>
             </div>
+
+            {showMenu && (
+                <div className="absolute top-12 right-4 bg-slate-950/95 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden min-w-[150px]"
+                    onClick={e => e.stopPropagation()}>
+                    {isGroup && (
+                        <button onClick={handleLeaveGroup}
+                            className="w-full px-4 py-2.5 text-xs font-black uppercase text-left hover:bg-white/5 text-red-400 flex items-center gap-2 transition-all">
+                            <X size={12} /> Leave Group
+                        </button>
+                    )}
+                    <button onClick={handleDeleteChat}
+                        className="w-full px-4 py-2.5 text-xs font-black uppercase text-left hover:bg-white/5 text-red-500 border-t border-white/5 flex items-center gap-2 transition-all">
+                        <Trash2 size={12} /> Delete Chat
+                    </button>
+                </div>
+            )}
 
             {!isMinimized && (
                 <>
@@ -625,14 +714,35 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
 
                     {/* INPUT */}
                     <div className="p-3 border-t border-[var(--hairline)] bg-[var(--glass-2)]">
-                        {isRecording ? (
+                        {recordedBlob ? (
+                            <div className="flex flex-col gap-2 p-3 rounded-xl bg-slate-900/60 border border-white/5 shadow-inner">
+                                <span className="text-[10px] font-black uppercase text-[var(--accent)] tracking-wider">Preview Recording</span>
+                                <div className="flex items-center gap-3">
+                                    {recordedBlob.type === 'audio' ? (
+                                        <audio src={recordedBlob.url} controls className="flex-1 h-8 bg-transparent" />
+                                    ) : (
+                                        <video src={recordedBlob.url} controls className="max-h-[140px] rounded-lg w-full bg-black border border-white/10" />
+                                    )}
+                                </div>
+                                <div className="flex justify-end gap-2 mt-1">
+                                    <button type="button" onClick={cancelRecordedBlob}
+                                        className="px-3 py-1.5 border border-red-500/20 bg-red-500/10 text-red-400 rounded-lg text-[10px] font-black uppercase hover:bg-red-500/25 transition-all">
+                                        Delete
+                                    </button>
+                                    <button type="button" onClick={sendRecordedBlob}
+                                        className="px-3 py-1.5 bg-[var(--accent)] text-[var(--accent-ink)] rounded-lg text-[10px] font-black uppercase border border-white/5 hover:opacity-90 transition-all">
+                                        Send
+                                    </button>
+                                </div>
+                            </div>
+                        ) : isRecording ? (
                             <div className="flex items-center justify-between p-3 rounded-xl animate-pulse"
                                 style={{ background: 'color-mix(in oklch, var(--bad) 15%, transparent)', border: '1px solid var(--bad)' }}>
                                 <div className="flex items-center gap-3 text-[var(--bad)] font-black text-xs uppercase">
-                                    <div className="w-2 h-2 rounded-full bg-[var(--bad)] animate-ping" />
+                                    <div className="w-2.5 h-2.5 rounded-full bg-[var(--bad)] animate-ping" />
                                     {isRecording === 'audio' ? 'Voice' : 'Video'} recording... {recordingTime}s
                                 </div>
-                                <button onClick={stopRecording} className="bg-[var(--bad)] text-white p-2 rounded-lg">
+                                <button onClick={stopRecording} className="bg-[var(--bad)] text-white p-2 rounded-lg hover:opacity-95 transition-opacity">
                                     <Square size={16} />
                                 </button>
                             </div>
