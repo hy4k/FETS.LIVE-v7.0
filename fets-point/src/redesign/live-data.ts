@@ -67,8 +67,20 @@ export async function loadLiveData(F: any) {
   try {
     const [authRes, staffRes, newsRes] = await Promise.all([
       supabase.auth.getUser().catch(() => ({ data: { user: null } })),
-      supabase.from("staff_profiles").select("id, user_id, full_name, role, branch_assigned, is_active, hourly_rate, daily_rate, permissions, joining_date, hire_date").order("full_name").catch(() => ({ data: null, error: true })),
-      supabase.from("news_ticker").select("*").order("created_at", { ascending: false }).catch(() => ({ data: null, error: true }))
+      (async () => {
+        try {
+          return await supabase.from("staff_profiles").select("id, user_id, full_name, role, branch_assigned, is_active, hourly_rate, daily_rate, permissions, joining_date, hire_date").order("full_name");
+        } catch (e) {
+          return { data: null, error: e };
+        }
+      })(),
+      (async () => {
+        try {
+          return await supabase.from("news_ticker").select("*").order("created_at", { ascending: false });
+        } catch (e) {
+          return { data: null, error: e };
+        }
+      })()
     ]);
 
     F._meUserId = authRes.data?.user?.id || null;
