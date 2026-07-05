@@ -3193,13 +3193,15 @@ const ROSTER_CODES = {
   E:    { label: "Evening shift",    color: "color-mix(in oklch, var(--v-prometric) 40%, var(--panel-3))",  ink: "var(--v-prometric)", solid: true },
   HD:   { label: "Half day",         color: "color-mix(in oklch, var(--warn) 40%, var(--panel-3))",         ink: "var(--warn)",        solid: true },
   RD:   { label: "Rest day",         color: "var(--panel-3)",                                               ink: "var(--ink-4)",       solid: false },
+  PH:   { label: "Public holiday",   color: "color-mix(in oklch, var(--bad) 30%, var(--panel-3))",          ink: "var(--bad)",         solid: true },
   L:    { label: "Leave",            color: "color-mix(in oklch, var(--bad) 38%, var(--panel-3))",          ink: "var(--bad)",         solid: true },
   TOIL: { label: "TOIL Earned",      color: "color-mix(in oklch, var(--v-cma) 42%, var(--panel-3))",        ink: "var(--v-cma)",       solid: true },
   TR:   { label: "TOIL Redeemed",    color: "color-mix(in oklch, var(--v-ielts) 40%, var(--panel-3))",      ink: "var(--v-ielts)",     solid: true },
   TP:   { label: "TOIL Paid-out",    color: "color-mix(in oklch, var(--v-pearson) 40%, var(--panel-3))",    ink: "var(--v-pearson)",   solid: true },
   SW:   { label: "Shift swapped",    color: "color-mix(in oklch, var(--v-prometric) 50%, var(--panel-3))",  ink: "var(--v-prometric)", solid: true },
+  TRD:  { label: "TOIL Rest Day",    color: "color-mix(in oklch, var(--v-cma) 20%, var(--panel-3))",        ink: "var(--v-cma)",       solid: true },
 };
-const RC_LIST = ["D", "E", "HD", "RD", "L", "TOIL", "TR", "TP", "SW"];
+const RC_LIST = ["D", "E", "HD", "RD", "PH", "L", "TOIL", "TR", "TP", "SW", "TRD"];
 const WORK_CODES = ["D", "E", "HD"];
 const OT_COLOR = "var(--v-ielts)";
 
@@ -3347,25 +3349,6 @@ function OtToilClaimDialog({ ctx, onClose }) {
   const profileId = F()._staffIdByName?.[staffName] || F()._meId;
   const rates = F()._staffRatesByProfileId?.[profileId] || { hourly_rate: 0, daily_rate: 0 };
   
-  const getStaffToilBalance = (name) => {
-    if (!name) return 0;
-    const dbRoster = F()._dbRoster?.[name] || {};
-    let toilEarned = 0;
-    let toilRedeemed = 0;
-    let toilPaid = 0;
-    Object.values(dbRoster).forEach((cell: any) => {
-      const code = cell ? (typeof cell === "string" ? cell : cell.code) : "";
-      const upper = String(code).toUpperCase();
-      if (upper === "TOIL") toilEarned++;
-      if (upper === "TR") toilRedeemed++;
-      if (upper === "TP") toilPaid++;
-    });
-    return toilEarned - toilRedeemed - toilPaid;
-  };
-  
-  const toilBalance = getStaffToilBalance(staffName);
-  const meName = staffName;
-  
   const existingClaim = F()._otClaims?.find(c => c.profile_id === profileId && c.date === dateStr);
   
   const cleanTime = (t) => {
@@ -3391,13 +3374,6 @@ function OtToilClaimDialog({ ctx, onClose }) {
     return nVal;
   };
 
-  const [toilPayout, setToilPayout] = React.useState(existingClaim ? existingClaim.toil_payout : false);
-  const [startTime, setStartTime] = React.useState(existingClaim ? cleanTime(existingClaim.start_time) : "17:00");
-  const [endTime, setEndTime] = React.useState(existingClaim ? cleanTime(existingClaim.end_time) : "");
-  const [otHours, setOtHours] = React.useState(existingClaim ? existingClaim.ot_hours : 0);
-  const [notes, setNotes] = React.useState(getNotesValue);
-  const [status, setStatus] = React.useState(existingClaim ? existingClaim.status : "pending");
-  
   const initToilDates = () => {
     if (!existingClaim) return [];
     let list = existingClaim.toil_dates || [];
@@ -3412,7 +3388,29 @@ function OtToilClaimDialog({ ctx, onClose }) {
     }
     return list;
   };
-  const [selectedToilDates, setSelectedToilDates] = React.useState(initToilDates);
+
+  const cellCodeVal = ctx.cell ? (typeof ctx.cell === "string" ? ctx.cell : ctx.cell.code) : "RD";
+  const isToilClaim = ["PH", "RD", "TP", "TR"].includes(cellCodeVal) || (existingClaim && (existingClaim.toil_payout || initToilDates().length > 0));
+
+  const [toilOption, setToilOption] = React.useState<"cash" | "rest">(() => {
+    if (existingClaim) {
+      if (existingClaim.toil_payout) return "cash";
+      const dates = initToilDates();
+      if (dates.length > 0) return "rest";
+    }
+    return "cash";
+  });
+
+  const [targetRestDate, setTargetRestDate] = React.useState(() => {
+    const dates = initToilDates();
+    return dates[0] || "";
+  });
+
+  const [startTime, setStartTime] = React.useState(existingClaim ? cleanTime(existingClaim.start_time) : "17:00");
+  const [endTime, setEndTime] = React.useState(existingClaim ? cleanTime(existingClaim.end_time) : "");
+  const [otHours, setOtHours] = React.useState(existingClaim ? existingClaim.ot_hours : 0);
+  const [notes, setNotes] = React.useState(getNotesValue);
+  const [status, setStatus] = React.useState(existingClaim ? existingClaim.status : "pending");
   const [loading, setLoading] = React.useState(false);
   
   React.useEffect(() => {
@@ -3420,47 +3418,8 @@ function OtToilClaimDialog({ ctx, onClose }) {
     window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k);
   }, []);
   
-  // Find all dates where this user has shift code "TOIL"
-  const earnedToilDates = React.useMemo(() => {
-    const dates = [];
-    if (!meName) return dates;
-    const dbRoster = F()._dbRoster?.[meName] || {};
-    Object.entries(dbRoster).forEach(([off, cell]: [string, any]) => {
-      const code = cell ? (typeof cell === "string" ? cell : cell.code) : "";
-      if (String(code).toUpperCase() === "TOIL") {
-        const dObj = F().ISO(Number(off));
-        const dStr = `${dObj.getFullYear()}-${String(dObj.getMonth() + 1).padStart(2, "0")}-${String(dObj.getDate()).padStart(2, "0")}`;
-        dates.push(dStr);
-      }
-    });
-    return dates.sort();
-  }, [meName]);
-
-  const pendingToilDates = React.useMemo(() => {
-    const dates = new Set();
-    F()._otClaims?.forEach(c => {
-      if (c.toil_payout && c.status === "pending" && c.id !== existingClaim?.id && c.profile_id === profileId) {
-        let list = [];
-        try {
-          list = typeof c.toil_dates === 'string' ? JSON.parse(c.toil_dates) : (c.toil_dates || []);
-        } catch (e) {
-          list = c.toil_dates || [];
-        }
-        if (Array.isArray(list)) list.forEach(d => dates.add(d));
-      }
-    });
-    return dates;
-  }, [existingClaim, profileId]);
-
-  const availableToilDates = React.useMemo(() => {
-    const currentSelected = initToilDates();
-    const available = earnedToilDates.filter(d => !pendingToilDates.has(d));
-    const merged = Array.from(new Set([...available, ...currentSelected]));
-    return merged.sort();
-  }, [earnedToilDates, pendingToilDates]);
-  
   React.useEffect(() => {
-    if (toilPayout) {
+    if (isToilClaim) {
       setOtHours(0);
       return;
     }
@@ -3474,16 +3433,16 @@ function OtToilClaimDialog({ ctx, onClose }) {
     if (diff < 0) diff += 24 * 60;
     const hrs = Math.max(0, +(diff / 60).toFixed(2));
     setOtHours(hrs);
-  }, [startTime, endTime, toilPayout]);
+  }, [startTime, endTime, isToilClaim]);
   
   const handleSave = async () => {
     if (!profileId) {
       alert("Error: Profile not found. Cannot submit claim.");
       return;
     }
-    if (toilPayout) {
-      if (selectedToilDates.length === 0) {
-        alert("Please select at least one TOIL date to cash out.");
+    if (isToilClaim) {
+      if (toilOption === "rest" && !targetRestDate) {
+        alert("Please select another day to take your rest day.");
         return;
       }
     } else {
@@ -3510,11 +3469,11 @@ function OtToilClaimDialog({ ctx, onClose }) {
     const payload = {
       profile_id: profileId,
       date: dateStr,
-      start_time: formatTimeForDb(startTime),
-      end_time: toilPayout ? null : formatTimeForDb(endTime),
-      ot_hours: toilPayout ? 0 : otHours,
-      toil_payout: toilPayout,
-      toil_dates: toilPayout ? selectedToilDates : [],
+      start_time: isToilClaim ? "17:00:00" : formatTimeForDb(startTime),
+      end_time: isToilClaim ? null : formatTimeForDb(endTime),
+      ot_hours: isToilClaim ? 0 : otHours,
+      toil_payout: isToilClaim ? (toilOption === "cash") : false,
+      toil_dates: isToilClaim && toilOption === "rest" ? [targetRestDate] : [],
       notes: notes || null,
       status: F().isAdmin ? status : (existingClaim ? existingClaim.status : "pending")
     };
@@ -3583,71 +3542,56 @@ function OtToilClaimDialog({ ctx, onClose }) {
         
         {(!displayStatus || displayStatus === 'pending' || displayStatus === 'rejected' || F().isAdmin) ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <div className="inset" style={{ padding: 14, borderRadius: 12, display: "flex", alignItems: "center", gap: 12 }}>
-              <span style={{ minWidth: 32, height: 22, padding: "0 6px", borderRadius: 6, display: "grid", placeItems: "center", fontSize: 10, fontWeight: 800, color: "#fff", background: "var(--v-pearson)" }}>TOIL</span>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>TOIL Cash Payout</div>
-                <div style={{ fontSize: 11, color: "var(--ink-4)", fontWeight: 500 }}>Claim payout instead of a leave day</div>
-              </div>
-              <input 
-                type="checkbox" 
-                checked={toilPayout} 
-                onChange={(e) => setToilPayout(e.target.checked)}
-                style={{ width: 18, height: 18, accentColor: "var(--v-pearson)", cursor: "pointer" }}
-              />
-            </div>
             
-            {toilPayout && toilBalance <= 0 && (
-              <div style={{ color: "var(--bad)", fontSize: 12.5, fontWeight: 600, padding: 10, borderRadius: 8, background: "color-mix(in oklch, var(--bad) 8%, var(--inset))", border: "1px solid color-mix(in oklch, var(--bad) 30%, transparent)" }}>
-                ⚠️ No TOIL balance available (Current balance: {toilBalance} days). You cannot request a cash payout.
-              </div>
-            )}
-
-            {toilPayout && toilBalance > 0 && (
-              <div className="inset" style={{ padding: 14, borderRadius: 12, display: "flex", flexDirection: "column", gap: 10 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-2)" }}>
-                  Select TOIL days to cash out (Max: {toilBalance} days):
+            {isToilClaim ? (
+              <div className="inset" style={{ padding: 14, borderRadius: 12, display: "flex", flexDirection: "column", gap: 14 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ minWidth: 32, height: 22, padding: "0 6px", borderRadius: 6, display: "grid", placeItems: "center", fontSize: 10, fontWeight: 800, color: "#fff", background: "var(--v-pearson)" }}>TOIL</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>Choose TOIL Option:</span>
                 </div>
-                {availableToilDates.length === 0 ? (
-                  <div style={{ fontSize: 11.5, color: "var(--ink-4)", fontStyle: "italic" }}>
-                    No unredeemed TOIL dates found in roster.
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 120, overflowY: "auto", paddingRight: 6 }} className="scroll-soft">
-                    {availableToilDates.map((date) => {
-                      const checked = selectedToilDates.includes(date);
-                      return (
-                        <label key={date} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "var(--ink-2)", cursor: "pointer" }}>
-                          <input 
-                            type="checkbox" 
-                            checked={checked} 
-                            onChange={() => {
-                              if (checked) {
-                                setSelectedToilDates(prev => prev.filter(d => d !== date));
-                              } else {
-                                if (selectedToilDates.length >= toilBalance) {
-                                  alert(`You can select at most ${toilBalance} days (TOIL balance).`);
-                                  return;
-                                }
-                                setSelectedToilDates(prev => [...prev, date].sort());
-                              }
-                            }}
-                            style={{ cursor: "pointer" }}
-                          />
-                          <span>{date} (Earned TOIL)</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                )}
-                <div style={{ fontSize: 11.5, color: "var(--ink-3)", fontWeight: 600, borderTop: "1px solid var(--hairline)", paddingTop: 8, display: "flex", justifyContent: "space-between" }}>
-                  <span>Selected: {selectedToilDates.length} days</span>
-                  <span>Payout: ₹{(selectedToilDates.length * rates.daily_rate * 1.5).toFixed(0)}</span>
+                
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 4 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13.5, color: "var(--ink)", fontWeight: 600, cursor: "pointer" }}>
+                    <input 
+                      type="radio" 
+                      name="toil_option" 
+                      value="cash"
+                      checked={toilOption === "cash"} 
+                      onChange={() => setToilOption("cash")}
+                      style={{ width: 16, height: 16, accentColor: "var(--accent)" }}
+                    />
+                    <span>1. Cash out (Paid TOIL)</span>
+                  </label>
+
+                  <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13.5, color: "var(--ink)", fontWeight: 600, cursor: "pointer" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <input 
+                        type="radio" 
+                        name="toil_option" 
+                        value="rest"
+                        checked={toilOption === "rest"} 
+                        onChange={() => setToilOption("rest")}
+                        style={{ width: 16, height: 16, accentColor: "var(--accent)" }}
+                      />
+                      <span>2. Take rest day on another day</span>
+                    </div>
+                    {toilOption === "rest" && (
+                      <div style={{ marginLeft: 26, marginTop: 4 }}>
+                        <span style={{ fontSize: 11, color: "var(--ink-4)", display: "block", marginBottom: 4 }}>Choose Target Rest Date:</span>
+                        <input 
+                          type="date" 
+                          value={targetRestDate}
+                          onChange={(e) => setTargetRestDate(e.target.value)}
+                          className="glass-2"
+                          style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid var(--hairline)", color: "var(--ink)", background: "transparent", fontSize: 13, outline: "none" }}
+                          required={toilOption === "rest"}
+                        />
+                      </div>
+                    )}
+                  </label>
                 </div>
               </div>
-            )}
-
-            {!toilPayout ? (
+            ) : (
               <div className="inset" style={{ padding: 14, borderRadius: 12, display: "flex", flexDirection: "column", gap: 14 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={{ minWidth: 32, height: 22, padding: "0 6px", borderRadius: 6, display: "grid", placeItems: "center", fontSize: 10, fontWeight: 800, color: "#fff", background: "var(--v-ielts)" }}>OT</span>
@@ -3684,7 +3628,7 @@ function OtToilClaimDialog({ ctx, onClose }) {
                   <span style={{ fontSize: 15, fontWeight: 800, color: "var(--v-ielts)" }}>{otHours.toFixed(2)} hours</span>
                 </div>
               </div>
-            ) : null}
+            )}
             
             {F().isAdmin && (
               <div>
@@ -3715,9 +3659,9 @@ function OtToilClaimDialog({ ctx, onClose }) {
             
             <button 
               onClick={handleSave} 
-              disabled={loading || (toilPayout && toilBalance <= 0)}
+              disabled={loading}
               className="tap btn-accent"
-              style={{ padding: "11px 0", borderRadius: 12, border: "none", fontWeight: 700, fontSize: 14, cursor: (toilPayout && toilBalance <= 0) ? "default" : "pointer", background: "var(--accent)", color: "#fff", transition: "opacity .2s", opacity: (loading || (toilPayout && toilBalance <= 0)) ? 0.6 : 1 }}
+              style={{ padding: "11px 0", borderRadius: 12, border: "none", fontWeight: 700, fontSize: 14, cursor: "pointer", background: "var(--accent)", color: "#fff", transition: "opacity .2s", opacity: loading ? 0.6 : 1 }}
             >
               {loading ? "Submitting..." : existingClaim ? "Save Changes" : "Submit Claim"}
             </button>
@@ -3740,18 +3684,9 @@ function OtToilClaimDialog({ ctx, onClose }) {
             </div>
             
             <div className="inset" style={{ padding: 12, borderRadius: 10, display: "flex", flexDirection: "column", gap: 8, fontSize: 12 }}>
-              <div><strong>Type:</strong> {existingClaim.toil_payout ? "TOIL Cash Payout" : "Overtime Hours"}</div>
-              {!existingClaim.toil_payout ? (
+              <div><strong>Type:</strong> {isToilClaim ? (existingClaim.toil_payout ? "TOIL Cash Payout" : `TOIL Rest Day (Rest Day on ${initToilDates()[0]})`) : "Overtime Hours"}</div>
+              {!isToilClaim && (
                 <div><strong>Hours:</strong> {existingClaim.ot_hours} hrs ({existingClaim.start_time} - {existingClaim.end_time})</div>
-              ) : (
-                <div>
-                  <strong>Payout Days:</strong> {existingClaim.toil_dates?.length || 0} days
-                  <div style={{ marginTop: 4, color: "var(--ink-3)", display: "flex", flexDirection: "column", gap: 2 }}>
-                    {(existingClaim.toil_dates || []).map(d => (
-                      <span key={d}>• {d}</span>
-                    ))}
-                  </div>
-                </div>
               )}
               {existingClaim.notes && <div><strong>Notes:</strong> {existingClaim.notes}</div>}
             </div>

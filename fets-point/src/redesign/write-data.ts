@@ -448,32 +448,39 @@ async function revertRosterChangesForClaim(claim: any) {
   if (!claim) return;
   const pid = claim.profile_id;
   const date = claim.date;
-  const toilPayout = claim.toil_payout;
   const name = Object.keys(F()._staffIdByName).find(k => F()._staffIdByName[k] === pid);
 
-  if (toilPayout) {
-    let tDates = [];
-    if (claim.notes && claim.notes.trim().startsWith("{")) {
+  const tDates = (() => {
+    let list = [];
+    if (claim.toil_dates) {
       try {
-        const parsed = JSON.parse(claim.notes);
-        tDates = parsed.toil_dates || [];
-      } catch (e) {}
-    } else if (Array.isArray(claim.toil_dates)) {
-      tDates = claim.toil_dates;
-    } else if (typeof claim.toil_dates === 'string') {
-      try {
-        tDates = JSON.parse(claim.toil_dates);
+        list = typeof claim.toil_dates === 'string' ? JSON.parse(claim.toil_dates) : claim.toil_dates;
       } catch (e) {}
     }
+    return Array.isArray(list) ? list : [];
+  })();
+  const isToilClaim = claim.toil_payout || tDates.length > 0;
+
+  if (isToilClaim) {
+    await dbSetRosterById(pid, date, "RD");
+    if (name) {
+      const dt = new Date(date + "T00:00:00");
+      const off = F().offsetOf ? F().offsetOf(dt) : null;
+      if (off != null && !isNaN(off)) {
+        F()._dbRoster = F()._dbRoster || {};
+        F()._dbRoster[name] = F()._dbRoster[name] || {};
+        F()._dbRoster[name][off] = { code: "RD", ot: 0 };
+      }
+    }
     for (const d of tDates) {
-      await dbSetRosterById(pid, d, "TOIL");
+      await dbSetRosterById(pid, d, "RD");
       if (name) {
         const dt = new Date(d + "T00:00:00");
         const off = F().offsetOf ? F().offsetOf(dt) : null;
         if (off != null && !isNaN(off)) {
           F()._dbRoster = F()._dbRoster || {};
           F()._dbRoster[name] = F()._dbRoster[name] || {};
-          F()._dbRoster[name][off] = { code: "TOIL", ot: 0 };
+          F()._dbRoster[name][off] = { code: "RD", ot: 0 };
         }
       }
     }
@@ -649,30 +656,54 @@ export async function dbResolveOtClaim(claimId: string, status: "Approved" | "Re
     if (status === "Approved" && claim) {
       const pid = claim.profile_id;
       const date = claim.date;
-      const toilPayout = claim.toil_payout;
       const otHours = claim.ot_hours;
       
       const name = Object.keys(F()._staffIdByName).find(k => F()._staffIdByName[k] === pid);
       
-      if (toilPayout) {
-        let tDates = [];
-        if (claim.notes && claim.notes.trim().startsWith("{")) {
+      const tDates = (() => {
+        let list = [];
+        if (claim.toil_dates) {
           try {
-            const parsed = JSON.parse(claim.notes);
-            tDates = parsed.toil_dates || [];
-          } catch (e) {
-            // ignore
-          }
+            list = typeof claim.toil_dates === 'string' ? JSON.parse(claim.toil_dates) : claim.toil_dates;
+          } catch (e) {}
         }
-        for (const d of tDates) {
-          await dbSetRosterById(pid, d, "TP");
+        return Array.isArray(list) ? list : [];
+      })();
+      const isToilClaim = claim.toil_payout || tDates.length > 0;
+      
+      if (isToilClaim) {
+        if (claim.toil_payout) {
+          await dbSetRosterById(pid, date, "TP");
           if (name) {
-            const dt = new Date(d + "T00:00:00");
+            const dt = new Date(date + "T00:00:00");
             const off = F().offsetOf ? F().offsetOf(dt) : null;
             if (off != null && !isNaN(off)) {
               F()._dbRoster = F()._dbRoster || {};
               F()._dbRoster[name] = F()._dbRoster[name] || {};
               F()._dbRoster[name][off] = { code: "TP", ot: 0 };
+            }
+          }
+        } else if (tDates.length > 0) {
+          await dbSetRosterById(pid, date, "TR");
+          if (name) {
+            const dt = new Date(date + "T00:00:00");
+            const off = F().offsetOf ? F().offsetOf(dt) : null;
+            if (off != null && !isNaN(off)) {
+              F()._dbRoster = F()._dbRoster || {};
+              F()._dbRoster[name] = F()._dbRoster[name] || {};
+              F()._dbRoster[name][off] = { code: "TR", ot: 0 };
+            }
+          }
+          for (const targetDate of tDates) {
+            await dbSetRosterById(pid, targetDate, "TRD");
+            if (name) {
+              const dt = new Date(targetDate + "T00:00:00");
+              const off = F().offsetOf ? F().offsetOf(dt) : null;
+              if (off != null && !isNaN(off)) {
+                F()._dbRoster = F()._dbRoster || {};
+                F()._dbRoster[name] = F()._dbRoster[name] || {};
+                F()._dbRoster[name][off] = { code: "TRD", ot: 0 };
+              }
             }
           }
         }

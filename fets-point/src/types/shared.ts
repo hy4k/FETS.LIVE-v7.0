@@ -245,6 +245,20 @@ export const SHIFT_CODES = {
     textColor: '#ffffff',
     borderColor: '#AF52DE',
     letter: 'TOIL'
+  },
+  'PH': {
+    name: 'Public Holiday',
+    bgColor: 'linear-gradient(135deg, #FF3B30 0%, #FF6961 100%)',
+    textColor: '#ffffff',
+    borderColor: '#FF3B30',
+    letter: 'PH'
+  },
+  'TRD': {
+    name: 'TOIL Rest Day',
+    bgColor: 'linear-gradient(135deg, #AF52DE 0%, #C644FC 100%)',
+    textColor: '#ffffff',
+    borderColor: '#AF52DE',
+    letter: 'TRD'
   }
 } as const
 

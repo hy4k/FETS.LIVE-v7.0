@@ -17,5 +17,11 @@
   },
   "devDependencies": {
     "ssh2": "^1.17.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "cpu-features",
+      "ssh2"
+    ]
   }
 }
