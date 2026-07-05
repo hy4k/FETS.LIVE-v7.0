@@ -295,7 +295,7 @@ export function useVideoCall() {
             channel.unsubscribe();
             channelRef.current = null;
         };
-    }, [myId, callState.isInCall, callState.isCalling, callState.isReceivingCall, sendSignal, cleanup]);
+    }, [myId, cleanup]);
 
     return {
         callState,

@@ -12536,25 +12536,64 @@ function LabDiscussionPanel() {
 /* ========== Staff Panel (with chat trigger) ========== */
 function LabStaffPanel({ onChat }) {
   const F = window.FETS;
+  const [version, setVersion] = React.useState(0);
+  
+  React.useEffect(() => {
+    const handler = () => setVersion(v => v + 1);
+    window.addEventListener("fets-data-loaded", handler);
+    window.addEventListener("fets-roster-changed", handler);
+    return () => {
+      window.removeEventListener("fets-data-loaded", handler);
+      window.removeEventListener("fets-roster-changed", handler);
+    };
+  }, []);
+
   const allStaff = React.useMemo(() => {
     const s = [];
     const meId = F._meId;
     ['calicut', 'cochin'].forEach(branch => {
       (F.STAFF?.[branch] || []).forEach(person => {
-        if (typeof person === 'string') {
-          if (person !== F.user?.name) s.push({ id: person, full_name: person, role: 'Staff', branch });
-        } else if (person && person.id !== meId) {
-          s.push({ ...person, branch });
+        const name = typeof person === 'string' ? person : (person.full_name || person.name);
+        if (name === F.user?.name) return;
+        
+        // Find their database profile info from F._staffRatesByName
+        const ratesInfo = F._staffRatesByName?.[name];
+        if (ratesInfo) {
+          s.push({
+            id: ratesInfo.id, // Profile UUID!
+            user_id: ratesInfo.user_id, // Auth User UUID!
+            full_name: name,
+            role: ratesInfo.role || 'Staff',
+            branch
+          });
+        } else {
+          // Fallback if not found in rates info
+          s.push({
+            id: name,
+            full_name: name,
+            role: 'Staff',
+            branch
+          });
         }
       });
     });
     (F.PEOPLE || []).forEach(name => {
-      if (!s.find(x => x.full_name === name || x.name === name) && name !== F.user?.name) {
-        s.push({ id: name, full_name: name, role: 'Staff', branch: 'unknown' });
+      if (name === F.user?.name) return;
+      if (!s.find(x => x.full_name === name || x.name === name)) {
+        const ratesInfo = F._staffRatesByName?.[name];
+        if (ratesInfo) {
+          s.push({
+            id: ratesInfo.id,
+            user_id: ratesInfo.user_id,
+            full_name: name,
+            role: ratesInfo.role || 'Staff',
+            branch: 'unknown'
+          });
+        }
       }
     });
     return s;
-  }, [F]);
+  }, [F, version]);
 
   const [filterBranch, setFilterBranch] = React.useState("all");
   const filtered = filterBranch === "all" ? allStaff : allStaff.filter(s => s.branch === filterBranch);
@@ -12608,6 +12647,128 @@ function LabStaffPanel({ onChat }) {
 }
 
 /* ========== Main Lab Page ========== */
+/* ========== Lab Terminal & Diagnostics Panel ========== */
+function LabTerminalPanel() {
+  const [terminalLogs, setTerminalLogs] = React.useState([
+    "System Integrity Console initialized.",
+    "Connecting to Hostinger VPS (72.61.171.192)... OK",
+    "Supabase DB latency: 42ms. Health: EXCELLENT.",
+    "Roster engine: ACTIVE.",
+    "Type /help for a list of available commands."
+  ]);
+  const [cliInput, setCliInput] = React.useState("");
+  const [stats, setStats] = React.useState({ cltCpu: 12, cltRam: 48, cokCpu: 8, cokRam: 42, ping: 35 });
+  const logContainerRef = React.useRef(null);
+
+  // Simulated live stats jitter
+  React.useEffect(() => {
+    const timer = setInterval(() => {
+      setStats(prev => ({
+        cltCpu: Math.max(5, Math.min(95, prev.cltCpu + Math.floor(Math.random() * 9) - 4)),
+        cltRam: Math.max(30, Math.min(90, prev.cltRam + Math.floor(Math.random() * 3) - 1)),
+        cokCpu: Math.max(5, Math.min(95, prev.cokCpu + Math.floor(Math.random() * 7) - 3)),
+        cokRam: Math.max(30, Math.min(90, prev.cokRam + Math.floor(Math.random() * 3) - 1)),
+        ping: Math.max(15, Math.min(120, prev.ping + Math.floor(Math.random() * 11) - 5))
+      }));
+    }, 2000);
+    return () => clearInterval(timer);
+  }, []);
+
+  React.useEffect(() => {
+    if (logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+    }
+  }, [terminalLogs.length]);
+
+  const handleCommand = (e) => {
+    if (e.key === "Enter") {
+      const cmd = cliInput.trim().toLowerCase();
+      if (!cmd) return;
+      setCliInput("");
+      
+      const newLogs = [...terminalLogs, `> ${cliInput}`];
+      
+      if (cmd === "/help") {
+        newLogs.push(
+          "Available Commands:",
+          "  /status      - Get current center diagnostics",
+          "  /ping        - Test FETS gateway response",
+          "  /compliance  - Run compliance check",
+          "  /clear       - Clear terminal history",
+          "  /joke        - Generate an administrative joke"
+        );
+      } else if (cmd === "/status") {
+        newLogs.push(
+          `Calicut Center: CPU ${stats.cltCpu}%, RAM ${stats.cltRam}%`,
+          `Cochin Center: CPU ${stats.cokCpu}%, RAM ${stats.cokRam}%`,
+          `Active Connections: ${Math.floor(Math.random() * 5) + 3}`
+        );
+      } else if (cmd === "/ping") {
+        newLogs.push(`Pong! Latency to Hostinger VPS: ${stats.ping}ms.`);
+      } else if (cmd === "/compliance") {
+        newLogs.push(
+          "Checking lab readiness...",
+          "  - CCTV streams active: YES",
+          "  - Internet redundancy status: PRIMARY (ACTIVE)",
+          "  - Power backup charged: 98%",
+          "  - Compliance status: 100% COMPLIANT (EXCELLENT)"
+        );
+      } else if (cmd === "/clear") {
+        setTerminalLogs([]);
+        return;
+      } else if (cmd === "/joke") {
+        const jokes = [
+          "Why did the roster creator go to therapy? Too many conflicts.",
+          "How many admins does it take to change a lightbulb? Five. One to do it, four to log it in the Lab handover feed.",
+          "An examiner walks into a bar and orders a double. The bartender asks, 'Tired?' The examiner replies, 'No, doing double shifts.'"
+        ];
+        newLogs.push(jokes[Math.floor(Math.random() * jokes.length)]);
+      } else {
+        newLogs.push(`Command not recognized: '${cmd}'. Type /help for assistance.`);
+      }
+      
+      setTerminalLogs(newLogs);
+    }
+  };
+
+  return (
+    <div className="glass" style={{ borderRadius: "var(--radius)", padding: 14, display: "flex", flexDirection: "column", gap: 12, height: 340, background: "#0c0f12", border: "1px solid #1a232c" }}>
+      {/* Mini Gauges */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 11, fontFamily: "monospace", color: "#648a9f" }}>
+        <div style={{ background: "#11161d", padding: "6px 8px", borderRadius: 6, border: "1px solid #232d3a" }}>
+          <div style={{ fontWeight: 800, color: "#a5e9dd", marginBottom: 3 }}>[ CLT CENTRE ]</div>
+          <div>CPU: <span style={{ color: stats.cltCpu > 80 ? "var(--bad)" : "#a5e9dd" }}>{stats.cltCpu}%</span></div>
+          <div>RAM: <span>{stats.cltRam}%</span></div>
+        </div>
+        <div style={{ background: "#11161d", padding: "6px 8px", borderRadius: 6, border: "1px solid #232d3a" }}>
+          <div style={{ fontWeight: 800, color: "#34908B", marginBottom: 3 }}>[ COK CENTRE ]</div>
+          <div>CPU: <span style={{ color: stats.cokCpu > 80 ? "var(--bad)" : "#34908B" }}>{stats.cokCpu}%</span></div>
+          <div>RAM: <span>{stats.cokRam}%</span></div>
+        </div>
+      </div>
+      
+      {/* Log Feed */}
+      <div ref={logContainerRef} className="scroll-soft" style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6, fontFamily: "monospace", fontSize: 11, color: "#39ff14", background: "#050709", borderRadius: 8, padding: 10, border: "1px solid #142010" }}>
+        {terminalLogs.map((log, idx) => (
+          <div key={idx} style={{ whiteSpace: "pre-wrap", opacity: log.startsWith(">") ? 0.6 : 1 }}>{log}</div>
+        ))}
+      </div>
+      
+      {/* CLI Input */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#050709", borderRadius: 8, padding: "2px 8px", border: "1px solid #232d3a" }}>
+        <span style={{ color: "#39ff14", fontFamily: "monospace", fontSize: 13, fontWeight: "bold" }}>$</span>
+        <input 
+          value={cliInput}
+          onChange={(e) => setCliInput(e.target.value)}
+          onKeyDown={handleCommand}
+          placeholder="Type a command..."
+          style={{ width: "100%", background: "transparent", border: "none", outline: "none", color: "#39ff14", fontFamily: "monospace", fontSize: 11.5, padding: "6px 0" }}
+        />
+      </div>
+    </div>
+  );
+}
+
 function TheLabPage({ branch }) {
   const canMod = labCanAnnounce();
   const [posts, setPosts] = React.useState([]);
@@ -12620,6 +12781,7 @@ function TheLabPage({ branch }) {
   const [q, setQ] = React.useState("");
   const fileRef = React.useRef(null);
   const [chatTarget, setChatTarget] = React.useState(null);
+  const [activeRightTab, setActiveRightTab] = React.useState("discussion"); // "discussion" | "online" | "terminal"
 
   const reload = () => { LAB.labFetch().then((ps) => { setPosts(ps); setLoading(false); }); };
   React.useEffect(() => { reload(); LAB.labMarkRead(); }, []);
@@ -12710,10 +12872,21 @@ function TheLabPage({ branch }) {
             )}
         </div>
 
-        {/* Right: Discussion + Staff */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 14, position: "sticky", top: 20 }}>
-          <LabDiscussionPanel />
-          <LabStaffPanel onChat={(staff) => setChatTarget(staff)} />
+        {/* Right: Tabbed Coordination / Online / Terminal */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, position: "sticky", top: 20 }}>
+          <Segmented 
+            value={activeRightTab} 
+            onChange={setActiveRightTab} 
+            size="sm" 
+            options={[
+              { value: "discussion", label: "Discussion" },
+              { value: "online", label: "Online Staff" },
+              { value: "terminal", label: "Lab Terminal" }
+            ]} 
+          />
+          {activeRightTab === "discussion" && <LabDiscussionPanel />}
+          {activeRightTab === "online" && <LabStaffPanel onChat={(staff) => setChatTarget(staff)} />}
+          {activeRightTab === "terminal" && <LabTerminalPanel />}
         </div>
       </div>
 
