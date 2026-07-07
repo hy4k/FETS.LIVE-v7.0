@@ -32,7 +32,8 @@ import {
   Lock,
   Power,
   ChevronLeft,
-  Send
+  Send,
+  Trash2
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../hooks/useAuth";
@@ -224,7 +225,11 @@ export function FetsIncidentPremium({ branch, setActive }: { branch: string; set
   const filtered = useMemo(() => {
     return inBranch.filter((c) => {
       const matchesCat = catFilter === "all" || c.category.toLowerCase() === catFilter.toLowerCase();
-      const matchesStatus = statusFilter === "all" || c.status === statusFilter;
+      const matchesStatus = statusFilter === "all"
+        ? true
+        : statusFilter === "delete_requested"
+        ? c.metadata?.delete_requested === true
+        : c.status === statusFilter && !c.metadata?.delete_requested;
       const matchesSearch =
         !searchQuery.trim() ||
         c.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -379,6 +384,65 @@ export function FetsIncidentPremium({ branch, setActive }: { branch: string; set
     setStatusFilter("all");
     setView("cases");
     setRaiseOpen(false);
+  };
+
+  const handleRequestDeleteCase = async (id: string) => {
+    if (isLocked) return;
+    const c0 = cases.find((c) => c.id === id);
+    if (!c0 || c0._dbId == null) return;
+    
+    const myName = window.FETS?.user?.name || "Staff";
+    const updatedMetadata = { ...c0.metadata, delete_requested: true, delete_requested_by: myName, delete_requested_at: new Date().toISOString() };
+    
+    setCases((cs) => cs.map((c) => c.id === id ? { ...c, metadata: updatedMetadata } : c));
+    
+    const { error } = await supabase.from("incidents").update({ metadata: updatedMetadata }).eq("id", c0._dbId);
+    if (error) {
+      triggerToast("Delete request failed", "alert");
+    } else {
+      await DB.dbAddCaseComment(c0._dbId, `[System] requested deletion of this case`);
+      triggerToast("Deletion requested", "check");
+      fetchCases();
+    }
+  };
+
+  const handleCancelDeleteCase = async (id: string) => {
+    if (isLocked) return;
+    const c0 = cases.find((c) => c.id === id);
+    if (!c0 || c0._dbId == null) return;
+    
+    const updatedMetadata = { ...c0.metadata, delete_requested: false };
+    delete updatedMetadata.delete_requested_by;
+    delete updatedMetadata.delete_requested_at;
+    
+    setCases((cs) => cs.map((c) => c.id === id ? { ...c, metadata: updatedMetadata } : c));
+    
+    const { error } = await supabase.from("incidents").update({ metadata: updatedMetadata }).eq("id", c0._dbId);
+    if (error) {
+      triggerToast("Rejection failed", "alert");
+    } else {
+      await DB.dbAddCaseComment(c0._dbId, `[System] rejected deletion request`);
+      triggerToast("Deletion request rejected", "check");
+      fetchCases();
+    }
+  };
+
+  const handleDeleteCasePermanently = async (id: string) => {
+    if (isLocked) return;
+    const c0 = cases.find((c) => c.id === id);
+    if (!c0 || c0._dbId == null) return;
+    
+    setCases((cs) => cs.filter((c) => c.id !== id));
+    setSelectedId(null);
+    
+    const { error } = await supabase.from("incidents").delete().eq("id", c0._dbId);
+    if (error) {
+      triggerToast("Delete failed", "alert");
+      fetchCases();
+    } else {
+      triggerToast("Incident permanently deleted", "check");
+      fetchCases();
+    }
   };
 
   const handleRaiseFromPreset = async (preset: Preset, promptVal: string) => {
@@ -1077,6 +1141,7 @@ export function FetsIncidentPremium({ branch, setActive }: { branch: string; set
                 <option value="open">Open</option>
                 <option value="progress">In Progress</option>
                 <option value="resolved">Resolved</option>
+                <option value="delete_requested">Delete Requested</option>
               </select>
             </div>
 
@@ -1089,7 +1154,9 @@ export function FetsIncidentPremium({ branch, setActive }: { branch: string; set
               ) : (
                 filtered.map((c) => {
                   const on = c.id === selectedId;
-                  const st = STATUS_META[c.status as "open" | "progress" | "resolved"] || { label: c.status, color: "#64748b" };
+                  const st = c.metadata?.delete_requested
+                    ? { label: "DELETE REQ", color: "#ef4444" }
+                    : STATUS_META[c.status as "open" | "progress" | "resolved"] || { label: c.status, color: "#64748b" };
                   const barColor = PRIO_COLORS[c.priority as "Low" | "Medium" | "High" | "Urgent"] || "#6b7280";
                   return (
                     <button
@@ -1149,6 +1216,9 @@ export function FetsIncidentPremium({ branch, setActive }: { branch: string; set
                 onContact={setContactDetails}
                 onClaim={handleClaimCase}
                 onEscalate={handleEscalateCase}
+                onDeletePermanently={handleDeleteCasePermanently}
+                onRequestDelete={handleRequestDeleteCase}
+                onCancelDelete={handleCancelDeleteCase}
                 isLocked={isLocked}
               />
             ) : (
@@ -1380,6 +1450,9 @@ function CasePlayground({
   onContact,
   onClaim,
   onEscalate,
+  onDeletePermanently,
+  onRequestDelete,
+  onCancelDelete,
   isLocked
 }: {
   c: any;
@@ -1388,6 +1461,9 @@ function CasePlayground({
   onContact: (id: string, ct: any) => void;
   onClaim: (id: string) => void;
   onEscalate: (id: string) => void;
+  onDeletePermanently: (id: string) => void;
+  onRequestDelete: (id: string) => void;
+  onCancelDelete: (id: string) => void;
   isLocked: boolean;
 }) {
   const [composerMode, setComposerMode] = useState<"staff" | "external">("staff");
@@ -1562,17 +1638,119 @@ function CasePlayground({
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
-              gap: 4,
-              marginLeft: "auto"
+              gap: 4
             }}
           >
             <AlertTriangle size={11} /> Escalated
           </button>
+
+          <div style={{ marginLeft: "auto" }}>
+            {(window as any).FETS?.isAdmin ? (
+              !c.metadata?.delete_requested && (
+                <button
+                  onClick={() => !isLocked && onDeletePermanently(c.id)}
+                  disabled={isLocked}
+                  style={{
+                    padding: "5px 10px",
+                    borderRadius: 6,
+                    fontSize: 11,
+                    fontWeight: 750,
+                    border: "1px solid rgba(239, 68, 68, 0.3)",
+                    background: "rgba(239, 68, 68, 0.1)",
+                    color: "#ef4444",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4
+                  }}
+                >
+                  <Trash2 size={11} /> Delete Case
+                </button>
+              )
+            ) : (
+              !c.metadata?.delete_requested && (
+                <button
+                  onClick={() => !isLocked && onRequestDelete(c.id)}
+                  disabled={isLocked}
+                  style={{
+                    padding: "5px 10px",
+                    borderRadius: 6,
+                    fontSize: 11,
+                    fontWeight: 750,
+                    border: "1px solid rgba(239, 68, 68, 0.3)",
+                    background: "rgba(239, 68, 68, 0.05)",
+                    color: "#ef4444",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4
+                  }}
+                >
+                  <Trash2 size={11} /> Request Deletion
+                </button>
+              )
+            )}
+          </div>
         </div>
       </div>
 
       {/* Feed Thread (Scroll) */}
       <div className="custom-scrollbar" style={{ flex: 1, overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
+        {c.metadata?.delete_requested && (
+          <div style={{
+            background: "rgba(239, 68, 68, 0.08)",
+            border: "1px solid rgba(239, 68, 68, 0.2)",
+            padding: 12,
+            borderRadius: 8,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <AlertTriangle size={15} style={{ color: "#ef4444" }} />
+              <span style={{ fontSize: 12, fontWeight: 700, color: "#f8fafc" }}>
+                {(window as any).FETS?.isAdmin 
+                  ? `Deletion requested by ${c.metadata.delete_requested_by || "Staff"}`
+                  : `Deletion request pending Super Admin review (requested by ${c.metadata.delete_requested_by || "you"})`}
+              </span>
+            </div>
+            {(window as any).FETS?.isAdmin && (
+              <div style={{ display: "flex", gap: 6 }}>
+                <button
+                  onClick={() => onDeletePermanently(c.id)}
+                  style={{
+                    background: "#ef4444",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: 6,
+                    padding: "4px 10px",
+                    fontSize: 11,
+                    fontWeight: 750,
+                    cursor: "pointer"
+                  }}
+                >
+                  Approve Deletion
+                </button>
+                <button
+                  onClick={() => onCancelDelete(c.id)}
+                  style={{
+                    background: "#1e293b",
+                    color: "#cbd5e1",
+                    border: "1px solid #334155",
+                    borderRadius: 6,
+                    padding: "4px 10px",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    cursor: "pointer"
+                  }}
+                >
+                  Reject
+                </button>
+              </div>
+            )}
+          </div>
+        )}
         {/* Contact Strip */}
         <ContactStrip c={c} onSave={(ct) => onContact(c.id, ct)} isLocked={isLocked} />
 
