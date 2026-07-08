@@ -79,6 +79,7 @@ export function UserManagement({ onNavigate }: UserManagementProps = {}) {
 
     const filteredStaff = useMemo(() => {
         return staff.filter(s => {
+            if (s.is_active === false) return false
             const matchesSearch = s.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 s.email.toLowerCase().includes(searchTerm.toLowerCase())
             const matchesBranch = branchFilter === 'all' || s.branch_assigned === branchFilter
