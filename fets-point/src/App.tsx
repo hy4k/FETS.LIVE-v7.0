@@ -167,16 +167,24 @@ function AppContent() {
     if (isMobile) {
       if (activeTab === 'command-center') return (
         <Suspense fallback={<PageLoadingFallback pageName="FETS · LIVE" />}>
-          <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isMithun} onLogout={handleLogout} activeBranch={activeBranch} onBranchChange={setActiveBranch} />
+          <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isMithun} onLogout={handleLogout} activeBranch={activeBranch} onBranchChange={setActiveBranch} activeSubPage="live" />
         </Suspense>
       );
-      if (activeTab === 'fets-calendar') return <MobileCalendar />;
+      if (activeTab === 'fets-calendar') return (
+        <Suspense fallback={<PageLoadingFallback pageName="FETS · Calendar" />}>
+          <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isMithun} onLogout={handleLogout} activeBranch={activeBranch} onBranchChange={setActiveBranch} activeSubPage="calendar" />
+        </Suspense>
+      );
       if (activeTab === 'fets-calendar-demo') return isMithun ? <FetsCalendar /> : <MobileHome setActiveTab={setActiveTab} profile={profile} />;
       if (activeTab === 'client-portal') return isMithun ? <ClientPortal /> : <MobileHome setActiveTab={setActiveTab} profile={profile} />;
       if (activeTab === 'candidate-tracker') return <MobileRegister />;
       if (activeTab === 'my-desk') return isMithun ? <MithunWorkbench onNavigate={setActiveTab} /> : <MobileHome setActiveTab={setActiveTab} profile={profile} />;
       if (activeTab === 'fets-intelligence') return <MobileAiChat />;
-      if (activeTab === 'incident-log') return <MobileIncidentManager />;
+      if (activeTab === 'incident-log') return (
+        <Suspense fallback={<PageLoadingFallback pageName="Incident Manager" />}>
+          <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isMithun} onLogout={handleLogout} activeBranch={activeBranch} onBranchChange={setActiveBranch} activeSubPage="case" />
+        </Suspense>
+      );
       if (activeTab === 'access-hub') return <AccessHubPage />;
       if (activeTab === 'user-management') return <UserManagement onNavigate={setActiveTab} />;
       if (activeTab === 'profile') return <FetsProfilePage />;
@@ -184,25 +192,29 @@ function AppContent() {
       if (activeTab === 'system-manager') return <SystemManager />;
       if (activeTab === 'news-manager') return <NewsManager />;
       if (activeTab === 'lost-and-found') return <LostAndFound />;
-      if (activeTab === 'fets-roster') return <FetsRoster />;
+      if (activeTab === 'fets-roster') return (
+        <Suspense fallback={<PageLoadingFallback pageName="FETS · Roster" />}>
+          <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isMithun} onLogout={handleLogout} activeBranch={activeBranch} onBranchChange={setActiveBranch} activeSubPage="roster" />
+        </Suspense>
+      );
       if (activeTab === 'cma-availability' || activeTab === 'branch-delegation') return isMithun ? <BranchDelegationWidget /> : <MobileHome setActiveTab={setActiveTab} profile={profile} />;
       if (activeTab === 'gbp') return <GBPDashboard />;
     }
 
     const routeComponents: { [key: string]: { component: JSX.Element; name: string } } = {
-      'command-center': { component: <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isMithun} onLogout={handleLogout} activeBranch={activeBranch} onBranchChange={setActiveBranch} />, name: 'FETS · LIVE' },
+      'command-center': { component: <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isMithun} onLogout={handleLogout} activeBranch={activeBranch} onBranchChange={setActiveBranch} activeSubPage="live" />, name: 'FETS · LIVE' },
       'command-center-classic': { component: <CommandCentre onNavigate={setActiveTab} onAiQuery={(q: string) => { setAiQuery(q); setActiveTab('fets-intelligence'); }} />, name: 'FETS POINT' },
       'access-hub': { component: <AccessHubPage />, name: 'F-Vault' },
       'dashboard': { component: <Dashboard onNavigate={setActiveTab} />, name: 'Dashboard' },
       'candidate-tracker': { component: <CandidateTracker />, name: 'Candidate Tracker' },
-      'fets-roster': { component: <FetsRoster />, name: 'FETS Roster' },
-      'fets-calendar': { component: <FetsCalendar />, name: 'FETS Calendar' },
+      'fets-roster': { component: <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isMithun} onLogout={handleLogout} activeBranch={activeBranch} onBranchChange={setActiveBranch} activeSubPage="roster" />, name: 'FETS Roster' },
+      'fets-calendar': { component: <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isMithun} onLogout={handleLogout} activeBranch={activeBranch} onBranchChange={setActiveBranch} activeSubPage="calendar" />, name: 'FETS Calendar' },
       'fets-calendar-demo': { component: isMithun ? <FetsCalendar /> : <CommandCentre onNavigate={setActiveTab} onAiQuery={(q: string) => { setAiQuery(q); setActiveTab('fets-intelligence'); }} />, name: 'CELPIP Calendar' },
       'client-portal': { component: isMithun ? <ClientPortal /> : <CommandCentre onNavigate={setActiveTab} onAiQuery={(q: string) => { setAiQuery(q); setActiveTab('fets-intelligence'); }} />, name: 'Client Portal' },
       'my-desk': { component: isMithun ? <MithunWorkbench onNavigate={setActiveTab} /> : <CommandCentre onNavigate={setActiveTab} onAiQuery={(q: string) => { setAiQuery(q); setActiveTab('fets-intelligence'); }} />, name: 'My Desk' },
       'staff-management': { component: <StaffManagement />, name: 'Staff Management' },
       'fets-intelligence': { component: <FetsIntelligence initialQuery={aiQuery} />, name: 'FETS Intelligence' },
-      'incident-log': { component: <RaiseACasePage />, name: 'Raise A Case' },
+      'incident-log': { component: <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isMithun} onLogout={handleLogout} activeBranch={activeBranch} onBranchChange={setActiveBranch} activeSubPage="case" />, name: 'Incident Manager' },
       'system-manager': { component: <SystemManager />, name: 'System Manager' },
       'news-manager': { component: <NewsManager />, name: 'News Manager' },
 

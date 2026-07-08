@@ -11957,7 +11957,7 @@ function AccentSwatches({ value, onChange }) {
   );
 }
 
-function App({ bridge, onLogout, activeBranch, onBranchChange }) {
+function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [branch, setBranch] = React.useState(() => {
     const base = window.FETS?._meBaseBranch || "calicut";
@@ -11979,7 +11979,24 @@ function App({ bridge, onLogout, activeBranch, onBranchChange }) {
   const [drawer, setDrawer] = React.useState(null);  // 'outlook' | 'vault' | 'help'
   const [tools, setTools] = React.useState(false);
   const [burger, setBurger] = React.useState(false);
-  const [active, setActive] = React.useState("live");
+  
+  const [active, setActiveState] = React.useState(activeSubPage || "live");
+
+  React.useEffect(() => {
+    if (activeSubPage && activeSubPage !== active) {
+      setActiveState(activeSubPage);
+    }
+  }, [activeSubPage]);
+
+  const setActive = (newActive) => {
+    setActiveState(newActive);
+    if (bridge) {
+      if (newActive === "live") bridge("command-center");
+      else if (newActive === "calendar") bridge("fets-calendar");
+      else if (newActive === "roster") bridge("fets-roster");
+      else if (newActive === "case") bridge("incident-log");
+    }
+  };
   const [pendingHandoverBadge, setPendingHandoverBadge] = React.useState(0);
   const [chatTarget, setChatTarget] = React.useState(null);
 
@@ -12205,7 +12222,7 @@ function App({ bridge, onLogout, activeBranch, onBranchChange }) {
   );
 }
 
-function RedesignShell({ bridge, userName, userEmail, isAdmin, onLogout, activeBranch, onBranchChange }) {
+function RedesignShell({ bridge, userName, userEmail, isAdmin, onLogout, activeBranch, onBranchChange, activeSubPage }) {
   // Identity + access from the real authenticated profile (replaces mock user)
   if (window.FETS) {
     if (userName) window.FETS.user = { ...window.FETS.user, name: userName, email: userEmail || "", role: isAdmin ? "Super Admin" : "Staff" };
@@ -12225,7 +12242,7 @@ function RedesignShell({ bridge, userName, userEmail, isAdmin, onLogout, activeB
       <div className="wallpaper" />
       <div className="grain" />
       <div style={{ position: "relative", zIndex: 2, height: "100%" }}>
-        {ready ? <App bridge={bridge} onLogout={onLogout} activeBranch={activeBranch} onBranchChange={onBranchChange} /> : (
+        {ready ? <App bridge={bridge} onLogout={onLogout} activeBranch={activeBranch} onBranchChange={onBranchChange} activeSubPage={activeSubPage} /> : (
           <div style={{ height: "100%", display: "grid", placeItems: "center" }}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
               <span style={{ width: 54, height: 54, borderRadius: 14, display: "grid", placeItems: "center", background: "var(--accent)", color: "var(--accent-ink)", fontWeight: 900, fontSize: 30, fontFamily: '"Archivo Expanded", var(--font)' }}>F</span>

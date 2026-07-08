@@ -135,3 +135,23 @@ export async function attAllForDate(dateStr) {
 }
 
 export const attFmtMins = (m) => `${Math.floor(m / 60)}h ${pad(m % 60)}m`;
+
+export async function attCheckInStaff(staffId, branch, dateStr = attDateStr()) {
+  const now = new Date(); const t = hhmm();
+  const late = now.getHours() > 9 || (now.getHours() === 9 && now.getMinutes() > 15);
+  const row = { staff_id: staffId, date: dateStr, check_in: t, status: late ? "late" : "present", branch_location: branch === "global" ? null : branch, notes: JSON.stringify({ breakMins: 0, steps: [] }), updated_at: now.toISOString(), created_at: now.toISOString() };
+  try { const { error } = await supabase.from("staff_attendance").upsert([row], { onConflict: "staff_id,date" }); if (error) throw error; return { ok: true }; }
+  catch (e) { return { error: e.message || "Check-in failed" }; }
+}
+
+export async function attCheckOutStaff(staffId, dateStr = attDateStr()) {
+  try { await supabase.from("staff_attendance").update({ check_out: hhmm(), updated_at: new Date().toISOString() }).eq("staff_id", staffId).eq("date", dateStr); return { ok: true }; }
+  catch (e) { return { error: e.message }; }
+}
+
+export async function attUpdateStatusStaff(staffId, status, dateStr = attDateStr()) {
+  const row = { staff_id: staffId, date: dateStr, status, notes: JSON.stringify({ breakMins: 0, steps: [] }), updated_at: new Date().toISOString(), created_at: new Date().toISOString() };
+  try { const { error } = await supabase.from("staff_attendance").upsert([row], { onConflict: "staff_id,date" }); if (error) throw error; return { ok: true }; }
+  catch (e) { return { error: e.message }; }
+}
+

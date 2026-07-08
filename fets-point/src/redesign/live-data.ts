@@ -143,6 +143,7 @@ export async function loadLiveData(F: any) {
       F._userIdToProfileId = userIdToProfileId;
       F._profileIdToUserId = profileIdToUserId;
       F._profileBranch = profileBranch;
+      F._staffProfiles = staffRes.data || [];
       const activeStaff = staffRes.data
         .filter((p: any) => p.is_active !== false && p.full_name)
         .map((p: any) => p.full_name.trim());

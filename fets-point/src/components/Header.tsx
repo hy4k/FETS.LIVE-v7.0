@@ -132,7 +132,6 @@ export function Header({ isMobile = false, sidebarOpen = false, setSidebarOpen, 
     { id: 'command-center', label: 'LIVE', icon: LayoutDashboard },
     { id: 'fets-calendar', label: 'CALENDAR', icon: CalendarDays },
     { id: 'fets-roster', label: 'ROSTER', icon: UserCheck },
-    { id: 'gbp', label: 'GOOGLE BUSINESS', icon: Building2 },
   ];
 
   // Mithun-only nav items — hidden from all other users
