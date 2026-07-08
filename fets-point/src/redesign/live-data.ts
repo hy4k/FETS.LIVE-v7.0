@@ -69,7 +69,7 @@ export async function loadLiveData(F: any) {
       supabase.auth.getUser().catch(() => ({ data: { user: null } })),
       (async () => {
         try {
-          return await supabase.from("staff_profiles").select("id, user_id, full_name, role, branch_assigned, is_active, hourly_rate, daily_rate, permissions, joining_date, hire_date").order("full_name");
+          return await supabase.from("staff_profiles").select("id, user_id, full_name, email, role, branch_assigned, is_active, hourly_rate, daily_rate, permissions, joining_date, hire_date").order("full_name");
         } catch (e) {
           return { data: null, error: e };
         }
@@ -118,11 +118,16 @@ export async function loadLiveData(F: any) {
           userIdToProfileId[p.user_id] = p.id;
           profileIdToUserId[p.id] = p.user_id;
         }
-        if (F._meUserId && p.user_id === F._meUserId) {
+        const isMe = (F._meUserId && p.user_id === F._meUserId) ||
+                     (F.user?.email && String(p.email || "").toLowerCase() === String(F.user.email).toLowerCase());
+        if (isMe) {
           F._meId = p.id;
           F._meName = p.full_name;
           F._meBranch = b;
           F._meBaseBranch = p.branch_assigned;
+          if (p.role === "super_admin") {
+            F.isAdmin = true;
+          }
           if (F.user) {
             F.user.name = p.full_name;
             F.user.role = p.role === 'super_admin' ? 'Super Admin' : 'Staff';

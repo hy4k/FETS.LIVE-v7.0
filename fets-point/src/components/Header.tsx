@@ -53,7 +53,7 @@ export function Header({ isMobile = false, sidebarOpen = false, setSidebarOpen, 
   const [isBranchDropdownOpen, setIsBranchDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const availableBranches = getAvailableBranches(profile?.email, profile?.role);
+  const availableBranches = getAvailableBranches(profile?.email, profile?.role, profile?.branch_assigned);
   const [hasDelegation, setHasDelegation] = useState(false);
   const isSuperAdmin = profile?.role === 'super_admin';
 
@@ -79,7 +79,7 @@ export function Header({ isMobile = false, sidebarOpen = false, setSidebarOpen, 
     }
   }, [profile?.id, isSuperAdmin]);
 
-  const canSwitch = true;
+  const canSwitch = isSuperAdmin || hasDelegation;
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {

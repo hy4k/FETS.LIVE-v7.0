@@ -10598,12 +10598,31 @@ function TopNav({ active, onNavigate, branch, setBranch, t, setTweak, onTools, o
       </span>
       {active !== "news" && (
         <div className="topnav-seg">
-          <Segmented value={branch} onChange={setBranch} size="sm" 
-            options={[
-              { value: "calicut", label: "Calicut", color: BRANCH_TINT.calicut },
-              { value: "cochin", label: "Cochin", color: BRANCH_TINT.cochin },
-              { value: "global", label: "All", color: BRANCH_TINT.global },
-            ]} />
+          {(window.FETS?.isAdmin || window.FETS?._hasTempCrossAccess) ? (
+            <Segmented value={branch} onChange={setBranch} size="sm" 
+              options={[
+                { value: "calicut", label: "Calicut", color: BRANCH_TINT.calicut },
+                { value: "cochin", label: "Cochin", color: BRANCH_TINT.cochin },
+                { value: "global", label: "All", color: BRANCH_TINT.global },
+              ]} />
+          ) : (
+            <div className="glass-2" style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              height: 36,
+              padding: "0 14px",
+              borderRadius: 10,
+              color: "var(--ink)",
+              fontSize: 12.5,
+              fontWeight: 800,
+              textTransform: "uppercase",
+              letterSpacing: "0.03em"
+            }}>
+              <Icon name="mapPin" size={13} style={{ color: BRANCH_TINT[branch] || "var(--accent)" }} />
+              {branch}
+            </div>
+          )}
         </div>
       )}
       {window.FETS.isAdmin && (

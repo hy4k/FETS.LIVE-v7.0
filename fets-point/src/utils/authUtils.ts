@@ -67,9 +67,11 @@ export function canSwitchBranches(email: string | null | undefined, role: string
  * @param role - User's role from profile
  * @returns Array of branch options
  */
-export function getAvailableBranches(email: string | null | undefined, role: string | null | undefined): string[] {
-  // Allow everyone to see all branches now, including global
-  return ['calicut', 'cochin', 'global'];
+export function getAvailableBranches(email: string | null | undefined, role: string | null | undefined, branchAssigned?: string | null): string[] {
+  if (role === 'super_admin' || isMithunEmail(email)) {
+    return ['calicut', 'cochin', 'global'];
+  }
+  return [branchAssigned || 'calicut'];
 }
 
 /**
