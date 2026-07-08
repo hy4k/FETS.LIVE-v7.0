@@ -11957,12 +11957,25 @@ function AccentSwatches({ value, onChange }) {
   );
 }
 
-function App({ bridge, onLogout }) {
+function App({ bridge, onLogout, activeBranch, onBranchChange }) {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [branch, setBranch] = React.useState(() => {
     const base = window.FETS?._meBaseBranch || "calicut";
     return base === "global" ? "global" : base;
   });
+
+  React.useEffect(() => {
+    if (activeBranch && activeBranch !== branch) {
+      setBranch(activeBranch);
+    }
+  }, [activeBranch]);
+
+  const handleBranchChange = (newBranch) => {
+    setBranch(newBranch);
+    if (onBranchChange) {
+      onBranchChange(newBranch);
+    }
+  };
   const [drawer, setDrawer] = React.useState(null);  // 'outlook' | 'vault' | 'help'
   const [tools, setTools] = React.useState(false);
   const [burger, setBurger] = React.useState(false);
@@ -12133,7 +12146,7 @@ function App({ bridge, onLogout }) {
 
   return (
     <div style={{ position: "relative", zIndex: 2, height: "100%", display: "flex", flexDirection: "column", "--branch": BRANCH_TINT[branch] || "var(--accent)" }}>
-      <TopNav active={active} onNavigate={onNavigate} branch={branch} setBranch={setBranch}
+      <TopNav active={active} onNavigate={onNavigate} branch={branch} setBranch={handleBranchChange}
         t={t} setTweak={setTweak} onTools={() => setTools(true)} onBurger={() => setBurger(true)} onLogout={onLogout}
         pendingHandoverBadge={pendingHandoverBadge} />
 
@@ -12192,7 +12205,7 @@ function App({ bridge, onLogout }) {
   );
 }
 
-function RedesignShell({ bridge, userName, userEmail, isAdmin, onLogout }) {
+function RedesignShell({ bridge, userName, userEmail, isAdmin, onLogout, activeBranch, onBranchChange }) {
   // Identity + access from the real authenticated profile (replaces mock user)
   if (window.FETS) {
     if (userName) window.FETS.user = { ...window.FETS.user, name: userName, email: userEmail || "", role: isAdmin ? "Super Admin" : "Staff" };
@@ -12212,7 +12225,7 @@ function RedesignShell({ bridge, userName, userEmail, isAdmin, onLogout }) {
       <div className="wallpaper" />
       <div className="grain" />
       <div style={{ position: "relative", zIndex: 2, height: "100%" }}>
-        {ready ? <App bridge={bridge} onLogout={onLogout} /> : (
+        {ready ? <App bridge={bridge} onLogout={onLogout} activeBranch={activeBranch} onBranchChange={onBranchChange} /> : (
           <div style={{ height: "100%", display: "grid", placeItems: "center" }}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
               <span style={{ width: 54, height: 54, borderRadius: 14, display: "grid", placeItems: "center", background: "var(--accent)", color: "var(--accent-ink)", fontWeight: 900, fontSize: 30, fontFamily: '"Archivo Expanded", var(--font)' }}>F</span>
