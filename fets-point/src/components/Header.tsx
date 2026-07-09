@@ -79,7 +79,7 @@ export function Header({ isMobile = false, sidebarOpen = false, setSidebarOpen, 
     }
   }, [profile?.id, isSuperAdmin]);
 
-  const canSwitch = isSuperAdmin || hasDelegation;
+  const canSwitch = true;
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
