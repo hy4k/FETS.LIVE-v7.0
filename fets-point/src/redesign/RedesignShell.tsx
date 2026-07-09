@@ -18,6 +18,9 @@ import * as ATT from "./attendance-data";
 import html2canvas from "html2canvas";
 import { FetsChatPopup } from "../components/FetsChatPopup";
 import { FetsIncidentPremium } from "../components/FetsIncidentPremium";
+import FetsRoster from "../components/FetsRosterPremium";
+import { FetsCalendarPremium as FetsCalendar } from "../components/FetsCalendarPremium";
+import { MobileCalendarView as MobileCalendar } from "../components/MobileCalendarView";
 
 /* ============================================================
    SOURCE: data.js
@@ -11938,7 +11941,7 @@ function AccentSwatches({ value, onChange }) {
   );
 }
 
-function App({ bridge, onLogout, activeBranch, onBranchChange }) {
+function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [branch, setBranch] = React.useState(() => {
     const base = window.FETS?._meBaseBranch || "calicut";
@@ -11961,8 +11964,20 @@ function App({ bridge, onLogout, activeBranch, onBranchChange }) {
   const [tools, setTools] = React.useState(false);
   const [burger, setBurger] = React.useState(false);
   
-  const [active, setActiveState] = React.useState("live");
+  const [active, setActiveState] = React.useState(activeSubPage || "live");
 
+  React.useEffect(() => {
+    if (activeSubPage && activeSubPage !== active) {
+      setActiveState(activeSubPage);
+    }
+  }, [activeSubPage]);
+
+  const [isMobile, setIsMobile] = React.useState(window.innerWidth < 768);
+  React.useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   const setActive = (newActive) => {
     setActiveState(newActive);
@@ -11971,6 +11986,7 @@ function App({ bridge, onLogout, activeBranch, onBranchChange }) {
       else if (newActive === "calendar") bridge("fets-calendar");
       else if (newActive === "roster") bridge("fets-roster");
       else if (newActive === "case") bridge("incident-log");
+      else if (newActive === "desk") bridge("my-desk");
     }
   };
   const [pendingHandoverBadge, setPendingHandoverBadge] = React.useState(0);
@@ -12145,12 +12161,22 @@ function App({ bridge, onLogout, activeBranch, onBranchChange }) {
 
       <main className="scroll-soft main-scroll" style={{
         flex: 1,
-        overflowY: "auto",
-        padding: active === "handover" ? "0 0 80px" : "clamp(22px,3.2vw,40px) clamp(14px,3vw,30px) 80px"
+        overflowY: (active === "calendar" || active === "roster") ? "hidden" : "auto",
+        padding: (active === "calendar" || active === "roster") 
+          ? "0" 
+          : (active === "handover" ? "0 0 80px" : "clamp(22px,3.2vw,40px) clamp(14px,3vw,30px) 80px")
       }}>
         {active === "live" && <LivePage branch={branch} setDrawer={setDrawer} setActive={setActive} bridge={bridge} />}
-        {active === "calendar" && <CalendarPage branch={branch} />}
-        {active === "roster" && <RosterPage branch={branch} />}
+        {active === "calendar" && (
+          <div style={{ height: "100%", width: "100%", overflow: "hidden" }}>
+            {isMobile ? <MobileCalendar /> : <FetsCalendar />}
+          </div>
+        )}
+        {active === "roster" && (
+          <div style={{ height: "100%", width: "100%", overflow: "hidden" }}>
+            <FetsRoster />
+          </div>
+        )}
         {active === "case" && <RaiseCasePage branch={branch} setActive={setActive} />}
         {active === "handover" && <ShiftHandoverPage branch={branch} setActive={setActive} />}
         {active === "desk" && <MyDeskPage branch={branch} setActive={setActive} setDrawer={setDrawer} />}
@@ -12198,7 +12224,7 @@ function App({ bridge, onLogout, activeBranch, onBranchChange }) {
   );
 }
 
-function RedesignShell({ bridge, userName, userEmail, isAdmin, onLogout, activeBranch, onBranchChange }) {
+function RedesignShell({ bridge, userName, userEmail, isAdmin, onLogout, activeBranch, onBranchChange, activeSubPage }) {
   // Identity + access from the real authenticated profile (replaces mock user)
   if (window.FETS) {
     if (userName) window.FETS.user = { ...window.FETS.user, name: userName, email: userEmail || "", role: isAdmin ? "Super Admin" : "Staff" };
@@ -12218,7 +12244,7 @@ function RedesignShell({ bridge, userName, userEmail, isAdmin, onLogout, activeB
       <div className="wallpaper" />
       <div className="grain" />
       <div style={{ position: "relative", zIndex: 2, height: "100%" }}>
-        {ready ? <App bridge={bridge} onLogout={onLogout} activeBranch={activeBranch} onBranchChange={onBranchChange} /> : (
+        {ready ? <App bridge={bridge} onLogout={onLogout} activeBranch={activeBranch} onBranchChange={onBranchChange} activeSubPage={activeSubPage} /> : (
           <div style={{ height: "100%", display: "grid", placeItems: "center" }}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
               <span style={{ width: 54, height: 54, borderRadius: 14, display: "grid", placeItems: "center", background: "var(--accent)", color: "var(--accent-ink)", fontWeight: 900, fontSize: 30, fontFamily: '"Archivo Expanded", var(--font)' }}>F</span>
