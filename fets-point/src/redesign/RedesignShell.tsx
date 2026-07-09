@@ -3262,81 +3262,250 @@ function RosterLegend() {
 
 /* ---------- shift-picker popup (one cell) ---------- */
 function RosterCellDialog({ ctx, onApply, onClose }) {
-  const isRest = ctx.defaultCode === "RD";
   const [code, setCode] = React.useState(cellCode(ctx.cell));
   const [otOn, setOtOn] = React.useState(cellOT(ctx.cell) > 0);
   const [hours, setHours] = React.useState(cellOT(ctx.cell) || 2);
+
   React.useEffect(() => {
     const k = (e) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k);
+    window.addEventListener("keydown", k);
+    return () => window.removeEventListener("keydown", k);
   }, []);
-  // any cell (including a rest day) can be set to any shift directly
-  const effective = code;
+
   const otAllowed = WORK_CODES.includes(code);
-  const save = () => onApply({ code: effective, ot: (otOn && otAllowed) ? (+hours || 1) : 0 });
+  const save = () => onApply({ code, ot: (otOn && otAllowed) ? (+hours || 0) : 0 });
   const d = ctx.date;
+
+  // Custom metadata for options grid
+  const OPTIONS = [
+    { key: "D", label: "Day Shift", icon: "sun" },
+    { key: "E", label: "Evening Shift", icon: "moon" },
+    { key: "HD", label: "Half Day", icon: "star" },
+    { key: "RD", label: "Rest Day", icon: "coffee" },
+    { key: "L", label: "Leave", icon: "calendar" },
+    { key: "TOIL", label: "TOIL Earned", icon: "plus" },
+    { key: "TR", label: "TOIL Redeemed", icon: "minus" },
+    { key: "PH", label: "Public Holiday", icon: "award" }
+  ];
+
+  // Get preview styling
+  const getPreview = () => {
+    const m = ROSTER_CODES[code] || ROSTER_CODES.RD;
+    const baseColor = m.solid ? m.ink : "var(--ink-4)";
+    let bg = "var(--panel-3)";
+    let border = "1px solid var(--glass-edge-lo)";
+    let color = baseColor;
+    let display = code;
+
+    if (code !== "RD") {
+      bg = `linear-gradient(135deg, color-mix(in oklch, ${baseColor} 24%, var(--panel)) 0%, color-mix(in oklch, ${baseColor} 10%, var(--panel-3)) 100%)`;
+      border = `1px solid color-mix(in oklch, ${baseColor} 40%, transparent)`;
+    }
+
+    if (otOn && otAllowed && hours > 0) {
+      border = `1px solid ${OT_COLOR}`;
+      display = `${code}+OT`;
+    }
+
+    return { bg, border, color, display, label: m.label };
+  };
+
+  const preview = getPreview();
 
   return (
     <React.Fragment>
-      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "color-mix(in oklch, var(--shadow-base, #000) 55%, transparent)", backdropFilter: "blur(3px)", zIndex: 120 }} />
-      <div role="dialog" className="glass rise" style={{ position: "fixed", zIndex: 121, top: "50%", left: "50%", transform: "translate(-50%,-50%)",
-        width: "min(390px, 92vw)", maxHeight: "88vh", overflowY: "auto", borderRadius: "var(--radius)", padding: 20, boxShadow: "var(--shadow-lift)", display: "flex", flexDirection: "column", gap: 15 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <Avatar name={ctx.name} size={40} />
+      {/* Backdrop */}
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0, 0, 0, 0.6)", backdropFilter: "blur(6px)", zIndex: 120 }} />
+      
+      {/* Apple-inspired Dialog Container */}
+      <div role="dialog" className="glass rise" style={{ 
+        position: "fixed", 
+        zIndex: 121, 
+        top: "50%", 
+        left: "50%", 
+        transform: "translate(-50%,-50%)",
+        width: "min(560px, 92vw)", 
+        maxHeight: "90vh", 
+        overflowY: "auto", 
+        borderRadius: 24, 
+        padding: 24, 
+        boxShadow: "var(--shadow-lift)", 
+        display: "flex", 
+        flexDirection: "column", 
+        gap: 20,
+        background: "oklch(0.18 0.024 184 / 0.96)",
+        border: "1px solid var(--hairline)"
+      }}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", gap: 14, borderBottom: "1px solid var(--hairline)", paddingBottom: 16 }}>
+          <Avatar name={ctx.name} size={44} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 15, fontWeight: 720, color: "var(--ink)", letterSpacing: "-0.01em" }}>{ctx.name}</div>
-            <div className="mono" style={{ fontSize: 11.5, color: "var(--ink-3)", marginTop: 2 }}>{window.P_WDL[d.getDay()]}, {window.P_MO[d.getMonth()]} {d.getDate()}{isRest ? " · rest day" : ""}</div>
-          </div>
-          <button onClick={onClose} className="tap glass-2" style={{ width: 34, height: 34, borderRadius: 999, display: "grid", placeItems: "center", cursor: "pointer", color: "var(--ink-2)", border: "1px solid var(--hairline)" }}><Icon name="x" size={16} /></button>
-        </div>
-
-        <div className="eyebrow" style={{ fontSize: 9, color: "var(--ink-4)" }}>Shift</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-          {RC_LIST.map((k) => {
-            const m = ROSTER_CODES[k]; const on = code === k;
-            return (
-              <button key={k} onClick={() => setCode(k)} className="tap" style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 11px", borderRadius: 11, cursor: "pointer",
-                textAlign: "left", fontFamily: "var(--font)", border: "1px solid " + (on ? "var(--accent-line)" : "var(--hairline)"), background: on ? "var(--accent-soft)" : "var(--inset)" }}>
-                <span style={{ minWidth: 34, height: 28, padding: "0 7px", borderRadius: 8, display: "grid", placeItems: "center", flexShrink: 0, fontSize: 12, fontWeight: 800,
-                  color: m.ink, background: m.color, border: "1px solid var(--hairline)" }}>{k}</span>
-                <span style={{ flex: 1, fontSize: 13.5, fontWeight: on ? 700 : 600, color: on ? "var(--ink)" : "var(--ink-2)" }}>{m.label}</span>
-                {on && <Icon name="check" size={16} stroke={2.6} style={{ color: "var(--accent)" }} />}
-              </button>
-            );
-          })}
-        </div>
-
-
-        {/* OT add-on, clubbed with the shift */}
-        <div className="inset" style={{ padding: "12px 14px", borderRadius: 12, display: "flex", flexDirection: "column", gap: otOn ? 11 : 0, opacity: otAllowed ? 1 : 0.45, pointerEvents: otAllowed ? "auto" : "none" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
-            <span style={{ minWidth: 30, height: 22, padding: "0 6px", borderRadius: 6, display: "grid", placeItems: "center", fontSize: 10, fontWeight: 800, color: "#fff", background: OT_COLOR, flexShrink: 0 }}>OT</span>
-            <span style={{ flex: 1, fontSize: 13, fontWeight: 650, color: "var(--ink-2)" }}>Add overtime <span style={{ color: "var(--ink-4)", fontWeight: 500 }}>(beyond 8+1h)</span></span>
-            <button onClick={() => setOtOn((v) => !v)} className="tap" style={{ width: 44, height: 26, borderRadius: 999, border: "none", cursor: "pointer", flexShrink: 0, position: "relative", background: otOn ? OT_COLOR : "var(--panel-3)", transition: "background .2s" }}>
-              <span style={{ position: "absolute", top: 3, left: otOn ? 21 : 3, width: 20, height: 20, borderRadius: 999, background: "#fff", transition: "left .2s" }} />
-            </button>
-          </div>
-          {otOn && (
-            <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "flex-end" }}>
-              <button onClick={() => setHours((h) => Math.max(0.5, +(h - 0.5).toFixed(1)))} className="tap glass-2" style={{ width: 30, height: 30, borderRadius: 8, cursor: "pointer", border: "1px solid var(--hairline)", color: "var(--ink-2)", fontSize: 18, lineHeight: 1 }}>−</button>
-              <span className="tabnum mono" style={{ minWidth: 46, textAlign: "center", fontSize: 16, fontWeight: 700, color: OT_COLOR }}>{hours}h</span>
-              <button onClick={() => setHours((h) => +(h + 0.5).toFixed(1))} className="tap glass-2" style={{ width: 30, height: 30, borderRadius: 8, cursor: "pointer", border: "1px solid var(--hairline)", color: "var(--ink-2)", fontSize: 18, lineHeight: 1 }}>+</button>
+            <div style={{ fontSize: 16, fontWeight: 800, color: "var(--ink)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{ctx.name}</div>
+            <div className="mono" style={{ fontSize: 12, color: "var(--accent)", fontWeight: 700, marginTop: 3 }}>
+              {window.P_WDL[d.getDay()]}, {window.P_MO[d.getMonth()]} {d.getDate()}, {d.getFullYear()}
             </div>
-          )}
+          </div>
+          <button onClick={onClose} className="tap glass-2" style={{ width: 34, height: 34, borderRadius: 999, display: "grid", placeItems: "center", cursor: "pointer", color: "var(--ink-2)", border: "1px solid var(--hairline)" }}>
+            <Icon name="x" size={16} />
+          </button>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 12.5, color: "var(--ink-3)", fontWeight: 600 }}>
-          <span>This cell:</span>
-          <span style={{ minWidth: 34, height: 26, padding: "0 9px", borderRadius: 7, display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 800,
-            color: ROSTER_CODES[effective].ink, background: ROSTER_CODES[effective].color,
-            boxShadow: (otOn && otAllowed) ? `inset 0 -3px 0 ${OT_COLOR}` : "none" }}>
-            {(otOn && otAllowed) ? `${effective}+OT` : effective}{(otOn && otAllowed) ? <span style={{ fontSize: 9, opacity: 0.9 }}>{hours}h</span> : null}
-          </span>
+        {/* Two column split layout: Grid selector on left/top, settings on right/bottom */}
+        <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 20 }} className="dialog-split-cols">
+          
+          {/* Left Column: Personnel Allocation options */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <span className="eyebrow" style={{ fontSize: 9.5, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: "1.5px" }}>Personnel Allocation</span>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
+              {OPTIONS.map((opt) => {
+                const on = code === opt.key;
+                return (
+                  <button 
+                    key={opt.key} 
+                    onClick={() => setCode(opt.key)} 
+                    className="tap" 
+                    style={{ 
+                      display: "flex", 
+                      flexDirection: "column", 
+                      alignItems: "center", 
+                      justifyContent: "center", 
+                      gap: 6, 
+                      padding: "12px 8px", 
+                      borderRadius: 14, 
+                      cursor: "pointer",
+                      textAlign: "center", 
+                      border: "1px solid " + (on ? "var(--accent)" : "var(--hairline)"), 
+                      background: on ? "var(--glass-2)" : "var(--inset)",
+                      boxShadow: on ? "0 0 12px color-mix(in oklch, var(--accent) 15%, transparent)" : "none",
+                      transition: "all 0.2s"
+                    }}
+                  >
+                    <span style={{ fontSize: 16, fontWeight: 900, color: on ? "var(--accent)" : "var(--ink)" }}>{opt.key}</span>
+                    <span style={{ fontSize: 10, fontWeight: 650, color: "var(--ink-3)" }}>{opt.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Right Column: Settings & Live Preview */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {/* Overtime settings */}
+            <div className="inset" style={{ 
+              padding: 14, 
+              borderRadius: 16, 
+              display: "flex", 
+              flexDirection: "column", 
+              gap: 12, 
+              opacity: otAllowed ? 1 : 0.4, 
+              pointerEvents: otAllowed ? "auto" : "none",
+              border: "1px solid var(--hairline)"
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ minWidth: 26, height: 18, borderRadius: 5, display: "grid", placeItems: "center", fontSize: 9, fontWeight: 900, color: "#fff", background: OT_COLOR }}>OT</span>
+                <span style={{ flex: 1, fontSize: 12, fontWeight: 700, color: "var(--ink-2)" }}>Extra Hours</span>
+                <button onClick={() => setOtOn((v) => !v)} className="tap" style={{ width: 38, height: 22, borderRadius: 999, border: "none", cursor: "pointer", flexShrink: 0, position: "relative", background: otOn ? OT_COLOR : "var(--glass-2)", transition: "background .2s" }}>
+                  <span style={{ position: "absolute", top: 2, left: otOn ? 18 : 2, width: 18, height: 18, borderRadius: 999, background: "#fff", transition: "left .2s" }} />
+                </button>
+              </div>
+              {otOn && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "center" }}>
+                  <button onClick={() => setHours((h) => Math.max(0.5, +(h - 0.5).toFixed(1)))} className="tap glass-2" style={{ width: 28, height: 28, borderRadius: 8, cursor: "pointer", border: "1px solid var(--hairline)", color: "var(--ink-2)", fontSize: 16, display: "grid", placeItems: "center" }}>−</button>
+                  <span className="tabnum mono" style={{ minWidth: 50, textAlign: "center", fontSize: 15, fontWeight: 800, color: OT_COLOR }}>{hours}h</span>
+                  <button onClick={() => setHours((h) => +(h + 0.5).toFixed(1))} className="tap glass-2" style={{ width: 28, height: 28, borderRadius: 8, cursor: "pointer", border: "1px solid var(--hairline)", color: "var(--ink-2)", fontSize: 16, display: "grid", placeItems: "center" }}>+</button>
+                </div>
+              )}
+            </div>
+
+            {/* Protocol Live Preview */}
+            <div className="inset" style={{ 
+              borderRadius: 16, 
+              padding: 16, 
+              display: "flex", 
+              flexDirection: "column", 
+              alignItems: "center", 
+              gap: 10, 
+              textAlign: "center",
+              border: "1px solid var(--hairline)",
+              position: "relative",
+              overflow: "hidden"
+            }}>
+              <span className="eyebrow" style={{ fontSize: 8.5, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: "1px" }}>Protocol Preview</span>
+              <div 
+                className="pulse-soft"
+                style={{ 
+                  width: 54, 
+                  height: 54, 
+                  borderRadius: 12, 
+                  display: "flex", 
+                  alignItems: "center", 
+                  justifyContent: "center", 
+                  fontSize: 16, 
+                  fontWeight: 900,
+                  background: preview.bg,
+                  color: preview.color,
+                  border: preview.border,
+                  boxShadow: "0 4px 12px rgba(0, 0, 0, 0.25)"
+                }}
+              >
+                {preview.display}
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 750, color: "var(--ink-2)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                {preview.label}
+                {otOn && otAllowed && hours > 0 && (
+                  <span style={{ color: "var(--accent)", display: "block", fontSize: 9.5, marginTop: 4 }}>+{hours}H OVERTIME</span>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div style={{ display: "flex", gap: 9 }}>
-          <button onClick={save} className="tap" style={{ flex: 1, padding: "11px", borderRadius: 11, border: "none", cursor: "pointer", fontFamily: "var(--font)", fontSize: 13.5, fontWeight: 700, color: "var(--accent-ink)", background: "var(--accent)" }}>Save shift</button>
-          <button onClick={() => onApply(null)} className="tap glass-2" title="Clear / delete this shift" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "11px 15px", borderRadius: 11, cursor: "pointer", border: "1px solid var(--hairline)", fontFamily: "var(--font)", fontSize: 13.5, fontWeight: 650, color: "var(--bad)" }}><Icon name="trash" size={15} /> Clear</button>
+        {/* Footer actions */}
+        <div style={{ display: "flex", gap: 10, borderTop: "1px solid var(--hairline)", paddingTop: 16, marginTop: 6 }}>
+          <button 
+            onClick={save} 
+            className="tap" 
+            style={{ 
+              flex: 1, 
+              height: 44,
+              borderRadius: 12, 
+              border: "none", 
+              cursor: "pointer", 
+              fontFamily: "var(--font)", 
+              fontSize: 14, 
+              fontWeight: 800, 
+              color: "var(--accent-ink)", 
+              background: "var(--accent)",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8
+            }}
+          >
+            <Icon name="check" size={16} stroke={2.6} /> Save Shift
+          </button>
+          <button 
+            onClick={() => onApply(null)} 
+            className="tap glass-2" 
+            title="Clear shift" 
+            style={{ 
+              width: 110,
+              height: 44,
+              borderRadius: 12, 
+              cursor: "pointer", 
+              border: "1px solid var(--hairline)", 
+              fontFamily: "var(--font)", 
+              fontSize: 13.5, 
+              fontWeight: 700, 
+              color: "var(--bad)",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6
+            }}
+          >
+            <Icon name="trash" size={15} /> Clear
+          </button>
         </div>
       </div>
     </React.Fragment>
@@ -4333,8 +4502,8 @@ function PersonalizedRosterOverview({ branch }) {
 }
 
 /* ---------- roster request tabbed form ---------- */
-function RosterRequestForm({ branch }) {
-  const [kind, setKind] = React.useState("leave");
+function RosterRequestForm({ branch, allowedKinds = ["leave", "swap", "toil"] }) {
+  const [kind, setKind] = React.useState(allowedKinds[0]);
   const [leaveType, setLeaveType] = React.useState("Full-day leave");
   const [reqDate, setReqDate] = React.useState("");
   const [swapDate, setSwapDate] = React.useState("");
@@ -4348,6 +4517,12 @@ function RosterRequestForm({ branch }) {
   const isSuperAdmin = !!window.FETS?.isAdmin;
   const userProfileBranch = window.FETS?._meBranch || 'cochin';
   const isLocked = !isSuperAdmin && branch !== userProfileBranch;
+
+  React.useEffect(() => {
+    if (allowedKinds.length > 0 && !allowedKinds.includes(kind)) {
+      setKind(allowedKinds[0]);
+    }
+  }, [allowedKinds]);
 
   if (isLocked) {
     return (
@@ -4427,6 +4602,9 @@ function RosterRequestForm({ branch }) {
     toil:  { icon: "clock",    label: "Redeem TOIL", desc: "Use accrued time-off-in-lieu balance", color: "var(--v-cma)" },
   };
 
+  const activeKinds = Object.entries(KIND_META).filter(([k]) => allowedKinds.includes(k));
+  const showSelector = activeKinds.length > 1;
+
   return (
     <div className="glass rise" style={{ borderRadius: "var(--radius)", padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Header */}
@@ -4441,51 +4619,53 @@ function RosterRequestForm({ branch }) {
       </div>
 
       {/* Main dual-pane layout */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.5fr", gap: 24 }} className="request-portal-grid">
+      <div style={{ display: "grid", gridTemplateColumns: showSelector ? "1fr 1.5fr" : "1fr", gap: 24 }} className="request-portal-grid">
         {/* Left selector pane */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {(Object.entries(KIND_META) as [string, any][]).map(([k, m]) => {
-            const on = kind === k;
-            return (
-              <button 
-                type="button" 
-                key={k} 
-                onClick={() => setKind(k)} 
-                className="tap hover-lift" 
-                style={{
-                  display: "flex", 
-                  alignItems: "center", 
-                  gap: 12,
-                  padding: "16px 18px", 
-                  borderRadius: 14,
-                  border: `1px solid ${on ? m.color : "var(--hairline)"}`,
-                  background: on ? `color-mix(in oklch, ${m.color} 8%, var(--inset))` : "var(--inset)",
-                  cursor: "pointer",
-                  textAlign: "left",
-                  width: "100%",
-                  transition: "all 0.2s"
-                }}
-              >
-                <div style={{ 
-                  width: 32, 
-                  height: 32, 
-                  borderRadius: 8, 
-                  background: on ? `color-mix(in oklch, ${m.color} 20%, transparent)` : "rgba(255,255,255,0.04)", 
-                  display: "grid", 
-                  placeItems: "center",
-                  color: on ? m.color : "var(--ink-3)",
-                  border: `1px solid ${on ? m.color : "var(--hairline)"}`
-                }}>
-                  <Icon name={m.icon} size={15} />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 750, color: on ? m.color : "var(--ink)" }}>{m.label}</div>
-                  <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2 }}>{m.desc}</div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
+        {showSelector && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {activeKinds.map(([k, m]) => {
+              const on = kind === k;
+              return (
+                <button 
+                  type="button" 
+                  key={k} 
+                  onClick={() => setKind(k)} 
+                  className="tap hover-lift" 
+                  style={{
+                    display: "flex", 
+                    alignItems: "center", 
+                    gap: 12,
+                    padding: "16px 18px", 
+                    borderRadius: 14,
+                    border: `1px solid ${on ? m.color : "var(--hairline)"}`,
+                    background: on ? `color-mix(in oklch, ${m.color} 8%, var(--inset))` : "var(--inset)",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    width: "100%",
+                    transition: "all 0.2s"
+                  }}
+                >
+                  <div style={{ 
+                    width: 32, 
+                    height: 32, 
+                    borderRadius: 8, 
+                    background: on ? `color-mix(in oklch, ${m.color} 20%, transparent)` : "rgba(255,255,255,0.04)", 
+                    display: "grid", 
+                    placeItems: "center",
+                    color: on ? m.color : "var(--ink-3)",
+                    border: `1px solid ${on ? m.color : "var(--hairline)"}`
+                  }}>
+                    <Icon name={m.icon} size={15} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 750, color: on ? m.color : "var(--ink)" }}>{m.label}</div>
+                    <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2 }}>{m.desc}</div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* Right input pane */}
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -6146,14 +6326,6 @@ function QuickAddRoster({ branch, onClose }) {
 function RosterStyleBlock() {
   return (
     <style>{`
-      /* Set complementing dark forest-teal-green background for Roster Page scroll region */
-      .main-scroll {
-        background: radial-gradient(120% 120% at 50% 10%, oklch(0.20 0.025 162) 0%, oklch(0.14 0.015 162) 100%) !important;
-      }
-      .wallpaper {
-        opacity: 0.15 !important;
-      }
-
       .attendance-hero-btn {
         --main-color: var(--accent);
         --main-bg-color: var(--accent-soft);
@@ -6500,8 +6672,104 @@ function AttendanceHeroButton({ branch }) {
   );
 }
 
+function RosterAttendanceControls({ branch }) {
+  const [row, setRow] = React.useState(undefined);
+  const [, force] = React.useReducer((x) => x + 1, 0);
+  const load = () => ATT.attToday().then((r) => setRow(r || null));
+
+  React.useEffect(() => {
+    load();
+    const handleRefresh = () => load();
+    window.addEventListener("fets-roster-changed", handleRefresh);
+    const t = setInterval(() => force(), 60000);
+    return () => {
+      window.removeEventListener("fets-roster-changed", handleRefresh);
+      clearInterval(t);
+    };
+  }, [branch]);
+
+  const act = async (fn, ok) => {
+    const r = await fn();
+    if (r && r.error) {
+      toast(r.error, "alert");
+    } else {
+      toast(ok, "check");
+      window.dispatchEvent(new Event("fets-roster-changed"));
+      load();
+    }
+  };
+
+  const onBreak = row && ATT.attOnBreak(row);
+  const checkedIn = row && row.check_in && !row.check_out;
+  const done = !!(row && row.check_out);
+  const worked = row ? ATT.attWorked(row) : 0;
+
+  const isSuperAdmin = !!window.FETS?.isAdmin;
+  const userProfileBranch = window.FETS?._meBranch || 'cochin';
+  const isLocked = !isSuperAdmin && branch !== userProfileBranch;
+
+  const Btn = ({ on, label, icon, primary }) => (
+    <button 
+      onClick={on} 
+      className="tap" 
+      style={{ 
+        display: "inline-flex", 
+        alignItems: "center", 
+        gap: 8, 
+        padding: "10px 16px", 
+        borderRadius: 12, 
+        border: primary ? "none" : "1px solid var(--hairline)", 
+        cursor: "pointer", 
+        fontFamily: "var(--font)", 
+        fontSize: 13, 
+        fontWeight: 750, 
+        color: primary ? "var(--accent-ink)" : "var(--ink)", 
+        background: primary ? "var(--accent)" : "var(--glass-2)",
+        transition: "all 0.2s"
+      }}
+    >
+      <Icon name={icon} size={15} /> {label}
+    </button>
+  );
+
+  if (row === undefined) return <span style={{ fontSize: 13, color: "var(--ink-3)" }}>Loading controls…</span>;
+
+  if (isLocked) {
+    return (
+      <div style={{ fontSize: 12.5, color: "var(--ink-3)", fontWeight: 650, display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", background: "var(--inset)", borderRadius: 10 }}>
+        <Icon name="lock" size={14} /> Locked to {userProfileBranch.toUpperCase()}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+      {!row && (
+        <Btn on={() => act(() => ATT.attCheckIn(branch), "Checked in")} label="Check In" icon="power" primary />
+      )}
+      {checkedIn && !onBreak && (
+        <React.Fragment>
+          <Btn on={() => act(ATT.attStepOut, "Stepped out")} label="Step Out" icon="coffee" />
+          <Btn on={() => act(ATT.attCheckOut, "Checked out")} label="Check Out" icon="power" primary />
+        </React.Fragment>
+      )}
+      {onBreak && (
+        <React.Fragment>
+          <Btn on={() => act(ATT.attBack, "Back on shift")} label="Back In" icon="arrowR" primary />
+          <Btn on={() => act(ATT.attCheckOut, "Checked out")} label="Check Out" icon="power" />
+        </React.Fragment>
+      )}
+      {done && (
+        <span className="mono" style={{ fontSize: 13, color: "var(--ok)", fontWeight: 700, padding: "8px 12px", background: "rgba(0, 184, 148, 0.1)", borderRadius: 10 }}>
+          ✓ Checked out ({ATT.attFmtMins(worked)} worked)
+        </span>
+      )}
+    </div>
+  );
+}
+
 function RosterPage({ branch }) {
-  const [activeRosterTab, setActiveRosterTab] = React.useState("duty"); // duty | time | shift | work | review
+  const [activeRosterTab, setActiveRosterTab] = React.useState("duty"); // duty | time | shift | swap | review
   const [view, setView] = React.useState("days");   // days | analysis
   const win = useMonthWindow();
   const [quickOpen, setQuickOpen] = React.useState(false);
@@ -6809,8 +7077,9 @@ function RosterPage({ branch }) {
   };
 
   // User requests list for Shift Desk
-  const UserRequestsList = () => {
-    const mine = F()._staffRequests?.filter(r => r.who === meName) || [];
+  const UserRequestsList = ({ forceKind }: { forceKind?: string }) => {
+    const mine = (F()._staffRequests?.filter(r => r.who === meName) || [])
+      .filter(r => !forceKind || r.kind === forceKind);
     const statusMeta = {
       Submitted: { color: "var(--warn)", label: "Awaiting Admin Review", icon: "clock" },
       Approved: { color: "var(--ok)", label: "Approved & Synced", icon: "check" },
@@ -6819,7 +7088,9 @@ function RosterPage({ branch }) {
 
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 24 }}>
-        <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>{mine.length} requests</span>}>Your Shift & Leave Requests</SectionLabel>
+        <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>{mine.length} requests</span>}>
+          {forceKind === "swap" ? "Your Shift Swap Requests" : "Your Shift & Leave Requests"}
+        </SectionLabel>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {mine.length === 0 ? (
             <div className="glass" style={{ borderRadius: "var(--radius)", padding: "24px", textAlign: "center", color: "var(--ink-4)", fontSize: 13.5 }}>
@@ -6931,25 +7202,6 @@ function RosterPage({ branch }) {
       flexDirection: "column",
       gap: "20px",
       position: "relative",
-      // Force whole roster page theme override to complementing forest-green
-      "--accent": "oklch(0.82 0.15 162)",
-      "--accent-2": "oklch(0.76 0.14 162)",
-      "--accent-soft": "oklch(0.82 0.15 162 / 0.15)",
-      "--accent-line": "oklch(0.82 0.15 162 / 0.40)",
-      "--accent-ink": "#000",
-      
-      // Override panels and borders to use green hues for maximum integration
-      "--panel": "oklch(0.24 0.025 162)",
-      "--panel-2": "oklch(0.28 0.025 162)",
-      "--panel-3": "oklch(0.17 0.02 162)",
-      "--glass": "var(--panel)",
-      "--glass-2": "var(--panel-2)",
-      "--inset": "var(--panel-3)",
-      "--hairline": "oklch(0.82 0.15 162 / 0.10)",
-      "--glass-edge": "oklch(0.82 0.15 162 / 0.10)",
-
-      "--v-cma": "oklch(0.82 0.15 162)",
-      "--v-prometric": "oklch(0.82 0.15 162)"
     } as React.CSSProperties}>
       <RosterStyleBlock />
 
@@ -6959,7 +7211,7 @@ function RosterPage({ branch }) {
         
         {/* Check in / out button widget on the right, but positioned slightly down */}
         <div style={{ marginTop: 24, display: "flex", flexDirection: "column", alignItems: "flex-end", position: "relative", zIndex: 110 }}>
-          <AttendanceHeroButton branch={branch} />
+          <RosterAttendanceControls branch={branch} />
         </div>
       </div>
 
@@ -7029,11 +7281,11 @@ function RosterPage({ branch }) {
       {/* Desk Tab Selection using Custom Neon Menu Button design */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 12 }}>
         {[
-          { id: "duty", label: "Duty" },
-          { id: "time", label: "Time" },
-          { id: "shift", label: "Shift" },
-          { id: "work", label: "Work" },
-          { id: "review", label: "Review" }
+          { id: "duty", label: "Duty Roster" },
+          { id: "time", label: "My Attendance" },
+          { id: "shift", label: "Shifts" },
+          { id: "swap", label: "Swap Tools" },
+          ...(isAdmin ? [{ id: "review", label: "Review Desk" }] : [])
         ].map((t) => {
           const isActive = activeRosterTab === t.id;
           return (
@@ -7104,185 +7356,196 @@ function RosterPage({ branch }) {
       )}
 
       {activeRosterTab === "time" && (
-        <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: 20 }}>
-          <ShiftHistory />
-          <DailyAttendanceLog />
+        <section style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+          {/* Combined Gamified Performance, Streak, and Goals */}
+          {(() => {
+            const totalShifts = workLogs ? workLogs.length : 0;
+            const latesCount = workLogs ? workLogs.filter(r => String(r.status).toLowerCase() === "late").length : 0;
+            const punctuality = totalShifts > 0 ? Math.round(((totalShifts - latesCount) / totalShifts) * 100) : 100;
+            
+            let currentStreak = 0;
+            if (workLogs) {
+              const sorted = [...workLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+              for (const r of sorted) {
+                if (r.check_in && String(r.status).toLowerCase() !== "late") {
+                  currentStreak++;
+                } else {
+                  break;
+                }
+              }
+            }
+
+            // SVG Circle properties
+            const radius = 36;
+            const circumference = 2 * Math.PI * radius;
+            const strokeDashoffset = circumference - (punctuality / 100) * circumference;
+
+            // Goals calculation
+            const goalPunctuality = 95;
+            const goalShifts = 20;
+            const goalOt = 5;
+
+            // Badges check
+            const badges = [
+              { id: "early", name: "Early Bird", desc: ">= 95% Punctuality", icon: "zap", active: punctuality >= 95, color: "var(--warn)" },
+              { id: "perfect", name: "Perfect Month", desc: "15+ shifts, 0 lates", active: totalShifts >= 15 && latesCount === 0, icon: "award", color: "var(--ok)" },
+              { id: "toil", name: "TOIL Collector", desc: "TOIL balance >= 3 days", active: toilBalance >= 3, icon: "clock", color: "var(--accent)" },
+              { id: "iron", name: "Iron Staff", desc: "Worked >= 20 shifts", active: workedDays >= 20, icon: "shield", color: "var(--v-ielts)" }
+            ];
+
+            return (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20 }}>
+                {/* Presence & Streak */}
+                <div className="glass rise" style={{ padding: 24, borderRadius: "var(--radius)", display: "flex", flexDirection: "column", gap: 20 }}>
+                  <SectionLabel style={{ margin: 0 }} right={<span className="mono" style={{ fontSize: 11, color: "var(--accent)" }}>gamified performance</span>}>Presence & Streaks</SectionLabel>
+                  
+                  <div style={{ display: "flex", alignItems: "center", gap: 24, padding: "10px 0" }}>
+                    <div style={{ position: "relative", width: 90, height: 90, flexShrink: 0 }}>
+                      <svg width="90" height="90" viewBox="0 0 90 90">
+                        <circle cx="45" cy="45" r={radius} stroke="var(--hairline)" strokeWidth="6" fill="transparent" />
+                        <circle cx="45" cy="45" r={radius} stroke={punctuality >= 90 ? "var(--ok)" : "var(--warn)"} strokeWidth="6" fill="transparent" 
+                                strokeDasharray={circumference} strokeDashoffset={strokeDashoffset} strokeLinecap="round"
+                                transform="rotate(-90 45 45)" style={{ transition: "stroke-dashoffset 0.5s ease" }} />
+                      </svg>
+                      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+                        <span style={{ fontSize: 16, fontWeight: 850, color: "var(--ink)" }}>{punctuality}%</span>
+                        <span style={{ fontSize: 8, color: "var(--ink-4)", fontWeight: 700, textTransform: "uppercase" }}>on time</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div style={{ fontSize: 13, color: "var(--ink-3)", fontWeight: 600 }}>Active Attendance Streak</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(255, 121, 63, 0.12)", display: "grid", placeItems: "center", color: "#FF793F" }}>
+                          <Icon name="zap" size={16} />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 18, fontWeight: 850, color: "var(--ink)" }}>{currentStreak} Day{currentStreak === 1 ? "" : "s"}</div>
+                          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 1 }}>Consecutive shifts on-time</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Allocation bar */}
+                  <div style={{ borderTop: "1px solid var(--hairline)", paddingTop: 16 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, fontWeight: 750, color: "var(--ink-4)", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                      <span>Monthly Allocation Ratio</span>
+                      <span>{workedDays}W / {restDays}R / {leaveDays}L</span>
+                    </div>
+                    <div style={{ height: 16, borderRadius: 99, overflow: "hidden", display: "flex", background: "var(--inset)", border: "1px solid var(--hairline)" }}>
+                      {workedDays > 0 && <div style={{ width: `${workedPercent}%`, background: "var(--accent)" }} title={`${workedDays} Days Worked`} />}
+                      {restDays > 0 && <div style={{ width: `${restPercent}%`, background: "var(--ink-4)" }} title={`${restDays} Rest Days`} />}
+                      {leaveDays > 0 && <div style={{ width: `${leavePercent}%`, background: "var(--bad)" }} title={`${leaveDays} Leave Days`} />}
+                    </div>
+                    <div style={{ display: "flex", gap: 12, marginTop: 10, fontSize: 11, color: "var(--ink-3)" }}>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: 99, background: "var(--accent)" }} /> Worked ({workedPercent}%)</span>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: 99, background: "var(--ink-4)" }} /> Rest ({restPercent}%)</span>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: 99, background: "var(--bad)" }} /> Leave ({leavePercent}%)</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Performance Goals */}
+                <div className="glass rise" style={{ padding: 24, borderRadius: "var(--radius)", display: "flex", flexDirection: "column", gap: 20 }}>
+                  <SectionLabel style={{ margin: 0 }} right={<span className="mono" style={{ fontSize: 11, color: "var(--v-ielts)" }}>monthly focus</span>}>Active Performance Goals</SectionLabel>
+                  
+                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                    {/* Goal 1: Punctuality */}
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5, marginBottom: 6 }}>
+                        <span style={{ fontWeight: 650, color: "var(--ink)" }}>Punctuality Target</span>
+                        <span style={{ fontSize: 11.5, color: "var(--ink-3)" }}><strong style={{ color: "var(--ink)" }}>{punctuality}%</strong> / {goalPunctuality}%</span>
+                      </div>
+                      <div style={{ height: 6, background: "var(--inset)", borderRadius: 99, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${Math.min(100, (punctuality / goalPunctuality) * 100)}%`, background: punctuality >= goalPunctuality ? "var(--ok)" : "var(--warn)", borderRadius: 99 }} />
+                      </div>
+                    </div>
+
+                    {/* Goal 2: Shift Fulfillment */}
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5, marginBottom: 6 }}>
+                        <span style={{ fontWeight: 650, color: "var(--ink)" }}>Shift Fulfillment</span>
+                        <span style={{ fontSize: 11.5, color: "var(--ink-3)" }}><strong style={{ color: "var(--ink)" }}>{workedDays}</strong> / {goalShifts} shifts</span>
+                      </div>
+                      <div style={{ height: 6, background: "var(--inset)", borderRadius: 99, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${Math.min(100, (workedDays / goalShifts) * 100)}%`, background: "var(--accent)", borderRadius: 99 }} />
+                      </div>
+                    </div>
+
+                    {/* Goal 3: Overtime Contribution */}
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5, marginBottom: 6 }}>
+                        <span style={{ fontWeight: 650, color: "var(--ink)" }}>Overtime Contribution</span>
+                        <span style={{ fontSize: 11.5, color: "var(--ink-3)" }}><strong style={{ color: "var(--ink)" }}>{totalMonthOt.toFixed(1)}h</strong> / {goalOt}h</span>
+                      </div>
+                      <div style={{ height: 6, background: "var(--inset)", borderRadius: 99, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${Math.min(100, (totalMonthOt / goalOt) * 100)}%`, background: "var(--v-ielts)", borderRadius: 99 }} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Achievements & Badges */}
+                <div className="glass rise" style={{ padding: 24, borderRadius: "var(--radius)", display: "flex", flexDirection: "column", gap: 16 }}>
+                  <SectionLabel style={{ margin: 0 }} right={<span className="mono" style={{ fontSize: 11, color: "var(--ok)" }}>staff credentials</span>}>Unlocked Achievements</SectionLabel>
+                  
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    {badges.map((b) => (
+                      <div key={b.id} className="inset" style={{ 
+                        padding: "12px", 
+                        borderRadius: 12, 
+                        display: "flex", 
+                        flexDirection: "column", 
+                        alignItems: "center", 
+                        textAlign: "center",
+                        opacity: b.active ? 1 : 0.45,
+                        border: b.active ? `1px solid ${b.color}40` : "1px solid transparent",
+                        background: b.active ? `color-mix(in oklch, ${b.color} 5%, var(--inset))` : "var(--inset)"
+                      }}>
+                        <div style={{ 
+                          width: 32, 
+                          height: 32, 
+                          borderRadius: 999, 
+                          background: b.active ? `color-mix(in oklch, ${b.color} 15%, transparent)` : "rgba(255,255,255,0.03)", 
+                          display: "grid", 
+                          placeItems: "center",
+                          color: b.active ? b.color : "var(--ink-4)",
+                          border: `1px solid ${b.active ? b.color : "var(--hairline)"}30`
+                        }}>
+                          <Icon name={b.icon} size={15} />
+                        </div>
+                        <div style={{ fontSize: 11.5, fontWeight: 750, color: b.active ? "var(--ink)" : "var(--ink-3)", marginTop: 8 }}>{b.name}</div>
+                        <div style={{ fontSize: 9, color: "var(--ink-4)", marginTop: 2 }}>{b.desc}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Logs and History */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: 20 }}>
+            <ShiftHistory />
+            <DailyAttendanceLog />
+          </div>
         </section>
       )}
 
       {activeRosterTab === "shift" && (
         <section style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <RosterRequestForm branch={branch} />
-          <UserRequestsList />
+          <RosterRequestForm branch={branch} allowedKinds={["leave", "toil"]} />
+          <UserRequestsList forceKind={undefined} />
         </section>
       )}
 
-      {activeRosterTab === "work" && (() => {
-        const totalShifts = workLogs ? workLogs.length : 0;
-        const latesCount = workLogs ? workLogs.filter(r => String(r.status).toLowerCase() === "late").length : 0;
-        const punctuality = totalShifts > 0 ? Math.round(((totalShifts - latesCount) / totalShifts) * 100) : 100;
-        
-        let currentStreak = 0;
-        if (workLogs) {
-          const sorted = [...workLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-          for (const r of sorted) {
-            if (r.check_in && String(r.status).toLowerCase() !== "late") {
-              currentStreak++;
-            } else {
-              break;
-            }
-          }
-        }
-
-        // SVG Circle properties
-        const radius = 36;
-        const circumference = 2 * Math.PI * radius;
-        const strokeDashoffset = circumference - (punctuality / 100) * circumference;
-
-        // Goals calculation
-        const goalPunctuality = 95;
-        const goalShifts = 20;
-        const goalOt = 5;
-
-        // Badges check
-        const badges = [
-          { id: "early", name: "Early Bird", desc: ">= 95% Punctuality", icon: "zap", active: punctuality >= 95, color: "var(--warn)" },
-          { id: "perfect", name: "Perfect Month", desc: "15+ shifts, 0 lates", active: totalShifts >= 15 && latesCount === 0, icon: "award", color: "var(--ok)" },
-          { id: "toil", name: "TOIL Collector", desc: "TOIL balance >= 3 days", active: toilBalance >= 3, icon: "clock", color: "var(--accent)" },
-          { id: "iron", name: "Iron Staff", desc: "Worked >= 20 shifts", active: workedDays >= 20, icon: "shield", color: "var(--v-ielts)" }
-        ];
-
-        return (
-          <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: 20 }}>
-            {/* Left Column: Presence & Streak */}
-            <div className="glass rise" style={{ padding: 24, borderRadius: "var(--radius)", display: "flex", flexDirection: "column", gap: 20 }}>
-              <SectionLabel style={{ margin: 0 }} right={<span className="mono" style={{ fontSize: 11, color: "var(--accent)" }}>gamified performance</span>}>Presence & Streaks</SectionLabel>
-              
-              <div style={{ display: "flex", alignItems: "center", gap: 24, padding: "10px 0" }}>
-                <div style={{ position: "relative", width: 90, height: 90, flexShrink: 0 }}>
-                  <svg width="90" height="90" viewBox="0 0 90 90">
-                    <circle cx="45" cy="45" r={radius} stroke="var(--hairline)" strokeWidth="6" fill="transparent" />
-                    <circle cx="45" cy="45" r={radius} stroke={punctuality >= 90 ? "var(--ok)" : "var(--warn)"} strokeWidth="6" fill="transparent" 
-                            strokeDasharray={circumference} strokeDashoffset={strokeDashoffset} strokeLinecap="round"
-                            transform="rotate(-90 45 45)" style={{ transition: "stroke-dashoffset 0.5s ease" }} />
-                  </svg>
-                  <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-                    <span style={{ fontSize: 16, fontWeight: 850, color: "var(--ink)" }}>{punctuality}%</span>
-                    <span style={{ fontSize: 8, color: "var(--ink-4)", fontWeight: 700, textTransform: "uppercase" }}>on time</span>
-                  </div>
-                </div>
-
-                <div>
-                  <div style={{ fontSize: 13, color: "var(--ink-3)", fontWeight: 600 }}>Active Attendance Streak</div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
-                    <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(255, 121, 63, 0.12)", display: "grid", placeItems: "center", color: "#FF793F" }}>
-                      <Icon name="zap" size={16} />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 18, fontWeight: 850, color: "var(--ink)" }}>{currentStreak} Day{currentStreak === 1 ? "" : "s"}</div>
-                      <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 1 }}>Consecutive shifts on-time</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Allocation bar */}
-              <div style={{ borderTop: "1px solid var(--hairline)", paddingTop: 16 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, fontWeight: 750, color: "var(--ink-4)", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                  <span>Monthly Allocation Ratio</span>
-                  <span>{workedDays}W / {restDays}R / {leaveDays}L</span>
-                </div>
-                <div style={{ height: 16, borderRadius: 99, overflow: "hidden", display: "flex", background: "var(--inset)", border: "1px solid var(--hairline)" }}>
-                  {workedDays > 0 && <div style={{ width: `${workedPercent}%`, background: "var(--accent)" }} title={`${workedDays} Days Worked`} />}
-                  {restDays > 0 && <div style={{ width: `${restPercent}%`, background: "var(--ink-4)" }} title={`${restDays} Rest Days`} />}
-                  {leaveDays > 0 && <div style={{ width: `${leavePercent}%`, background: "var(--bad)" }} title={`${leaveDays} Leave Days`} />}
-                </div>
-                <div style={{ display: "flex", gap: 12, marginTop: 10, fontSize: 11, color: "var(--ink-3)" }}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: 99, background: "var(--accent)" }} /> Worked ({workedPercent}%)</span>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: 99, background: "var(--ink-4)" }} /> Rest ({restPercent}%)</span>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: 99, background: "var(--bad)" }} /> Leave ({leavePercent}%)</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Middle Column: Performance Goals */}
-            <div className="glass rise" style={{ padding: 24, borderRadius: "var(--radius)", display: "flex", flexDirection: "column", gap: 20 }}>
-              <SectionLabel style={{ margin: 0 }} right={<span className="mono" style={{ fontSize: 11, color: "var(--v-ielts)" }}>monthly focus</span>}>Active Performance Goals</SectionLabel>
-              
-              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                {/* Goal 1: Punctuality */}
-                <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5, marginBottom: 6 }}>
-                    <span style={{ fontWeight: 650, color: "var(--ink)" }}>Punctuality Target</span>
-                    <span style={{ fontSize: 11.5, color: "var(--ink-3)" }}><strong style={{ color: "var(--ink)" }}>{punctuality}%</strong> / {goalPunctuality}%</span>
-                  </div>
-                  <div style={{ height: 6, background: "var(--inset)", borderRadius: 99, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${Math.min(100, (punctuality / goalPunctuality) * 100)}%`, background: punctuality >= goalPunctuality ? "var(--ok)" : "var(--warn)", borderRadius: 99 }} />
-                  </div>
-                </div>
-
-                {/* Goal 2: Shift Fulfillment */}
-                <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5, marginBottom: 6 }}>
-                    <span style={{ fontWeight: 650, color: "var(--ink)" }}>Shift Fulfillment</span>
-                    <span style={{ fontSize: 11.5, color: "var(--ink-3)" }}><strong style={{ color: "var(--ink)" }}>{workedDays}</strong> / {goalShifts} shifts</span>
-                  </div>
-                  <div style={{ height: 6, background: "var(--inset)", borderRadius: 99, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${Math.min(100, (workedDays / goalShifts) * 100)}%`, background: "var(--accent)", borderRadius: 99 }} />
-                  </div>
-                </div>
-
-                {/* Goal 3: Overtime Contribution */}
-                <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5, marginBottom: 6 }}>
-                    <span style={{ fontWeight: 650, color: "var(--ink)" }}>Overtime Contribution</span>
-                    <span style={{ fontSize: 11.5, color: "var(--ink-3)" }}><strong style={{ color: "var(--ink)" }}>{totalMonthOt.toFixed(1)}h</strong> / {goalOt}h</span>
-                  </div>
-                  <div style={{ height: 6, background: "var(--inset)", borderRadius: 99, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${Math.min(100, (totalMonthOt / goalOt) * 100)}%`, background: "var(--v-ielts)", borderRadius: 99 }} />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Right Column: Achievements & Badges */}
-            <div className="glass rise" style={{ padding: 24, borderRadius: "var(--radius)", display: "flex", flexDirection: "column", gap: 16 }}>
-              <SectionLabel style={{ margin: 0 }} right={<span className="mono" style={{ fontSize: 11, color: "var(--ok)" }}>staff credentials</span>}>Unlocked Achievements</SectionLabel>
-              
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                {badges.map((b) => (
-                  <div key={b.id} className="inset" style={{ 
-                    padding: "12px", 
-                    borderRadius: 12, 
-                    display: "flex", 
-                    flexDirection: "column", 
-                    alignItems: "center", 
-                    textAlign: "center",
-                    opacity: b.active ? 1 : 0.45,
-                    border: b.active ? `1px solid ${b.color}40` : "1px solid transparent",
-                    background: b.active ? `color-mix(in oklch, ${b.color} 5%, var(--inset))` : "var(--inset)"
-                  }}>
-                    <div style={{ 
-                      width: 32, 
-                      height: 32, 
-                      borderRadius: 999, 
-                      background: b.active ? `color-mix(in oklch, ${b.color} 15%, transparent)` : "rgba(255,255,255,0.03)", 
-                      display: "grid", 
-                      placeItems: "center",
-                      color: b.active ? b.color : "var(--ink-4)",
-                      border: `1px solid ${b.active ? b.color : "var(--hairline)"}30`
-                    }}>
-                      <Icon name={b.icon} size={15} />
-                    </div>
-                    <div style={{ fontSize: 11.5, fontWeight: 750, color: b.active ? "var(--ink)" : "var(--ink-3)", marginTop: 8 }}>{b.name}</div>
-                    <div style={{ fontSize: 9, color: "var(--ink-4)", marginTop: 2 }}>{b.desc}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </section>
-        );
-      })()}
+      {activeRosterTab === "swap" && (
+        <section style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <RosterRequestForm branch={branch} allowedKinds={["swap"]} />
+          <UserRequestsList forceKind="swap" />
+        </section>
+      )}
 
       {activeRosterTab === "review" && (
         <section style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -12161,8 +12424,8 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
 
       <main className="scroll-soft main-scroll" style={{
         flex: 1,
-        overflowY: (active === "calendar" || active === "roster") ? "hidden" : "auto",
-        padding: (active === "calendar" || active === "roster") 
+        overflowY: active === "calendar" ? "hidden" : "auto",
+        padding: active === "calendar" 
           ? "0" 
           : (active === "handover" ? "0 0 80px" : "clamp(22px,3.2vw,40px) clamp(14px,3vw,30px) 80px")
       }}>
@@ -12172,11 +12435,7 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
             {isMobile ? <MobileCalendar /> : <FetsCalendar />}
           </div>
         )}
-        {active === "roster" && (
-          <div style={{ height: "100%", width: "100%", overflow: "hidden" }}>
-            <FetsRoster />
-          </div>
-        )}
+        {active === "roster" && <RosterPage branch={branch} />}
         {active === "case" && <RaiseCasePage branch={branch} setActive={setActive} />}
         {active === "handover" && <ShiftHandoverPage branch={branch} setActive={setActive} />}
         {active === "desk" && <MyDeskPage branch={branch} setActive={setActive} setDrawer={setDrawer} />}
