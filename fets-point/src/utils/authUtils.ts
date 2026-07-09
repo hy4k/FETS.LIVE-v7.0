@@ -19,8 +19,8 @@ export function isMithunEmail(email: string | null | undefined): boolean {
  * @returns true if user is a super admin
  */
 export function isSuperAdmin(email: string | null | undefined, role: string | null | undefined): boolean {
-  if (!email || !role) return false
-  return role === 'super_admin' && isMithunEmail(email)
+  if (!role) return false
+  return role === 'super_admin'
 }
 
 /**

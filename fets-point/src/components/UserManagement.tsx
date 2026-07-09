@@ -135,7 +135,7 @@ export function UserManagement({ onNavigate }: UserManagementProps = {}) {
         setFormData({ ...formData, [field]: newArray })
     }
 
-    const isSuperAdmin = isMithunEmail(currentUser?.email);
+    const isSuperAdmin = currentUser?.email ? isMithunEmail(currentUser.email) || (currentUser?.role === 'super_admin') : false;
 
     // Access Denied Screen
     if (!isSuperAdmin) {
