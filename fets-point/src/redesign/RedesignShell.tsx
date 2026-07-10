@@ -7196,8 +7196,9 @@ function RosterPage({ branch }) {
 
   return (
     <div style={{
-      maxWidth: 1180,
+      maxWidth: 1600,
       margin: "0 auto",
+      padding: "clamp(22px,3.2vw,40px) clamp(14px,3vw,30px) 80px",
       display: "flex",
       flexDirection: "column",
       gap: "20px",
@@ -10720,7 +10721,7 @@ function MyDeskPage({ branch, setActive, setDrawer }) {
   }, []);
 
   return (
-    <div style={{ maxWidth: 1180, margin: "0 auto", display: "flex", flexDirection: "column", gap }}>
+    <div style={{ maxWidth: 1600, margin: "0 auto", padding: "clamp(22px,3.2vw,40px) clamp(14px,3vw,30px) 80px", display: "flex", flexDirection: "column", gap }}>
       {/* masthead — name + profile photo only */}
       <header className="rise" style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
         <ProfileAvatar name={u.name} size={66} />
@@ -10822,7 +10823,7 @@ function TopNav({ active, onNavigate, branch, setBranch, t, setTweak, onTools, o
   return (
     <header className="glass" style={{
       position: "sticky", top: 0, zIndex: 60, flexShrink: 0,
-      margin: "14px clamp(14px,3vw,30px) 0", borderRadius: 16,
+      maxWidth: 1600, width: "calc(100% - 2 * clamp(14px, 3vw, 30px))", margin: "14px auto 0", borderRadius: 16,
       padding: "11px 11px 11px 18px", display: "flex", alignItems: "center", gap: "clamp(14px,2.4vw,30px)",
       boxShadow: "var(--shadow)", "--branch": BRANCH_TINT[branch] || "var(--accent)",
     }}>
@@ -11145,7 +11146,7 @@ function LivePage({ branch, setDrawer, setActive, bridge }) {
     { label: "Lost & Found", sub: "Items handed in, logged & waiting to be claimed", on: () => setDrawer("lostfound") },
   ];
   return (
-    <div style={{ maxWidth: 1180, margin: "0 auto", display: "flex", flexDirection: "column", gap }}>
+    <div style={{ maxWidth: 1600, margin: "0 auto", padding: "clamp(22px,3.2vw,40px) clamp(14px,3vw,30px) 80px", display: "flex", flexDirection: "column", gap }}>
       <Masthead branch={branch} />
       <section style={{ display: "flex", flexDirection: "column", gap: "calc(16px * var(--density))" }}>
         <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>operations</span>}>Operations</SectionLabel>
@@ -12425,7 +12426,7 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
       <main className="scroll-soft main-scroll" style={{
         flex: 1,
         overflowY: active === "calendar" ? "hidden" : "auto",
-        padding: active === "calendar" 
+        padding: (active === "calendar" || active === "roster" || active === "live" || active === "desk")
           ? "0" 
           : (active === "handover" ? "0 0 80px" : "clamp(22px,3.2vw,40px) clamp(14px,3vw,30px) 80px")
       }}>
