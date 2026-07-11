@@ -633,4 +633,228 @@
   transform: translateY(0) scale(0.96) !important;
 }
 
+/* ---------- PREMIUM CARD LAYOUT (Inspired by Gautham Sharma UI design) ---------- */
+.fets-redesign-root .fets-premium-card {
+  height: auto;
+  border-radius: 26px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4);
+  background: #050505;
+  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.3s ease;
+  text-decoration: none;
+  font-family: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Archivo", sans-serif;
+}
+
+.fets-redesign-root .fets-premium-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.6), 0 0 1px 1px rgba(255, 255, 255, 0.15);
+}
+
+.fets-redesign-root .fets-premium-card-top {
+  position: relative;
+  padding: 24px 20px;
+  background: radial-gradient(
+      140% 120% at 0% 0%,
+      rgba(255, 255, 255, 0.12),
+      transparent 50%
+    ),
+    linear-gradient(180deg, #161616, #090909);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.fets-redesign-root .fets-premium-card-glass {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    180px 140px at 30% 0%,
+    rgba(255, 255, 255, 0.24),
+    rgba(255, 255, 255, 0.08) 40%,
+    transparent 75%
+  );
+  opacity: 0;
+  transition: opacity 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  pointer-events: none;
+}
+
+.fets-redesign-root .fets-premium-card:hover .fets-premium-card-glass {
+  opacity: 1;
+}
+
+.fets-redesign-root .fets-premium-card-top > *:not(.fets-premium-card-glass) {
+  position: relative;
+  z-index: 2;
+}
+
+.fets-redesign-root .fets-premium-card-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.fets-redesign-root .fets-premium-card-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.fets-redesign-root .fets-premium-card-val {
+  font-size: 40px;
+  font-weight: 900;
+  color: #ffffff;
+  line-height: 1;
+  font-family: var(--font-mono, monospace);
+  letter-spacing: -0.02em;
+}
+
+.fets-redesign-root .fets-premium-card-lbl {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 600;
+}
+
+.fets-redesign-root .fets-premium-card-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.fets-redesign-root .fets-premium-card-dot {
+  width: 6px;
+  height: 6px;
+  background: #6aff6a;
+  border-radius: 50%;
+  box-shadow: 0 0 8px #6aff6a;
+}
+
+.fets-redesign-root .fets-premium-card-dot.pulse {
+  animation: pulse-dot 1.8s infinite;
+}
+
+@keyframes pulse-dot {
+  0% { transform: scale(0.9); opacity: 0.6; }
+  50% { transform: scale(1.2); opacity: 1; box-shadow: 0 0 12px #6aff6a; }
+  100% { transform: scale(0.9); opacity: 0.6; }
+}
+
+.fets-redesign-root .fets-premium-card-expand {
+  background: #090909;
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+  border-top: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.fets-redesign-root .fets-premium-card:hover .fets-premium-card-expand {
+  max-height: 140px;
+}
+
+.fets-redesign-root .fets-premium-card-section {
+  padding: 16px 20px;
+}
+
+.fets-redesign-root .fets-premium-card-title {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.4);
+  margin-bottom: 6px;
+}
+
+.fets-redesign-root .fets-premium-card-text {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.75);
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+.fets-redesign-root .fets-premium-card-bottom {
+  padding: 12px;
+  text-align: center;
+  font-weight: 800;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #0b0b0b;
+}
+
+.fets-redesign-root .fets-premium-card-bottom.cyan {
+  background: linear-gradient(135deg, #5effeb, #12aba3);
+  box-shadow: 0 10px 24px rgba(23, 199, 184, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.fets-redesign-root .fets-premium-card-bottom.purple {
+  background: linear-gradient(135deg, #c7a4ff, #723bc9);
+  box-shadow: 0 10px 24px rgba(135, 87, 219, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.fets-redesign-root .fets-premium-card-bottom.amber {
+  background: linear-gradient(135deg, #ffd35e, #c7880e);
+  box-shadow: 0 10px 24px rgba(219, 152, 18, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.fets-redesign-root .fets-premium-card-bottom.green {
+  background: linear-gradient(135deg, #b8ff5a, #6bc42a);
+  box-shadow: 0 10px 24px rgba(120, 255, 80, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+/* Premium sessions table styling */
+.fets-redesign-root .fets-premium-table-wrap {
+  border-radius: 26px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, #111111, #060606);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.35);
+  font-family: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Archivo", sans-serif;
+}
+
+.fets-redesign-root .fets-premium-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.fets-redesign-root .fets-premium-table th {
+  padding: 16px 24px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.01);
+}
+
+.fets-redesign-root .fets-premium-table tr {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  transition: background-color 0.2s ease;
+}
+
+.fets-redesign-root .fets-premium-table tr:hover {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.fets-redesign-root .fets-premium-table tr:last-child {
+  border-bottom: none;
+}
+
+.fets-redesign-root .fets-premium-table td {
+  padding: 18px 24px;
+  vertical-align: middle;
+}
+
+
 

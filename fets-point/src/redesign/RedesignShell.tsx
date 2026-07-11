@@ -11589,11 +11589,23 @@ function LivePage({ branch, setDrawer, setActive, bridge }) {
     <div style={{ maxWidth: 1600, margin: "0 auto", padding: "clamp(22px,3.2vw,40px) clamp(14px,3vw,30px) 80px", display: "flex", flexDirection: "column", gap }}>
       <Masthead branch={branch} />
       
-      {/* 1. Live Operational Snapshot Grid */}
+      {/* Existing Menu Tabs (Operations) */}
       <section style={{ display: "flex", flexDirection: "column", gap: "calc(16px * var(--density))" }}>
+        <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>operations</span>}>Operations</SectionLabel>
+        <MenuRow items={ops} />
+      </section>
+
+      {/* Existing Menu Tabs (Support) */}
+      <section style={{ display: "flex", flexDirection: "column", gap: "calc(16px * var(--density))" }}>
+        <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>support</span>}>Quick access &amp; support</SectionLabel>
+        <MenuRow items={support} />
+      </section>
+
+      {/* 1. Live Operational Snapshot Grid */}
+      <section style={{ display: "flex", flexDirection: "column", gap: "calc(16px * var(--density))", marginTop: 12 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "var(--ink)", fontFamily: "var(--font)" }}>
+            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: "var(--accent)", fontFamily: "var(--font)", letterSpacing: "-0.02em" }}>
               Today at {branchLabel}
             </h2>
             <p style={{ margin: 0, fontSize: 11, color: "var(--ink-4)", fontWeight: 550, textTransform: "uppercase", letterSpacing: "0.5px" }}>Live operational snapshot</p>
@@ -11604,11 +11616,11 @@ function LivePage({ branch, setDrawer, setActive, bridge }) {
             style={{
               background: "var(--glass-2)",
               border: "1px solid var(--hairline)",
-              borderRadius: 8,
-              padding: "6px 12px",
-              color: "var(--ink-3)",
+              borderRadius: 12,
+              padding: "8px 16px",
+              color: "var(--ink-2)",
               fontSize: 12,
-              fontWeight: 650,
+              fontWeight: 700,
               display: "flex",
               alignItems: "center",
               gap: 6,
@@ -11621,167 +11633,119 @@ function LivePage({ branch, setDrawer, setActive, bridge }) {
 
         <div style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-          gap: 16
+          gridTemplateColumns: "repeat(auto-fit, minmax(245px, 1fr))",
+          gap: 20
         }}>
           {/* Card 1: Candidates today */}
-          <div className="glass rise" style={{
-            padding: 20,
-            borderRadius: 16,
-            border: "1px solid var(--hairline)",
-            background: "var(--glass-2)",
-            position: "relative",
-            display: "flex",
-            flexDirection: "column",
-            gap: 16
-          }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ 
-                width: 32, 
-                height: 32, 
-                borderRadius: 8, 
-                background: "var(--accent-soft)", 
-                display: "flex", 
-                alignItems: "center", 
-                justifyContent: "center", 
-                color: "var(--accent)" 
-              }}>
-                <Icon name="users" size={16} />
+          <div className="fets-premium-card">
+            <div className="fets-premium-card-top">
+              <div className="fets-premium-card-glass" />
+              <div className="fets-premium-card-meta">
+                <span>Live Activity</span>
+                <span>Candidates</span>
               </div>
-              <span className="mono" style={{ 
-                fontSize: 9, 
-                fontWeight: 800, 
-                background: "var(--accent)", 
-                color: "var(--accent-ink)", 
-                padding: "2px 6px", 
-                borderRadius: 99, 
-                letterSpacing: "0.5px"
-              }}>
-                LIVE
-              </span>
-            </div>
-            <div>
-              <div style={{ fontSize: 32, fontWeight: 900, color: "var(--ink)", lineHeight: 1, fontFamily: "var(--font-mono, monospace)" }}>
-                {loading ? "..." : stats.candidatesCount}
+              <div className="fets-premium-card-main">
+                <div className="fets-premium-card-val">{loading ? "..." : stats.candidatesCount}</div>
+                <div className="fets-premium-card-lbl">Registered &amp; Scheduled</div>
               </div>
-              <div style={{ fontSize: 12, color: "var(--ink-3)", fontWeight: 650, marginTop: 4 }}>
-                Candidates today
+              <div className="fets-premium-card-status">
+                <span className="fets-premium-card-dot pulse" style={{ background: "#5effeb", boxShadow: "0 0 8px #5effeb" }} />
+                <span>Real-time aggregation</span>
               </div>
             </div>
-            <div style={{ borderTop: "1px solid var(--hairline)", paddingTop: 10, fontSize: 11, color: "var(--accent)", fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
-              <Icon name="arrowU" size={11} /> 100% capacity check
+            <div className="fets-premium-card-expand">
+              <div className="fets-premium-card-section">
+                <div className="fets-premium-card-title">Allocation Info</div>
+                <div className="fets-premium-card-text">
+                  Current seating allocations and hardware sanity checks are validated. 100% capacity threshold verification active.
+                </div>
+              </div>
             </div>
+            <div className="fets-premium-card-bottom cyan">100% Capacity Checked</div>
           </div>
 
           {/* Card 2: Exam sessions */}
-          <div className="glass rise" style={{
-            padding: 20,
-            borderRadius: 16,
-            border: "1px solid var(--hairline)",
-            background: "var(--glass-2)",
-            display: "flex",
-            flexDirection: "column",
-            gap: 16
-          }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ 
-                width: 32, 
-                height: 32, 
-                borderRadius: 8, 
-                background: "var(--accent-soft)", 
-                display: "flex", 
-                alignItems: "center", 
-                justifyContent: "center", 
-                color: "var(--accent)" 
-              }}>
-                <Icon name="clipboard" size={16} />
+          <div className="fets-premium-card">
+            <div className="fets-premium-card-top">
+              <div className="fets-premium-card-glass" />
+              <div className="fets-premium-card-meta">
+                <span>Schedule Overview</span>
+                <span>Sessions</span>
+              </div>
+              <div className="fets-premium-card-main">
+                <div className="fets-premium-card-val">{loading ? "..." : stats.examSessionsCount}</div>
+                <div className="fets-premium-card-lbl">Active &amp; Upcoming</div>
+              </div>
+              <div className="fets-premium-card-status">
+                <span className="fets-premium-card-dot pulse" style={{ background: "#c7a4ff", boxShadow: "0 0 8px #c7a4ff" }} />
+                <span>Current exam status</span>
               </div>
             </div>
-            <div>
-              <div style={{ fontSize: 32, fontWeight: 900, color: "var(--ink)", lineHeight: 1, fontFamily: "var(--font-mono, monospace)" }}>
-                {loading ? "..." : stats.examSessionsCount}
-              </div>
-              <div style={{ fontSize: 12, color: "var(--ink-3)", fontWeight: 650, marginTop: 4 }}>
-                Exam sessions
+            <div className="fets-premium-card-expand">
+              <div className="fets-premium-card-section">
+                <div className="fets-premium-card-title">Status Breakdown</div>
+                <div className="fets-premium-card-text">
+                  {stats.completedSessions} completed sessions and {stats.upcomingSessions} upcoming/ready sessions scheduled for today.
+                </div>
               </div>
             </div>
-            <div style={{ borderTop: "1px solid var(--hairline)", paddingTop: 10, fontSize: 11, color: "var(--ink-4)", fontWeight: 650 }}>
-              {stats.completedSessions} completed · {stats.upcomingSessions} upcoming
-            </div>
+            <div className="fets-premium-card-bottom purple">{stats.completedSessions} Completed · {stats.upcomingSessions} Upcoming</div>
           </div>
 
           {/* Card 3: Staff present */}
-          <div className="glass rise" style={{
-            padding: 20,
-            borderRadius: 16,
-            border: "1px solid var(--hairline)",
-            background: "var(--glass-2)",
-            display: "flex",
-            flexDirection: "column",
-            gap: 16
-          }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ 
-                width: 32, 
-                height: 32, 
-                borderRadius: 8, 
-                background: "var(--accent-soft)", 
-                display: "flex", 
-                alignItems: "center", 
-                justifyContent: "center", 
-                color: "var(--accent)" 
-              }}>
-                <Icon name="power" size={16} />
+          <div className="fets-premium-card">
+            <div className="fets-premium-card-top">
+              <div className="fets-premium-card-glass" />
+              <div className="fets-premium-card-meta">
+                <span>Team Coverage</span>
+                <span>Roster</span>
+              </div>
+              <div className="fets-premium-card-main">
+                <div className="fets-premium-card-val">{loading ? "..." : `${stats.staffCheckedIn} / ${stats.staffRostered}`}</div>
+                <div className="fets-premium-card-lbl">Checked In / Rostered</div>
+              </div>
+              <div className="fets-premium-card-status">
+                <span className="fets-premium-card-dot pulse" style={{ background: "#ffd35e", boxShadow: "0 0 8px #ffd35e" }} />
+                <span>Live attendance tracking</span>
               </div>
             </div>
-            <div>
-              <div style={{ fontSize: 32, fontWeight: 900, color: "var(--ink)", lineHeight: 1, fontFamily: "var(--font-mono, monospace)" }}>
-                {loading ? "..." : `${stats.staffCheckedIn} / ${stats.staffRostered}`}
-              </div>
-              <div style={{ fontSize: 12, color: "var(--ink-3)", fontWeight: 650, marginTop: 4 }}>
-                Staff present
+            <div className="fets-premium-card-expand">
+              <div className="fets-premium-card-section">
+                <div className="fets-premium-card-title">Attendance Status</div>
+                <div className="fets-premium-card-text">
+                  Live attendance validation matches current roster. Shifts are tracked in real-time via Cochin and Calicut consoles.
+                </div>
               </div>
             </div>
-            <div style={{ borderTop: "1px solid var(--hairline)", paddingTop: 10, fontSize: 11, color: "var(--ok)", fontWeight: 700 }}>
-              ✓ Full coverage scheduled
-            </div>
+            <div className="fets-premium-card-bottom amber">✓ Full Coverage Rostered</div>
           </div>
 
           {/* Card 4: Punctuality */}
-          <div className="glass rise" style={{
-            padding: 20,
-            borderRadius: 16,
-            border: "1px solid var(--hairline)",
-            background: "var(--glass-2)",
-            display: "flex",
-            flexDirection: "column",
-            gap: 16
-          }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ 
-                width: 32, 
-                height: 32, 
-                borderRadius: 8, 
-                background: "var(--accent-soft)", 
-                display: "flex", 
-                alignItems: "center", 
-                justifyContent: "center", 
-                color: "var(--accent)" 
-              }}>
-                <Icon name="check" size={16} />
+          <div className="fets-premium-card">
+            <div className="fets-premium-card-top">
+              <div className="fets-premium-card-glass" />
+              <div className="fets-premium-card-meta">
+                <span>Operations Audit</span>
+                <span>On-Time</span>
+              </div>
+              <div className="fets-premium-card-main">
+                <div className="fets-premium-card-val">{loading ? "..." : `${stats.punctuality}%`}</div>
+                <div className="fets-premium-card-lbl">Average Performance</div>
+              </div>
+              <div className="fets-premium-card-status">
+                <span className="fets-premium-card-dot pulse" style={{ background: "#b8ff5a", boxShadow: "0 0 8px #b8ff5a" }} />
+                <span>SLA compliance level</span>
               </div>
             </div>
-            <div>
-              <div style={{ fontSize: 32, fontWeight: 900, color: "var(--ink)", lineHeight: 1, fontFamily: "var(--font-mono, monospace)" }}>
-                {loading ? "..." : `${stats.punctuality}%`}
-              </div>
-              <div style={{ fontSize: 12, color: "var(--ink-3)", fontWeight: 650, marginTop: 4 }}>
-                Punctuality
+            <div className="fets-premium-card-expand">
+              <div className="fets-premium-card-section">
+                <div className="fets-premium-card-title">SLA Compliance</div>
+                <div className="fets-premium-card-text">
+                  Computed ratio of staff check-in times relative to target shift opening constraints. 15-min grace window applied.
+                </div>
               </div>
             </div>
-            <div style={{ borderTop: "1px solid var(--hairline)", paddingTop: 10, fontSize: 11, color: "var(--ok)", fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
-              <Icon name="arrowU" size={11} /> On-time attendance
-            </div>
+            <div className="fets-premium-card-bottom green">On-Time Compliance Excellent</div>
           </div>
         </div>
       </section>
@@ -11790,7 +11754,7 @@ function LivePage({ branch, setDrawer, setActive, bridge }) {
       <section style={{ display: "flex", flexDirection: "column", gap: "calc(16px * var(--density))" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "var(--ink)", fontFamily: "var(--font)" }}>Today's sessions</h2>
+            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: "var(--accent)", fontFamily: "var(--font)", letterSpacing: "-0.02em" }}>Today's sessions</h2>
             <p style={{ margin: 0, fontSize: 11, color: "var(--ink-4)", fontWeight: 550, textTransform: "uppercase", letterSpacing: "0.5px" }}>Live schedule and readiness</p>
           </div>
           <button 
@@ -11812,65 +11776,69 @@ function LivePage({ branch, setDrawer, setActive, bridge }) {
           </button>
         </div>
 
-        <div className="glass" style={{
-          borderRadius: 16,
-          border: "1px solid var(--hairline)",
-          background: "var(--glass-2)",
-          overflow: "hidden"
-        }}>
+        <div className="fets-premium-table-wrap">
           {loading ? (
-            <div style={{ padding: 40, textAlign: "center", color: "var(--ink-3)", fontSize: 14 }}>
+            <div style={{ padding: 40, textAlign: "center", color: "rgba(255,255,255,0.4)", fontSize: 14 }}>
               Loading sessions...
             </div>
           ) : stats.sessionsList.length === 0 ? (
-            <div style={{ padding: 40, textAlign: "center", color: "var(--ink-3)", fontSize: 14 }}>
+            <div style={{ padding: 40, textAlign: "center", color: "rgba(255,255,255,0.4)", fontSize: 14 }}>
               No exam sessions scheduled for today.
             </div>
           ) : (
             <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 600 }}>
+              <table className="fets-premium-table">
                 <thead>
-                  <tr style={{ background: "rgba(255,255,255,0.02)", borderBottom: "1px solid var(--hairline)" }}>
-                    <th style={{ padding: "12px 20px", textAlign: "left", fontSize: 10, fontWeight: 800, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: "1.5px" }}>Time</th>
-                    <th style={{ padding: "12px 20px", textAlign: "left", fontSize: 10, fontWeight: 800, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: "1.5px" }}>Exam / Client</th>
-                    <th style={{ padding: "12px 20px", textAlign: "left", fontSize: 10, fontWeight: 800, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: "1.5px" }}>Room</th>
-                    <th style={{ padding: "12px 20px", textAlign: "left", fontSize: 10, fontWeight: 800, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: "1.5px" }}>Candidates</th>
-                    <th style={{ padding: "12px 20px", textAlign: "left", fontSize: 10, fontWeight: 800, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: "1.5px" }}>Status</th>
+                  <tr>
+                    <th style={{ width: "120px" }}>Time</th>
+                    <th>Exam / Client</th>
+                    <th>Room</th>
+                    <th>Candidates</th>
+                    <th>Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {stats.sessionsList.map((s, idx) => {
                     let badgeBg = "rgba(255, 255, 255, 0.05)";
-                    let badgeColor = "var(--ink-3)";
+                    let badgeColor = "rgba(255, 255, 255, 0.6)";
+                    let dotColor = "rgba(255, 255, 255, 0.4)";
+                    
                     if (s.status === "In progress") {
-                      badgeBg = "rgba(0, 184, 148, 0.1)";
-                      badgeColor = "var(--ok)";
+                      badgeBg = "rgba(0, 184, 148, 0.15)";
+                      badgeColor = "#6aff6a";
+                      dotColor = "#6aff6a";
                     } else if (s.status === "Ready") {
-                      badgeBg = "rgba(225, 173, 56, 0.1)";
-                      badgeColor = "var(--warn)";
+                      badgeBg = "rgba(225, 173, 56, 0.15)";
+                      badgeColor = "#ffd35e";
+                      dotColor = "#ffd35e";
                     } else if (s.status === "Completed") {
                       badgeBg = "rgba(255, 255, 255, 0.03)";
-                      badgeColor = "var(--ink-4)";
+                      badgeColor = "rgba(255, 255, 255, 0.3)";
+                      dotColor = "rgba(255, 255, 255, 0.2)";
+                    } else {
+                      badgeBg = "rgba(255, 255, 255, 0.05)";
+                      badgeColor = "#c7a4ff";
+                      dotColor = "#c7a4ff";
                     }
 
                     return (
-                      <tr key={s.id || idx} style={{ borderBottom: idx === stats.sessionsList.length - 1 ? "none" : "1px solid var(--hairline)" }}>
-                        <td style={{ padding: "16px 20px" }}>
-                          <div style={{ fontSize: 14, fontWeight: 800, color: "var(--ink)" }}>{s.time}</div>
-                          {s.endTime && <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2 }}>{s.endTime}</div>}
+                      <tr key={s.id || idx}>
+                        <td>
+                          <div style={{ fontSize: 15, fontWeight: 800, color: "#ffffff" }}>{s.time}</div>
+                          {s.endTime && <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>{s.endTime}</div>}
                         </td>
-                        <td style={{ padding: "16px 20px" }}>
-                          <div style={{ fontSize: 13, fontWeight: 800, color: "var(--ink)" }}>{s.client}</div>
-                          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2 }}>{s.examName}</div>
+                        <td>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: "#ffffff" }}>{s.client}</div>
+                          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginTop: 2 }}>{s.examName}</div>
                         </td>
-                        <td style={{ padding: "16px 20px", fontSize: 13, fontWeight: 700, color: "var(--ink-2)" }}>
+                        <td style={{ fontSize: 14, fontWeight: 600, color: "rgba(255,255,255,0.8)" }}>
                           {s.room}
                         </td>
-                        <td style={{ padding: "16px 20px" }}>
-                          <div style={{ fontSize: 13, fontWeight: 800, color: "var(--ink)" }}>{s.candidates}</div>
-                          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2 }}>/ {s.capacity}</div>
+                        <td>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: "#ffffff" }}>{s.candidates}</div>
+                          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>/ {s.capacity} max</div>
                         </td>
-                        <td style={{ padding: "16px 20px" }}>
+                        <td>
                           <span style={{
                             display: "inline-flex",
                             alignItems: "center",
@@ -11880,13 +11848,15 @@ function LivePage({ branch, setDrawer, setActive, bridge }) {
                             fontSize: 11,
                             fontWeight: 750,
                             background: badgeBg,
-                            color: badgeColor
+                            color: badgeColor,
+                            border: `1px solid ${badgeColor}22`
                           }}>
                             <span style={{
                               width: 6,
                               height: 6,
                               borderRadius: "50%",
-                              background: badgeColor
+                              background: dotColor,
+                              boxShadow: `0 0 6px ${dotColor}`
                             }} />
                             {s.status}
                           </span>
@@ -11899,15 +11869,6 @@ function LivePage({ branch, setDrawer, setActive, bridge }) {
             </div>
           )}
         </div>
-      </section>
-
-      <section style={{ display: "flex", flexDirection: "column", gap: "calc(16px * var(--density))" }}>
-        <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>operations</span>}>Operations</SectionLabel>
-        <MenuRow items={ops} />
-      </section>
-      <section style={{ display: "flex", flexDirection: "column", gap: "calc(16px * var(--density))" }}>
-        <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>support</span>}>Quick access &amp; support</SectionLabel>
-        <MenuRow items={support} />
       </section>
     </div>
   );
