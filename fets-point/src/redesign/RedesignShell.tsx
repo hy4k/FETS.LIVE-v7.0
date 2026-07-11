@@ -6430,6 +6430,121 @@ function RosterStyleBlock() {
       .fets-menu-btn.active .fets-btn-icon svg {
         transform: rotate(-45deg);
       }
+
+      /* Premium Glassmorphic Clock Widget styles */
+      .fets-clock-face {
+        width: 44px;
+        height: 44px;
+        background: rgba(255, 255, 255, 0.03);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-radius: 50%;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow:
+          inset 1.5px 1.5px 4px rgba(0, 0, 0, 0.5),
+          inset -1.5px -1.5px 4px rgba(255, 255, 255, 0.05),
+          0 4px 12px rgba(0, 0, 0, 0.35);
+        position: relative;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        flex-shrink: 0;
+      }
+
+      .fets-clock-marker {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        z-index: 1;
+      }
+
+      .fets-clock-marker-dot {
+        position: absolute;
+        top: 3px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 1.5px;
+        height: 1.5px;
+        border-radius: 50%;
+        background-color: var(--ink-4);
+        opacity: 0.4;
+      }
+
+      .fets-clock-marker-3 .fets-clock-marker-dot,
+      .fets-clock-marker-6 .fets-clock-marker-dot,
+      .fets-clock-marker-9 .fets-clock-marker-dot,
+      .fets-clock-marker-12 .fets-clock-marker-dot {
+        width: 2px;
+        height: 2px;
+        background-color: var(--accent);
+        opacity: 0.8;
+      }
+
+      .fets-clock-number {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        text-align: center;
+        font-size: 6.5px;
+        font-weight: 800;
+        color: var(--ink-3);
+        opacity: 0.65;
+        z-index: 2;
+        font-family: var(--font-mono, monospace);
+      }
+
+      .fets-clock-hand {
+        position: absolute;
+        bottom: 50%;
+        left: 50%;
+        transform-origin: bottom center;
+        border-radius: 2px 2px 0 0;
+      }
+
+      .fets-clock-hour {
+        width: 1.5px;
+        height: 11px;
+        background: var(--ink-2);
+        z-index: 5;
+      }
+
+      .fets-clock-minute {
+        width: 1px;
+        height: 16px;
+        background: var(--ink-3);
+        z-index: 6;
+      }
+
+      .fets-clock-second {
+        width: 0.8px;
+        height: 19px;
+        background: #ff7675; /* Coral red */
+        z-index: 7;
+        box-shadow: 0 0 3px rgba(255, 118, 117, 0.5);
+      }
+
+      .fets-clock-pin {
+        width: 4px;
+        height: 4px;
+        background: var(--panel-3);
+        border: 0.5px solid var(--hairline);
+        border-radius: 50%;
+        position: absolute;
+        z-index: 10;
+        box-shadow: 0 0.5px 1px rgba(0,0,0,0.4);
+      }
+
+      .fets-clock-pin::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 1.5px;
+        height: 1.5px;
+        background: #ff7675;
+        border-radius: 50%;
+      }
     `}</style>
   );
 }
@@ -6672,21 +6787,101 @@ function AttendanceHeroButton({ branch }) {
   );
 }
 
+function ClockWidget() {
+  const [time, setTime] = React.useState(new Date());
+
+  React.useEffect(() => {
+    const timer = setInterval(() => {
+      setTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const hrs = time.getHours();
+  const mins = time.getMinutes();
+  const secs = time.getSeconds();
+
+  const hrAngle = (hrs % 12) * 30 + mins * 0.5;
+  const minAngle = mins * 6 + secs * 0.1;
+  const secAngle = secs * 6;
+
+  return (
+    <div className="fets-clock-face">
+      {/* Markers */}
+      {Array.from({ length: 12 }).map((_, i) => (
+        <div 
+          key={i} 
+          className={`fets-clock-marker fets-clock-marker-${i + 1}`}
+          style={{ transform: `rotate(${(i + 1) * 30}deg)` }}
+        >
+          <div className="fets-clock-marker-dot" />
+        </div>
+      ))}
+
+      {/* Numbers */}
+      {[12, 3, 6, 9].map((num) => {
+        const angle = num * 30;
+        return (
+          <div 
+            key={num} 
+            className="fets-clock-number"
+            style={{ transform: `rotate(${angle}deg)` }}
+          >
+            <span style={{ display: "inline-block", transform: `translateY(10px) rotate(${-angle}deg)` }}>
+              {num}
+            </span>
+          </div>
+        );
+      })}
+
+      {/* Hands */}
+      <div 
+        className="fets-clock-hand fets-clock-hour" 
+        style={{ transform: `translateX(-50%) rotate(${hrAngle}deg)` }} 
+      />
+      <div 
+        className="fets-clock-hand fets-clock-minute" 
+        style={{ transform: `translateX(-50%) rotate(${minAngle}deg)` }} 
+      />
+      <div 
+        className="fets-clock-hand fets-clock-second" 
+        style={{ transform: `translateX(-50%) rotate(${secAngle}deg)` }} 
+      />
+      
+      {/* Center Pin */}
+      <div className="fets-clock-pin" />
+    </div>
+  );
+}
+
 function RosterAttendanceControls({ branch }) {
   const [row, setRow] = React.useState(undefined);
-  const [, force] = React.useReducer((x) => x + 1, 0);
+  const [nowTime, setNowTime] = React.useState(new Date());
+
   const load = () => ATT.attToday().then((r) => setRow(r || null));
 
   React.useEffect(() => {
     load();
     const handleRefresh = () => load();
     window.addEventListener("fets-roster-changed", handleRefresh);
-    const t = setInterval(() => force(), 60000);
     return () => {
       window.removeEventListener("fets-roster-changed", handleRefresh);
-      clearInterval(t);
     };
   }, [branch]);
+
+  const onBreak = row && ATT.attOnBreak(row);
+  const checkedIn = row && row.check_in && !row.check_out;
+  const done = !!(row && row.check_out);
+  const worked = row ? ATT.attWorked(row) : 0;
+
+  React.useEffect(() => {
+    if (checkedIn) {
+      const interval = setInterval(() => {
+        setNowTime(new Date());
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [checkedIn]);
 
   const act = async (fn, ok) => {
     const r = await fn();
@@ -6699,14 +6894,50 @@ function RosterAttendanceControls({ branch }) {
     }
   };
 
-  const onBreak = row && ATT.attOnBreak(row);
-  const checkedIn = row && row.check_in && !row.check_out;
-  const done = !!(row && row.check_out);
-  const worked = row ? ATT.attWorked(row) : 0;
-
   const isSuperAdmin = !!window.FETS?.isAdmin;
   const userProfileBranch = window.FETS?._meBranch || 'cochin';
   const isLocked = !isSuperAdmin && branch !== userProfileBranch;
+
+  const parseDateTime = (dateStr: string, timeStr: string) => {
+    if (!dateStr || !timeStr) return new Date();
+    const [year, month, day] = dateStr.split("-").map(Number);
+    const parts = timeStr.split(":");
+    const hours = Number(parts[0]) || 0;
+    const minutes = Number(parts[1]) || 0;
+    const seconds = Number(parts[2]) || 0;
+    return new Date(year, month - 1, day, hours, minutes, seconds);
+  };
+
+  let workedSeconds = 0;
+  if (row && row.check_in) {
+    const checkInDate = parseDateTime(row.date, row.check_in);
+    const endTime = row.check_out 
+      ? parseDateTime(row.date, row.check_out)
+      : nowTime;
+    const elapsedSeconds = Math.max(0, Math.floor((endTime.getTime() - checkInDate.getTime()) / 1000));
+    
+    const notes = row.notes ? (typeof row.notes === "string" ? JSON.parse(row.notes) : row.notes) : {};
+    const completedBreakMins = notes.breakMins || 0;
+    
+    let currentBreakSeconds = 0;
+    const steps = notes.steps || [];
+    const lastStep = steps[steps.length - 1];
+    const isOnBreak = !!(lastStep && lastStep.out && !lastStep.in);
+    if (isOnBreak) {
+      const breakStartDate = parseDateTime(row.date, lastStep.out);
+      currentBreakSeconds = Math.max(0, Math.floor((endTime.getTime() - breakStartDate.getTime()) / 1000));
+    }
+    
+    const totalBreakSeconds = (completedBreakMins * 60) + currentBreakSeconds;
+    workedSeconds = Math.max(0, elapsedSeconds - totalBreakSeconds);
+  }
+
+  const formatSeconds = (totalSecs) => {
+    const h = Math.floor(totalSecs / 3600);
+    const m = Math.floor((totalSecs % 3600) / 60);
+    const s = totalSecs % 60;
+    return [h, m, s].map(v => String(v).padStart(2, '0')).join(':');
+  };
 
   const Btn = ({ on, label, icon, primary }) => (
     <button 
@@ -6743,26 +6974,61 @@ function RosterAttendanceControls({ branch }) {
   }
 
   return (
-    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-      {!row && (
-        <Btn on={() => act(() => ATT.attCheckIn(branch), "Checked in")} label="Check In" icon="power" primary />
-      )}
-      {checkedIn && !onBreak && (
-        <React.Fragment>
-          <Btn on={() => act(ATT.attStepOut, "Stepped out")} label="Step Out" icon="coffee" />
-          <Btn on={() => act(ATT.attCheckOut, "Checked out")} label="Check Out" icon="power" primary />
-        </React.Fragment>
-      )}
-      {onBreak && (
-        <React.Fragment>
-          <Btn on={() => act(ATT.attBack, "Back on shift")} label="Back In" icon="arrowR" primary />
-          <Btn on={() => act(ATT.attCheckOut, "Checked out")} label="Check Out" icon="power" />
-        </React.Fragment>
-      )}
-      {done && (
-        <span className="mono" style={{ fontSize: 13, color: "var(--ok)", fontWeight: 700, padding: "8px 12px", background: "rgba(0, 184, 148, 0.1)", borderRadius: 10 }}>
-          ✓ Checked out ({ATT.attFmtMins(worked)} worked)
-        </span>
+    <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        {!row && (
+          <Btn on={() => act(() => ATT.attCheckIn(branch), "Checked in")} label="Check In" icon="power" primary />
+        )}
+        {checkedIn && !onBreak && (
+          <React.Fragment>
+            <Btn on={() => act(ATT.attStepOut, "Stepped out")} label="Step Out" icon="coffee" />
+            <Btn on={() => act(ATT.attCheckOut, "Checked out")} label="Check Out" icon="power" primary />
+          </React.Fragment>
+        )}
+        {onBreak && (
+          <React.Fragment>
+            <Btn on={() => act(ATT.attBack, "Back on shift")} label="Back In" icon="arrowR" primary />
+            <Btn on={() => act(ATT.attCheckOut, "Checked out")} label="Check Out" icon="power" />
+          </React.Fragment>
+        )}
+        {done && (
+          <span className="mono" style={{ fontSize: 13, color: "var(--ok)", fontWeight: 700, padding: "8px 12px", background: "rgba(0, 184, 148, 0.1)", borderRadius: 10 }}>
+            ✓ Checked out ({ATT.attFmtMins(worked)} worked)
+          </span>
+        )}
+      </div>
+
+      {checkedIn && (
+        <div className="glass rise" style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          padding: "6px 14px",
+          borderRadius: 16,
+          border: "1px solid var(--hairline)",
+          background: "var(--glass-2)",
+          boxShadow: "0 4px 20px rgba(0, 0, 0, 0.25)"
+        }}>
+          {/* Working Analog Clock */}
+          <ClockWidget />
+
+          {/* Digital stopwatch with seconds */}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 1 }}>
+            <span className="mono" style={{ 
+              fontSize: 17, 
+              fontWeight: 850, 
+              color: onBreak ? "var(--warn)" : "var(--accent)", 
+              textShadow: onBreak ? "0 0 8px var(--warn-soft)" : "0 0 8px var(--accent-soft)",
+              lineHeight: 1.1,
+              letterSpacing: "0.5px"
+            }}>
+              {formatSeconds(workedSeconds)}
+            </span>
+            <span style={{ fontSize: 9, color: "var(--ink-4)", fontWeight: 750, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+              {onBreak ? "On Break" : "Worked today"}
+            </span>
+          </div>
+        </div>
       )}
     </div>
   );
