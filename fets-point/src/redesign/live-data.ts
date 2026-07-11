@@ -61,6 +61,9 @@ export async function loadLiveData(F: any) {
   F._staffUserIdByName = F._staffUserIdByName || {};
   F._userIdToProfileId = F._userIdToProfileId || {};
   F._profileIdToUserId = F._profileIdToUserId || {};
+  F._staffDays = F._staffDays || {};
+  F._staffRatesByProfileId = F._staffRatesByProfileId || {};
+  F._staffRatesByName = F._staffRatesByName || {};
   const today = new Date();
 
   // Load foundation metadata concurrently

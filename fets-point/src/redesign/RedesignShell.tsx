@@ -12425,14 +12425,14 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
 
       <main className="scroll-soft main-scroll" style={{
         flex: 1,
-        overflowY: active === "calendar" ? "hidden" : "auto",
+        overflowY: "auto",
         padding: (active === "calendar" || active === "roster" || active === "live" || active === "desk")
           ? "0" 
           : (active === "handover" ? "0 0 80px" : "clamp(22px,3.2vw,40px) clamp(14px,3vw,30px) 80px")
       }}>
         {active === "live" && <LivePage branch={branch} setDrawer={setDrawer} setActive={setActive} bridge={bridge} />}
         {active === "calendar" && (
-          <div style={{ height: "100%", width: "100%", overflow: "hidden" }}>
+          <div style={{ width: "100%" }}>
             {isMobile ? <MobileCalendar /> : <FetsCalendar />}
           </div>
         )}
