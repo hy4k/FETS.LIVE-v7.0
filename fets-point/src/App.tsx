@@ -175,6 +175,7 @@ function AppContent() {
             onLogout={handleLogout} 
             activeBranch={activeBranch} 
             onBranchChange={setActiveBranch} 
+            profileBranch={profile?.branch_assigned}
             activeSubPage={
               activeTab === 'command-center' ? 'live' :
               activeTab === 'fets-calendar' ? 'calendar' :
@@ -200,16 +201,16 @@ function AppContent() {
     }
 
     const routeComponents: { [key: string]: { component: JSX.Element; name: string } } = {
-      'command-center': { component: <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isAdmin} onLogout={handleLogout} activeBranch={activeBranch} onBranchChange={setActiveBranch} activeSubPage="live" />, name: 'FETS · LIVE' },
+      'command-center': { component: <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isAdmin} onLogout={handleLogout} activeBranch={activeBranch} onBranchChange={setActiveBranch} profileBranch={profile?.branch_assigned} activeSubPage="live" />, name: 'FETS · LIVE' },
       'command-center-classic': { component: <CommandCentre onNavigate={setActiveTab} onAiQuery={(q: string) => { setAiQuery(q); setActiveTab('fets-intelligence'); }} />, name: 'FETS POINT' },
       'access-hub': { component: <AccessHubPage />, name: 'F-Vault' },
       'dashboard': { component: <Dashboard onNavigate={setActiveTab} />, name: 'Dashboard' },
       'candidate-tracker': { component: <CandidateTracker />, name: 'Candidate Tracker' },
-      'fets-roster': { component: <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isAdmin} onLogout={handleLogout} activeBranch={activeBranch} onBranchChange={setActiveBranch} activeSubPage="roster" />, name: 'FETS Roster' },
-      'fets-calendar': { component: <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isAdmin} onLogout={handleLogout} activeBranch={activeBranch} onBranchChange={setActiveBranch} activeSubPage="calendar" />, name: 'FETS Calendar' },
+      'fets-roster': { component: <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isAdmin} onLogout={handleLogout} activeBranch={activeBranch} onBranchChange={setActiveBranch} profileBranch={profile?.branch_assigned} activeSubPage="roster" />, name: 'FETS Roster' },
+      'fets-calendar': { component: <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isAdmin} onLogout={handleLogout} activeBranch={activeBranch} onBranchChange={setActiveBranch} profileBranch={profile?.branch_assigned} activeSubPage="calendar" />, name: 'FETS Calendar' },
       'fets-calendar-demo': { component: isMithun ? <FetsCalendar /> : <CommandCentre onNavigate={setActiveTab} onAiQuery={(q: string) => { setAiQuery(q); setActiveTab('fets-intelligence'); }} />, name: 'CELPIP Calendar' },
       'client-portal': { component: isMithun ? <ClientPortal /> : <CommandCentre onNavigate={setActiveTab} onAiQuery={(q: string) => { setAiQuery(q); setActiveTab('fets-intelligence'); }} />, name: 'Client Portal' },
-      'my-desk': { component: <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isAdmin} onLogout={handleLogout} activeBranch={activeBranch} onBranchChange={setActiveBranch} activeSubPage="desk" />, name: 'My Desk' },
+      'my-desk': { component: <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isAdmin} onLogout={handleLogout} activeBranch={activeBranch} onBranchChange={setActiveBranch} profileBranch={profile?.branch_assigned} activeSubPage="desk" />, name: 'My Desk' },
       'staff-management': { component: <StaffManagement />, name: 'Staff Management' },
       'fets-intelligence': { component: <FetsIntelligence initialQuery={aiQuery} />, name: 'FETS Intelligence' },
       'incident-log': { component: <RaiseACasePage />, name: 'Raise A Case' },

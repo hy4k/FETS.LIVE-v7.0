@@ -12484,11 +12484,15 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
   );
 }
 
-function RedesignShell({ bridge, userName, userEmail, isAdmin, onLogout, activeBranch, onBranchChange, activeSubPage }) {
+function RedesignShell({ bridge, userName, userEmail, isAdmin, onLogout, activeBranch, onBranchChange, activeSubPage, profileBranch }) {
   // Identity + access from the real authenticated profile (replaces mock user)
   if (window.FETS) {
     if (userName) window.FETS.user = { ...window.FETS.user, name: userName, email: userEmail || "", role: isAdmin ? "Super Admin" : "Staff" };
     window.FETS.isAdmin = !!isAdmin;
+    if (profileBranch) {
+      window.FETS._meBranch = profileBranch;
+      window.FETS._meBaseBranch = profileBranch;
+    }
   }
   const [ready, setReady] = React.useState(false);
   React.useEffect(() => {
