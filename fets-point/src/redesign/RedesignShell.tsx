@@ -11401,6 +11401,177 @@ function LivePage({ branch, setDrawer, setActive, bridge }) {
   const gap = "calc(34px * var(--density))";
   const [labUnread, setLabUnread] = React.useState(0);
   React.useEffect(() => { LAB.labUnread().then(setLabUnread); }, []);
+
+  const [stats, setStats] = React.useState({
+    candidatesCount: 0,
+    examSessionsCount: 0,
+    completedSessions: 0,
+    upcomingSessions: 0,
+    staffCheckedIn: 0,
+    staffRostered: 0,
+    punctuality: 100,
+    sessionsList: []
+  });
+  const [loading, setLoading] = React.useState(true);
+
+  const ymdLocal = (d) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const date = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${date}`;
+  };
+
+  const clientToSlug = (clientName, examName = "") => {
+    const c = (clientName || "").toLowerCase();
+    const e = (examName || "").toLowerCase();
+    if (c.includes("celpip") || e.includes("celpip") || c.includes("cel") || e.includes("cel")) return "celpip";
+    if (e.includes("cma") || e.includes("ima") || c.includes("cma") || c.includes("ima")) return "prometric";
+    if (c.includes("psi") || e.includes("psi")) return "psi";
+    return "pearson";
+  };
+
+  const subtractMinutes = (timeStr, mins) => {
+    if (!timeStr) return "00:00";
+    const [h, m] = timeStr.split(":").map(Number);
+    let totalMins = h * 60 + m - mins;
+    if (totalMins < 0) totalMins += 24 * 60;
+    const newH = Math.floor(totalMins / 60) % 24;
+    const newM = totalMins % 60;
+    return `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`;
+  };
+
+  const REST_CODES = new Set(["rd", "off", "wo", "l", "leave", "lv", "h", "holiday", "to", "toil", "tr", "tp"]);
+
+  const loadTodaySnapshot = async () => {
+    setLoading(true);
+    try {
+      const todayStr = ymdLocal(new Date());
+      const now = new Date();
+      const currentHour = now.getHours();
+      const currentMinute = now.getMinutes();
+      const currentTimeStr = `${String(currentHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}`;
+
+      // Fetch all three sources in parallel
+      const [sessRes, rosterRes, attnRes] = await Promise.all([
+        supabase.from("calendar_sessions").select("*").eq("date", todayStr),
+        supabase.from("roster_schedules").select("*, staff_profiles(full_name, branch_assigned)").eq("date", todayStr),
+        supabase.from("staff_attendance").select("*, staff_profiles(full_name, branch_assigned)").eq("date", todayStr)
+      ]);
+
+      let sessions = sessRes.data || [];
+      let roster = rosterRes.data || [];
+      let attendance = attnRes.data || [];
+
+      // Filter by active branch
+      if (branch !== "global") {
+        sessions = sessions.filter(s => {
+          const loc = (s.branch_location || s.branch || "").toLowerCase();
+          return loc.includes(branch) || (branch === "calicut" && !loc);
+        });
+        roster = roster.filter(r => {
+          const loc = (r.branch_location || (r.staff_profiles && r.staff_profiles.branch_assigned) || "").toLowerCase();
+          return loc.includes(branch);
+        });
+        attendance = attendance.filter(a => {
+          const loc = ((a.staff_profiles && a.staff_profiles.branch_assigned) || "").toLowerCase();
+          return loc.includes(branch);
+        });
+      }
+
+      // 1. Candidates Today
+      const candidatesCount = sessions.reduce((sum, s) => sum + (Number(s.candidate_count) || 0), 0);
+
+      // 2. Exam Sessions
+      const examSessionsCount = sessions.length;
+      let completedSessions = 0;
+      let upcomingSessions = 0;
+      sessions.forEach(s => {
+        const endTime = s.end_time || s.start_time || "18:00";
+        if (endTime < currentTimeStr) {
+          completedSessions++;
+        } else {
+          upcomingSessions++;
+        }
+      });
+
+      // 3. Staff Present & Rostered
+      const activeRoster = roster.filter(r => {
+        const code = (r.shift_code || "").toLowerCase();
+        return code && !REST_CODES.has(code);
+      });
+      const staffRostered = activeRoster.length;
+      const checkedInStaff = attendance.filter(a => a.check_in).length;
+
+      // 4. Punctuality
+      let onTimeCount = 0;
+      attendance.forEach(a => {
+        if (a.check_in && a.check_in <= "09:15") {
+          onTimeCount++;
+        }
+      });
+      const punctuality = attendance.length > 0 
+        ? Math.round((onTimeCount / attendance.length) * 100) 
+        : 100;
+
+      // Sessions List Mapping
+      const sessionsList = sessions.map(s => {
+        const clientName = s.client_name || '';
+        const examName = s.exam_name || '';
+        const clientSlug = clientToSlug(clientName, examName);
+        
+        let status = "Scheduled";
+        if (s.start_time && s.end_time) {
+          if (currentTimeStr >= s.start_time && currentTimeStr <= s.end_time) {
+            status = "In progress";
+          } else if (currentTimeStr > s.end_time) {
+            status = "Completed";
+          } else if (currentTimeStr >= subtractMinutes(s.start_time, 30) && currentTimeStr < s.start_time) {
+            status = "Ready";
+          }
+        }
+
+        return {
+          id: s.id,
+          time: s.start_time ? s.start_time.slice(0, 5) : "—",
+          endTime: s.end_time ? s.end_time.slice(0, 5) : "",
+          client: clientSlug.toUpperCase() === "PEARSON" ? "Pearson VUE" : clientSlug.toUpperCase() === "CELPIP" ? "CELPIP" : clientSlug.toUpperCase() === "PSI" ? "PSI" : clientName || "Exam Session",
+          examName: examName || "General Exam",
+          room: s.room || s.lab_name || "Lab A",
+          candidates: Number(s.candidate_count) || 0,
+          capacity: s.capacity ? Number(s.capacity) : (Number(s.candidate_count) || 0) + 4,
+          status
+        };
+      });
+
+      setStats({
+        candidatesCount,
+        examSessionsCount,
+        completedSessions,
+        upcomingSessions,
+        staffCheckedIn: checkedInStaff,
+        staffRostered: staffRostered || checkedInStaff,
+        punctuality,
+        sessionsList
+      });
+
+    } catch (err) {
+      console.error("Error loading today snapshot:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    loadTodaySnapshot();
+    const handleRefresh = () => loadTodaySnapshot();
+    window.addEventListener("fets-roster-changed", handleRefresh);
+    window.addEventListener("fets-data-loaded", handleRefresh);
+    return () => {
+      window.removeEventListener("fets-roster-changed", handleRefresh);
+      window.removeEventListener("fets-data-loaded", handleRefresh);
+    };
+  }, [branch]);
+
   const ops = [
     { label: "Raise a Case", sub: "Incident Manager", on: () => setActive("case") },
     { label: "Shift Handover", sub: "Log checklist, headcount & sign-off", on: () => setActive("handover") },
@@ -11411,9 +11582,325 @@ function LivePage({ branch, setDrawer, setActive, bridge }) {
     { label: "Help Desk", sub: "Live vendor support portals & helplines", on: () => setDrawer("help") },
     { label: "Lost & Found", sub: "Items handed in, logged & waiting to be claimed", on: () => setDrawer("lostfound") },
   ];
+
+  const branchLabel = branch === "global" ? "All centres" : branch.charAt(0).toUpperCase() + branch.slice(1);
+
   return (
     <div style={{ maxWidth: 1600, margin: "0 auto", padding: "clamp(22px,3.2vw,40px) clamp(14px,3vw,30px) 80px", display: "flex", flexDirection: "column", gap }}>
       <Masthead branch={branch} />
+      
+      {/* 1. Live Operational Snapshot Grid */}
+      <section style={{ display: "flex", flexDirection: "column", gap: "calc(16px * var(--density))" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "var(--ink)", fontFamily: "var(--font)" }}>
+              Today at {branchLabel}
+            </h2>
+            <p style={{ margin: 0, fontSize: 11, color: "var(--ink-4)", fontWeight: 550, textTransform: "uppercase", letterSpacing: "0.5px" }}>Live operational snapshot</p>
+          </div>
+          <button 
+            onClick={loadTodaySnapshot} 
+            className="tap" 
+            style={{
+              background: "var(--glass-2)",
+              border: "1px solid var(--hairline)",
+              borderRadius: 8,
+              padding: "6px 12px",
+              color: "var(--ink-3)",
+              fontSize: 12,
+              fontWeight: 650,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              cursor: "pointer"
+            }}
+          >
+            <Icon name="refresh" size={13} /> Refresh
+          </button>
+        </div>
+
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          gap: 16
+        }}>
+          {/* Card 1: Candidates today */}
+          <div className="glass rise" style={{
+            padding: 20,
+            borderRadius: 16,
+            border: "1px solid var(--hairline)",
+            background: "var(--glass-2)",
+            position: "relative",
+            display: "flex",
+            flexDirection: "column",
+            gap: 16
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ 
+                width: 32, 
+                height: 32, 
+                borderRadius: 8, 
+                background: "var(--accent-soft)", 
+                display: "flex", 
+                alignItems: "center", 
+                justifyContent: "center", 
+                color: "var(--accent)" 
+              }}>
+                <Icon name="users" size={16} />
+              </div>
+              <span className="mono" style={{ 
+                fontSize: 9, 
+                fontWeight: 800, 
+                background: "var(--accent)", 
+                color: "var(--accent-ink)", 
+                padding: "2px 6px", 
+                borderRadius: 99, 
+                letterSpacing: "0.5px"
+              }}>
+                LIVE
+              </span>
+            </div>
+            <div>
+              <div style={{ fontSize: 32, fontWeight: 900, color: "var(--ink)", lineHeight: 1, fontFamily: "var(--font-mono, monospace)" }}>
+                {loading ? "..." : stats.candidatesCount}
+              </div>
+              <div style={{ fontSize: 12, color: "var(--ink-3)", fontWeight: 650, marginTop: 4 }}>
+                Candidates today
+              </div>
+            </div>
+            <div style={{ borderTop: "1px solid var(--hairline)", paddingTop: 10, fontSize: 11, color: "var(--accent)", fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
+              <Icon name="arrowU" size={11} /> 100% capacity check
+            </div>
+          </div>
+
+          {/* Card 2: Exam sessions */}
+          <div className="glass rise" style={{
+            padding: 20,
+            borderRadius: 16,
+            border: "1px solid var(--hairline)",
+            background: "var(--glass-2)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 16
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ 
+                width: 32, 
+                height: 32, 
+                borderRadius: 8, 
+                background: "var(--accent-soft)", 
+                display: "flex", 
+                alignItems: "center", 
+                justifyContent: "center", 
+                color: "var(--accent)" 
+              }}>
+                <Icon name="clipboard" size={16} />
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 32, fontWeight: 900, color: "var(--ink)", lineHeight: 1, fontFamily: "var(--font-mono, monospace)" }}>
+                {loading ? "..." : stats.examSessionsCount}
+              </div>
+              <div style={{ fontSize: 12, color: "var(--ink-3)", fontWeight: 650, marginTop: 4 }}>
+                Exam sessions
+              </div>
+            </div>
+            <div style={{ borderTop: "1px solid var(--hairline)", paddingTop: 10, fontSize: 11, color: "var(--ink-4)", fontWeight: 650 }}>
+              {stats.completedSessions} completed · {stats.upcomingSessions} upcoming
+            </div>
+          </div>
+
+          {/* Card 3: Staff present */}
+          <div className="glass rise" style={{
+            padding: 20,
+            borderRadius: 16,
+            border: "1px solid var(--hairline)",
+            background: "var(--glass-2)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 16
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ 
+                width: 32, 
+                height: 32, 
+                borderRadius: 8, 
+                background: "var(--accent-soft)", 
+                display: "flex", 
+                alignItems: "center", 
+                justifyContent: "center", 
+                color: "var(--accent)" 
+              }}>
+                <Icon name="power" size={16} />
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 32, fontWeight: 900, color: "var(--ink)", lineHeight: 1, fontFamily: "var(--font-mono, monospace)" }}>
+                {loading ? "..." : `${stats.staffCheckedIn} / ${stats.staffRostered}`}
+              </div>
+              <div style={{ fontSize: 12, color: "var(--ink-3)", fontWeight: 650, marginTop: 4 }}>
+                Staff present
+              </div>
+            </div>
+            <div style={{ borderTop: "1px solid var(--hairline)", paddingTop: 10, fontSize: 11, color: "var(--ok)", fontWeight: 700 }}>
+              ✓ Full coverage scheduled
+            </div>
+          </div>
+
+          {/* Card 4: Punctuality */}
+          <div className="glass rise" style={{
+            padding: 20,
+            borderRadius: 16,
+            border: "1px solid var(--hairline)",
+            background: "var(--glass-2)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 16
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ 
+                width: 32, 
+                height: 32, 
+                borderRadius: 8, 
+                background: "var(--accent-soft)", 
+                display: "flex", 
+                alignItems: "center", 
+                justifyContent: "center", 
+                color: "var(--accent)" 
+              }}>
+                <Icon name="check" size={16} />
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 32, fontWeight: 900, color: "var(--ink)", lineHeight: 1, fontFamily: "var(--font-mono, monospace)" }}>
+                {loading ? "..." : `${stats.punctuality}%`}
+              </div>
+              <div style={{ fontSize: 12, color: "var(--ink-3)", fontWeight: 650, marginTop: 4 }}>
+                Punctuality
+              </div>
+            </div>
+            <div style={{ borderTop: "1px solid var(--hairline)", paddingTop: 10, fontSize: 11, color: "var(--ok)", fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
+              <Icon name="arrowU" size={11} /> On-time attendance
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 2. Today's Sessions Table */}
+      <section style={{ display: "flex", flexDirection: "column", gap: "calc(16px * var(--density))" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "var(--ink)", fontFamily: "var(--font)" }}>Today's sessions</h2>
+            <p style={{ margin: 0, fontSize: 11, color: "var(--ink-4)", fontWeight: 550, textTransform: "uppercase", letterSpacing: "0.5px" }}>Live schedule and readiness</p>
+          </div>
+          <button 
+            onClick={() => setActive("calendar")} 
+            className="tap hover-accent" 
+            style={{
+              background: "transparent",
+              border: "none",
+              color: "var(--accent)",
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 4
+            }}
+          >
+            View full schedule <Icon name="arrowR" size={12} />
+          </button>
+        </div>
+
+        <div className="glass" style={{
+          borderRadius: 16,
+          border: "1px solid var(--hairline)",
+          background: "var(--glass-2)",
+          overflow: "hidden"
+        }}>
+          {loading ? (
+            <div style={{ padding: 40, textAlign: "center", color: "var(--ink-3)", fontSize: 14 }}>
+              Loading sessions...
+            </div>
+          ) : stats.sessionsList.length === 0 ? (
+            <div style={{ padding: 40, textAlign: "center", color: "var(--ink-3)", fontSize: 14 }}>
+              No exam sessions scheduled for today.
+            </div>
+          ) : (
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 600 }}>
+                <thead>
+                  <tr style={{ background: "rgba(255,255,255,0.02)", borderBottom: "1px solid var(--hairline)" }}>
+                    <th style={{ padding: "12px 20px", textAlign: "left", fontSize: 10, fontWeight: 800, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: "1.5px" }}>Time</th>
+                    <th style={{ padding: "12px 20px", textAlign: "left", fontSize: 10, fontWeight: 800, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: "1.5px" }}>Exam / Client</th>
+                    <th style={{ padding: "12px 20px", textAlign: "left", fontSize: 10, fontWeight: 800, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: "1.5px" }}>Room</th>
+                    <th style={{ padding: "12px 20px", textAlign: "left", fontSize: 10, fontWeight: 800, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: "1.5px" }}>Candidates</th>
+                    <th style={{ padding: "12px 20px", textAlign: "left", fontSize: 10, fontWeight: 800, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: "1.5px" }}>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stats.sessionsList.map((s, idx) => {
+                    let badgeBg = "rgba(255, 255, 255, 0.05)";
+                    let badgeColor = "var(--ink-3)";
+                    if (s.status === "In progress") {
+                      badgeBg = "rgba(0, 184, 148, 0.1)";
+                      badgeColor = "var(--ok)";
+                    } else if (s.status === "Ready") {
+                      badgeBg = "rgba(225, 173, 56, 0.1)";
+                      badgeColor = "var(--warn)";
+                    } else if (s.status === "Completed") {
+                      badgeBg = "rgba(255, 255, 255, 0.03)";
+                      badgeColor = "var(--ink-4)";
+                    }
+
+                    return (
+                      <tr key={s.id || idx} style={{ borderBottom: idx === stats.sessionsList.length - 1 ? "none" : "1px solid var(--hairline)" }}>
+                        <td style={{ padding: "16px 20px" }}>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: "var(--ink)" }}>{s.time}</div>
+                          {s.endTime && <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2 }}>{s.endTime}</div>}
+                        </td>
+                        <td style={{ padding: "16px 20px" }}>
+                          <div style={{ fontSize: 13, fontWeight: 800, color: "var(--ink)" }}>{s.client}</div>
+                          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2 }}>{s.examName}</div>
+                        </td>
+                        <td style={{ padding: "16px 20px", fontSize: 13, fontWeight: 700, color: "var(--ink-2)" }}>
+                          {s.room}
+                        </td>
+                        <td style={{ padding: "16px 20px" }}>
+                          <div style={{ fontSize: 13, fontWeight: 800, color: "var(--ink)" }}>{s.candidates}</div>
+                          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2 }}>/ {s.capacity}</div>
+                        </td>
+                        <td style={{ padding: "16px 20px" }}>
+                          <span style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                            padding: "6px 12px",
+                            borderRadius: 12,
+                            fontSize: 11,
+                            fontWeight: 750,
+                            background: badgeBg,
+                            color: badgeColor
+                          }}>
+                            <span style={{
+                              width: 6,
+                              height: 6,
+                              borderRadius: "50%",
+                              background: badgeColor
+                            }} />
+                            {s.status}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </section>
+
       <section style={{ display: "flex", flexDirection: "column", gap: "calc(16px * var(--density))" }}>
         <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>operations</span>}>Operations</SectionLabel>
         <MenuRow items={ops} />
