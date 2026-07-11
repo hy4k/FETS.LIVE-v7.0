@@ -940,8 +940,8 @@ function Icon({ name, size = 18, stroke = 2, className = "", style = {} }) {
 
 /* ---- segmented control (glass pill) ---- */
 function Segmented({ options, value, onChange, size = "md", activeColor, disabled }) {
-  const pad = size === "sm" ? "6px 14px" : "8px 18px";
-  const fs = size === "sm" ? 11.5 : 13;
+  const pad = size === "lg" ? "10px 22px" : size === "sm" ? "6px 14px" : "8px 18px";
+  const fs = size === "lg" ? 14.5 : size === "sm" ? 11.5 : 13;
   const br = 9;
   return (
     <div className="inset" style={{ 
@@ -11089,23 +11089,23 @@ function TopNav({ active, onNavigate, branch, setBranch, t, setTweak, onTools, o
   return (
     <header className="glass" style={{
       position: "sticky", top: 0, zIndex: 60, flexShrink: 0,
-      maxWidth: 1600, width: "calc(100% - 2 * clamp(14px, 3vw, 30px))", margin: "14px auto 0", borderRadius: 16,
-      padding: "11px 11px 11px 18px", display: "flex", alignItems: "center", gap: "clamp(14px,2.4vw,30px)",
+      maxWidth: 1720, width: "calc(100% - 2 * clamp(14px, 3vw, 30px))", margin: "20px auto 0", borderRadius: 20,
+      padding: "16px 20px 16px 24px", display: "flex", alignItems: "center", gap: "clamp(16px,2.8vw,36px)",
       boxShadow: "var(--shadow)", "--branch": BRANCH_TINT[branch] || "var(--accent)",
     }}>
       {/* brand mark */}
       <button onClick={() => onNavigate({ id: "live" })} className="tap" style={{
-        display: "flex", alignItems: "center", gap: 13, border: "none", background: "transparent",
+        display: "flex", alignItems: "center", gap: 14, border: "none", background: "transparent",
         cursor: "pointer", padding: 0, flexShrink: 0, fontFamily: "var(--font)",
       }}>
-        <span style={{ width: 34, height: 34, borderRadius: 9, display: "grid", placeItems: "center",
-          background: "var(--accent)", color: "var(--accent-ink)", fontWeight: 900, fontSize: 20,
+        <span style={{ width: 40, height: 40, borderRadius: 10, display: "grid", placeItems: "center",
+          background: "var(--accent)", color: "var(--accent-ink)", fontWeight: 900, fontSize: 22,
           fontFamily: '"Archivo Expanded", var(--font)', letterSpacing: "-0.04em", lineHeight: 1 }}>F</span>
-        <span style={{ width: 1, height: 26, background: "var(--accent)" }} />
+        <span style={{ width: 1, height: 30, background: "var(--accent)" }} />
       </button>
 
       {/* primary links */}
-      <nav className="topnav-links" style={{ display: "flex", alignItems: "center", gap: "clamp(18px,2.4vw,32px)" }}>
+      <nav className="topnav-links" style={{ display: "flex", alignItems: "center", gap: "clamp(20px,2.8vw,36px)" }}>
         {NAV.map((n) => (
           <button key={n.id} className={`topnav-item ${active === n.id ? "active" : ""}`} onClick={() => onNavigate(n)} style={{ position: "relative" }}>
             {n.label}
@@ -11123,15 +11123,15 @@ function TopNav({ active, onNavigate, branch, setBranch, t, setTweak, onTools, o
       {/* right controls */}
       {/* candidates today — compact, reacts to the branch toggle */}
       <span title={`${candToday} candidates booked today · ${BRANCH_NAME[branch]}`} className="tap glass-2 topnav-count" style={{
-        display: "inline-flex", alignItems: "center", gap: 8, height: 36, padding: "0 13px", borderRadius: 10, flexShrink: 0,
-        color: "var(--ink-2)", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 650 }}>
-        <Icon name="users" size={15} style={{ color: "var(--accent)" }} />
-        <span className="tabnum" style={{ fontSize: 13.5, fontWeight: 750, color: "var(--ink)" }}>{candToday}</span>
-        <span className="topnav-branch">today</span>
+        display: "inline-flex", alignItems: "center", gap: 8, height: 42, padding: "0 16px", borderRadius: 12, flexShrink: 0,
+        color: "var(--ink-2)", fontFamily: "var(--font)", fontSize: 13.5, fontWeight: 650 }}>
+        <Icon name="users" size={16} style={{ color: "var(--accent)" }} />
+        <span className="tabnum" style={{ fontSize: 14.5, fontWeight: 750, color: "var(--ink)" }}>{candToday}</span>
+        <span className="topnav-branch" style={{ fontSize: 11.5 }}>today</span>
       </span>
       {active !== "news" && (
         <div className="topnav-seg">
-          <Segmented value={branch} onChange={setBranch} size="sm" 
+          <Segmented value={branch} onChange={setBranch} size="lg" 
             options={[
               { value: "calicut", label: "Calicut", color: BRANCH_TINT.calicut },
               { value: "cochin", label: "Cochin", color: BRANCH_TINT.cochin },
@@ -11141,19 +11141,19 @@ function TopNav({ active, onNavigate, branch, setBranch, t, setTweak, onTools, o
       )}
       {window.FETS.isAdmin && (
         <button onClick={onTools} title="All modules" className="tap glass-2" style={{
-          display: "inline-flex", alignItems: "center", gap: 8, height: 36, padding: "0 14px", borderRadius: 10,
-          cursor: "pointer", color: "var(--ink-2)", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 650 }}>
-          <Icon name="grid" size={15} /> <span className="topnav-branch">Modules</span>
+          display: "inline-flex", alignItems: "center", gap: 8, height: 42, padding: "0 18px", borderRadius: 12,
+          cursor: "pointer", color: "var(--ink-2)", fontFamily: "var(--font)", fontSize: 13.5, fontWeight: 650 }}>
+          <Icon name="grid" size={16} /> <span className="topnav-branch">Modules</span>
         </button>
       )}
       <button onClick={onLogout} title="Log out" className="tap glass-2" style={{
-        display: "inline-flex", alignItems: "center", gap: 8, height: 36, padding: "0 13px", borderRadius: 10,
-        cursor: "pointer", color: "var(--ink-2)", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 650, flexShrink: 0 }}>
-        <Icon name="power" size={15} /> <span className="topnav-branch">Log out</span>
+        display: "inline-flex", alignItems: "center", gap: 8, height: 42, padding: "0 16px", borderRadius: 12,
+        cursor: "pointer", color: "var(--ink-2)", fontFamily: "var(--font)", fontSize: 13.5, fontWeight: 650, flexShrink: 0 }}>
+        <Icon name="power" size={16} /> <span className="topnav-branch">Log out</span>
       </button>
       <button onClick={onBurger} className="tap glass-2 topnav-burger" title="Menu" style={{
-        display: "none", width: 36, height: 36, borderRadius: 10, placeItems: "center", cursor: "pointer", color: "var(--ink-2)" }}>
-        <Icon name="menu" size={18} />
+        display: "none", width: 42, height: 42, borderRadius: 12, placeItems: "center", cursor: "pointer", color: "var(--ink-2)" }}>
+        <Icon name="menu" size={20} />
       </button>
     </header>
   );
@@ -11599,276 +11599,6 @@ function LivePage({ branch, setDrawer, setActive, bridge }) {
       <section style={{ display: "flex", flexDirection: "column", gap: "calc(16px * var(--density))" }}>
         <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>support</span>}>Quick access &amp; support</SectionLabel>
         <MenuRow items={support} />
-      </section>
-
-      {/* 1. Live Operational Snapshot Grid */}
-      <section style={{ display: "flex", flexDirection: "column", gap: "calc(16px * var(--density))", marginTop: 12 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: "var(--accent)", fontFamily: "var(--font)", letterSpacing: "-0.02em" }}>
-              Today at {branchLabel}
-            </h2>
-            <p style={{ margin: 0, fontSize: 11, color: "var(--ink-4)", fontWeight: 550, textTransform: "uppercase", letterSpacing: "0.5px" }}>Live operational snapshot</p>
-          </div>
-          <button 
-            onClick={loadTodaySnapshot} 
-            className="tap" 
-            style={{
-              background: "var(--glass-2)",
-              border: "1px solid var(--hairline)",
-              borderRadius: 12,
-              padding: "8px 16px",
-              color: "var(--ink-2)",
-              fontSize: 12,
-              fontWeight: 700,
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              cursor: "pointer"
-            }}
-          >
-            <Icon name="refresh" size={13} /> Refresh
-          </button>
-        </div>
-
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(245px, 1fr))",
-          gap: 20
-        }}>
-          {/* Card 1: Candidates today */}
-          <div className="fets-premium-card">
-            <div className="fets-premium-card-top">
-              <div className="fets-premium-card-glass" />
-              <div className="fets-premium-card-meta">
-                <span>Live Activity</span>
-                <span>Candidates</span>
-              </div>
-              <div className="fets-premium-card-main">
-                <div className="fets-premium-card-val">{loading ? "..." : stats.candidatesCount}</div>
-                <div className="fets-premium-card-lbl">Registered &amp; Scheduled</div>
-              </div>
-              <div className="fets-premium-card-status">
-                <span className="fets-premium-card-dot pulse" style={{ background: "#5effeb", boxShadow: "0 0 8px #5effeb" }} />
-                <span>Real-time aggregation</span>
-              </div>
-            </div>
-            <div className="fets-premium-card-expand">
-              <div className="fets-premium-card-section">
-                <div className="fets-premium-card-title">Allocation Info</div>
-                <div className="fets-premium-card-text">
-                  Current seating allocations and hardware sanity checks are validated. 100% capacity threshold verification active.
-                </div>
-              </div>
-            </div>
-            <div className="fets-premium-card-bottom cyan">100% Capacity Checked</div>
-          </div>
-
-          {/* Card 2: Exam sessions */}
-          <div className="fets-premium-card">
-            <div className="fets-premium-card-top">
-              <div className="fets-premium-card-glass" />
-              <div className="fets-premium-card-meta">
-                <span>Schedule Overview</span>
-                <span>Sessions</span>
-              </div>
-              <div className="fets-premium-card-main">
-                <div className="fets-premium-card-val">{loading ? "..." : stats.examSessionsCount}</div>
-                <div className="fets-premium-card-lbl">Active &amp; Upcoming</div>
-              </div>
-              <div className="fets-premium-card-status">
-                <span className="fets-premium-card-dot pulse" style={{ background: "#c7a4ff", boxShadow: "0 0 8px #c7a4ff" }} />
-                <span>Current exam status</span>
-              </div>
-            </div>
-            <div className="fets-premium-card-expand">
-              <div className="fets-premium-card-section">
-                <div className="fets-premium-card-title">Status Breakdown</div>
-                <div className="fets-premium-card-text">
-                  {stats.completedSessions} completed sessions and {stats.upcomingSessions} upcoming/ready sessions scheduled for today.
-                </div>
-              </div>
-            </div>
-            <div className="fets-premium-card-bottom purple">{stats.completedSessions} Completed · {stats.upcomingSessions} Upcoming</div>
-          </div>
-
-          {/* Card 3: Staff present */}
-          <div className="fets-premium-card">
-            <div className="fets-premium-card-top">
-              <div className="fets-premium-card-glass" />
-              <div className="fets-premium-card-meta">
-                <span>Team Coverage</span>
-                <span>Roster</span>
-              </div>
-              <div className="fets-premium-card-main">
-                <div className="fets-premium-card-val">{loading ? "..." : `${stats.staffCheckedIn} / ${stats.staffRostered}`}</div>
-                <div className="fets-premium-card-lbl">Checked In / Rostered</div>
-              </div>
-              <div className="fets-premium-card-status">
-                <span className="fets-premium-card-dot pulse" style={{ background: "#ffd35e", boxShadow: "0 0 8px #ffd35e" }} />
-                <span>Live attendance tracking</span>
-              </div>
-            </div>
-            <div className="fets-premium-card-expand">
-              <div className="fets-premium-card-section">
-                <div className="fets-premium-card-title">Attendance Status</div>
-                <div className="fets-premium-card-text">
-                  Live attendance validation matches current roster. Shifts are tracked in real-time via Cochin and Calicut consoles.
-                </div>
-              </div>
-            </div>
-            <div className="fets-premium-card-bottom amber">✓ Full Coverage Rostered</div>
-          </div>
-
-          {/* Card 4: Punctuality */}
-          <div className="fets-premium-card">
-            <div className="fets-premium-card-top">
-              <div className="fets-premium-card-glass" />
-              <div className="fets-premium-card-meta">
-                <span>Operations Audit</span>
-                <span>On-Time</span>
-              </div>
-              <div className="fets-premium-card-main">
-                <div className="fets-premium-card-val">{loading ? "..." : `${stats.punctuality}%`}</div>
-                <div className="fets-premium-card-lbl">Average Performance</div>
-              </div>
-              <div className="fets-premium-card-status">
-                <span className="fets-premium-card-dot pulse" style={{ background: "#b8ff5a", boxShadow: "0 0 8px #b8ff5a" }} />
-                <span>SLA compliance level</span>
-              </div>
-            </div>
-            <div className="fets-premium-card-expand">
-              <div className="fets-premium-card-section">
-                <div className="fets-premium-card-title">SLA Compliance</div>
-                <div className="fets-premium-card-text">
-                  Computed ratio of staff check-in times relative to target shift opening constraints. 15-min grace window applied.
-                </div>
-              </div>
-            </div>
-            <div className="fets-premium-card-bottom green">On-Time Compliance Excellent</div>
-          </div>
-        </div>
-      </section>
-
-      {/* 2. Today's Sessions Table */}
-      <section style={{ display: "flex", flexDirection: "column", gap: "calc(16px * var(--density))" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: "var(--accent)", fontFamily: "var(--font)", letterSpacing: "-0.02em" }}>Today's sessions</h2>
-            <p style={{ margin: 0, fontSize: 11, color: "var(--ink-4)", fontWeight: 550, textTransform: "uppercase", letterSpacing: "0.5px" }}>Live schedule and readiness</p>
-          </div>
-          <button 
-            onClick={() => setActive("calendar")} 
-            className="tap hover-accent" 
-            style={{
-              background: "transparent",
-              border: "none",
-              color: "var(--accent)",
-              fontSize: 12,
-              fontWeight: 700,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: 4
-            }}
-          >
-            View full schedule <Icon name="arrowR" size={12} />
-          </button>
-        </div>
-
-        <div className="fets-premium-table-wrap">
-          {loading ? (
-            <div style={{ padding: 40, textAlign: "center", color: "rgba(255,255,255,0.4)", fontSize: 14 }}>
-              Loading sessions...
-            </div>
-          ) : stats.sessionsList.length === 0 ? (
-            <div style={{ padding: 40, textAlign: "center", color: "rgba(255,255,255,0.4)", fontSize: 14 }}>
-              No exam sessions scheduled for today.
-            </div>
-          ) : (
-            <div style={{ overflowX: "auto" }}>
-              <table className="fets-premium-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: "120px" }}>Time</th>
-                    <th>Exam / Client</th>
-                    <th>Room</th>
-                    <th>Candidates</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {stats.sessionsList.map((s, idx) => {
-                    let badgeBg = "rgba(255, 255, 255, 0.05)";
-                    let badgeColor = "rgba(255, 255, 255, 0.6)";
-                    let dotColor = "rgba(255, 255, 255, 0.4)";
-                    
-                    if (s.status === "In progress") {
-                      badgeBg = "rgba(0, 184, 148, 0.15)";
-                      badgeColor = "#6aff6a";
-                      dotColor = "#6aff6a";
-                    } else if (s.status === "Ready") {
-                      badgeBg = "rgba(225, 173, 56, 0.15)";
-                      badgeColor = "#ffd35e";
-                      dotColor = "#ffd35e";
-                    } else if (s.status === "Completed") {
-                      badgeBg = "rgba(255, 255, 255, 0.03)";
-                      badgeColor = "rgba(255, 255, 255, 0.3)";
-                      dotColor = "rgba(255, 255, 255, 0.2)";
-                    } else {
-                      badgeBg = "rgba(255, 255, 255, 0.05)";
-                      badgeColor = "#c7a4ff";
-                      dotColor = "#c7a4ff";
-                    }
-
-                    return (
-                      <tr key={s.id || idx}>
-                        <td>
-                          <div style={{ fontSize: 15, fontWeight: 800, color: "#ffffff" }}>{s.time}</div>
-                          {s.endTime && <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>{s.endTime}</div>}
-                        </td>
-                        <td>
-                          <div style={{ fontSize: 14, fontWeight: 700, color: "#ffffff" }}>{s.client}</div>
-                          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginTop: 2 }}>{s.examName}</div>
-                        </td>
-                        <td style={{ fontSize: 14, fontWeight: 600, color: "rgba(255,255,255,0.8)" }}>
-                          {s.room}
-                        </td>
-                        <td>
-                          <div style={{ fontSize: 14, fontWeight: 800, color: "#ffffff" }}>{s.candidates}</div>
-                          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>/ {s.capacity} max</div>
-                        </td>
-                        <td>
-                          <span style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 6,
-                            padding: "6px 12px",
-                            borderRadius: 12,
-                            fontSize: 11,
-                            fontWeight: 750,
-                            background: badgeBg,
-                            color: badgeColor,
-                            border: `1px solid ${badgeColor}22`
-                          }}>
-                            <span style={{
-                              width: 6,
-                              height: 6,
-                              borderRadius: "50%",
-                              background: dotColor,
-                              boxShadow: `0 0 6px ${dotColor}`
-                            }} />
-                            {s.status}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
       </section>
     </div>
   );
