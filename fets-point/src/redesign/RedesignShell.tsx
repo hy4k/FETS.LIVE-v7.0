@@ -10961,9 +10961,9 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
 
   const getModuleStatus = (it) => {
     if (nativeIds.includes(it.id)) {
-      return { label: "Native React", color: "var(--sh-green)", isNative: true };
+      return { label: "Native React", color: "#99CED3", isNative: true };
     } else {
-      return { label: "Legacy Bridged", color: "#7b6500", isNative: false };
+      return { label: "Legacy Bridged", color: "#EDB5BF", isNative: false };
     }
   };
 
@@ -10998,63 +10998,152 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
 
   return (
     <div style={{ maxWidth: 1600, margin: "0 auto", padding: "clamp(22px,3.2vw,40px) clamp(14px,3vw,30px) 80px", display: "flex", flexDirection: "column", gap }}>
+      <style>{`
+        /* Neumorphic Search Input */
+        .desk-search-input {
+          background: rgba(0, 0, 0, 0.25) !important;
+          border: 1px solid rgba(255, 255, 255, 0.05) !important;
+          border-radius: 99px !important;
+          color: #fff !important;
+          box-shadow: inset 3px 3px 6px rgba(0,0,0,0.5), inset -3px -3px 6px rgba(255,255,255,0.03) !important;
+        }
+        .desk-search-input::placeholder {
+          color: rgba(255, 255, 255, 0.3) !important;
+        }
+
+        /* Category pills */
+        .desk-cat-btn {
+          border: 1px solid rgba(255, 255, 255, 0.02) !important;
+          background: rgba(255, 255, 255, 0.01) !important;
+          color: #a0aec0 !important;
+          padding: 8px 16px !important;
+          border-radius: 20px !important;
+          font-size: 12px !important;
+          font-weight: 700 !important;
+          cursor: pointer;
+          box-shadow: 4px 4px 8px rgba(0,0,0,0.3), -4px -4px 8px rgba(255,255,255,0.03) !important;
+          transition: all 0.2s ease;
+        }
+        .desk-cat-btn.active {
+          background: rgba(0, 0, 0, 0.25) !important;
+          color: #99CED3 !important;
+          box-shadow: inset 2px 2px 5px rgba(0,0,0,0.4), inset -2px -2px 5px rgba(255,255,255,0.03) !important;
+        }
+
+        /* Neumorphic Metallic Card */
+        .desk-module-card {
+          position: relative;
+          background: linear-gradient(135deg, #2a333c, #1a2025) !important; /* Metallic Slate */
+          border: 1px solid rgba(255, 255, 255, 0.04) !important;
+          border-radius: 30px !important;
+          padding: 24px !important;
+          cursor: pointer;
+          text-align: left;
+          transition: transform 0.3s ease, box-shadow 0.3s ease !important;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+          min-height: 154px;
+          overflow: hidden;
+          box-shadow:
+            6px 6px 12px rgba(0, 0, 0, 0.4),
+            -6px -6px 12px rgba(255, 255, 255, 0.03),
+            inset 1px 1px 2px rgba(255, 255, 255, 0.05),
+            inset -1px -1px 2px rgba(0, 0, 0, 0.4) !important;
+        }
+
+        .desk-module-card:hover {
+          transform: translateY(-4px) !important;
+          box-shadow:
+            8px 8px 16px rgba(0, 0, 0, 0.5),
+            -8px -8px 16px rgba(255, 255, 255, 0.05),
+            inset 1px 1px 2px rgba(255, 255, 255, 0.1),
+            inset -1px -1px 2px rgba(0, 0, 0, 0.3) !important;
+        }
+
+        /* Shine overlay effect */
+        .desk-module-card::before {
+          content: "";
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background: linear-gradient(
+            120deg,
+            transparent,
+            rgba(255, 255, 255, 0.02),
+            rgba(255, 255, 255, 0.06),
+            rgba(255, 255, 255, 0.02),
+            transparent
+          );
+          background-size: 200% 100%;
+          background-position: -200% 0;
+          transition: all 0.5s ease;
+          border-radius: 30px;
+          pointer-events: none;
+        }
+
+        .desk-module-card:hover::before {
+          animation: desk-shine 2s infinite ease-in-out;
+        }
+
+        @keyframes desk-shine {
+          0% {
+            background-position: -200% 0;
+          }
+          100% {
+            background-position: 200% 0;
+          }
+        }
+
+        /* Icon Container */
+        .desk-module-icon-wrap {
+          width: 44px;
+          height: 44px;
+          border-radius: 12px;
+          display: grid;
+          place-items: center;
+          background: rgba(255, 255, 255, 0.02);
+          border: 1px solid rgba(255, 255, 255, 0.05);
+          color: #86B3D1; /* Image 2 Light Periwinkle */
+          transition: all 0.3s ease;
+        }
+
+        .desk-module-card:hover .desk-module-icon-wrap {
+          background: rgba(153, 206, 211, 0.1);
+          border-color: rgba(153, 206, 211, 0.3);
+          color: #99CED3; /* Image 2 Pastel Cyan */
+        }
+      `}</style>
+
       {/* masthead — name + profile photo only */}
       <header className="rise" style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
         <ProfileAvatar name={u.name} size={66} />
         <h1 style={{ margin: 0, fontFamily: '"Archivo Expanded", var(--font)', fontWeight: 800, whiteSpace: "nowrap",
-          fontSize: "clamp(30px,4vw,48px)", lineHeight: 1, letterSpacing: "-0.03em", color: "var(--ink)" }}>{u.name}</h1>
+          fontSize: "clamp(30px,4vw,48px)", lineHeight: 1, letterSpacing: "-0.03em", color: "#ffffff" }}>{u.name}</h1>
       </header>
 
       {isSuperAdmin ? (
         <div className="rise" style={{ display: "flex", flexDirection: "column", gap: 20, marginTop: 10 }}>
           {/* Section head & controls */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 20, flexWrap: "wrap", borderBottom: "1px solid var(--sh-line)", paddingBottom: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 20, flexWrap: "wrap", borderBottom: "1px solid rgba(255, 255, 255, 0.06)", paddingBottom: 16 }}>
             <div style={{ display: "flex", gap: 8 }}>
               <button 
                 onClick={() => setSelectedCat("all")}
-                className={`sh-status-choice-btn ${selectedCat === "all" ? "active" : ""}`}
-                style={{
-                  border: "1px solid var(--sh-line)",
-                  background: selectedCat === "all" ? "var(--sh-yellow)" : "#fff",
-                  color: "var(--sh-ink)",
-                  padding: "6px 12px",
-                  borderRadius: 20,
-                  fontSize: 12,
-                  fontWeight: 700,
-                  cursor: "pointer"
-                }}
+                className={`desk-cat-btn ${selectedCat === "all" ? "active" : ""}`}
               >
                 All Modules
               </button>
               <button 
                 onClick={() => setSelectedCat("native")}
-                className={`sh-status-choice-btn ${selectedCat === "native" ? "active" : ""}`}
-                style={{
-                  border: "1px solid var(--sh-line)",
-                  background: selectedCat === "native" ? "var(--sh-yellow)" : "#fff",
-                  color: "var(--sh-ink)",
-                  padding: "6px 12px",
-                  borderRadius: 20,
-                  fontSize: 12,
-                  fontWeight: 700,
-                  cursor: "pointer"
-                }}
+                className={`desk-cat-btn ${selectedCat === "native" ? "active" : ""}`}
               >
                 Native React
               </button>
               <button 
                 onClick={() => setSelectedCat("legacy")}
-                className={`sh-status-choice-btn ${selectedCat === "legacy" ? "active" : ""}`}
-                style={{
-                  border: "1px solid var(--sh-line)",
-                  background: selectedCat === "legacy" ? "var(--sh-yellow)" : "#fff",
-                  color: "var(--sh-ink)",
-                  padding: "6px 12px",
-                  borderRadius: 20,
-                  fontSize: 12,
-                  fontWeight: 700,
-                  cursor: "pointer"
-                }}
+                className={`desk-cat-btn ${selectedCat === "legacy" ? "active" : ""}`}
               >
                 Legacy Bridged
               </button>
@@ -11062,18 +11151,13 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
 
             {/* Search Input */}
             <div style={{ flex: 1, minWidth: 260, maxWidth: 400, position: "relative" }}>
-              <Icon name="search" size={16} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "var(--sh-muted)" }} />
+              <Icon name="search" size={16} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "rgba(255,255,255,0.3)" }} />
               <input 
                 value={searchQuery} 
                 onChange={(e) => setSearchQuery(e.target.value)} 
                 placeholder="Search modules..." 
+                className="desk-search-input"
                 style={{ 
-                  background: "#fff",
-                  border: "1px solid var(--sh-line)",
-                  borderRadius: 99,
-                  color: "var(--sh-ink)",
-                  fontFamily: "var(--font)",
-                  fontSize: 13,
                   padding: "8px 14px 8px 42px",
                   width: "100%",
                   outline: "none"
@@ -11082,10 +11166,10 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
             </div>
           </div>
 
-          {/* Grid of Modules - light theme style */}
+          {/* Grid of Modules - premium neomorphic dark style */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
             {filtered.length === 0 ? (
-              <div style={{ gridColumn: "1 / -1", padding: 60, textAlign: "center", color: "var(--sh-muted)", fontSize: 14 }}>
+              <div style={{ gridColumn: "1 / -1", padding: 60, textAlign: "center", color: "rgba(255,255,255,0.3)", fontSize: 14 }}>
                 No modules match your query. Try searching for something else.
               </div>
             ) : (
@@ -11095,46 +11179,11 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
                   <button 
                     key={it.id} 
                     onClick={() => handlePick(it)} 
-                    style={{
-                      position: "relative",
-                      background: "#fff",
-                      border: "1px solid var(--sh-line)",
-                      borderRadius: 18,
-                      padding: 20,
-                      cursor: "pointer",
-                      textAlign: "left",
-                      fontFamily: "var(--font)",
-                      transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
-                      display: "flex",
-                      flexDirection: "column",
-                      justifyContent: "space-between",
-                      minHeight: 140,
-                      boxShadow: "0 2px 5px rgba(29, 33, 23, 0.03)",
-                      outline: "none"
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = "translateY(-4px)";
-                      e.currentTarget.style.borderColor = "var(--sh-yellow)";
-                      e.currentTarget.style.boxShadow = "0 8px 20px rgba(0,0,0,0.06), 0 0 1px 1px var(--sh-yellow)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = "translateY(0)";
-                      e.currentTarget.style.borderColor = "var(--sh-line)";
-                      e.currentTarget.style.boxShadow = "0 2px 5px rgba(29, 33, 23, 0.03)";
-                    }}
+                    className="desk-module-card"
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", width: "100%" }}>
-                      <div style={{
-                        width: 38,
-                        height: 38,
-                        borderRadius: 10,
-                        display: "grid",
-                        placeItems: "center",
-                        background: "var(--sh-canvas)",
-                        border: "1px solid var(--sh-line)",
-                        color: "var(--sh-muted)"
-                      }}>
-                        <Icon name={it.icon} size={18} />
+                      <div className="desk-module-icon-wrap">
+                        <Icon name={it.icon} size={20} />
                       </div>
                       {/* Status badge */}
                       <span style={{ 
@@ -11142,21 +11191,21 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
                         fontWeight: 800, 
                         textTransform: "uppercase", 
                         letterSpacing: "0.5px",
-                        padding: "3px 8px", 
+                        padding: "4px 10px", 
                         borderRadius: 999, 
                         color: status.color, 
-                        background: status.isNative ? "#eaf8f0" : "#fff5bd",
-                        border: status.isNative ? "1px solid #bce5cc" : "1px solid #e8dda9"
+                        background: status.isNative ? "rgba(153, 206, 211, 0.1)" : "rgba(237, 181, 191, 0.1)",
+                        border: status.isNative ? "1px solid rgba(153, 206, 211, 0.25)" : "1px solid rgba(237, 181, 191, 0.25)"
                       }}>
                         {status.label}
                       </span>
                     </div>
 
-                    <div style={{ marginTop: 16 }}>
-                      <h3 style={{ fontSize: 15, fontWeight: 800, color: "var(--sh-ink)", margin: 0 }}>
+                    <div style={{ marginTop: 20 }}>
+                      <h3 style={{ fontSize: 16, fontWeight: 800, color: "#ffffff", margin: 0, letterSpacing: "-0.01em" }}>
                         {it.label}
                       </h3>
-                      <p style={{ fontSize: 11.5, color: "var(--sh-muted)", marginTop: 4, lineHeight: 1.4, marginBlockEnd: 0 }}>
+                      <p style={{ fontSize: 12, color: "#86B3D1", marginTop: 6, lineHeight: 1.4, marginBlockEnd: 0 }}>
                         {it.sub}
                       </p>
                     </div>
