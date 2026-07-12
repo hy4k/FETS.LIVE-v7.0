@@ -10971,9 +10971,9 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
 
   const getModuleStatus = (it) => {
     if (nativeIds.includes(it.id)) {
-      return { label: "Native React", color: "#99CED3", isNative: true };
+      return { label: "Native React", color: "#5DA2D5", isNative: true };
     } else {
-      return { label: "Legacy Bridged", color: "#EDB5BF", isNative: false };
+      return { label: "Legacy Bridged", color: "#F78888", isNative: false };
     }
   };
 
@@ -11006,48 +11006,54 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
   return (
     <div style={{ maxWidth: 1600, margin: "0 auto", padding: "clamp(22px,3.2vw,40px) clamp(14px,3vw,30px) 80px", display: "flex", flexDirection: "column", gap }}>
       <style>{`
-        /* Neumorphic Search Input */
+        /* Search Input – Elespacio palette */
         .desk-search-input {
-          background: rgba(0, 0, 0, 0.2) !important;
-          border: 1px solid rgba(255, 255, 255, 0.1) !important;
+          background: rgba(255,255,255,0.85) !important;
+          border: 2px solid #90CCF4 !important;
           border-radius: 99px !important;
-          color: #fff !important;
-          box-shadow: inset 3px 3px 6px rgba(0,0,0,0.4), inset -3px -3px 6px rgba(255,255,255,0.05) !important;
+          color: #2c3e50 !important;
+          box-shadow: 0 2px 8px rgba(93,162,213,0.15) !important;
+        }
+        .desk-search-input:focus {
+          border-color: #5DA2D5 !important;
+          box-shadow: 0 0 0 3px rgba(93,162,213,0.18) !important;
         }
         .desk-search-input::placeholder {
-          color: #86B3D1 !important;
-          opacity: 0.6;
+          color: #5DA2D5 !important;
+          opacity: 0.55;
         }
 
-        /* Category pills */
+        /* Category pills – Elespacio */
         .desk-cat-btn {
-          border: 1px solid rgba(255, 255, 255, 0.1) !important;
-          background: rgba(255, 255, 255, 0.05) !important;
-          color: #86B3D1 !important; /* Palette Light Periwinkle */
+          border: 2px solid #90CCF4 !important;
+          background: rgba(255,255,255,0.7) !important;
+          color: #5DA2D5 !important;
           padding: 8px 16px !important;
           border-radius: 20px !important;
           font-size: 12px !important;
           font-weight: 700 !important;
           cursor: pointer;
-          box-shadow: 4px 4px 8px rgba(0,0,0,0.2), -4px -4px 8px rgba(255,255,255,0.05) !important;
+          box-shadow: 0 2px 6px rgba(93,162,213,0.1) !important;
           transition: all 0.2s ease;
         }
         .desk-cat-btn:hover {
-          color: #ffffff !important;
-          background: rgba(255, 255, 255, 0.1) !important;
+          color: #fff !important;
+          background: #90CCF4 !important;
+          border-color: #90CCF4 !important;
         }
         .desk-cat-btn.active {
-          background: #99CED3 !important; /* Palette Pastel Cyan */
-          color: #1a3038 !important;
-          box-shadow: inset 2px 2px 5px rgba(0,0,0,0.35), inset -2px -2px 5px rgba(255,255,255,0.15) !important;
+          background: #F3D250 !important;
+          color: #2c3e50 !important;
+          border-color: #F3D250 !important;
+          box-shadow: 0 3px 10px rgba(243,210,80,0.35) !important;
         }
 
-        /* Neumorphic Metallic Card */
+        /* Cards – Elespacio warm-sky gradient */
         .desk-module-card {
           position: relative;
-          background: linear-gradient(135deg, #3d587c, #2d425d) !important; /* Paul Smith Steel-Blue to Slate-Gray */
-          border: 1px solid rgba(255, 255, 255, 0.1) !important;
-          border-radius: 30px !important;
+          background: linear-gradient(135deg, #5DA2D5, #90CCF4) !important;
+          border: none !important;
+          border-radius: 22px !important;
           padding: 24px !important;
           cursor: pointer;
           text-align: left;
@@ -11058,42 +11064,36 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
           min-height: 154px;
           overflow: hidden;
           box-shadow:
-            6px 6px 16px rgba(0, 0, 0, 0.35),
-            -6px -6px 16px rgba(255, 255, 255, 0.06),
-            inset 2px 2px 4px rgba(255, 255, 255, 0.1),
-            inset -2px -2px 4px rgba(0, 0, 0, 0.3) !important;
+            0 6px 20px rgba(93,162,213,0.25),
+            inset 0 1px 0 rgba(255,255,255,0.35) !important;
         }
 
         .desk-module-card:hover {
-          transform: translateY(-4px) !important;
-          background: linear-gradient(135deg, #46658f, #334a69) !important;
+          transform: translateY(-5px) !important;
+          background: linear-gradient(135deg, #4A92C7, #7DBFE8) !important;
           box-shadow:
-            8px 8px 20px rgba(0, 0, 0, 0.45),
-            -8px -8px 20px rgba(255, 255, 255, 0.08),
-            inset 2px 2px 4px rgba(255, 255, 255, 0.15),
-            inset -2px -2px 4px rgba(0, 0, 0, 0.25) !important;
+            0 12px 32px rgba(93,162,213,0.35),
+            inset 0 1px 0 rgba(255,255,255,0.4) !important;
         }
 
-        /* Shine overlay effect */
+        /* Shine overlay */
         .desk-module-card::before {
           content: "";
           position: absolute;
-          top: 0;
-          left: 0;
-          width: 100%;
-          height: 100%;
+          top: 0; left: 0;
+          width: 100%; height: 100%;
           background: linear-gradient(
             120deg,
             transparent,
-            rgba(255, 255, 255, 0.02),
-            rgba(255, 255, 255, 0.06),
-            rgba(255, 255, 255, 0.02),
+            rgba(255,255,255,0.06),
+            rgba(255,255,255,0.18),
+            rgba(255,255,255,0.06),
             transparent
           );
           background-size: 200% 100%;
           background-position: -200% 0;
           transition: all 0.5s ease;
-          border-radius: 30px;
+          border-radius: 22px;
           pointer-events: none;
         }
 
@@ -11102,31 +11102,27 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
         }
 
         @keyframes desk-shine {
-          0% {
-            background-position: -200% 0;
-          }
-          100% {
-            background-position: 200% 0;
-          }
+          0%   { background-position: -200% 0; }
+          100% { background-position:  200% 0; }
         }
 
-        /* Icon Container */
+        /* Icon wrap – white frosted pill */
         .desk-module-icon-wrap {
           width: 44px;
           height: 44px;
           border-radius: 12px;
           display: grid;
           place-items: center;
-          background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          color: #86B3D1; /* Image 2 Light Periwinkle */
+          background: rgba(255,255,255,0.25);
+          border: 1px solid rgba(255,255,255,0.35);
+          color: #fff;
           transition: all 0.3s ease;
         }
 
         .desk-module-card:hover .desk-module-icon-wrap {
-          background: rgba(153, 206, 211, 0.15);
-          border-color: rgba(153, 206, 211, 0.3);
-          color: #99CED3; /* Image 2 Pastel Cyan */
+          background: rgba(255,255,255,0.35);
+          border-color: rgba(255,255,255,0.5);
+          color: #F3D250;
         }
       `}</style>
 
@@ -11134,13 +11130,13 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
       <header className="rise" style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
         <ProfileAvatar name={u.name} size={66} />
         <h1 style={{ margin: 0, fontFamily: '"Archivo Expanded", var(--font)', fontWeight: 800, whiteSpace: "nowrap",
-          fontSize: "clamp(30px,4vw,48px)", lineHeight: 1, letterSpacing: "-0.03em", color: "#ffffff" }}>{u.name}</h1>
+          fontSize: "clamp(30px,4vw,48px)", lineHeight: 1, letterSpacing: "-0.03em", color: "#2c3e50" }}>{u.name}</h1>
       </header>
 
       {isSuperAdmin ? (
         <div className="rise" style={{ display: "flex", flexDirection: "column", gap: 20, marginTop: 10 }}>
           {/* Section head & controls */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 20, flexWrap: "wrap", borderBottom: "1px solid rgba(255, 255, 255, 0.06)", paddingBottom: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 20, flexWrap: "wrap", borderBottom: "1px solid rgba(93,162,213,0.2)", paddingBottom: 16 }}>
             <div style={{ display: "flex", gap: 8 }}>
               <button 
                 onClick={() => setSelectedCat("all")}
@@ -11164,7 +11160,7 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
 
             {/* Search Input */}
             <div style={{ flex: 1, minWidth: 260, maxWidth: 400, position: "relative" }}>
-              <Icon name="search" size={16} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "rgba(255,255,255,0.3)" }} />
+              <Icon name="search" size={16} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#5DA2D5" }} />
               <input 
                 value={searchQuery} 
                 onChange={(e) => setSearchQuery(e.target.value)} 
@@ -11206,19 +11202,19 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
                         letterSpacing: "0.5px",
                         padding: "4px 10px", 
                         borderRadius: 999, 
-                        color: status.color, 
-                        background: status.isNative ? "rgba(153, 206, 211, 0.1)" : "rgba(237, 181, 191, 0.1)",
-                        border: status.isNative ? "1px solid rgba(153, 206, 211, 0.25)" : "1px solid rgba(237, 181, 191, 0.25)"
+                        color: "#fff", 
+                        background: status.isNative ? "rgba(93,162,213,0.45)" : "rgba(247,136,136,0.5)",
+                        border: "none"
                       }}>
                         {status.label}
                       </span>
                     </div>
 
                     <div style={{ marginTop: 20 }}>
-                      <h3 style={{ fontSize: 16, fontWeight: 800, color: "#ffffff", margin: 0, letterSpacing: "-0.01em" }}>
+                      <h3 style={{ fontSize: 16, fontWeight: 800, color: "#fff", margin: 0, letterSpacing: "-0.01em" }}>
                         {it.label}
                       </h3>
-                      <p style={{ fontSize: 12, color: "#86B3D1", marginTop: 6, lineHeight: 1.4, marginBlockEnd: 0 }}>
+                      <p style={{ fontSize: 12, color: "rgba(255,255,255,0.75)", marginTop: 6, lineHeight: 1.4, marginBlockEnd: 0 }}>
                         {it.sub}
                       </p>
                     </div>
@@ -11237,10 +11233,10 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
           justifyContent: "center",
           textAlign: "center",
           padding: "80px 40px",
-          background: "linear-gradient(135deg, #3d587c, #2d425d)",
-          border: "1px solid rgba(255, 255, 255, 0.1)",
+          background: "linear-gradient(135deg, #90CCF4, #5DA2D5)",
+          border: "none",
           borderRadius: 24,
-          boxShadow: "6px 6px 16px rgba(0,0,0,0.25), -6px -6px 16px rgba(255,255,255,0.06)",
+          boxShadow: "0 8px 30px rgba(93,162,213,0.25)",
           maxWidth: 600,
           margin: "40px auto 0",
         }}>
@@ -11248,13 +11244,13 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
             width: 80,
             height: 80,
             borderRadius: "50%",
-            background: "#99CED3",
+            background: "#F3D250",
             display: "grid",
             placeItems: "center",
             marginBottom: 24,
-            boxShadow: "0 10px 25px rgba(153, 206, 211, 0.3)",
+            boxShadow: "0 10px 25px rgba(243,210,80,0.35)",
           }}>
-            <Icon name="spark" size={36} style={{ color: "#1a3038" }} />
+            <Icon name="spark" size={36} style={{ color: "#2c3e50" }} />
           </div>
           <h2 style={{
             margin: "0 0 10px",
@@ -11270,7 +11266,7 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
             margin: 0,
             fontSize: 14,
             lineHeight: 1.5,
-            color: "#86B3D1",
+            color: "rgba(255,255,255,0.85)",
             maxWidth: 380,
           }}>
             We are upgrading your cockpit with powerful new productivity tools. Stay tuned!
@@ -13083,7 +13079,7 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
       <main className="scroll-soft main-scroll" style={{
         flex: 1,
         overflowY: "auto",
-        background: isDeskActive ? "linear-gradient(135deg, #4D6D9A 0%, #5F6366 100%)" : undefined,
+        background: isDeskActive ? "linear-gradient(160deg, #ECECEC 0%, #90CCF4 50%, #5DA2D5 100%)" : undefined,
         padding: (active === "calendar" || active === "roster" || active === "live" || active === "desk")
           ? "0" 
           : (active === "handover" ? "0 0 80px" : "clamp(22px,3.2vw,40px) clamp(14px,3vw,30px) 80px")

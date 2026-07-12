@@ -200,31 +200,50 @@ function AppContent() {
       if (activeTab === 'gbp') return <GBPDashboard />;
     }
 
-    const routeComponents: { [key: string]: { component: JSX.Element; name: string } } = {
-      'command-center': { component: <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isAdmin} onLogout={handleLogout} activeBranch={activeBranch} onBranchChange={setActiveBranch} profileBranch={profile?.branch_assigned} activeSubPage="live" />, name: 'FETS · LIVE' },
-      'command-center-classic': { component: <CommandCentre onNavigate={setActiveTab} onAiQuery={(q: string) => { setAiQuery(q); setActiveTab('fets-intelligence'); }} />, name: 'FETS POINT' },
-      'access-hub': { component: <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isAdmin} onLogout={handleLogout} activeBranch={activeBranch} onBranchChange={setActiveBranch} profileBranch={profile?.branch_assigned} activeSubPage="access-hub" />, name: 'F-Vault' },
-      'dashboard': { component: <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isAdmin} onLogout={handleLogout} activeBranch={activeBranch} onBranchChange={setActiveBranch} profileBranch={profile?.branch_assigned} activeSubPage="dashboard" />, name: 'Dashboard' },
-      'candidate-tracker': { component: <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isAdmin} onLogout={handleLogout} activeBranch={activeBranch} onBranchChange={setActiveBranch} profileBranch={profile?.branch_assigned} activeSubPage="candidate-tracker" />, name: 'Candidate Tracker' },
-      'fets-roster': { component: <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isAdmin} onLogout={handleLogout} activeBranch={activeBranch} onBranchChange={setActiveBranch} profileBranch={profile?.branch_assigned} activeSubPage="roster" />, name: 'FETS Roster' },
-      'fets-calendar': { component: <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isAdmin} onLogout={handleLogout} activeBranch={activeBranch} onBranchChange={setActiveBranch} profileBranch={profile?.branch_assigned} activeSubPage="calendar" />, name: 'FETS Calendar' },
-      'fets-calendar-demo': { component: isMithun ? <FetsCalendar /> : <CommandCentre onNavigate={setActiveTab} onAiQuery={(q: string) => { setAiQuery(q); setActiveTab('fets-intelligence'); }} />, name: 'CELPIP Calendar' },
-      'client-portal': { component: isMithun ? <ClientPortal /> : <CommandCentre onNavigate={setActiveTab} onAiQuery={(q: string) => { setAiQuery(q); setActiveTab('fets-intelligence'); }} />, name: 'Client Portal' },
-      'my-desk': { component: <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isAdmin} onLogout={handleLogout} activeBranch={activeBranch} onBranchChange={setActiveBranch} profileBranch={profile?.branch_assigned} activeSubPage="desk" />, name: 'My Desk' },
-      'staff-management': { component: <StaffManagement />, name: 'Staff Management' },
-      'fets-intelligence': { component: <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isAdmin} onLogout={handleLogout} activeBranch={activeBranch} onBranchChange={setActiveBranch} profileBranch={profile?.branch_assigned} activeSubPage="fets-intelligence" />, name: 'FETS Intelligence' },
-      'incident-log': { component: <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isAdmin} onLogout={handleLogout} activeBranch={activeBranch} onBranchChange={setActiveBranch} profileBranch={profile?.branch_assigned} activeSubPage="incident-log" />, name: 'Raise A Case' },
-      'system-manager': { component: <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isAdmin} onLogout={handleLogout} activeBranch={activeBranch} onBranchChange={setActiveBranch} profileBranch={profile?.branch_assigned} activeSubPage="system-manager" />, name: 'System Manager' },
-      'news-manager': { component: <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isAdmin} onLogout={handleLogout} activeBranch={activeBranch} onBranchChange={setActiveBranch} profileBranch={profile?.branch_assigned} activeSubPage="news-manager" />, name: 'News Manager' },
-      'lost-and-found': { component: <LostAndFound />, name: 'Lost & Found' },
-      'user-management': { component: <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isAdmin} onLogout={handleLogout} activeBranch={activeBranch} onBranchChange={setActiveBranch} profileBranch={profile?.branch_assigned} activeSubPage="user-management" />, name: 'User Management' },
-      'profile': { component: <FetsProfilePage />, name: 'Profile' },
-      'fets-omni-ai': { component: <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isAdmin} onLogout={handleLogout} activeBranch={activeBranch} onBranchChange={setActiveBranch} profileBranch={profile?.branch_assigned} activeSubPage="fets-intelligence" />, name: 'FETS AI' },
-      'branch-delegation': { component: <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isAdmin} onLogout={handleLogout} activeBranch={activeBranch} onBranchChange={setActiveBranch} profileBranch={profile?.branch_assigned} activeSubPage="branch-delegation" />, name: 'Branch Access Delegation' },
-      'gbp': { component: <RedesignShell bridge={setActiveTab} userName={userName} userEmail={userEmail} isAdmin={isAdmin} onLogout={handleLogout} activeBranch={activeBranch} onBranchChange={setActiveBranch} profileBranch={profile?.branch_assigned} activeSubPage="gbp" />, name: 'Google Business' }
+    const isRedesignPage = [
+      'command-center', 'fets-calendar', 'fets-roster', 'my-desk',
+      'access-hub', 'dashboard', 'candidate-tracker', 'fets-intelligence',
+      'incident-log', 'system-manager', 'news-manager', 'user-management',
+      'branch-delegation', 'gbp', 'attn-admin', 'business', 'staff-requests', 'staff-ot'
+    ].includes(activeTab);
+
+    if (isRedesignPage) {
+      let subPage = "live";
+      if (activeTab === 'fets-calendar') subPage = 'calendar';
+      else if (activeTab === 'fets-roster') subPage = 'roster';
+      else if (activeTab === 'my-desk') subPage = 'desk';
+      else if (activeTab === 'command-center') subPage = 'live';
+      else subPage = activeTab;
+
+      return (
+        <LazyErrorBoundary routeName="FETS · LIVE" onGoBack={() => setActiveTab('command-center')}>
+          <Suspense fallback={<PageLoadingFallback pageName="FETS · LIVE" />}>
+            <RedesignShell 
+              bridge={setActiveTab} 
+              userName={userName} 
+              userEmail={userEmail} 
+              isAdmin={isAdmin} 
+              onLogout={handleLogout} 
+              activeBranch={activeBranch} 
+              onBranchChange={setActiveBranch} 
+              profileBranch={profile?.branch_assigned}
+              activeSubPage={subPage}
+            />
+          </Suspense>
+        </LazyErrorBoundary>
+      );
     }
 
-    const currentRoute = routeComponents[activeTab] || routeComponents['command-center'];
+    const routeComponents: { [key: string]: { component: JSX.Element; name: string } } = {
+      'command-center-classic': { component: <CommandCentre onNavigate={setActiveTab} onAiQuery={(q: string) => { setAiQuery(q); setActiveTab('fets-intelligence'); }} />, name: 'FETS POINT' },
+      'fets-calendar-demo': { component: isMithun ? <FetsCalendar /> : <CommandCentre onNavigate={setActiveTab} onAiQuery={(q: string) => { setAiQuery(q); setActiveTab('fets-intelligence'); }} />, name: 'CELPIP Calendar' },
+      'client-portal': { component: isMithun ? <ClientPortal /> : <CommandCentre onNavigate={setActiveTab} onAiQuery={(q: string) => { setAiQuery(q); setActiveTab('fets-intelligence'); }} />, name: 'Client Portal' },
+      'staff-management': { component: <StaffManagement />, name: 'Staff Management' },
+      'lost-and-found': { component: <LostAndFound />, name: 'Lost & Found' },
+      'profile': { component: <FetsProfilePage />, name: 'Profile' },
+    };
+
+    const currentRoute = routeComponents[activeTab] || routeComponents['command-center-classic'];
     return (
       <LazyErrorBoundary routeName={currentRoute.name} onGoBack={() => setActiveTab('command-center')}>
         <Suspense fallback={<PageLoadingFallback pageName={currentRoute.name} />}>
@@ -234,7 +253,7 @@ function AppContent() {
     );
   }
 
-  const isFullscreenPage = activeTab === 'my-desk' || activeTab === 'fets-intelligence' || activeTab === 'command-center' || activeTab === 'fets-roster' || activeTab === 'fets-calendar' || activeTab === 'access-hub' || activeTab === 'dashboard' || activeTab === 'candidate-tracker' || activeTab === 'incident-log' || activeTab === 'system-manager' || activeTab === 'news-manager' || activeTab === 'user-management' || activeTab === 'branch-delegation' || activeTab === 'gbp';
+  const isFullscreenPage = activeTab === 'my-desk' || activeTab === 'fets-intelligence' || activeTab === 'command-center' || activeTab === 'fets-roster' || activeTab === 'fets-calendar' || activeTab === 'access-hub' || activeTab === 'dashboard' || activeTab === 'candidate-tracker' || activeTab === 'incident-log' || activeTab === 'system-manager' || activeTab === 'news-manager' || activeTab === 'user-management' || activeTab === 'branch-delegation' || activeTab === 'gbp' || activeTab === 'attn-admin' || activeTab === 'business' || activeTab === 'staff-requests' || activeTab === 'staff-ot';
 
   return (
     <div className={`golden-theme min-h-screen h-screen flex flex-col overflow-hidden relative ${getBranchTheme(activeBranch)} ${(activeTab === 'fets-calendar' || activeTab === 'fets-calendar-demo') ? 'fets-calendar-active-page' : ''}`}>
