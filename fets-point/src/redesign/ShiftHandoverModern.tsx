@@ -849,8 +849,7 @@ function ScheduleNotes({ branch }: any) {
         {/* Mithun Column */}
         <section className="sh-card" style={{ display: "flex", flexDirection: "column" }}>
           <div className="sh-section-head" style={{ marginBottom: 15, paddingBottom: 15 }}>
-            <h2>Mithun's Column</h2>
-            <p>Direct updates and notes from Mithun.</p>
+            <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "var(--sh-muted)" }}>Direct updates and notes from Mithun.</p>
           </div>
 
           {isMithun && (
@@ -929,8 +928,7 @@ function ScheduleNotes({ branch }: any) {
         {/* Niyas Column */}
         <section className="sh-card" style={{ display: "flex", flexDirection: "column" }}>
           <div className="sh-section-head" style={{ marginBottom: 15, paddingBottom: 15 }}>
-            <h2>Niyas's Column</h2>
-            <p>Direct updates and notes from Niyas.</p>
+            <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "var(--sh-muted)" }}>Direct updates and notes from Niyas.</p>
           </div>
 
           {isNiyas && (
@@ -1157,17 +1155,19 @@ export default function ShiftHandoverModern({ branch, setActive }: any) {
   return (
     <div className="sh-modern-root">
       <header className="sh-modern-header">
-        <button type="button" className="sh-back" onClick={() => setActive("live")}><ArrowLeft size={17} /> Back to Live</button>
-        <div className="sh-title"><span><ClipboardCheck size={18} /></span><div><strong>Shift Handover</strong><small>{titleBranch(branch)} centre</small></div></div>
+        <div className="sh-title" style={{ cursor: "pointer" }} onClick={() => setActive("live")} title="Back to Live Page">
+          <span style={{ background: "var(--sh-yellow)", color: "var(--sh-ink)" }}><ArrowLeft size={18} /></span>
+          <div><strong>Shift Handover</strong><small>{titleBranch(branch)} centre</small></div>
+        </div>
         <nav aria-label="Handover pages">
-          <button className={view === "end" ? "active" : ""} onClick={() => setView("end")}><Clock3 size={14} /> Shift End</button>
-          <button className={view === "begin" ? "active" : ""} onClick={() => setView("begin")}><UserCheck size={14} /> Shift Beginning</button>
+          <button className={view === "end" ? "active" : ""} onClick={() => setView("end")}>Closing</button>
+          <button className={view === "begin" ? "active" : ""} onClick={() => setView("begin")}>Opening</button>
           {isAdmin && (
-            <button className={view === "assignments" ? "active" : ""} onClick={() => setView("assignments")}><Users size={14} /> Assignments</button>
+            <button className={view === "assignments" ? "active" : ""} onClick={() => setView("assignments")}>Assignments</button>
           )}
-          <button className={view === "schedule_notes" ? "active" : ""} onClick={() => setView("schedule_notes")}><History size={14} /> Schedule & Notes</button>
-          <button className={view === "history" ? "active" : ""} onClick={() => setView("history")}><History size={14} /> History</button>
-          <button className={view === "analysis" ? "active" : ""} onClick={() => setView("analysis")}><BarChart3 size={14} /> Analysis</button>
+          <button className={view === "schedule_notes" ? "active" : ""} onClick={() => setView("schedule_notes")}>Notes</button>
+          <button className={view === "analysis" ? "active" : ""} onClick={() => setView("analysis")}>Analysis</button>
+          <button className={view === "history" ? "active" : ""} onClick={() => setView("history")}>History</button>
         </nav>
         <button type="button" className="sh-refresh" onClick={() => { setRefreshKey((x) => x + 1); setRefreshQTrigger((x) => x + 1); }} title="Refresh"><RefreshCcw size={16} /></button>
       </header>
