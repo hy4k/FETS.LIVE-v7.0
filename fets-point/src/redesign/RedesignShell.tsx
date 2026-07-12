@@ -8306,6 +8306,12 @@ function ShiftHandoverPage({ branch, setActive }) {
     updateDraft({ checklist: next });
   };
 
+  const handleMarkAllOk = () => {
+    const next = checklist.map(i => ({ ...i, status: "ok" }));
+    setChecklist(next);
+    updateDraft({ checklist: next });
+  };
+
   // Dynamic Questions Drawer Actions
   const handleMutateQuestion = async (action, label, id) => {
     const res = await DB.dbMutateHandoverQuestion(action, label, id);
