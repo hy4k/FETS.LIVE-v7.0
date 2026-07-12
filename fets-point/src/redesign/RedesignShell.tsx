@@ -10945,24 +10945,56 @@ function DeskMenu({ tab, setTab, pendingHandovers }) {
   );
 }
 
-function MyDeskPage({ branch, setActive, setDrawer }) {
+function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
   const u = window.FETS.user;
   const gap = "calc(24px * var(--density))";
-  const [pendingCount, setPendingCount] = React.useState(0);
-  const [tab, setTab] = React.useState("tasks");
 
-  // Fetch pending handover count + auto-select tab
-  React.useEffect(() => {
-    const refresh = async () => {
-      const n = await DB.dbCountPendingHandovers(u.name);
-      setPendingCount(n);
-      if (n > 0) setTab("handovers");
-    };
-    refresh();
-    const handler = () => refresh();
-    window.addEventListener("fets-handover-pending", handler);
-    return () => window.removeEventListener("fets-handover-pending", handler);
-  }, []);
+  // Determine if the user is a super admin (Mithun or Niyas)
+  const isSuperAdmin = ["mithun", "niyas"].includes((u.name || "").toLowerCase()) ||
+                       ["mithun@fets.in", "mithun@fets.live", "niyas@fets.in", "niyas@fets.live"].includes((u.email || "").toLowerCase());
+
+  // Only Super Admins see the modules
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const [selectedCat, setSelectedCat] = React.useState("all");
+
+  const nativeIds = ["live", "calendar", "roster", "desk", "attn-admin", "business", "staff-requests", "staff-ot"];
+
+  const getModuleStatus = (it) => {
+    if (nativeIds.includes(it.id)) {
+      return { label: "Native React", color: "var(--sh-green)", isNative: true };
+    } else {
+      return { label: "Legacy Bridged", color: "#7b6500", isNative: false };
+    }
+  };
+
+  const handlePick = (it) => {
+    if (it.nav) { setActive(it.id); return; }
+    if (["business", "attn-admin", "staff-requests", "staff-ot"].includes(it.id)) { setActive(it.id); return; }
+    if (it.id === "vault") { setDrawer("vault"); return; }
+    if (it.legacy && bridge) { bridge(it.id); return; }
+    toast(it.label, "arrowR");
+  };
+
+  // Filter NAV items and TOOLS
+  const allModules = isSuperAdmin ? [
+    ...NAV.map((n) => ({ 
+      ...n, 
+      icon: n.id === "live" ? "globe" : n.id === "calendar" ? "calendar" : n.id === "roster" ? "layers" : "briefcase", 
+      nav: true,
+      sub: n.id === "live" ? "Operations monitor & live queue" : n.id === "calendar" ? "Centre booking calendar & sessions" : n.id === "roster" ? "Shift schedules, time desk & metrics" : "Personal tasks, checklists & leave"
+    })).filter(n => n.id !== "calendar" && n.id !== "roster" && n.id !== "desk"),
+    ...TOOLS
+  ] : [];
+
+  const filtered = allModules.filter(it => {
+    const matchesSearch = it.label.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          (it.sub && it.sub.toLowerCase().includes(searchQuery.toLowerCase()));
+    const status = getModuleStatus(it);
+    const matchesCategory = selectedCat === "all" || 
+                            (selectedCat === "native" && status.isNative) ||
+                            (selectedCat === "legacy" && !status.isNative);
+    return matchesSearch && matchesCategory;
+  });
 
   return (
     <div style={{ maxWidth: 1600, margin: "0 auto", padding: "clamp(22px,3.2vw,40px) clamp(14px,3vw,30px) 80px", display: "flex", flexDirection: "column", gap }}>
@@ -10973,23 +11005,216 @@ function MyDeskPage({ branch, setActive, setDrawer }) {
           fontSize: "clamp(30px,4vw,48px)", lineHeight: 1, letterSpacing: "-0.03em", color: "var(--ink)" }}>{u.name}</h1>
       </header>
 
-      {/* attendance console removed as requested */}
+      {isSuperAdmin ? (
+        <div className="rise" style={{ display: "flex", flexDirection: "column", gap: 20, marginTop: 10 }}>
+          {/* Section head & controls */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 20, flexWrap: "wrap", borderBottom: "1px solid var(--sh-line)", paddingBottom: 16 }}>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button 
+                onClick={() => setSelectedCat("all")}
+                className={`sh-status-choice-btn ${selectedCat === "all" ? "active" : ""}`}
+                style={{
+                  border: "1px solid var(--sh-line)",
+                  background: selectedCat === "all" ? "var(--sh-yellow)" : "#fff",
+                  color: "var(--sh-ink)",
+                  padding: "6px 12px",
+                  borderRadius: 20,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: "pointer"
+                }}
+              >
+                All Modules
+              </button>
+              <button 
+                onClick={() => setSelectedCat("native")}
+                className={`sh-status-choice-btn ${selectedCat === "native" ? "active" : ""}`}
+                style={{
+                  border: "1px solid var(--sh-line)",
+                  background: selectedCat === "native" ? "var(--sh-yellow)" : "#fff",
+                  color: "var(--sh-ink)",
+                  padding: "6px 12px",
+                  borderRadius: 20,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: "pointer"
+                }}
+              >
+                Native React
+              </button>
+              <button 
+                onClick={() => setSelectedCat("legacy")}
+                className={`sh-status-choice-btn ${selectedCat === "legacy" ? "active" : ""}`}
+                style={{
+                  border: "1px solid var(--sh-line)",
+                  background: selectedCat === "legacy" ? "var(--sh-yellow)" : "#fff",
+                  color: "var(--sh-ink)",
+                  padding: "6px 12px",
+                  borderRadius: 20,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: "pointer"
+                }}
+              >
+                Legacy Bridged
+              </button>
+            </div>
 
-      {/* workspace presets */}
-      <section style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>{DESK_TABS.length} modules</span>}>Your workspace</SectionLabel>
-        <DeskMenu tab={tab} setTab={setTab} pendingHandovers={pendingCount} />
-      </section>
+            {/* Search Input */}
+            <div style={{ flex: 1, minWidth: 260, maxWidth: 400, position: "relative" }}>
+              <Icon name="search" size={16} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "var(--sh-muted)" }} />
+              <input 
+                value={searchQuery} 
+                onChange={(e) => setSearchQuery(e.target.value)} 
+                placeholder="Search modules..." 
+                style={{ 
+                  background: "#fff",
+                  border: "1px solid var(--sh-line)",
+                  borderRadius: 99,
+                  color: "var(--sh-ink)",
+                  fontFamily: "var(--font)",
+                  fontSize: 13,
+                  padding: "8px 14px 8px 42px",
+                  width: "100%",
+                  outline: "none"
+                }} 
+              />
+            </div>
+          </div>
 
-      {/* active feature — full width */}
-      <div style={{ minHeight: 300 }}>
-        {tab === "handovers" && <HandoverInbox />}
-        {tab === "tasks" && <TasksModule />}
-        {tab === "checklist" && <ChecklistModule />}
-        {tab === "certs" && <CertsModule />}
-        {tab === "leave" && <LeaveModule />}
-        {tab === "readiness" && <PerformanceSnapshot />}
-      </div>
+          {/* Grid of Modules - light theme style */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
+            {filtered.length === 0 ? (
+              <div style={{ gridColumn: "1 / -1", padding: 60, textAlign: "center", color: "var(--sh-muted)", fontSize: 14 }}>
+                No modules match your query. Try searching for something else.
+              </div>
+            ) : (
+              filtered.map((it) => {
+                const status = getModuleStatus(it);
+                return (
+                  <button 
+                    key={it.id} 
+                    onClick={() => handlePick(it)} 
+                    style={{
+                      position: "relative",
+                      background: "#fff",
+                      border: "1px solid var(--sh-line)",
+                      borderRadius: 18,
+                      padding: 20,
+                      cursor: "pointer",
+                      textAlign: "left",
+                      fontFamily: "var(--font)",
+                      transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "space-between",
+                      minHeight: 140,
+                      boxShadow: "0 2px 5px rgba(29, 33, 23, 0.03)",
+                      outline: "none"
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = "translateY(-4px)";
+                      e.currentTarget.style.borderColor = "var(--sh-yellow)";
+                      e.currentTarget.style.boxShadow = "0 8px 20px rgba(0,0,0,0.06), 0 0 1px 1px var(--sh-yellow)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = "translateY(0)";
+                      e.currentTarget.style.borderColor = "var(--sh-line)";
+                      e.currentTarget.style.boxShadow = "0 2px 5px rgba(29, 33, 23, 0.03)";
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", width: "100%" }}>
+                      <div style={{
+                        width: 38,
+                        height: 38,
+                        borderRadius: 10,
+                        display: "grid",
+                        placeItems: "center",
+                        background: "var(--sh-canvas)",
+                        border: "1px solid var(--sh-line)",
+                        color: "var(--sh-muted)"
+                      }}>
+                        <Icon name={it.icon} size={18} />
+                      </div>
+                      {/* Status badge */}
+                      <span style={{ 
+                        fontSize: 9, 
+                        fontWeight: 800, 
+                        textTransform: "uppercase", 
+                        letterSpacing: "0.5px",
+                        padding: "3px 8px", 
+                        borderRadius: 999, 
+                        color: status.color, 
+                        background: status.isNative ? "#eaf8f0" : "#fff5bd",
+                        border: status.isNative ? "1px solid #bce5cc" : "1px solid #e8dda9"
+                      }}>
+                        {status.label}
+                      </span>
+                    </div>
+
+                    <div style={{ marginTop: 16 }}>
+                      <h3 style={{ fontSize: 15, fontWeight: 800, color: "var(--sh-ink)", margin: 0 }}>
+                        {it.label}
+                      </h3>
+                      <p style={{ fontSize: 11.5, color: "var(--sh-muted)", marginTop: 4, lineHeight: 1.4, marginBlockEnd: 0 }}>
+                        {it.sub}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      ) : (
+        /* Nice premium watch this space banner for non-superadmin staff */
+        <div className="rise" style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          textAlign: "center",
+          padding: "80px 40px",
+          background: "#fff",
+          border: "1px solid var(--sh-line)",
+          borderRadius: 24,
+          boxShadow: "0 8px 32px rgba(0, 0, 0, 0.02)",
+          maxWidth: 600,
+          margin: "40px auto 0",
+        }}>
+          <div style={{
+            width: 80,
+            height: 80,
+            borderRadius: "50%",
+            background: "var(--sh-yellow)",
+            display: "grid",
+            placeItems: "center",
+            marginBottom: 24,
+            boxShadow: "0 10px 25px rgba(244, 201, 0, 0.3)",
+          }}>
+            <Icon name="spark" size={36} style={{ color: "var(--sh-ink)" }} />
+          </div>
+          <h2 style={{
+            margin: "0 0 10px",
+            fontFamily: '"Archivo Expanded", var(--font)',
+            fontWeight: 800,
+            fontSize: 24,
+            letterSpacing: "-0.02em",
+            color: "var(--sh-ink)",
+          }}>
+            Watch This Space
+          </h2>
+          <p style={{
+            margin: 0,
+            fontSize: 14,
+            lineHeight: 1.5,
+            color: "var(--sh-muted)",
+            maxWidth: 380,
+          }}>
+            We are upgrading your cockpit with powerful new productivity tools. Stay tuned!
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -11117,13 +11342,7 @@ function TopNav({ active, onNavigate, branch, setBranch, t, setTweak, onTools, o
             ]} />
         </div>
       )}
-      {window.FETS.isAdmin && (
-        <button onClick={onTools} title="All modules" className="tap glass-2" style={{
-          display: "inline-flex", alignItems: "center", gap: 8, height: 42, padding: "0 18px", borderRadius: 12,
-          cursor: "pointer", color: "var(--ink-2)", fontFamily: "var(--font)", fontSize: 13.5, fontWeight: 650 }}>
-          <Icon name="grid" size={16} /> <span className="topnav-branch">Modules</span>
-        </button>
-      )}
+
       <button onClick={onLogout} title="Log out" className="tap glass-2" style={{
         display: "inline-flex", alignItems: "center", gap: 8, height: 42, padding: "0 16px", borderRadius: 12,
         cursor: "pointer", color: "var(--ink-2)", fontFamily: "var(--font)", fontSize: 13.5, fontWeight: 650, flexShrink: 0 }}>
@@ -12861,7 +13080,7 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
         {active === "roster" && <RosterPage branch={branch} />}
         {active === "case" && <RaiseCasePage branch={branch} setActive={setActive} />}
         {active === "handover" && <ShiftHandoverModern branch={branch} setActive={setActive} />}
-        {active === "desk" && <MyDeskPage branch={branch} setActive={setActive} setDrawer={setDrawer} />}
+        {active === "desk" && <MyDeskPage branch={branch} setActive={setActive} setDrawer={setDrawer} bridge={bridge} />}
         {active === "business" && <BusinessPage branch={branch} />}
         {active === "news" && <TheLabPage branch={branch} />}
         {active === "attn-admin" && <AttendanceAdminPage branch={branch} />}
