@@ -8033,29 +8033,35 @@ const ChipRow = ({ options, value, onChange, multi, format }) => null;
 /* =====================================================================
    SHIFT HANDOVER PAGE — End of Shift Checklist, Headcount & Sign-off
    ===================================================================== */
-const DEFAULT_CHECKLIST = [
-  { label: "Workstations & servers" },
-  { label: "Internet & network" },
-  { label: "CCTV & recording" },
-  { label: "Power & AC" },
-  { label: "All candidates exited" },
-  { label: "Secure materials locked" },
-  { label: "Dashboards logged out" }
+const CORE_QUESTIONS = [
+  { id: "core_exam_status", label: "Exam sessions and candidate status", desc: "Session progress, no-shows and special arrangements reviewed" },
+  { id: "core_incidents", label: "Incidents and pending follow-ups", desc: "Open incidents explained with ownership and next action" },
+  { id: "core_security", label: "Security controls and access items", desc: "Keys, lockers, restricted access and DVR status verified" },
+  { id: "core_workstations", label: "Workstations and equipment", desc: "Faults, replacements and reserved systems communicated" },
+  { id: "core_documents", label: "Client documents and submissions", desc: "Roster, CPR, reports and required uploads accounted for" },
+  { id: "core_power_facility", label: "Power, network and facility status", desc: "UPS, DG, internet, cooling and housekeeping checked" }
 ];
+
+function getTomorrowStr(baseDateStr) {
+  if (!baseDateStr) return "";
+  const parts = baseDateStr.split("-").map(Number);
+  const d = new Date(parts[0], parts[1] - 1, parts[2]);
+  d.setDate(d.getDate() + 1);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const date = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${date}`;
+}
 
 function ShiftHandoverPage({ branch, setActive }) {
   const [subView, setSubView] = React.useState("new"); // "new" | "pending" | "history"
   const [date, setDate] = React.useState(() => new Date().toISOString().split("T")[0]);
-  const [handoverTime, setHandoverTime] = React.useState(() => {
-    const now = new Date();
-    return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-  });
+  const [handoverTime, setHandoverTime] = React.useState("17:00");
+  const [currentShift, setCurrentShift] = React.useState("General - 09:00-17:30");
   
   // Multiple proctors tag arrays
   const [outgoing, setOutgoing] = React.useState(() => [window.FETS?.user?.name || "Staff"]);
   const [incoming, setIncoming] = React.useState([]);
-  const [outgoingInput, setOutgoingInput] = React.useState("");
-  const [incomingInput, setIncomingInput] = React.useState("");
 
   // Only currently testing and no-shows needed
   const [testing, setTesting] = React.useState(0);
@@ -8071,6 +8077,10 @@ function ShiftHandoverPage({ branch, setActive }) {
   const [sigOut, setSigOut] = React.useState(null);
   const [sigIn, setSigIn] = React.useState(null);
   const [submitted, setSubmitted] = React.useState(false);
+
+  // Confirmations
+  const [outgoingConfirmed, setOutgoingConfirmed] = React.useState(false);
+  const [incomingConfirmed, setIncomingConfirmed] = React.useState(false);
 
   // Question Management Drawer
   const [isManagingQuestions, setIsManagingQuestions] = React.useState(false);
@@ -8098,11 +8108,9 @@ function ShiftHandoverPage({ branch, setActive }) {
   React.useEffect(() => {
     let active = true;
     async function loadQuestionsAndDraft() {
-      // 1. Fetch latest checklist questions from Supabase
       const qList = await DB.dbFetchHandoverQuestions();
       if (!active) return;
 
-      // 2. Read draft if available
       let draftChecklist = null;
       try {
         const stored = localStorage.getItem(`fets_handover_draft_${branch}`);
@@ -8125,15 +8133,29 @@ function ShiftHandoverPage({ branch, setActive }) {
         console.error("Error restoring draft:", e);
       }
 
-      // 3. Merge DB questions with draft statuses
-      const merged = qList.map(q => {
+      const merged = CORE_QUESTIONS.map(q => {
         const match = draftChecklist?.find(d => d.id === q.id || d.label === q.label);
         return {
           id: q.id,
           label: q.label,
+          desc: q.desc,
           status: match ? match.status : null,
           note: match ? (match.note || "") : ""
         };
+      });
+
+      qList.forEach(dbQ => {
+        const isCore = CORE_QUESTIONS.some(cq => cq.label.toLowerCase() === dbQ.label.toLowerCase());
+        if (!isCore) {
+          const match = draftChecklist?.find(d => d.id === dbQ.id || d.label === dbQ.label);
+          merged.push({
+            id: dbQ.id,
+            label: dbQ.label,
+            desc: "System check",
+            status: match ? match.status : null,
+            note: match ? (match.note || "") : ""
+          });
+        }
       });
       setChecklist(merged);
     }
@@ -8141,6 +8163,65 @@ function ShiftHandoverPage({ branch, setActive }) {
     loadQuestionsAndDraft();
     return () => { active = false; };
   }, [branch]);
+
+  // Synchronize outgoing and incoming proctors from database Roster schedules
+  React.useEffect(() => {
+    let active = true;
+    async function syncRosterStaff() {
+      if (!date) return;
+      const br = branch === "global" ? "all" : branch;
+      const tomorrow = getTomorrowStr(date);
+      
+      try {
+        const [sessRes, rosterRes] = await Promise.all([
+          supabase.from("roster_schedules").select("*, staff_profiles(full_name, role, branch_assigned)").eq("date", date),
+          supabase.from("roster_schedules").select("*, staff_profiles(full_name, role, branch_assigned)").eq("date", tomorrow)
+        ]);
+        if (!active) return;
+
+        const REST_CODES = new Set(["rd", "off", "wo", "l", "leave", "lv", "h", "holiday", "to", "toil", "tr", "tp"]);
+
+        // Today's active rostered staff -> Outgoing
+        const todayActive = (sessRes.data || []).filter(r => {
+          const code = (r.shift_code || "").toLowerCase();
+          const matchesBranch = br === "all" || (r.branch_location || (r.staff_profiles && r.staff_profiles.branch_assigned) || "").toLowerCase().includes(br);
+          return code && !REST_CODES.has(code) && matchesBranch;
+        });
+        const outgoingNames = todayActive.map(r => r.staff_profiles?.full_name).filter(Boolean);
+        if (outgoingNames.length > 0) {
+          setOutgoing(outgoingNames);
+        } else {
+          setOutgoing([window.FETS?.user?.name || "Staff"]);
+        }
+
+        // Shift label mapping
+        let currentShiftLabel = "General - 09:00-17:30";
+        if (todayActive.length > 0) {
+          const firstCode = todayActive[0].shift_code;
+          if (firstCode === "M") currentShiftLabel = "Morning - 08:00-16:00";
+          else if (firstCode === "A") currentShiftLabel = "Afternoon - 12:00-20:00";
+          else if (firstCode === "E") currentShiftLabel = "Evening - 16:00-23:30";
+          else if (firstCode === "D") currentShiftLabel = "Day - 09:00-18:00";
+        }
+        setCurrentShift(currentShiftLabel);
+
+        // Tomorrow's active rostered staff -> Incoming
+        const tomorrowActive = (rosterRes.data || []).filter(r => {
+          const code = (r.shift_code || "").toLowerCase();
+          const matchesBranch = br === "all" || (r.branch_location || (r.staff_profiles && r.staff_profiles.branch_assigned) || "").toLowerCase().includes(br);
+          return code && !REST_CODES.has(code) && matchesBranch;
+        });
+        const incomingNames = tomorrowActive.map(r => r.staff_profiles?.full_name).filter(Boolean);
+        setIncoming(incomingNames);
+
+      } catch (e) {
+        console.error("Error synchronizing roster schedules:", e);
+      }
+    }
+
+    syncRosterStaff();
+    return () => { active = false; };
+  }, [date, branch]);
 
   // Load history logs from Supabase
   const loadHistoryLogs = async () => {
@@ -8193,39 +8274,6 @@ function ShiftHandoverPage({ branch, setActive }) {
     }
   };
 
-  // Multiple staff helpers
-  const addStaff = (type, name) => {
-    const val = name.trim();
-    if (!val) return;
-    if (type === "outgoing") {
-      if (!outgoing.includes(val)) {
-        const next = [...outgoing, val];
-        setOutgoing(next);
-        updateDraft({ outgoing: next });
-      }
-      setOutgoingInput("");
-    } else {
-      if (!incoming.includes(val)) {
-        const next = [...incoming, val];
-        setIncoming(next);
-        updateDraft({ incoming: next });
-      }
-      setIncomingInput("");
-    }
-  };
-
-  const removeStaff = (type, name) => {
-    if (type === "outgoing") {
-      const next = outgoing.filter(n => n !== name);
-      setOutgoing(next);
-      updateDraft({ outgoing: next });
-    } else {
-      const next = incoming.filter(n => n !== name);
-      setIncoming(next);
-      updateDraft({ incoming: next });
-    }
-  };
-
   // Candidate status headcount handlers
   const handleStep = (field, delta) => {
     if (field === "testing") {
@@ -8239,7 +8287,13 @@ function ShiftHandoverPage({ branch, setActive }) {
     }
   };
 
-  // Checklist handlers
+  // Checklist handlers (clicking card toggles between OK and null)
+  const handleToggleCard = (id) => {
+    const next = checklist.map(i => i.id === id ? { ...i, status: i.status === "ok" ? null : "ok" } : i);
+    setChecklist(next);
+    updateDraft({ checklist: next });
+  };
+
   const handleSeg = (id, status) => {
     const next = checklist.map(i => i.id === id ? { ...i, status: i.status === status ? null : status } : i);
     setChecklist(next);
@@ -8248,12 +8302,6 @@ function ShiftHandoverPage({ branch, setActive }) {
 
   const handleNote = (id, val) => {
     const next = checklist.map(i => i.id === id ? { ...i, note: val } : i);
-    setChecklist(next);
-    updateDraft({ checklist: next });
-  };
-
-  const handleMarkAllOk = () => {
-    const next = checklist.map(i => ({ ...i, status: "ok" }));
     setChecklist(next);
     updateDraft({ checklist: next });
   };
@@ -8276,31 +8324,6 @@ function ShiftHandoverPage({ branch, setActive }) {
     });
   };
 
-  // Pending Work helpers
-  const handleAddPending = () => {
-    const next = [...pending, { id: "p" + Date.now(), sev: "low", text: "" }];
-    setPending(next);
-    updateDraft({ pending: next });
-  };
-
-  const handlePendingSev = (id, sev) => {
-    const next = pending.map(p => p.id === id ? { ...p, sev } : p);
-    setPending(next);
-    updateDraft({ pending: next });
-  };
-
-  const handlePendingText = (id, text) => {
-    const next = pending.map(p => p.id === id ? { ...p, text } : p);
-    setPending(next);
-    updateDraft({ pending: next });
-  };
-
-  const handleRemovePending = (id) => {
-    const next = pending.filter(p => p.id !== id);
-    setPending(next);
-    updateDraft({ pending: next });
-  };
-
   // Sign-off handlers
   const handleSign = (which) => {
     const timeStr = new Date().toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).replace(",", "");
@@ -8309,12 +8332,14 @@ function ShiftHandoverPage({ branch, setActive }) {
       const stamp = { name: staffName, time: timeStr };
       setSigOut(stamp);
       updateDraft({ sigOut: stamp });
+      setOutgoingConfirmed(true);
       toast(`Outgoing signed by ${staffName}`, "check");
     } else {
       const staffName = incoming.length > 0 ? incoming.join(", ") : "Incoming Staff";
       const stamp = { name: staffName, time: timeStr };
       setSigIn(stamp);
       updateDraft({ sigIn: stamp });
+      setIncomingConfirmed(true);
       toast(`Incoming signed by ${staffName}`, "check");
     }
   };
@@ -8323,9 +8348,11 @@ function ShiftHandoverPage({ branch, setActive }) {
     if (which === "out") {
       setSigOut(null);
       updateDraft({ sigOut: null });
+      setOutgoingConfirmed(false);
     } else {
       setSigIn(null);
       updateDraft({ sigIn: null });
+      setIncomingConfirmed(false);
     }
   };
 
@@ -8338,6 +8365,8 @@ function ShiftHandoverPage({ branch, setActive }) {
     setNoShow(0);
     setCandidateNotes("");
     setInstructions("");
+    setOutgoingConfirmed(false);
+    setIncomingConfirmed(false);
     setOutgoing([window.FETS?.user?.name || "Staff"]);
     setIncoming([]);
     localStorage.removeItem(`fets_handover_draft_${branch}`);
@@ -8350,7 +8379,12 @@ function ShiftHandoverPage({ branch, setActive }) {
       return;
     }
 
-    // Insert into Supabase with pending status (no Lab post yet — that happens when incoming signs)
+    let finalSigOut = sigOut;
+    if (!finalSigOut) {
+      const timeStr = new Date().toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).replace(",", "");
+      finalSigOut = { name: outgoing.join(", "), time: timeStr };
+    }
+
     const dbRes = await DB.dbCreateHandover({
       branch: branch === "global" ? "all" : branch,
       date,
@@ -8363,13 +8397,13 @@ function ShiftHandoverPage({ branch, setActive }) {
       checklist,
       pending_items: pending,
       instructions,
-      sig_out: sigOut
+      sig_out: finalSigOut
     });
 
     if (dbRes) {
       setSubmitted(true);
       handleResetDraft();
-      toast(`Handover submitted — ${incoming.join(", ")} will be notified`, "check");
+      toast(`Shift handover successfully recorded!`, "check");
       window.dispatchEvent(new Event("fets-handover-pending"));
       window.dispatchEvent(new Event("fets-discussion-changed"));
     } else {
@@ -8378,21 +8412,23 @@ function ShiftHandoverPage({ branch, setActive }) {
   };
 
   // Progress calculations
-  const answered = checklist.filter((i) => i.status).length;
+  const answered = checklist.filter((i) => i.status === "ok" || i.status === "na" || i.status === "attention" || i.status === "critical").length;
   const total = checklist.length;
   const criticalCount = checklist.filter((i) => i.status === "critical").length;
   const attentionCount = checklist.filter((i) => i.status === "attention").length;
-  
-  const signedOut = !!sigOut;
-  const signedIn = !!sigIn;
 
-  // Progress: checklist items + outgoing signature only (incoming signs later on My Desk)
-  const totalReq = total + 1;
+  const signedOut = !!sigOut || outgoingConfirmed;
+
+  // Completeness progress
   const doneCount = answered + (signedOut ? 1 : 0);
+  const totalReq = total + 1;
   const percent = totalReq > 0 ? Math.round((doneCount / totalReq) * 100) : 100;
 
-  // Need checklist 100%, outgoing signed, incoming staff tagged (for notification)
-  const canSubmit = percent === 100 && outgoing.length > 0 && incoming.length > 0 && signedOut;
+  // Score health indicator
+  const score = Math.min(100, Math.round(75 + (answered / (total || 1)) * 25));
+
+  // Handover submission validation
+  const canSubmit = outgoing.length > 0 && incoming.length > 0 && outgoingConfirmed && incomingConfirmed;
 
   // Filtered logs for History Log
   const filteredLogs = React.useMemo(() => {
@@ -8472,7 +8508,7 @@ function ShiftHandoverPage({ branch, setActive }) {
       --ho-accent-glow: rgba(162, 155, 254, 0.25);
     }
 
-    .handover-page-wrapper {
+    .fets-handover-root {
       background: var(--ho-bg);
       color: var(--ho-text);
       min-height: 100vh;
@@ -8481,14 +8517,14 @@ function ShiftHandoverPage({ branch, setActive }) {
       transition: background 0.3s ease, color 0.3s ease;
       width: 100%;
     }
-    .handover-container {
+    .fets-handover-container {
       max-width: 1180px;
       margin: 0 auto;
       display: flex;
       flex-direction: column;
       gap: 22px;
     }
-    .handover-card {
+    .fets-handover-card {
       background: var(--ho-card-bg);
       border: none;
       border-radius: 20px;
@@ -8496,7 +8532,7 @@ function ShiftHandoverPage({ branch, setActive }) {
       box-shadow: 8px 8px 16px var(--ho-shadow-dark), -8px -8px 16px var(--ho-shadow-light);
       transition: background 0.3s ease, box-shadow 0.3s ease;
     }
-    .handover-label {
+    .fets-handover-label {
       display: block;
       font-family: 'JetBrains Mono', monospace;
       font-size: 10.5px;
@@ -8506,7 +8542,7 @@ function ShiftHandoverPage({ branch, setActive }) {
       color: var(--ho-text-muted);
       margin-bottom: 7px;
     }
-    .handover-input {
+    .fets-handover-input {
       width: 100%;
       padding: 12px 16px;
       border: none;
@@ -8520,15 +8556,15 @@ function ShiftHandoverPage({ branch, setActive }) {
       transition: all 0.2s ease;
       box-shadow: inset 3px 3px 6px var(--ho-shadow-dark), inset -3px -3px 6px var(--ho-shadow-light);
     }
-    .handover-input:focus {
+    .fets-handover-input:focus {
       box-shadow: inset 3px 3px 6px var(--ho-shadow-dark), inset -3px -3px 6px var(--ho-shadow-light), 0 0 0 3px var(--ho-accent-glow);
     }
-    .handover-btn-group {
+    .fets-handover-btn-group {
       display: flex;
       gap: 6px;
       flex-wrap: wrap;
     }
-    .handover-seg-btn {
+    .fets-handover-seg-btn {
       padding: 9px 14px;
       border-radius: 10px;
       font-size: 12.5px;
@@ -8544,33 +8580,33 @@ function ShiftHandoverPage({ branch, setActive }) {
       user-select: none;
       box-shadow: 3px 3px 6px var(--ho-shadow-dark), -3px -3px 6px var(--ho-shadow-light);
     }
-    .handover-seg-btn:hover {
+    .fets-handover-seg-btn:hover {
       box-shadow: 2px 2px 4px var(--ho-shadow-dark), -2px -2px 4px var(--ho-shadow-light);
     }
-    .handover-seg-btn:active {
+    .fets-handover-seg-btn:active {
       box-shadow: inset 2px 2px 4px var(--ho-shadow-dark), inset -2px -2px 4px var(--ho-shadow-light);
     }
-    .handover-seg-btn.active-ok {
+    .fets-handover-seg-btn.active-ok {
       background: #00B894;
       color: #fff;
       box-shadow: inset 2px 2px 4px rgba(0,0,0,.15), inset -2px -2px 4px rgba(255,255,255,.1);
     }
-    .handover-seg-btn.active-attention {
+    .fets-handover-seg-btn.active-attention {
       background: #FDCB6E;
       color: #2D3436;
       box-shadow: inset 2px 2px 4px rgba(0,0,0,.12), inset -2px -2px 4px rgba(255,255,255,.15);
     }
-    .handover-seg-btn.active-critical {
+    .fets-handover-seg-btn.active-critical {
       background: #FF7675;
       color: #fff;
       box-shadow: inset 2px 2px 4px rgba(0,0,0,.15), inset -2px -2px 4px rgba(255,255,255,.1);
     }
-    .handover-seg-btn.active-na {
+    .fets-handover-seg-btn.active-na {
       background: #B2BEC3;
       color: #2D3436;
       box-shadow: inset 2px 2px 4px rgba(0,0,0,.1), inset -2px -2px 4px rgba(255,255,255,.15);
     }
-    .checklist-row {
+    .fets-checklist-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -8583,28 +8619,28 @@ function ShiftHandoverPage({ branch, setActive }) {
       flex-wrap: wrap;
       box-shadow: 4px 4px 8px var(--ho-shadow-dark), -4px -4px 8px var(--ho-shadow-light);
     }
-    .checklist-row.attention {
+    .fets-checklist-row.attention {
       border-left: 3px solid #FDCB6E;
       background: var(--ho-card-bg);
     }
-    .checklist-row.critical {
+    .fets-checklist-row.critical {
       border-left: 3px solid #FF7675;
       background: var(--ho-card-bg);
     }
-    .signature-box {
+    .fets-signature-box {
       border: none;
       border-radius: 18px;
       padding: 22px;
       background: var(--ho-signature-box);
       box-shadow: 6px 6px 12px var(--ho-shadow-dark), -6px -6px 12px var(--ho-shadow-light);
     }
-    .signature-cursive {
+    .fets-signature-cursive {
       font-family: 'Caveat', cursive;
       font-size: 36px;
       color: var(--ho-accent);
       line-height: 1;
     }
-    .handover-back-btn {
+    .fets-handover-back-btn {
       width: 38px;
       height: 38px;
       border-radius: 12px;
@@ -8618,11 +8654,11 @@ function ShiftHandoverPage({ branch, setActive }) {
       transition: all 0.15s ease;
       box-shadow: 4px 4px 8px var(--ho-shadow-dark), -4px -4px 8px var(--ho-shadow-light);
     }
-    .handover-back-btn:hover {
+    .fets-handover-back-btn:hover {
       box-shadow: 2px 2px 4px var(--ho-shadow-dark), -2px -2px 4px var(--ho-shadow-light);
       transform: translateX(-2px);
     }
-    .counter-btn {
+    .fets-counter-btn {
       width: 40px;
       height: 40px;
       border-radius: 12px;
@@ -8639,14 +8675,14 @@ function ShiftHandoverPage({ branch, setActive }) {
       user-select: none;
       box-shadow: 4px 4px 8px var(--ho-shadow-dark), -4px -4px 8px var(--ho-shadow-light);
     }
-    .counter-btn:hover {
+    .fets-counter-btn:hover {
       box-shadow: 2px 2px 4px var(--ho-shadow-dark), -2px -2px 4px var(--ho-shadow-light);
     }
-    .counter-btn:active {
+    .fets-counter-btn:active {
       box-shadow: inset 2px 2px 4px var(--ho-shadow-dark), inset -2px -2px 4px var(--ho-shadow-light);
       transform: scale(0.97);
     }
-    .handover-grid-2 {
+    .fets-handover-grid-2 {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
       gap: 16px;
@@ -8656,14 +8692,14 @@ function ShiftHandoverPage({ branch, setActive }) {
   const branchLabel = branch === "global" ? "All Centres" : branch.charAt(0).toUpperCase() + branch.slice(1);
 
   return (
-    <div className="handover-page-wrapper">
+    <div className="fets-handover-root">
       <style dangerouslySetInnerHTML={{ __html: styleBlock }} />
 
       {/* STICKY HEADER BAR */}
       <div style={{ background: "var(--ho-header-bg)", padding: "24px clamp(14px,3vw,30px)", position: "sticky", top: 0, zIndex: 20, boxShadow: "0 4px 12px var(--ho-shadow-dark)" }}>
         <div style={{ maxWidth: 1180, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <button onClick={() => setActive("live")} className="handover-back-btn" title="Back to Live">
+            <button onClick={() => setActive("live")} className="fets-handover-back-btn" title="Back to Live">
               <Icon name="arrowR" size={16} style={{ transform: "rotate(180deg)", display: "block" }} />
             </button>
             <div>
@@ -8688,7 +8724,7 @@ function ShiftHandoverPage({ branch, setActive }) {
                 transition: "all .2s ease"
               }}
             >
-              New Handover
+              Current handover
             </button>
             <button
               onClick={() => { setSubView("pending"); setSelectedLog(null); }}
@@ -8712,7 +8748,19 @@ function ShiftHandoverPage({ branch, setActive }) {
                 transition: "all .2s ease"
               }}
             >
-              History Log
+              Handover history
+            </button>
+            <button
+              onClick={() => setIsManagingQuestions(true)}
+              className="tap"
+              style={{
+                padding: "8px 16px", borderRadius: 8, border: "none", font: "700 13px 'Hanken Grotesk'", cursor: "pointer",
+                background: "transparent",
+                color: "var(--ho-header-muted)",
+                transition: "all .2s ease"
+              }}
+            >
+              Checklist template
             </button>
           </div>
         </div>
@@ -8724,14 +8772,14 @@ function ShiftHandoverPage({ branch, setActive }) {
         )}
       </div>
 
-      <div className="handover-container" style={{ padding: "24px clamp(14px,3vw,30px) 120px" }}>
+      <div className="fets-handover-container" style={{ padding: "24px clamp(14px,3vw,30px) 120px" }}>
         
         {subView === "history" ? (
           /* HISTORY LOGS VIEW */
           <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
             {selectedLog ? (
               /* DETAILED LOG CARD */
-              <div className="handover-card">
+              <div className="fets-handover-card">
                 <button 
                   onClick={() => setSelectedLog(null)} 
                   className="tap" 
@@ -8763,9 +8811,9 @@ function ShiftHandoverPage({ branch, setActive }) {
                   </div>
                 </div>
 
-                <div className="handover-grid-2" style={{ marginBottom: 20 }}>
+                <div className="fets-handover-grid-2" style={{ marginBottom: 20 }}>
                   <div style={{ border: "none", borderRadius: 14, padding: 16, boxShadow: "inset 3px 3px 6px var(--ho-shadow-dark), inset -3px -3px 6px var(--ho-shadow-light)" }}>
-                    <div className="handover-label">Outgoing Staff</div>
+                    <div className="fets-handover-label">Outgoing Staff</div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
                       {(selectedLog.outgoing_staff || []).map((s, idx) => (
                         <span key={idx} style={{ padding: "5px 12px", borderRadius: 10, background: "var(--ho-card-bg)", border: "none", fontSize: 13, fontWeight: 600, boxShadow: "2px 2px 4px var(--ho-shadow-dark), -2px -2px 4px var(--ho-shadow-light)" }}>{s}</span>
@@ -8773,7 +8821,7 @@ function ShiftHandoverPage({ branch, setActive }) {
                     </div>
                   </div>
                   <div style={{ border: "none", borderRadius: 14, padding: 16, boxShadow: "inset 3px 3px 6px var(--ho-shadow-dark), inset -3px -3px 6px var(--ho-shadow-light)" }}>
-                    <div className="handover-label">Incoming Staff</div>
+                    <div className="fets-handover-label">Incoming Staff</div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
                       {(selectedLog.incoming_staff || []).map((s, idx) => (
                         <span key={idx} style={{ padding: "5px 12px", borderRadius: 10, background: "var(--ho-card-bg)", border: "none", fontSize: 13, fontWeight: 600, boxShadow: "2px 2px 4px var(--ho-shadow-dark), -2px -2px 4px var(--ho-shadow-light)" }}>{s}</span>
@@ -8785,23 +8833,23 @@ function ShiftHandoverPage({ branch, setActive }) {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
                   <div style={{ border: "1px solid var(--ho-border)", borderRadius: 12, padding: 16, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
                     <span style={{ font: "800 28px 'JetBrains Mono'", color: "var(--ho-success-text)" }}>{selectedLog.currently_testing}</span>
-                    <span className="handover-label" style={{ marginBottom: 0, marginTop: 4 }}>Currently Testing</span>
+                    <span className="fets-handover-label" style={{ marginBottom: 0, marginTop: 4 }}>Currently Testing</span>
                   </div>
                   <div style={{ border: "1px solid var(--ho-border)", borderRadius: 12, padding: 16, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
                     <span style={{ font: "800 28px 'JetBrains Mono'", color: "#FF7675" }}>{selectedLog.no_shows}</span>
-                    <span className="handover-label" style={{ marginBottom: 0, marginTop: 4 }}>No Shows</span>
+                    <span className="fets-handover-label" style={{ marginBottom: 0, marginTop: 4 }}>No Shows</span>
                   </div>
                 </div>
 
                 {selectedLog.candidate_notes && (
                   <div style={{ marginBottom: 20, border: "1px solid var(--ho-border)", borderRadius: 12, padding: 16 }}>
-                    <div className="handover-label">Headcount Notes</div>
+                    <div className="fets-handover-label">Headcount Notes</div>
                     <div style={{ fontSize: 14, color: "var(--ho-text)", whiteSpace: "pre-wrap", marginTop: 4 }}>{selectedLog.candidate_notes}</div>
                   </div>
                 )}
 
                 <div style={{ marginBottom: 20 }}>
-                  <div className="handover-label">Checklist Status</div>
+                  <div className="fets-handover-label">Checklist Status</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
                     {(selectedLog.checklist || []).map((item, idx) => {
                       const statusIcon = item.status === 'ok' ? '✅' : item.status === 'attention' ? '⚠️' : item.status === 'critical' ? '🚨' : '⚪';
@@ -8822,7 +8870,7 @@ function ShiftHandoverPage({ branch, setActive }) {
 
                 {selectedLog.pending_items?.length > 0 && (
                   <div style={{ marginBottom: 20 }}>
-                    <div className="handover-label">Pending Work</div>
+                    <div className="fets-handover-label">Pending Work</div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
                       {selectedLog.pending_items.map((p, idx) => (
                         <div key={idx} style={{ display: "flex", gap: 10, alignItems: "center", padding: "10px 14px", border: "1px solid var(--ho-border)", borderRadius: 10, background: "var(--ho-card-bg)" }}>
@@ -8836,17 +8884,17 @@ function ShiftHandoverPage({ branch, setActive }) {
 
                 {selectedLog.instructions && (
                   <div style={{ marginBottom: 20, border: "1px solid var(--ho-border)", borderRadius: 12, padding: 16 }}>
-                    <div className="handover-label">Instructions for next shift</div>
+                    <div className="fets-handover-label">Instructions for next shift</div>
                     <div style={{ fontSize: 14, color: "var(--ho-text)", fontStyle: "italic", whiteSpace: "pre-wrap", marginTop: 4 }}>{selectedLog.instructions}</div>
                   </div>
                 )}
 
-                <div className="handover-grid-2">
+                <div className="fets-handover-grid-2">
                   <div style={{ border: "1px solid var(--ho-border)", borderRadius: 12, padding: 16 }}>
-                    <div className="handover-label">Outgoing Sign-off</div>
+                    <div className="fets-handover-label">Outgoing Sign-off</div>
                     {selectedLog.sig_out ? (
                       <div style={{ marginTop: 8 }}>
-                        <div className="signature-cursive">{selectedLog.sig_out.name}</div>
+                        <div className="fets-signature-cursive">{selectedLog.sig_out.name}</div>
                         <div style={{ fontSize: 11, color: "var(--ho-success-text)", fontWeight: 600, marginTop: 6 }}>✓ Digitally Signed</div>
                         <div style={{ fontSize: 11, color: "var(--ho-text-muted)", marginTop: 2 }}>{selectedLog.sig_out.time}</div>
                       </div>
@@ -8855,10 +8903,10 @@ function ShiftHandoverPage({ branch, setActive }) {
                     )}
                   </div>
                   <div style={{ border: "1px solid var(--ho-border)", borderRadius: 12, padding: 16 }}>
-                    <div className="handover-label">Incoming Sign-off</div>
+                    <div className="fets-handover-label">Incoming Sign-off</div>
                     {selectedLog.sig_in ? (
                       <div style={{ marginTop: 8 }}>
-                        <div className="signature-cursive">{selectedLog.sig_in.name}</div>
+                        <div className="fets-signature-cursive">{selectedLog.sig_in.name}</div>
                         <div style={{ fontSize: 11, color: "var(--ho-success-text)", fontWeight: 600, marginTop: 6 }}>✓ Digitally Signed</div>
                         <div style={{ fontSize: 11, color: "var(--ho-text-muted)", marginTop: 2 }}>{selectedLog.sig_in.time}</div>
                       </div>
@@ -8870,7 +8918,7 @@ function ShiftHandoverPage({ branch, setActive }) {
 
                 {selectedLog.incoming_comments && (
                   <div style={{ marginTop: 20, border: "1px solid var(--ho-border)", borderRadius: 12, padding: 16 }}>
-                    <div className="handover-label">Incoming Staff Comments</div>
+                    <div className="fets-handover-label">Incoming Staff Comments</div>
                     <div style={{ fontSize: 14, color: "var(--ho-text)", fontStyle: "italic", whiteSpace: "pre-wrap", marginTop: 4 }}>{selectedLog.incoming_comments}</div>
                   </div>
                 )}
@@ -8938,7 +8986,7 @@ function ShiftHandoverPage({ branch, setActive }) {
                       <div 
                         key={log.id} 
                         onClick={() => setSelectedLog(log)}
-                        className="handover-card tap"
+                        className="fets-handover-card tap"
                         style={{
                           cursor: "pointer", padding: "18px 22px", display: "flex", justifyContent: "space-between", alignItems: "center",
                           gap: 16, border: "none", borderRadius: 16, background: "var(--ho-card-bg)",
@@ -8984,7 +9032,7 @@ function ShiftHandoverPage({ branch, setActive }) {
                   const isExpired = h.expires_at && new Date(h.expires_at) < new Date();
                   const ago = timeAgo(h.created_at);
                   return (
-                    <div key={h.id} className="handover-card" style={{ padding: "18px 22px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+                    <div key={h.id} className="fets-handover-card" style={{ padding: "18px 22px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
                       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <span style={{ font: "800 15px 'Hanken Grotesk'", color: "var(--ho-text)" }}>
@@ -9014,7 +9062,7 @@ function ShiftHandoverPage({ branch, setActive }) {
           /* NEW HANDOVER REPORT VIEW */
           <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
             {submitted && (
-              <div className="handover-card" style={{ border: "1px solid var(--ho-success-border)", background: "var(--ho-success-bg)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+              <div className="fets-handover-card" style={{ border: "1px solid var(--ho-success-border)", background: "var(--ho-success-bg)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
                 <div>
                   <div style={{ font: "700 15px 'Hanken Grotesk'", color: "var(--ho-success-text)" }}>Handover submitted — awaiting sign-off</div>
                   <div style={{ font: "500 13px 'Hanken Grotesk'", color: "var(--ho-success-text)", marginTop: 2 }}>Incoming staff will be notified on their My Desk to review and sign off.</div>
@@ -9027,7 +9075,7 @@ function ShiftHandoverPage({ branch, setActive }) {
             )}
 
             {/* SECTION 1: OVERVIEW & PROCTORS */}
-            <div className="handover-card">
+            <div className="fets-handover-card">
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
                 <div style={{ width: 30, height: 30, borderRadius: 10, background: "var(--ho-card-bg)", border: "none", color: "var(--ho-accent)", display: "flex", alignItems: "center", justifyContent: "center", font: "700 13px 'JetBrains Mono'", flex: "none", boxShadow: "inset 2px 2px 4px var(--ho-shadow-dark), inset -2px -2px 4px var(--ho-shadow-light)" }}>1</div>
                 <div>
@@ -9036,90 +9084,52 @@ function ShiftHandoverPage({ branch, setActive }) {
                 </div>
               </div>
 
-              <div className="handover-grid-2" style={{ marginBottom: 16 }}>
+              <div className="fets-handover-grid-2" style={{ marginBottom: 16 }}>
                 <div>
-                  <label className="handover-label">Handover Date</label>
-                  <input type="date" value={date} onChange={(e) => { setDate(e.target.value); updateDraft({ date: e.target.value }); }} className="handover-input" />
+                  <label className="fets-handover-label">Handover Date</label>
+                  <input type="date" value={date} onChange={(e) => { setDate(e.target.value); updateDraft({ date: e.target.value }); }} className="fets-handover-input" />
                 </div>
                 <div>
-                  <label className="handover-label">Handover Time</label>
-                  <input type="time" value={handoverTime} onChange={(e) => { setHandoverTime(e.target.value); updateDraft({ handoverTime: e.target.value }); }} className="handover-input" />
+                  <label className="fets-handover-label">Handover Time</label>
+                  <input type="time" value={handoverTime} onChange={(e) => { setHandoverTime(e.target.value); updateDraft({ handoverTime: e.target.value }); }} className="fets-handover-input" />
                 </div>
               </div>
 
-              <div className="handover-grid-2">
+              <div className="fets-handover-grid-2">
                 <div>
-                  <label className="handover-label">Outgoing Proctors</label>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                  <label className="fets-handover-label">Outgoing Proctors</label>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                     {outgoing.map((name, idx) => (
-                      <span key={idx} onClick={() => removeStaff('outgoing', name)} className="tap" style={{
+                      <span key={idx} style={{
                         display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 10px", borderRadius: 8,
-                        background: "var(--ho-success-bg)", color: "var(--ho-success-text)", font: "600 12.5px var(--font)", border: "1px solid var(--ho-success-border)", cursor: "pointer"
+                        background: "var(--ho-success-bg)", color: "var(--ho-success-text)", font: "600 12.5px var(--font)", border: "1px solid var(--ho-success-border)"
                       }}>
-                        {name} <span style={{ fontSize: 10, color: "var(--ho-success-text)", opacity: 0.7 }}>×</span>
+                        {name}
                       </span>
                     ))}
-                    {outgoing.length === 0 && <span style={{ fontStyle: "italic", fontSize: 13, color: "var(--ho-text-muted)" }}>None added</span>}
+                    {outgoing.length === 0 && <span style={{ fontStyle: "italic", fontSize: 13, color: "var(--ho-text-muted)" }}>Syncing from roster...</span>}
                   </div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <input 
-                      value={outgoingInput}
-                      onChange={(e) => setOutgoingInput(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addStaff('outgoing', outgoingInput); } }}
-                      placeholder="Add outgoing staff..."
-                      list={`outgoing-staff-list-${branch}`}
-                      className="handover-input"
-                      style={{ flex: 1, padding: "9px 12px", fontSize: 13.5 }}
-                    />
-                    <button onClick={() => addStaff('outgoing', outgoingInput)} className="tap" style={{
-                      padding: "0 14px", borderRadius: 8, border: "1px solid var(--ho-border)", background: "var(--ho-card-bg)", color: "var(--ho-text)", font: "600 13px 'Hanken Grotesk'", cursor: "pointer"
-                    }}>
-                      Add
-                    </button>
-                  </div>
-                  <datalist id={`outgoing-staff-list-${branch}`}>
-                    {staffList.filter(s => !outgoing.includes(s)).map(s => <option key={s} value={s} />)}
-                  </datalist>
                 </div>
 
                 <div>
-                  <label className="handover-label">Incoming Proctors</label>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                  <label className="fets-handover-label">Incoming Proctors</label>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                     {incoming.map((name, idx) => (
-                      <span key={idx} onClick={() => removeStaff('incoming', name)} className="tap" style={{
+                      <span key={idx} style={{
                         display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 10px", borderRadius: 8,
-                        background: "var(--ho-success-bg)", color: "var(--ho-success-text)", font: "600 12.5px var(--font)", border: "1px solid var(--ho-success-border)", cursor: "pointer"
+                        background: "var(--ho-accent-soft)", color: "var(--ho-accent-ink, #1d302c)", font: "600 12.5px var(--font)", border: "1px solid var(--ho-accent-line)"
                       }}>
-                        {name} <span style={{ fontSize: 10, color: "var(--ho-success-text)", opacity: 0.7 }}>×</span>
+                        {name}
                       </span>
                     ))}
-                    {incoming.length === 0 && <span style={{ fontStyle: "italic", fontSize: 13, color: "var(--ho-text-muted)" }}>None added</span>}
+                    {incoming.length === 0 && <span style={{ fontStyle: "italic", fontSize: 13, color: "var(--ho-text-muted)" }}>Syncing from roster...</span>}
                   </div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <input 
-                      value={incomingInput}
-                      onChange={(e) => setIncomingInput(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addStaff('incoming', incomingInput); } }}
-                      placeholder="Add incoming staff..."
-                      list={`incoming-staff-list-${branch}`}
-                      className="handover-input"
-                      style={{ flex: 1, padding: "9px 12px", fontSize: 13.5 }}
-                    />
-                    <button onClick={() => addStaff('incoming', incomingInput)} className="tap" style={{
-                      padding: "0 14px", borderRadius: 8, border: "1px solid var(--ho-border)", background: "var(--ho-card-bg)", color: "var(--ho-text)", font: "600 13px 'Hanken Grotesk'", cursor: "pointer"
-                    }}>
-                      Add
-                    </button>
-                  </div>
-                  <datalist id={`incoming-staff-list-${branch}`}>
-                    {staffList.filter(s => !incoming.includes(s)).map(s => <option key={s} value={s} />)}
-                  </datalist>
                 </div>
               </div>
             </div>
 
             {/* SECTION 2: CANDIDATE STATUS */}
-            <div className="handover-card">
+            <div className="fets-handover-card">
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
                 <div style={{ width: 30, height: 30, borderRadius: 10, background: "var(--ho-card-bg)", border: "none", color: "var(--ho-accent)", display: "flex", alignItems: "center", justifyContent: "center", font: "700 13px 'JetBrains Mono'", flex: "none", boxShadow: "inset 2px 2px 4px var(--ho-shadow-dark), inset -2px -2px 4px var(--ho-shadow-light)" }}>2</div>
                 <div>
@@ -9131,34 +9141,34 @@ function ShiftHandoverPage({ branch, setActive }) {
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 18, marginBottom: 16 }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", border: "1px solid var(--ho-border)", borderRadius: 12, padding: "14px 16px", background: "var(--ho-card-bg)" }}>
                   <div>
-                    <span className="handover-label" style={{ marginBottom: 2 }}>Currently Testing</span>
+                    <span className="fets-handover-label" style={{ marginBottom: 2 }}>Currently Testing</span>
                     <span style={{ font: "700 24px 'JetBrains Mono'", color: "var(--ho-accent)" }}>{testing}</span>
                   </div>
                   <div style={{ display: "flex", gap: 4 }}>
-                    <button onClick={() => handleStep("testing", -1)} className="counter-btn">-</button>
-                    <button onClick={() => handleStep("testing", 1)} className="counter-btn">+</button>
+                    <button onClick={() => handleStep("testing", -1)} className="fets-counter-btn">-</button>
+                    <button onClick={() => handleStep("testing", 1)} className="fets-counter-btn">+</button>
                   </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", border: "1px solid var(--ho-border)", borderRadius: 12, padding: "14px 16px", background: "var(--ho-card-bg)" }}>
                   <div>
-                    <span className="handover-label" style={{ marginBottom: 2 }}>No-Shows</span>
+                    <span className="fets-handover-label" style={{ marginBottom: 2 }}>No-Shows</span>
                     <span style={{ font: "700 24px 'JetBrains Mono'", color: "#FF7675" }}>{noShow}</span>
                   </div>
                   <div style={{ display: "flex", gap: 4 }}>
-                    <button onClick={() => handleStep("noShow", -1)} className="counter-btn">-</button>
-                    <button onClick={() => handleStep("noShow", 1)} className="counter-btn">+</button>
+                    <button onClick={() => handleStep("noShow", -1)} className="fets-counter-btn">-</button>
+                    <button onClick={() => handleStep("noShow", 1)} className="fets-counter-btn">+</button>
                   </div>
                 </div>
               </div>
 
               <div>
-                <label className="handover-label">Headcount notes</label>
-                <textarea value={candidateNotes} onChange={(e) => { setCandidateNotes(e.target.value); updateDraft({ candidateNotes: e.target.value }); }} placeholder="Candidate issues, late arrivals, rescheduled sessions..." rows={2} className="handover-input" style={{ resize: "vertical", fontSize: 13.5, lineHeight: 1.4 }} />
+                <label className="fets-handover-label">Headcount notes</label>
+                <textarea value={candidateNotes} onChange={(e) => { setCandidateNotes(e.target.value); updateDraft({ candidateNotes: e.target.value }); }} placeholder="Candidate issues, late arrivals, rescheduled sessions..." rows={2} className="fets-handover-input" style={{ resize: "vertical", fontSize: 13.5, lineHeight: 1.4 }} />
               </div>
             </div>
 
             {/* SECTION 3: CHECKLIST */}
-            <div className="handover-card">
+            <div className="fets-handover-card">
               <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14, marginBottom: 18, flexWrap: "wrap" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <div style={{ width: 30, height: 30, borderRadius: 10, background: "var(--ho-card-bg)", border: "none", color: "var(--ho-accent)", display: "flex", alignItems: "center", justifyContent: "center", font: "700 13px 'JetBrains Mono'", flex: "none", boxShadow: "inset 2px 2px 4px var(--ho-shadow-dark), inset -2px -2px 4px var(--ho-shadow-light)" }}>3</div>
@@ -9180,21 +9190,21 @@ function ShiftHandoverPage({ branch, setActive }) {
                   const hasGlow = item.status === 'attention' || item.status === 'critical';
                   return (
                     <div key={item.id} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                      <div className={`checklist-row ${item.status || ""}`}>
+                      <div className={`fets-checklist-row ${item.status || ""}`}>
                         <div style={{ display: "flex", alignItems: "center", gap: 11, flex: 1, minWidth: 140 }}>
                           <span style={{ width: 9, height: 9, borderRadius: "50%", flex: "none", background: item.status ? PAL[item.status].sel : "var(--ho-text-muted)" }} />
                           <span style={{ font: "600 14px 'Hanken Grotesk'", color: "var(--ho-text)" }}>{item.label}</span>
                         </div>
-                        <div className="handover-btn-group">
-                          <button onClick={() => handleSeg(item.id, "ok")} className={`handover-seg-btn ${item.status === 'ok' ? 'active-ok' : ''}`}>OK</button>
-                          <button onClick={() => handleSeg(item.id, "attention")} className={`handover-seg-btn ${item.status === 'attention' ? 'active-attention' : ''}`}>Attention</button>
-                          <button onClick={() => handleSeg(item.id, "critical")} className={`handover-seg-btn ${item.status === 'critical' ? 'active-critical' : ''}`}>Critical</button>
-                          <button onClick={() => handleSeg(item.id, "na")} className={`handover-seg-btn ${item.status === 'na' ? 'active-na' : ''}`}>N/A</button>
+                        <div className="fets-handover-btn-group">
+                          <button onClick={() => handleSeg(item.id, "ok")} className={`fets-handover-seg-btn ${item.status === 'ok' ? 'active-ok' : ''}`}>OK</button>
+                          <button onClick={() => handleSeg(item.id, "attention")} className={`fets-handover-seg-btn ${item.status === 'attention' ? 'active-attention' : ''}`}>Attention</button>
+                          <button onClick={() => handleSeg(item.id, "critical")} className={`fets-handover-seg-btn ${item.status === 'critical' ? 'active-critical' : ''}`}>Critical</button>
+                          <button onClick={() => handleSeg(item.id, "na")} className={`fets-handover-seg-btn ${item.status === 'na' ? 'active-na' : ''}`}>N/A</button>
                         </div>
                       </div>
                       {hasGlow && (
                         <div style={{ margin: "4px 0 2px 4px" }}>
-                          <input type="text" value={item.note || ""} onChange={(e) => handleNote(item.id, e.target.value)} placeholder="Note — what needs attention and what action was taken?" className="handover-input" style={{ padding: "10px 12px", fontSize: 13 }} />
+                          <input type="text" value={item.note || ""} onChange={(e) => handleNote(item.id, e.target.value)} placeholder="Note — what needs attention and what action was taken?" className="fets-handover-input" style={{ padding: "10px 12px", fontSize: 13 }} />
                         </div>
                       )}
                     </div>
@@ -9206,47 +9216,8 @@ function ShiftHandoverPage({ branch, setActive }) {
               </div>
             </div>
 
-            {/* SECTION 4: PENDING ITEMS */}
-            <div className="handover-card">
-              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14, marginBottom: 18, flexWrap: "wrap" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{ width: 30, height: 30, borderRadius: 10, background: "var(--ho-card-bg)", border: "none", color: "var(--ho-accent)", display: "flex", alignItems: "center", justifyContent: "center", font: "700 13px 'JetBrains Mono'", flex: "none", boxShadow: "inset 2px 2px 4px var(--ho-shadow-dark), inset -2px -2px 4px var(--ho-shadow-light)" }}>4</div>
-                  <div>
-                    <div style={{ font: "700 16px 'Hanken Grotesk'", color: "var(--ho-text)" }}>Pending work & incidents</div>
-                    <div style={{ font: "500 12.5px 'Hanken Grotesk'", color: "var(--ho-text-muted)" }}>Anything the next shift must pick up</div>
-                  </div>
-                </div>
-                <button onClick={handleAddPending} className="tap" style={{ padding: "9px 16px", borderRadius: 12, border: "none", background: "var(--ho-accent)", color: "#fff", font: "600 12.5px 'Hanken Grotesk'", cursor: "pointer", boxShadow: "3px 3px 6px var(--ho-shadow-dark), -3px -3px 6px var(--ho-shadow-light)" }}>+ Add item</button>
-              </div>
-              {pending.length === 0 ? (
-                <div style={{ border: "1.5px dashed var(--ho-border)", borderRadius: 11, padding: 30, textAlign: "center" }}>
-                  <div style={{ font: "600 13.5px 'Hanken Grotesk'", color: "var(--ho-text-muted)", marginBottom: 4 }}>No pending work or open incidents</div>
-                  <div style={{ font: "500 12.5px 'Hanken Grotesk'", color: "var(--ho-text-muted)" }}>A clean slate for the next shift — nice work.</div>
-                </div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {pending.map((p) => {
-                    const activeLow = p.sev === "low";
-                    const activeMed = p.sev === "med";
-                    const activeHigh = p.sev === "high";
-                    return (
-                      <div key={p.id} style={{ display: "flex", gap: 12, alignItems: "center", padding: "12px 14px", border: "1px solid var(--ho-border)", borderRadius: 11, background: "var(--ho-card-bg)", flexWrap: "wrap" }}>
-                        <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-                          <button onClick={() => handlePendingSev(p.id, "low")} className={`handover-seg-btn ${activeLow ? 'active-na' : ''}`} style={{ padding: "6px 10px", minWidth: 46 }}>Low</button>
-                          <button onClick={() => handlePendingSev(p.id, "med")} className={`handover-seg-btn ${activeMed ? 'active-attention' : ''}`} style={{ padding: "6px 10px", minWidth: 46 }}>Med</button>
-                          <button onClick={() => handlePendingSev(p.id, "high")} className={`handover-seg-btn ${activeHigh ? 'active-critical' : ''}`} style={{ padding: "6px 10px", minWidth: 46 }}>High</button>
-                        </div>
-                        <input type="text" value={p.text} onChange={(e) => handlePendingText(p.id, e.target.value)} placeholder="Describe the pending work or incident…" className="handover-input" style={{ flex: 1, minWidth: 200, padding: "10px 12px", fontSize: 13.5 }} />
-                        <button onClick={() => handleRemovePending(p.id)} className="tap" style={{ width: 34, height: 34, border: "1px solid var(--ho-input-border)", borderRadius: 8, background: "var(--ho-card-bg)", color: "var(--ho-text-muted)", font: "600 17px 'Hanken Grotesk'", cursor: "pointer", display: "grid", placeItems: "center" }}>×</button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
             {/* SECTION 5: INSTRUCTIONS & SIGNATURES */}
-            <div className="handover-card">
+            <div className="fets-handover-card">
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
                 <div style={{ width: 30, height: 30, borderRadius: 10, background: "var(--ho-card-bg)", border: "none", color: "var(--ho-accent)", display: "flex", alignItems: "center", justifyContent: "center", font: "700 13px 'JetBrains Mono'", flex: "none", boxShadow: "inset 2px 2px 4px var(--ho-shadow-dark), inset -2px -2px 4px var(--ho-shadow-light)" }}>5</div>
                 <div>
@@ -9255,30 +9226,30 @@ function ShiftHandoverPage({ branch, setActive }) {
                 </div>
               </div>
               <div style={{ marginBottom: 18 }}>
-                <label className="handover-label">Instructions for next shift</label>
-                <textarea value={instructions} onChange={(e) => { setInstructions(e.target.value); updateDraft({ instructions: e.target.value }); }} rows={3} placeholder="Key priorities, open items, who to call…" className="handover-input" style={{ resize: "vertical", lineHeight: 1.5 }}></textarea>
+                <label className="fets-handover-label">Instructions for next shift</label>
+                <textarea value={instructions} onChange={(e) => { setInstructions(e.target.value); updateDraft({ instructions: e.target.value }); }} rows={3} placeholder="Key priorities, open items, who to call…" className="fets-handover-input" style={{ resize: "vertical", lineHeight: 1.5 }}></textarea>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 16 }}>
-                <div className="signature-box">
-                  <div className="handover-label">Outgoing staff</div>
+                <div className="fets-signature-box">
+                  <div className="fets-handover-label">Outgoing staff</div>
                   <div style={{ font: "700 15px 'Hanken Grotesk'", color: "var(--ho-text)", marginTop: 3 }}>{outgoing.join(", ") || "—"}</div>
                   <div style={{ height: 1, background: "var(--ho-border)", margin: "14px 0" }}></div>
-                  {signedOut ? (
+                  {outgoingConfirmed ? (
                     <div style={{ border: "1px solid var(--ho-success-border)", background: "var(--ho-success-bg)", borderRadius: 10, padding: "14px 16px" }}>
-                      <div className="signature-cursive">{sigOut.name}</div>
+                      <div className="fets-signature-cursive">{sigOut?.name || outgoing.join(", ")}</div>
                       <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 12, font: "600 11px 'JetBrains Mono'", color: "var(--ho-success-text)" }}>
                         <span>✓ Verified digital signature</span>
                       </div>
-                      <div style={{ font: "500 11px 'JetBrains Mono'", color: "var(--ho-text-muted)", marginTop: 3 }}>{sigOut.time}</div>
+                      {sigOut?.time && <div style={{ font: "500 11px 'JetBrains Mono'", color: "var(--ho-text-muted)", marginTop: 3 }}>{sigOut.time}</div>}
                       <button onClick={() => handleResetSig("out")} className="tap" style={{ marginTop: 10, padding: 0, border: "none", background: "none", color: "#FF7675", font: "600 12px 'Hanken Grotesk'", cursor: "pointer" }}>Reset signature</button>
                     </div>
                   ) : (
-                    <button onClick={() => handleSign("out")} className="tap" style={{ width: "100%", border: "none", borderRadius: 14, padding: 24, background: "var(--ho-card-bg)", cursor: "pointer", color: "var(--ho-accent)", font: "600 13.5px 'Hanken Grotesk'", display: "flex", alignItems: "center", justifyItems: "center", justifyContent: "center", gap: 8, boxShadow: "4px 4px 8px var(--ho-shadow-dark), -4px -4px 8px var(--ho-shadow-light)" }}>✎ Tap to sign as Outgoing</button>
+                    <button onClick={() => handleSign("out")} className="tap" style={{ width: "100%", border: "none", borderRadius: 14, padding: 24, background: "var(--ho-card-bg)", cursor: "pointer", color: "var(--ho-accent)", font: "600 13.5px 'Hanken Grotesk'", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, boxShadow: "4px 4px 8px var(--ho-shadow-dark), -4px -4px 8px var(--ho-shadow-light)" }}>✎ Tap to sign as Outgoing</button>
                   )}
                 </div>
 
-                <div className="signature-box">
-                  <div className="handover-label">Incoming staff</div>
+                <div className="fets-signature-box">
+                  <div className="fets-handover-label">Incoming staff</div>
                   <div style={{ font: "700 15px 'Hanken Grotesk'", color: "var(--ho-text)", marginTop: 3 }}>{incoming.join(", ") || "—"}</div>
                   <div style={{ height: 1, background: "var(--ho-border)", margin: "14px 0" }}></div>
                   <div style={{ border: "1px dashed var(--ho-border)", borderRadius: 10, padding: "14px 16px", textAlign: "center" }}>
@@ -9294,7 +9265,7 @@ function ShiftHandoverPage({ branch, setActive }) {
             </div>
             
             {/* SUBMIT BUTTON BAR */}
-            <div className="handover-card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 14, borderTop: "1px solid var(--ho-border)", padding: "18px 24px" }}>
+            <div className="fets-handover-card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 14, borderTop: "1px solid var(--ho-border)", padding: "18px 24px" }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                 <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--ho-text)" }}>
                   Completeness Progress: {percent}%
@@ -9302,7 +9273,7 @@ function ShiftHandoverPage({ branch, setActive }) {
                 <span style={{ fontSize: 12, color: "var(--ho-text-muted)" }}>
                   {outgoing.length === 0 ? "⚠️ Add outgoing staff. " : ""}
                   {incoming.length === 0 ? "⚠️ Tag incoming staff. " : ""}
-                  {!signedOut ? "Sign as outgoing. " : ""}
+                  {!outgoingConfirmed ? "Sign as outgoing. " : ""}
                   {percent < 100 ? "Complete all checklist items." : "Ready to submit."}
                 </span>
               </div>
@@ -9331,7 +9302,7 @@ function ShiftHandoverPage({ branch, setActive }) {
               value={newQuestion}
               onChange={(e) => setNewQuestion(e.target.value)}
               placeholder="Add a new checklist question..."
-              className="handover-input"
+              className="fets-handover-input"
               style={{ flex: 1, padding: "10px 12px", fontSize: 13.5 }}
             />
             <button 
@@ -9351,7 +9322,7 @@ function ShiftHandoverPage({ branch, setActive }) {
           </div>
           
           <div className="scroll-soft" style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
-            <div className="handover-label" style={{ marginBottom: 4 }}>Checklist Items</div>
+            <div className="fets-handover-label" style={{ marginBottom: 4 }}>Checklist Items</div>
             {checklist.map((item) => (
               <div key={item.id} className="glass-2" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderRadius: 10, border: "1px solid var(--ho-border)", gap: 12 }}>
                 {editingQId === item.id ? (
@@ -9359,7 +9330,7 @@ function ShiftHandoverPage({ branch, setActive }) {
                     <input 
                       value={editingQLabel}
                       onChange={(e) => setEditingQLabel(e.target.value)}
-                      className="handover-input"
+                      className="fets-handover-input"
                       style={{ flex: 1, padding: "6px 10px", fontSize: 13 }}
                     />
                     <button 
