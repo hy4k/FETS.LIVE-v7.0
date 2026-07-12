@@ -22,6 +22,16 @@ import FetsRoster from "../components/FetsRosterPremium";
 import { FetsCalendarPremium as FetsCalendar } from "../components/FetsCalendarPremium";
 import { MobileCalendarView as MobileCalendar } from "../components/MobileCalendarView";
 import ShiftHandoverModern from "./ShiftHandoverModern";
+import { AccessHub as AccessHubPage } from "../components/AccessHub";
+import { CandidateTrackerPremium as CandidateTracker } from "../components/CandidateTrackerPremium";
+import SystemManager from "../components/SystemManager";
+import { NewsManager } from "../components/NewsManager";
+import { UserManagement } from "../components/UserManagement";
+import { BranchDelegationWidget } from "../components/BranchDelegationWidget";
+import { ICloudDashboard as Dashboard } from "../components/iCloud/iCloudDashboard";
+import { FetsIntelligence } from "../components/FetsIntelligence";
+import GBPDashboard from "../pages/GBPDashboard";
+
 
 /* ============================================================
    SOURCE: data.js
@@ -10968,11 +10978,8 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
   };
 
   const handlePick = (it) => {
-    if (it.nav) { setActive(it.id); return; }
-    if (["business", "attn-admin", "staff-requests", "staff-ot"].includes(it.id)) { setActive(it.id); return; }
     if (it.id === "vault") { setDrawer("vault"); return; }
-    if (it.legacy && bridge) { bridge(it.id); return; }
-    toast(it.label, "arrowR");
+    setActive(it.id);
   };
 
   // Filter NAV items and TOOLS
@@ -11001,40 +11008,45 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
       <style>{`
         /* Neumorphic Search Input */
         .desk-search-input {
-          background: rgba(0, 0, 0, 0.25) !important;
-          border: 1px solid rgba(255, 255, 255, 0.05) !important;
+          background: rgba(0, 0, 0, 0.2) !important;
+          border: 1px solid rgba(255, 255, 255, 0.1) !important;
           border-radius: 99px !important;
           color: #fff !important;
-          box-shadow: inset 3px 3px 6px rgba(0,0,0,0.5), inset -3px -3px 6px rgba(255,255,255,0.03) !important;
+          box-shadow: inset 3px 3px 6px rgba(0,0,0,0.4), inset -3px -3px 6px rgba(255,255,255,0.05) !important;
         }
         .desk-search-input::placeholder {
-          color: rgba(255, 255, 255, 0.3) !important;
+          color: #86B3D1 !important;
+          opacity: 0.6;
         }
 
         /* Category pills */
         .desk-cat-btn {
-          border: 1px solid rgba(255, 255, 255, 0.02) !important;
-          background: rgba(255, 255, 255, 0.01) !important;
-          color: #a0aec0 !important;
+          border: 1px solid rgba(255, 255, 255, 0.1) !important;
+          background: rgba(255, 255, 255, 0.05) !important;
+          color: #86B3D1 !important; /* Palette Light Periwinkle */
           padding: 8px 16px !important;
           border-radius: 20px !important;
           font-size: 12px !important;
           font-weight: 700 !important;
           cursor: pointer;
-          box-shadow: 4px 4px 8px rgba(0,0,0,0.3), -4px -4px 8px rgba(255,255,255,0.03) !important;
+          box-shadow: 4px 4px 8px rgba(0,0,0,0.2), -4px -4px 8px rgba(255,255,255,0.05) !important;
           transition: all 0.2s ease;
         }
+        .desk-cat-btn:hover {
+          color: #ffffff !important;
+          background: rgba(255, 255, 255, 0.1) !important;
+        }
         .desk-cat-btn.active {
-          background: rgba(0, 0, 0, 0.25) !important;
-          color: #99CED3 !important;
-          box-shadow: inset 2px 2px 5px rgba(0,0,0,0.4), inset -2px -2px 5px rgba(255,255,255,0.03) !important;
+          background: #99CED3 !important; /* Palette Pastel Cyan */
+          color: #1a3038 !important;
+          box-shadow: inset 2px 2px 5px rgba(0,0,0,0.35), inset -2px -2px 5px rgba(255,255,255,0.15) !important;
         }
 
         /* Neumorphic Metallic Card */
         .desk-module-card {
           position: relative;
-          background: linear-gradient(135deg, #2a333c, #1a2025) !important; /* Metallic Slate */
-          border: 1px solid rgba(255, 255, 255, 0.04) !important;
+          background: linear-gradient(135deg, #3d587c, #2d425d) !important; /* Paul Smith Steel-Blue to Slate-Gray */
+          border: 1px solid rgba(255, 255, 255, 0.1) !important;
           border-radius: 30px !important;
           padding: 24px !important;
           cursor: pointer;
@@ -11046,19 +11058,20 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
           min-height: 154px;
           overflow: hidden;
           box-shadow:
-            6px 6px 12px rgba(0, 0, 0, 0.4),
-            -6px -6px 12px rgba(255, 255, 255, 0.03),
-            inset 1px 1px 2px rgba(255, 255, 255, 0.05),
-            inset -1px -1px 2px rgba(0, 0, 0, 0.4) !important;
+            6px 6px 16px rgba(0, 0, 0, 0.35),
+            -6px -6px 16px rgba(255, 255, 255, 0.06),
+            inset 2px 2px 4px rgba(255, 255, 255, 0.1),
+            inset -2px -2px 4px rgba(0, 0, 0, 0.3) !important;
         }
 
         .desk-module-card:hover {
           transform: translateY(-4px) !important;
+          background: linear-gradient(135deg, #46658f, #334a69) !important;
           box-shadow:
-            8px 8px 16px rgba(0, 0, 0, 0.5),
-            -8px -8px 16px rgba(255, 255, 255, 0.05),
-            inset 1px 1px 2px rgba(255, 255, 255, 0.1),
-            inset -1px -1px 2px rgba(0, 0, 0, 0.3) !important;
+            8px 8px 20px rgba(0, 0, 0, 0.45),
+            -8px -8px 20px rgba(255, 255, 255, 0.08),
+            inset 2px 2px 4px rgba(255, 255, 255, 0.15),
+            inset -2px -2px 4px rgba(0, 0, 0, 0.25) !important;
         }
 
         /* Shine overlay effect */
@@ -11104,14 +11117,14 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
           border-radius: 12px;
           display: grid;
           place-items: center;
-          background: rgba(255, 255, 255, 0.02);
-          border: 1px solid rgba(255, 255, 255, 0.05);
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.08);
           color: #86B3D1; /* Image 2 Light Periwinkle */
           transition: all 0.3s ease;
         }
 
         .desk-module-card:hover .desk-module-icon-wrap {
-          background: rgba(153, 206, 211, 0.1);
+          background: rgba(153, 206, 211, 0.15);
           border-color: rgba(153, 206, 211, 0.3);
           color: #99CED3; /* Image 2 Pastel Cyan */
         }
@@ -11224,10 +11237,10 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
           justifyContent: "center",
           textAlign: "center",
           padding: "80px 40px",
-          background: "#fff",
-          border: "1px solid var(--sh-line)",
+          background: "linear-gradient(135deg, #3d587c, #2d425d)",
+          border: "1px solid rgba(255, 255, 255, 0.1)",
           borderRadius: 24,
-          boxShadow: "0 8px 32px rgba(0, 0, 0, 0.02)",
+          boxShadow: "6px 6px 16px rgba(0,0,0,0.25), -6px -6px 16px rgba(255,255,255,0.06)",
           maxWidth: 600,
           margin: "40px auto 0",
         }}>
@@ -11235,13 +11248,13 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
             width: 80,
             height: 80,
             borderRadius: "50%",
-            background: "var(--sh-yellow)",
+            background: "#99CED3",
             display: "grid",
             placeItems: "center",
             marginBottom: 24,
-            boxShadow: "0 10px 25px rgba(244, 201, 0, 0.3)",
+            boxShadow: "0 10px 25px rgba(153, 206, 211, 0.3)",
           }}>
-            <Icon name="spark" size={36} style={{ color: "var(--sh-ink)" }} />
+            <Icon name="spark" size={36} style={{ color: "#1a3038" }} />
           </div>
           <h2 style={{
             margin: "0 0 10px",
@@ -11249,7 +11262,7 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
             fontWeight: 800,
             fontSize: 24,
             letterSpacing: "-0.02em",
-            color: "var(--sh-ink)",
+            color: "#ffffff",
           }}>
             Watch This Space
           </h2>
@@ -11257,7 +11270,7 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
             margin: 0,
             fontSize: 14,
             lineHeight: 1.5,
-            color: "var(--sh-muted)",
+            color: "#86B3D1",
             maxWidth: 380,
           }}>
             We are upgrading your cockpit with powerful new productivity tools. Stay tuned!
@@ -11358,16 +11371,21 @@ function TopNav({ active, onNavigate, branch, setBranch, t, setTweak, onTools, o
 
       {/* primary links */}
       <nav className="topnav-links" style={{ display: "flex", alignItems: "center", gap: "clamp(20px,2.8vw,36px)" }}>
-        {NAV.map((n) => (
-          <button key={n.id} className={`topnav-item ${active === n.id ? "active" : ""}`} onClick={() => onNavigate(n)} style={{ position: "relative" }}>
-            {n.label}
-            {n.id === "desk" && pendingHandoverBadge > 0 && (
-              <span style={{ position: "absolute", top: -6, right: -10, minWidth: 16, height: 16, padding: "0 4px", borderRadius: 999, display: "grid", placeItems: "center", fontSize: 9, fontWeight: 800, color: "#fff", background: "#FF7675", boxShadow: "0 0 6px rgba(255,118,117,0.5)" }}>
-                {pendingHandoverBadge > 9 ? "9+" : pendingHandoverBadge}
-              </span>
-            )}
-          </button>
-        ))}
+        {NAV.map((n) => {
+          const isActive = n.id === "desk"
+            ? ["desk", "attn-admin", "business", "staff-requests", "staff-ot", "candidate-tracker", "access-hub", "system-manager", "news-manager", "user-management", "branch-delegation", "dashboard", "fets-intelligence", "gbp"].includes(active)
+            : active === n.id;
+          return (
+            <button key={n.id} className={`topnav-item ${isActive ? "active" : ""}`} onClick={() => onNavigate(n)} style={{ position: "relative" }}>
+              {n.label}
+              {n.id === "desk" && pendingHandoverBadge > 0 && (
+                <span style={{ position: "absolute", top: -6, right: -10, minWidth: 16, height: 16, padding: "0 4px", borderRadius: 999, display: "grid", placeItems: "center", fontSize: 9, fontWeight: 800, color: "#fff", background: "#FF7675", boxShadow: "0 0 6px rgba(255,118,117,0.5)" }}>
+                  {pendingHandoverBadge > 9 ? "9+" : pendingHandoverBadge}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </nav>
 
       <div style={{ flex: 1 }} />
@@ -11486,7 +11504,7 @@ function Masthead({ branch }) {
           pointerEvents: "none",
         }} />
         
-        <Avatar name={user.name} size={54} />
+        <ProfileAvatar name={user.name} size={54} />
         <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
           <span className="mono" style={{
             fontSize: 10,
@@ -12941,6 +12959,7 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
       else if (newActive === "roster") bridge("fets-roster");
       else if (newActive === "case") bridge("incident-log");
       else if (newActive === "desk") bridge("my-desk");
+      else bridge(newActive);
     }
   };
   const [pendingHandoverBadge, setPendingHandoverBadge] = React.useState(0);
@@ -12987,58 +13006,7 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
     };
   }, []);
 
-  // Check unread messages on boot
-  React.useEffect(() => {
-    const checkUnread = async () => {
-      const myId = window.FETS?._meId;
-      if (!myId) return;
-      try {
-        const { data: members } = await supabase
-          .from('conversation_members')
-          .select('conversation_id')
-          .eq('user_id', myId);
-          
-        if (!members || members.length === 0) return;
-        const convIds = members.map(m => m.conversation_id);
-        
-        for (const cid of convIds) {
-          const { data: msgs } = await supabase
-            .from('messages')
-            .select('id, sender_id, content, status, created_at')
-            .eq('conversation_id', cid)
-            .order('created_at', { ascending: false })
-            .limit(1);
-            
-          if (msgs && msgs.length > 0) {
-            const lastMsg = msgs[0];
-            if (lastMsg.sender_id !== myId && lastMsg.status !== 'seen') {
-              const { data: sender } = await supabase
-                .from('staff_profiles')
-                .select('full_name')
-                .eq('id', lastMsg.sender_id)
-                .single();
-                
-              const senderName = sender?.full_name || "Teammate";
-              toast(
-                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                  <div style={{ fontWeight: 800 }}>Unread message from {senderName}</div>
-                  <div style={{ fontSize: 11, opacity: 0.8, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 180 }}>{lastMsg.content}</div>
-                  <button onClick={() => {
-                    setChatTarget({ id: lastMsg.sender_id, full_name: senderName });
-                    toast.dismiss();
-                  }} style={{ alignSelf: "flex-end", border: "none", background: "transparent", color: "var(--accent)", fontSize: 10, fontWeight: 900, cursor: "pointer", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 4 }}>
-                    Open Chat
-                  </button>
-                </div>,
-                { duration: 10000, icon: '✉️' }
-              );
-            }
-          }
-        }
-      } catch (e) {}
-    };
-    setTimeout(checkUnread, 1500); // Check shortly after loading
-  }, []);
+
 
   React.useEffect(() => {
     const r = document.getElementById("fets-redesign-root") || document.documentElement;
@@ -13097,15 +13065,14 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
 
 
   const handlePick = (it) => {
-    if (it.nav) { setActive(it.id); return; }
-    if (["business", "attn-admin", "staff-requests", "staff-ot"].includes(it.id)) { setActive(it.id); return; }
     if (it.id === "vault") { setDrawer("vault"); return; }
-    if (it.legacy && bridge) { bridge(it.id); return; }
-    toast(it.label, "arrowR");
+    setActive(it.id);
   };
   const onNavigate = (n) => setActive(n.id);
   const V = window.VENDOR_BY_SLUG;
   const branchLabel = branch === "global" ? "All centres" : branch.charAt(0).toUpperCase() + branch.slice(1);
+
+  const isDeskActive = ["desk", "attn-admin", "business", "staff-requests", "staff-ot", "candidate-tracker", "access-hub", "system-manager", "news-manager", "user-management", "branch-delegation", "dashboard", "fets-intelligence", "gbp"].includes(active);
 
   return (
     <div style={{ position: "relative", zIndex: 2, height: "100%", display: "flex", flexDirection: "column", "--branch": BRANCH_TINT[branch] || "var(--accent)" }}>
@@ -13116,6 +13083,7 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
       <main className="scroll-soft main-scroll" style={{
         flex: 1,
         overflowY: "auto",
+        background: isDeskActive ? "linear-gradient(135deg, #4D6D9A 0%, #5F6366 100%)" : undefined,
         padding: (active === "calendar" || active === "roster" || active === "live" || active === "desk")
           ? "0" 
           : (active === "handover" ? "0 0 80px" : "clamp(22px,3.2vw,40px) clamp(14px,3vw,30px) 80px")
@@ -13135,6 +13103,15 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
         {active === "attn-admin" && <AttendanceAdminPage branch={branch} />}
         {active === "staff-requests" && <RosterApprovalsHub branch={branch} />}
         {active === "staff-ot" && <OtToilClaimsHub branch={branch} />}
+        {active === "candidate-tracker" && <CandidateTracker />}
+        {active === "access-hub" && <AccessHubPage />}
+        {active === "system-manager" && <SystemManager />}
+        {active === "news-manager" && <NewsManager />}
+        {active === "user-management" && <UserManagement onNavigate={setActive} />}
+        {active === "branch-delegation" && <BranchDelegationWidget />}
+        {active === "dashboard" && <Dashboard onNavigate={setActive} />}
+        {active === "fets-intelligence" && <FetsIntelligence initialQuery="" />}
+        {active === "gbp" && <GBPDashboard />}
       </main>
 
       {/* drawers */}
