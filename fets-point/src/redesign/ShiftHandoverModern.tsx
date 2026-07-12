@@ -849,7 +849,7 @@ function ScheduleNotes({ branch }: any) {
         {/* Mithun Column */}
         <section className="sh-card" style={{ display: "flex", flexDirection: "column" }}>
           <div className="sh-section-head" style={{ marginBottom: 15, paddingBottom: 15 }}>
-            <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "var(--sh-muted)" }}>Direct updates and notes from Mithun.</p>
+            <p style={{ margin: 0, fontSize: 11, color: "var(--sh-muted)" }}>Direct updates and notes from Mithun.</p>
           </div>
 
           {isMithun && (
@@ -928,7 +928,7 @@ function ScheduleNotes({ branch }: any) {
         {/* Niyas Column */}
         <section className="sh-card" style={{ display: "flex", flexDirection: "column" }}>
           <div className="sh-section-head" style={{ marginBottom: 15, paddingBottom: 15 }}>
-            <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "var(--sh-muted)" }}>Direct updates and notes from Niyas.</p>
+            <p style={{ margin: 0, fontSize: 11, color: "var(--sh-muted)" }}>Direct updates and notes from Niyas.</p>
           </div>
 
           {isNiyas && (
@@ -1165,7 +1165,7 @@ export default function ShiftHandoverModern({ branch, setActive }: any) {
           {isAdmin && (
             <button className={view === "assignments" ? "active" : ""} onClick={() => setView("assignments")}>Assignments</button>
           )}
-          <button className={view === "schedule_notes" ? "active" : ""} onClick={() => setView("schedule_notes")}>Notes</button>
+          <button className={view === "schedule_notes" ? "active" : ""} onClick={() => setView("schedule_notes")}>Pulse</button>
           <button className={view === "analysis" ? "active" : ""} onClick={() => setView("analysis")}>Analysis</button>
           <button className={view === "history" ? "active" : ""} onClick={() => setView("history")}>History</button>
         </nav>
