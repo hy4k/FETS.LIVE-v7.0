@@ -21,6 +21,7 @@ import { FetsIncidentPremium } from "../components/FetsIncidentPremium";
 import FetsRoster from "../components/FetsRosterPremium";
 import { FetsCalendarPremium as FetsCalendar } from "../components/FetsCalendarPremium";
 import { MobileCalendarView as MobileCalendar } from "../components/MobileCalendarView";
+import ShiftHandoverModern from "./ShiftHandoverModern";
 
 /* ============================================================
    SOURCE: data.js
@@ -12859,7 +12860,7 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
         )}
         {active === "roster" && <RosterPage branch={branch} />}
         {active === "case" && <RaiseCasePage branch={branch} setActive={setActive} />}
-        {active === "handover" && <ShiftHandoverPage branch={branch} setActive={setActive} />}
+        {active === "handover" && <ShiftHandoverModern branch={branch} setActive={setActive} />}
         {active === "desk" && <MyDeskPage branch={branch} setActive={setActive} setDrawer={setDrawer} />}
         {active === "business" && <BusinessPage branch={branch} />}
         {active === "news" && <TheLabPage branch={branch} />}

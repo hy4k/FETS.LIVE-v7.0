@@ -295,6 +295,67 @@ export async function dbSetRosterById(pid: string, date: string, shiftCode: stri
   }
 }
 
+async function notifySuperAdminsOfLeave(req: any) {
+  try {
+    const { data: admins } = await supabase
+      .from("staff_profiles")
+      .select("id, branch_assigned")
+      .or("role.eq.Super Admin,role.eq.admin,role.eq.Admin");
+    
+    if (admins && admins.length > 0) {
+      const isSudden = (new Date(req.date).getTime() - new Date().getTime()) < 2 * 24 * 60 * 60 * 1000;
+      const prefix = isSudden ? "🚨 [SUDDEN LEAVE]" : "📅 [Leave Request]";
+      const notifications = admins.map((admin: any) => ({
+        recipient_id: admin.id,
+        type: "critical_incident",
+        title: `${prefix} ${req.who}`,
+        message: `${req.who} has requested ${req.leaveType || "leave"} for ${req.date}. Reason: ${req.reason || "None"}.`,
+        priority: "high",
+        branch_location: req.branch || admin.branch_assigned || "global",
+        is_read: false,
+        created_at: new Date().toISOString()
+      }));
+
+      await supabase.from("notifications").insert(notifications);
+    }
+  } catch (err) {
+    console.error("notifySuperAdminsOfLeave error:", err);
+  }
+}
+
+export async function dbFetchHandoverAssignments(branch: string, startDate: string, endDate: string) {
+  try {
+    const { data, error } = await supabase
+      .from("handover_assignments")
+      .select("*")
+      .eq("branch", branch)
+      .gte("date", startDate)
+      .lte("date", endDate);
+    if (error) throw error;
+    return data || [];
+  } catch (e) {
+    console.error("dbFetchHandoverAssignments error:", e);
+    return [];
+  }
+}
+
+export async function dbSaveHandoverAssignment(date: string, branch: string, staffNames: string[]) {
+  try {
+    const { data, error } = await supabase
+      .from("handover_assignments")
+      .upsert({ date, branch, staff_names: staffNames, created_at: new Date().toISOString() }, { onConflict: "date,branch" })
+      .select()
+      .single();
+    if (error) throw error;
+    rtoast("Assignment saved");
+    return data;
+  } catch (e) {
+    console.error("dbSaveHandoverAssignment error:", e);
+    rtoast("Save assignment failed", "alert");
+    return null;
+  }
+}
+
 export async function dbAddStaffRequest(req: any) {
   let finalReason = req.reason || "";
   if (req.kind === "leave" && req.leaveType) {
@@ -337,6 +398,11 @@ export async function dbAddStaffRequest(req: any) {
     
     F().staffReqAdd(newReq);
     rtoast("Request submitted");
+
+    if (req.kind === "leave") {
+      notifySuperAdminsOfLeave(req);
+    }
+
     return data;
   } catch (e) {
     console.error("dbAddStaffRequest error:", e);
@@ -344,6 +410,7 @@ export async function dbAddStaffRequest(req: any) {
     return null;
   }
 }
+
 
 export const dbAddLeave = dbAddStaffRequest;
 
@@ -964,7 +1031,7 @@ export async function dbMutateHandoverQuestion(action: "add" | "edit" | "delete"
 export async function dbCreateHandover(h: any) {
   const now = new Date();
   const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
-  const row = {
+  const legacyRow = {
     branch: h.branch,
     date: h.date,
     handover_time: h.handover_time,
@@ -982,12 +1049,32 @@ export async function dbCreateHandover(h: any) {
     expires_at: expiresAt,
     created_by: F()._meUserId || null
   };
+  const row = {
+    ...legacyRow,
+    outgoing_user_ids: h.outgoing_user_ids || [],
+    incoming_user_ids: h.incoming_user_ids || [],
+    overall_status: h.overall_status || "ready",
+    total_sessions: Number(h.total_sessions) || 0,
+    scheduled_candidates: Number(h.scheduled_candidates) || 0,
+    attended_candidates: Number(h.attended_candidates) || 0,
+    sessions_completed: h.sessions_completed !== false,
+    timing_exception: !!h.timing_exception,
+    incident_status: h.incident_status || "none",
+    client_report_status: h.client_report_status || "completed",
+    next_day_sessions: h.next_day_sessions || []
+  };
   try {
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from("shift_handovers")
       .insert([row])
       .select()
       .single();
+    // Backward compatibility: the UI remains usable before the V2 SQL is run.
+    if (error && (error.code === "PGRST204" || String(error.message || "").includes("column"))) {
+      const fallback = await supabase.from("shift_handovers").insert([legacyRow]).select().single();
+      data = fallback.data;
+      error = fallback.error;
+    }
     if (error) throw error;
     rtoast("Handover submitted — awaiting incoming sign-off");
     return data;
@@ -998,18 +1085,22 @@ export async function dbCreateHandover(h: any) {
   }
 }
 
-export async function dbFetchPendingHandovers(staffName: string) {
+export async function dbFetchPendingHandovers(staffName: string, userId?: string) {
   try {
     const { data, error } = await supabase
       .from("shift_handovers")
       .select("*")
       .eq("status", "pending")
-      .contains("incoming_staff", [staffName])
       .order("created_at", { ascending: false });
     if (error) throw error;
-    // Auto-expire: mark as expired if past expires_at
-    const now = new Date();
-    const results = (data || []).map(h => {
+    
+    const nameLower = staffName.toLowerCase().trim();
+    const results = (data || []).filter((h: any) => {
+      const hasName = (h.incoming_staff || []).some((n: string) => n.toLowerCase().trim() === nameLower);
+      const hasId = userId && (h.incoming_user_ids || []).includes(userId);
+      return hasName || hasId;
+    }).map((h: any) => {
+      const now = new Date();
       if (h.expires_at && new Date(h.expires_at) < now) {
         return { ...h, status: "expired" };
       }
@@ -1021,6 +1112,61 @@ export async function dbFetchPendingHandovers(staffName: string) {
     return [];
   }
 }
+
+export async function dbFetchHandoverNotes() {
+  try {
+    const { data, error } = await supabase
+      .from("handover_notes")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return data || [];
+  } catch (e) {
+    console.error("dbFetchHandoverNotes error:", e);
+    return [];
+  }
+}
+
+export async function dbSaveHandoverNote(author: string, content: string, taggedStaff: string[], centers: string[]) {
+  try {
+    const { data, error } = await supabase
+      .from("handover_notes")
+      .insert([{
+        author,
+        content,
+        tagged_staff: taggedStaff,
+        centers,
+        created_at: new Date().toISOString(),
+        created_by: F()._meUserId || null
+      }])
+      .select()
+      .single();
+    if (error) throw error;
+    rtoast("Note posted");
+    return data;
+  } catch (e) {
+    console.error("dbSaveHandoverNote error:", e);
+    rtoast("Sync failed — saved locally", "alert");
+    return null;
+  }
+}
+
+export async function dbDeleteHandoverNote(id: string) {
+  try {
+    const { error } = await supabase
+      .from("handover_notes")
+      .delete()
+      .eq("id", id);
+    if (error) throw error;
+    rtoast("Note deleted");
+    return true;
+  } catch (e) {
+    console.error("dbDeleteHandoverNote error:", e);
+    rtoast("Failed to delete note", "alert");
+    return false;
+  }
+}
+
 
 export async function dbCompleteHandover(id: string, sigIn: any, comments: string) {
   try {
