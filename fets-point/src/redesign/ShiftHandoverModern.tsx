@@ -22,7 +22,13 @@ const EMPTY_SUMMARY = {
   notes: "",
 };
 
-const nowDate = () => new Date().toISOString().slice(0, 10);
+const toYMD = (d: Date) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const r = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${r}`;
+};
+const nowDate = () => toYMD(new Date());
 const nowTime = () => new Date().toTimeString().slice(0, 5);
 const titleBranch = (branch: string) => branch === "global" ? "All centres" : `${branch.charAt(0).toUpperCase()}${branch.slice(1)}`;
 const initials = (name = "Staff") => name.split(/\s+/).filter(Boolean).slice(0, 2).map((x) => x[0]).join("").toUpperCase();
@@ -258,7 +264,7 @@ function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestions }: a
     let alive = true;
     async function syncIncoming() {
       try {
-        const day = tomorrow.toISOString().slice(0, 10);
+        const day = toYMD(tomorrow);
         const br = branch === "global" ? (window.FETS?._meBranch || "calicut") : branch;
         
         // Try fetching handover assignment first
@@ -344,7 +350,7 @@ function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestions }: a
   const toggleIncoming = (name: string) => setIncoming((list) => list.includes(name) ? list.filter((x) => x !== name) : [...list, name]);
   const updateSummary = (key: string, value: any) => setSummary((state) => ({ ...state, [key]: value }));
   const updateReadiness = (id: string, patch: any) => setReadiness((state) => ({ ...state, [id]: { ...state[id], ...patch } }));
-  const addTask = () => setTasks((list) => [...list, { id: crypto.randomUUID(), title: "", priority: "before_first_session", owner: incoming[0] || "", deadline: `${tomorrow.toISOString().slice(0, 10)}T08:00`, notes: "" }]);
+  const addTask = () => setTasks((list) => [...list, { id: crypto.randomUUID(), title: "", priority: "before_first_session", owner: incoming[0] || "", deadline: `${toYMD(tomorrow)}T08:00`, notes: "" }]);
   const updateTask = (id: string, patch: any) => setTasks((list) => list.map((task) => task.id === id ? { ...task, ...patch } : task));
   const removeTask = (id: string) => setTasks((list) => list.filter((task) => task.id !== id));
 
@@ -445,7 +451,7 @@ function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestions }: a
         <Field label="Important notes from today" wide><textarea rows={3} value={summary.notes} onChange={(e) => updateSummary("notes", e.target.value)} placeholder="Add only information the next team needs to know…" /></Field>
       </Section>
 
-      <Section number={3} eyebrow="Step 3" title="Next-day exam schedule" description={`${displayDate(tomorrow.toISOString().slice(0, 10))} · automatically loaded from Calendar.`}>
+      <Section number={3} eyebrow="Step 3" title="Next-day exam schedule" description={`${displayDate(toYMD(tomorrow))} · automatically loaded from Calendar.`}>
         {sessions.length ? <div className="sh-sessions">{sessions.map((session: any) => <div key={session.id}><span className="sh-session-time">{session.start}</span><span className="sh-session-logo">{String(session.client).slice(0, 1).toUpperCase()}</span><span><strong>{session.client} · {session.exam}</strong><small>Scheduled examination</small></span><span className="sh-session-count"><strong>{session.candidates}</strong><small>candidates</small></span></div>)}</div> : <EmptyState icon={CalendarDays} title="No sessions found" text="Add tomorrow’s sessions in FETS Calendar if this is not correct." />}
       </Section>
 
@@ -568,7 +574,7 @@ function ShiftBeginning({ branch, refreshKey, onAccepted }: any) {
           "I reviewed today’s sessions",
           "I verified centre readiness",
           "I checked all pending actions",
-        ].map((label, index) => <label className={checks[index] ? "checked" : ""} key={label}><input type="checkbox" checked={checks[index]} onChange={() => setChecks((state) => state.map((value, i) => i === index ? !value : value))} /><span><Check size={14} /></span>{label}</label>)}</div>
+        ].map((label, index) => <label className={checks[index] ? "checked" : ""} key={label}><input type="checkbox" checked={checks[index]} onChange={(e) => setChecks((state) => state.map((value, i) => i === index ? e.target.checked : value))} /><span><Check size={14} /></span>{label}</label>)}</div>
         <div className="sh-progress"><span><i style={{ width: `${completeCount * 25}%` }} /></span><strong>{completeCount} of 4 completed</strong></div>
       </Section>
 
@@ -611,8 +617,8 @@ function HandoverAssignments({ branch }: any) {
     });
   }, []);
 
-  const startDate = dates[0].toISOString().slice(0, 10);
-  const endDate = dates[6].toISOString().slice(0, 10);
+  const startDate = toYMD(dates[0]);
+  const endDate = toYMD(dates[6]);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -653,7 +659,7 @@ function HandoverAssignments({ branch }: any) {
 
       <div className="sh-assignments-list">
         {dates.map((d) => {
-          const dateStr = d.toISOString().slice(0, 10);
+          const dateStr = toYMD(d);
           const br = branch === "global" ? (window.FETS?._meBranch || "calicut") : branch;
           const rostered = window.FETS?.rosterOn?.(d, br) || [];
           const assign = assignments.find(x => x.date === dateStr);
@@ -733,8 +739,8 @@ function ScheduleNotes({ branch }: any) {
     });
   }, []);
 
-  const startDate = dates[0].toISOString().slice(0, 10);
-  const endDate = dates[6].toISOString().slice(0, 10);
+  const startDate = toYMD(dates[0]);
+  const endDate = toYMD(dates[6]);
 
   const load = React.useCallback(async () => {
     setLoadingSchedule(true);
@@ -820,7 +826,7 @@ function ScheduleNotes({ branch }: any) {
         ) : (
           <div className="sh-horizontal-schedule scroll-soft" style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 10 }}>
             {dates.map((d) => {
-              const dateStr = d.toISOString().slice(0, 10);
+              const dateStr = toYMD(d);
               const assign = assignments.find(x => x.date === dateStr);
               const assignedNames = assign ? assign.staff_names : [];
               return (
