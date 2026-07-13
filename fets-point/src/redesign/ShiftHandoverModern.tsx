@@ -73,13 +73,13 @@ function Section({ number, eyebrow, title, description, children, action }: any)
   );
 }
 
-function StatusChoice({ value, onChange }: any) {
+function StatusChoice({ value, onChange, disabled = false }: any) {
   return (
     <div className="sh-status-choice">
       {[
         ["ready", "Ready"], ["issue", "Issue found"], ["unchecked", "Not checked"],
       ].map(([id, label]) => (
-        <button type="button" key={id} onClick={() => onChange(id)} className={`${id} ${value === id ? "active" : ""}`}>
+        <button type="button" disabled={disabled} key={id} onClick={() => !disabled && onChange(id)} className={`${id} ${value === id ? "active" : ""}`}>
           <i />{label}
         </button>
       ))}
@@ -87,11 +87,11 @@ function StatusChoice({ value, onChange }: any) {
   );
 }
 
-function Toggle({ value, onChange, yes = "Yes", no = "No" }: any) {
+function Toggle({ value, onChange, yes = "Yes", no = "No", disabled = false }: any) {
   return (
     <div className="sh-toggle">
-      <button type="button" className={value === "yes" ? "active" : ""} onClick={() => onChange("yes")}>{yes}</button>
-      <button type="button" className={value === "no" ? "active" : ""} onClick={() => onChange("no")}>{no}</button>
+      <button type="button" disabled={disabled} className={value === "yes" ? "active" : ""} onClick={() => !disabled && onChange("yes")}>{yes}</button>
+      <button type="button" disabled={disabled} className={value === "no" ? "active" : ""} onClick={() => !disabled && onChange("no")}>{no}</button>
     </div>
   );
 }
@@ -217,6 +217,13 @@ function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestions }: a
   const [tasks, setTasks] = React.useState<any[]>([]);
   const [confirmed, setConfirmed] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
+  const [existingHandover, setExistingHandover] = React.useState<any>(null);
+  const [isLoadingExisting, setIsLoadingExisting] = React.useState(false);
+  const [assignedIncoming, setAssignedIncoming] = React.useState<string[]>([]);
+  const [rosteredIncoming, setRosteredIncoming] = React.useState<string[]>([]);
+  const [hasIncomingAssignment, setHasIncomingAssignment] = React.useState(false);
+  const [todayAssignment, setTodayAssignment] = React.useState<string[]>([]);
+  const [hasTodayAssignment, setHasTodayAssignment] = React.useState(false);
   const tomorrow = React.useMemo(() => tomorrowOf(date), [date]);
   const sessions = React.useMemo(() => sessionSnapshot(tomorrow, branch), [date, branch]);
 
@@ -244,20 +251,129 @@ function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestions }: a
     try {
       const stored = JSON.parse(localStorage.getItem(draftKey) || "null");
       if (!stored) return;
-      if (stored.date) setDate(stored.date);
-      if (stored.time) setTime(stored.time);
-      if (stored.incoming) setIncoming(stored.incoming);
-      if (stored.overall) setOverall(stored.overall);
-      if (stored.summary) setSummary({ ...EMPTY_SUMMARY, ...stored.summary });
-      if (stored.readiness) setReadiness(stored.readiness);
-      if (stored.tasks) setTasks(stored.tasks);
+      if (stored.date && stored.date === nowDate()) {
+        setDate(stored.date);
+        if (stored.time) setTime(stored.time);
+        if (stored.incoming) setIncoming(stored.incoming);
+        if (stored.overall) setOverall(stored.overall);
+        if (stored.summary) setSummary({ ...EMPTY_SUMMARY, ...stored.summary });
+        if (stored.readiness) setReadiness(stored.readiness);
+        if (stored.tasks) setTasks(stored.tasks);
+      } else {
+        localStorage.removeItem(draftKey);
+      }
     } catch {}
   }, [draftKey]);
 
   // Save draft
   React.useEffect(() => {
-    localStorage.setItem(draftKey, JSON.stringify({ date, time, incoming, overall, summary, readiness, tasks }));
-  }, [date, time, incoming, overall, summary, readiness, tasks, draftKey]);
+    if (!existingHandover && date === nowDate()) {
+      localStorage.setItem(draftKey, JSON.stringify({ date, time, incoming, overall, summary, readiness, tasks }));
+    }
+  }, [date, time, incoming, overall, summary, readiness, tasks, draftKey, existingHandover]);
+
+  // Load existing handover from database
+  React.useEffect(() => {
+    let alive = true;
+    async function checkExisting() {
+      setIsLoadingExisting(true);
+      try {
+        const br = branch === "global" ? (window.FETS?._meBranch || "calicut") : branch;
+        const { data, error } = await supabase
+          .from("shift_handovers")
+          .select("*")
+          .eq("branch", br)
+          .eq("date", date)
+          .maybeSingle();
+
+        if (!alive) return;
+        if (data) {
+          setExistingHandover(data);
+          setIncoming(data.incoming_staff || []);
+          setOverall(data.overall_status || (data.instructions?.includes("Overall status: ") ? data.instructions.split("Overall status: ")[1] : "ready"));
+          
+          const newReadiness: any = {};
+          if (data.checklist) {
+            data.checklist.forEach((item: any) => {
+              newReadiness[item.id] = { status: item.status, note: item.note || "" };
+            });
+          }
+          setReadiness(newReadiness);
+          setTasks(data.pending_items || []);
+          setConfirmed(true);
+          setSummary({
+            total_sessions: data.total_sessions || 0,
+            scheduled: data.scheduled_candidates || 0,
+            attended: data.attended_candidates || 0,
+            no_shows: data.no_shows || 0,
+            sessions_completed: data.sessions_completed ? "yes" : "no",
+            timing_exception: data.timing_exception ? "yes" : "no",
+            incident_status: data.incident_status || "none",
+            client_report_status: data.client_report_status || "completed",
+            notes: data.candidate_notes || "",
+          });
+        } else {
+          setExistingHandover(null);
+          setConfirmed(false);
+          // Try loading draft
+          try {
+            const stored = JSON.parse(localStorage.getItem(draftKey) || "null");
+            if (stored && stored.date === date) {
+              setIncoming(stored.incoming || []);
+              setOverall(stored.overall || "ready");
+              setSummary(stored.summary || { ...EMPTY_SUMMARY });
+              setReadiness(stored.readiness || {});
+              setTasks(stored.tasks || []);
+            } else {
+              setIncoming([]);
+              setOverall("ready");
+              setSummary({ ...EMPTY_SUMMARY });
+              setTasks([]);
+            }
+          } catch {}
+        }
+      } catch (err) {
+        console.error("checkExisting error:", err);
+      } finally {
+        if (alive) setIsLoadingExisting(false);
+      }
+    }
+
+    checkExisting();
+    return () => { alive = false; };
+  }, [date, branch, draftKey]);
+
+  // Load today's assignment to determine outgoing staff
+  React.useEffect(() => {
+    let alive = true;
+    async function fetchTodayAssignment() {
+      try {
+        const br = branch === "global" ? (window.FETS?._meBranch || "calicut") : branch;
+        const { data, error } = await supabase
+          .from("handover_assignments")
+          .select("staff_names")
+          .eq("date", date)
+          .eq("branch", br)
+          .maybeSingle();
+        
+        if (!alive) return;
+        if (data && data.staff_names) {
+          setTodayAssignment(data.staff_names);
+          setHasTodayAssignment(true);
+        } else {
+          setTodayAssignment([]);
+          setHasTodayAssignment(false);
+        }
+      } catch {
+        if (alive) {
+          setTodayAssignment([]);
+          setHasTodayAssignment(false);
+        }
+      }
+    }
+    fetchTodayAssignment();
+    return () => { alive = false; };
+  }, [date, branch]);
 
   // Sync incoming staff from assignments (primary) or roster fallback
   React.useEffect(() => {
@@ -278,28 +394,57 @@ function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestions }: a
         if (!alive) return;
 
         if (assignData && assignData.staff_names && assignData.staff_names.length > 0) {
+          setAssignedIncoming(assignData.staff_names);
+          setHasIncomingAssignment(true);
           setIncoming(assignData.staff_names);
           return;
         }
+
+        setHasIncomingAssignment(false);
+        setAssignedIncoming([]);
 
         // Fallback to roster schedules
         const { data } = await supabase
           .from("roster_schedules")
           .select("shift_code, branch_location, staff_profiles(full_name, branch_assigned)")
           .eq("date", day);
-        if (!alive || !data) return;
-        const rest = new Set(["rd", "off", "wo", "l", "leave", "lv", "h", "holiday", "to", "toil", "tr", "tp"]);
-        const names = data.filter((row: any) => {
-          const code = String(row.shift_code || "").toLowerCase();
-          const rowBranch = String(row.branch_location || row.staff_profiles?.branch_assigned || "").toLowerCase();
-          return code && !rest.has(code) && rowBranch.includes(br);
-        }).map((row: any) => row.staff_profiles?.full_name).filter(Boolean);
-        if (names.length) setIncoming(Array.from(new Set(names)) as string[]);
-      } catch {}
+        if (!alive) return;
+        
+        if (data) {
+          const brLower = br.toLowerCase();
+          const rest = new Set(["rd", "off", "wo", "l", "leave", "lv", "h", "holiday", "to", "toil", "tr", "tp"]);
+          const names = data.filter((row: any) => {
+            const code = String(row.shift_code || "").toLowerCase();
+            const rowBranch = String(row.branch_location || row.staff_profiles?.branch_assigned || "").toLowerCase();
+            return code && !rest.has(code) && rowBranch.includes(brLower);
+          }).map((row: any) => row.staff_profiles?.full_name).filter(Boolean);
+          
+          const uniqueNames = Array.from(new Set(names)) as string[];
+          setRosteredIncoming(uniqueNames);
+          if (uniqueNames.length) {
+            setIncoming(uniqueNames);
+          } else {
+            setIncoming([]);
+          }
+        } else {
+          setRosteredIncoming([]);
+          setIncoming([]);
+        }
+      } catch {
+        if (alive) {
+          setHasIncomingAssignment(false);
+          setAssignedIncoming([]);
+          setRosteredIncoming([]);
+          setIncoming([]);
+        }
+      }
     }
-    syncIncoming();
+    
+    if (!existingHandover) {
+      syncIncoming();
+    }
     return () => { alive = false; };
-  }, [date, branch, tomorrow]);
+  }, [date, branch, tomorrow, existingHandover]);
 
   // Autofill session and candidate attendance metrics from FETS.live context
   React.useEffect(() => {
@@ -343,9 +488,53 @@ function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestions }: a
         console.error("autofillData error:", err);
       }
     }
-    autofillData();
+    // Only autofill if no existing handover is loaded
+    if (!existingHandover) {
+      autofillData();
+    }
     return () => { alive = false; };
-  }, [date, branch]);
+  }, [date, branch, existingHandover]);
+
+  const isLocked = React.useMemo(() => {
+    if (existingHandover) return true;
+
+    const br = branch === "global" ? (window.FETS?._meBranch || "calicut") : branch;
+    
+    // Check if me is in today's assignment (outgoing staff)
+    const isMeToday = todayAssignment.some((n: string) => n.toLowerCase().trim() === me.toLowerCase().trim());
+    
+    // Check if me is tomorrow's assigned staff (incoming staff)
+    const isMeTomorrow = assignedIncoming.some((n: string) => n.toLowerCase().trim() === me.toLowerCase().trim());
+
+    if (hasTodayAssignment && !isMeToday) {
+      return true;
+    }
+
+    const todayRostered = window.FETS?.rosterOn?.(new Date(`${date}T00:00:00`), br) || [];
+    const isMeRosteredToday = todayRostered.some((n: string) => n.toLowerCase().trim() === me.toLowerCase().trim());
+    if (!hasTodayAssignment && todayRostered.length > 0 && !isMeRosteredToday) {
+      return true;
+    }
+
+    if (hasIncomingAssignment && isMeTomorrow) {
+      return true;
+    }
+
+    return false;
+  }, [existingHandover, todayAssignment, hasTodayAssignment, assignedIncoming, hasIncomingAssignment, me, date, branch]);
+
+  const allowedIncomingOptions = React.useMemo(() => {
+    if (existingHandover) {
+      return incoming;
+    }
+    if (hasIncomingAssignment) {
+      return assignedIncoming;
+    }
+    if (rosteredIncoming.length > 0) {
+      return rosteredIncoming;
+    }
+    return people.filter((name: string) => name !== me);
+  }, [existingHandover, incoming, hasIncomingAssignment, assignedIncoming, rosteredIncoming, people, me]);
 
   const toggleIncoming = (name: string) => setIncoming((list) => list.includes(name) ? list.filter((x) => x !== name) : [...list, name]);
   const updateSummary = (key: string, value: any) => setSummary((state) => ({ ...state, [key]: value }));
@@ -408,11 +597,19 @@ function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestions }: a
     }
   }
 
+  if (isLoadingExisting) {
+    return <div className="sh-loading"><Loader2 className="spin" /> Loading handover details…</div>;
+  }
+
   return (
     <div className="sh-stack">
       <div className="sh-page-intro">
-        <div><span className="sh-page-kicker">SHIFT END · {titleBranch(branch).toUpperCase()}</span><h1>Close today. Prepare tomorrow.</h1><p>Record the day’s status and anything the opening team needs to know.</p></div>
-        <span className="sh-saved"><CheckCircle2 size={14} /> Draft saved</span>
+        <div>
+          <span className="sh-page-kicker">SHIFT END · {titleBranch(branch).toUpperCase()}</span>
+          <h1>Close today. Prepare tomorrow.</h1>
+          <p>Record the day’s status and anything the opening team needs to know.</p>
+        </div>
+        {!existingHandover && <span className="sh-saved"><CheckCircle2 size={14} /> Draft saved</span>}
       </div>
 
       <Section number={1} eyebrow="Step 1" title="Handover details" description="Staff and timing for this handover.">
@@ -420,11 +617,26 @@ function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestions }: a
           <Field label="Centre"><input value={titleBranch(branch)} disabled /></Field>
           <Field label="Handover date"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
           <Field label="Closing staff"><input value={me} disabled /></Field>
-          <Field label="Closing time"><input type="time" value={time} onChange={(e) => setTime(e.target.value)} /></Field>
+          <Field label="Closing time"><input type="time" value={time} onChange={(e) => setTime(e.target.value)} disabled={isLocked} /></Field>
         </div>
         <div className="sh-sub-label">Next opening staff</div>
         <div className="sh-people">
-          {people.filter((name: string) => name !== me).map((name: string) => <button type="button" key={name} className={incoming.includes(name) ? "active" : ""} onClick={() => toggleIncoming(name)}><span>{initials(name)}</span>{name}{incoming.includes(name) && <Check size={13} />}</button>)}
+          {allowedIncomingOptions.map((name: string) => (
+            <button
+              type="button"
+              key={name}
+              className={incoming.includes(name) ? "active" : ""}
+              onClick={() => !isLocked && toggleIncoming(name)}
+              disabled={isLocked}
+            >
+              <span>{initials(name)}</span>
+              {name}
+              {incoming.includes(name) && <Check size={13} />}
+            </button>
+          ))}
+          {allowedIncomingOptions.length === 0 && (
+            <span className="sh-no-staff">No staff available for the next day.</span>
+          )}
         </div>
         {!incoming.length && <p className="sh-inline-error">Select at least one opening staff member.</p>}
         <div className="sh-sub-label">Overall centre status</div>
@@ -434,21 +646,43 @@ function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestions }: a
             ["minor", "Ready with minor issues", "Operations can continue"],
             ["attention", "Attention required", "Action needed before opening"],
             ["not_ready", "Not ready", "Manager action required"],
-          ].map(([id, label, detail]) => <button type="button" key={id} className={overall === id ? "active" : ""} onClick={() => setOverall(id)}><i className={id} /><span><strong>{label}</strong><small>{detail}</small></span>{overall === id && <Check size={14} />}</button>)}
+          ].map(([id, label, detail]) => (
+            <button
+              type="button"
+              key={id}
+              className={overall === id ? "active" : ""}
+              onClick={() => !isLocked && setOverall(id)}
+              disabled={isLocked}
+            >
+              <i className={id} />
+              <span><strong>{label}</strong><small>{detail}</small></span>
+              {overall === id && <Check size={14} />}
+            </button>
+          ))}
         </div>
       </Section>
 
       <Section number={2} eyebrow="Step 2" title="Today’s closing summary" description="Completed sessions, candidate counts and exceptions.">
         <div className="sh-metrics">
-          {[["total_sessions", "Total sessions"], ["scheduled", "Scheduled"], ["attended", "Attended"], ["no_shows", "No-shows"]].map(([key, label]) => <Field key={key} label={label}><input type="number" min="0" value={summary[key]} onChange={(e) => updateSummary(key, e.target.value)} /></Field>)}
+          {[["total_sessions", "Total sessions"], ["scheduled", "Scheduled"], ["attended", "Attended"], ["no_shows", "No-shows"]].map(([key, label]) => (
+            <Field key={key} label={label}>
+              <input
+                type="number"
+                min="0"
+                value={summary[key]}
+                onChange={(e) => updateSummary(key, e.target.value)}
+                disabled={isLocked}
+              />
+            </Field>
+          ))}
         </div>
         <div className="sh-questions">
-          <div><span><strong>All sessions completed?</strong><small>Confirm every scheduled session has ended.</small></span><Toggle value={summary.sessions_completed} onChange={(value: string) => updateSummary("sessions_completed", value)} /></div>
-          <div><span><strong>Any late start or late finish?</strong><small>Record any timing exception.</small></span><Toggle value={summary.timing_exception} onChange={(value: string) => updateSummary("timing_exception", value)} /></div>
-          <div><span><strong>Incidents today</strong><small>Detailed cases should remain in Incident Logger.</small></span><select value={summary.incident_status} onChange={(e) => updateSummary("incident_status", e.target.value)}><option value="none">No incident</option><option value="linked">Incident linked</option><option value="pending">Reporting pending</option></select></div>
-          <div><span><strong>Required client reports / CPR</strong><small>Select the correct completion status.</small></span><select value={summary.client_report_status} onChange={(e) => updateSummary("client_report_status", e.target.value)}><option value="completed">Completed</option><option value="not_applicable">Not applicable</option><option value="pending">Pending</option></select></div>
+          <div><span><strong>All sessions completed?</strong><small>Confirm every scheduled session has ended.</small></span><Toggle value={summary.sessions_completed} onChange={(value: string) => updateSummary("sessions_completed", value)} disabled={isLocked} /></div>
+          <div><span><strong>Any late start or late finish?</strong><small>Record any timing exception.</small></span><Toggle value={summary.timing_exception} onChange={(value: string) => updateSummary("timing_exception", value)} disabled={isLocked} /></div>
+          <div><span><strong>Incidents today</strong><small>Detailed cases should remain in Incident Logger.</small></span><select value={summary.incident_status} onChange={(e) => updateSummary("incident_status", e.target.value)} disabled={isLocked}><option value="none">No incident</option><option value="linked">Incident linked</option><option value="pending">Reporting pending</option></select></div>
+          <div><span><strong>Required client reports / CPR</strong><small>Select the correct completion status.</small></span><select value={summary.client_report_status} onChange={(e) => updateSummary("client_report_status", e.target.value)} disabled={isLocked}><option value="completed">Completed</option><option value="not_applicable">Not applicable</option><option value="pending">Pending</option></select></div>
         </div>
-        <Field label="Important notes from today" wide><textarea rows={3} value={summary.notes} onChange={(e) => updateSummary("notes", e.target.value)} placeholder="Add only information the next team needs to know…" /></Field>
+        <Field label="Important notes from today" wide><textarea rows={3} value={summary.notes} onChange={(e) => updateSummary("notes", e.target.value)} placeholder="Add only information the next team needs to know…" disabled={isLocked} /></Field>
       </Section>
 
       <Section number={3} eyebrow="Step 3" title="Next-day exam schedule" description={`${displayDate(toYMD(tomorrow))} · automatically loaded from Calendar.`}>
@@ -461,7 +695,7 @@ function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestions }: a
         title="Centre readiness"
         description="Use Not checked when a closing verification was not performed."
         action={isAdmin && (
-          <button type="button" className="sh-manage-q-btn" onClick={onManageQuestions}>
+          <button type="button" className="sh-manage-q-btn" onClick={onManageQuestions} disabled={isLocked}>
             <Settings size={14} /> Manage Questions
           </button>
         )}
@@ -470,8 +704,8 @@ function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestions }: a
           {readinessRows.map((item: any) => {
             return <div className={`sh-ready-row ${item.status === "issue" ? "has-issue" : ""}`} key={item.id}>
               <span className="sh-ready-icon"><Laptop size={16} /></span><span className="sh-ready-name"><strong>{item.label}</strong><small>{item.description}</small></span>
-              <StatusChoice value={item.status} onChange={(value: string) => updateReadiness(item.id, { status: value })} />
-              {item.status === "issue" && <label className="sh-issue-note"><span>Issue details required</span><input value={item.note} onChange={(e) => updateReadiness(item.id, { note: e.target.value })} placeholder="What is wrong, what was done, and what remains?" /></label>}
+              <StatusChoice value={item.status} onChange={(value: string) => updateReadiness(item.id, { status: value })} disabled={isLocked} />
+              {item.status === "issue" && <label className="sh-issue-note"><span>Issue details required</span><input value={item.note} onChange={(e) => updateReadiness(item.id, { note: e.target.value })} placeholder="What is wrong, what was done, and what remains?" disabled={isLocked} /></label>}
             </div>;
           })}
         </div>
@@ -481,21 +715,27 @@ function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestions }: a
       <Section number={5} eyebrow="Step 5" title="Pending tasks" description="Every pending action needs an owner and deadline.">
         <div className="sh-task-list">
           {tasks.map((task) => <div className="sh-task" key={task.id}>
-            <div className="sh-task-top"><select value={task.priority} onChange={(e) => updateTask(task.id, { priority: e.target.value })}><option value="critical">Critical</option><option value="before_first_session">Before first session</option><option value="today">Today</option><option value="routine">Routine</option></select><button type="button" onClick={() => removeTask(task.id)} title="Remove task"><Trash2 size={16} /></button></div>
-            <input className="sh-task-title" value={task.title} onChange={(e) => updateTask(task.id, { title: e.target.value })} placeholder="What needs to be done?" />
-            <div className="sh-task-grid"><Field label="Assigned to"><select value={task.owner} onChange={(e) => updateTask(task.id, { owner: e.target.value })}><option value="">Select owner</option>{people.map((name: string) => <option key={name}>{name}</option>)}</select></Field><Field label="Deadline"><input type="datetime-local" value={task.deadline} onChange={(e) => updateTask(task.id, { deadline: e.target.value })} /></Field></div>
-            <textarea rows={2} value={task.notes} onChange={(e) => updateTask(task.id, { notes: e.target.value })} placeholder="Supporting note or reference (optional)" />
+            <div className="sh-task-top"><select value={task.priority} onChange={(e) => updateTask(task.id, { priority: e.target.value })} disabled={isLocked}><option value="critical">Critical</option><option value="before_first_session">Before first session</option><option value="today">Today</option><option value="routine">Routine</option></select><button type="button" onClick={() => !isLocked && removeTask(task.id)} title="Remove task" disabled={isLocked}><Trash2 size={16} /></button></div>
+            <input className="sh-task-title" value={task.title} onChange={(e) => updateTask(task.id, { title: e.target.value })} placeholder="What needs to be done?" disabled={isLocked} />
+            <div className="sh-task-grid"><Field label="Assigned to"><select value={task.owner} onChange={(e) => updateTask(task.id, { owner: e.target.value })} disabled={isLocked}><option value="">Select owner</option>{people.map((name: string) => <option key={name}>{name}</option>)}</select></Field><Field label="Deadline"><input type="datetime-local" value={task.deadline} onChange={(e) => updateTask(task.id, { deadline: e.target.value })} disabled={isLocked} /></Field></div>
+            <textarea rows={2} value={task.notes} onChange={(e) => updateTask(task.id, { notes: e.target.value })} placeholder="Supporting note or reference (optional)" disabled={isLocked} />
           </div>)}
         </div>
         {!tasks.length && <p className="sh-no-tasks">No pending tasks added.</p>}
-        <button type="button" className="sh-add" onClick={addTask}><Plus size={15} /> Add pending task</button>
+        <button type="button" className="sh-add" onClick={addTask} disabled={isLocked}><Plus size={15} /> Add pending task</button>
       </Section>
 
       <Section number={6} eyebrow="Final step" title="Confirm and send handover" description="The opening staff will receive this record for review and acceptance.">
-        <label className="sh-declaration"><input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} /><span><strong>I confirm that this handover is accurate.</strong><small>All known incidents, technical issues and pending actions have been recorded or linked.</small></span></label>
+        <label className="sh-declaration"><input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} disabled={isLocked} /><span><strong>I confirm that this handover is accurate.</strong><small>All known incidents, technical issues and pending actions have been recorded or linked.</small></span></label>
         <div className="sh-signature"><span>{initials(me)}</span><span><strong>{me}</strong><small>Closing staff · {titleBranch(branch)}</small></span><small>Digitally signed on submission</small></div>
-        <button type="button" className="sh-primary" disabled={!canSubmit || submitting} onClick={submit}>{submitting ? <><Loader2 className="spin" size={16} /> Submitting…</> : <>Submit shift handover <ChevronRight size={17} /></>}</button>
-        {!canSubmit && <p className="sh-submit-help">Select incoming staff, complete all readiness checks, fix incomplete tasks and confirm the declaration.</p>}
+        <button type="button" className="sh-primary" disabled={!canSubmit || submitting || isLocked} onClick={submit}>{submitting ? <><Loader2 className="spin" size={16} /> Submitting…</> : <>Submit shift handover <ChevronRight size={17} /></>}</button>
+        {existingHandover ? (
+          <p className="sh-submit-help" style={{ color: "var(--sh-green)", fontWeight: "bold" }}>This handover has already been submitted and is locked.</p>
+        ) : isLocked ? (
+          <p className="sh-submit-help" style={{ color: "var(--sh-red)", fontWeight: "bold" }}>You are not the outgoing staff member for this shift. Access is view-only.</p>
+        ) : (
+          !canSubmit && <p className="sh-submit-help">Select incoming staff, complete all readiness checks, fix incomplete tasks and confirm the declaration.</p>
+        )}
       </Section>
     </div>
   );
@@ -609,16 +849,19 @@ function HandoverAssignments({ branch }: any) {
   const [assignments, setAssignments] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
 
-  const dates = React.useMemo(() => {
-    return Array.from({ length: 7 }).map((_, idx) => {
-      const d = new Date();
-      d.setDate(d.getDate() + idx);
-      return d;
-    });
-  }, []);
+  const now = React.useMemo(() => new Date(), []);
+  const [selectedMonth, setSelectedMonth] = React.useState(now.getMonth());
+  const [selectedYear, setSelectedYear] = React.useState(now.getFullYear());
 
-  const startDate = toYMD(dates[0]);
-  const endDate = toYMD(dates[6]);
+  const dates = React.useMemo(() => {
+    const totalDays = new Date(selectedYear, selectedMonth + 1, 0).getDate();
+    return Array.from({ length: totalDays }).map((_, idx) => {
+      return new Date(selectedYear, selectedMonth, idx + 1);
+    });
+  }, [selectedYear, selectedMonth]);
+
+  const startDate = React.useMemo(() => toYMD(dates[0]), [dates]);
+  const endDate = React.useMemo(() => toYMD(dates[dates.length - 1]), [dates]);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -645,57 +888,83 @@ function HandoverAssignments({ branch }: any) {
     }
   }
 
-  if (loading) return <div className="sh-loading"><Loader2 className="spin" /> Loading assignments…</div>;
-
   return (
     <div className="sh-stack">
       <div className="sh-page-intro">
         <div>
           <span className="sh-page-kicker">SCHEDULING · {titleBranch(branch).toUpperCase()}</span>
           <h1>Handover Assignments</h1>
-          <p>Assign who needs to take handover for the next 7 days.</p>
+          <p>Assign who needs to take handover for the selected month.</p>
         </div>
       </div>
 
-      <div className="sh-assignments-list">
-        {dates.map((d) => {
-          const dateStr = toYMD(d);
-          const br = branch === "global" ? (window.FETS?._meBranch || "calicut") : branch;
-          const rostered = window.FETS?.rosterOn?.(d, br) || [];
-          const assign = assignments.find(x => x.date === dateStr);
-          const assignedNames = assign ? assign.staff_names : [];
-
-          return (
-            <div key={dateStr} className="sh-assignment-card sh-card">
-              <div className="sh-assign-info">
-                <h3>{displayDate(dateStr)}</h3>
-                <p>{rostered.length} staff rostered</p>
-              </div>
-              <div className="sh-assign-selectors">
-                {rostered.length ? (
-                  rostered.map((name: string) => {
-                    const isAssigned = assignedNames.includes(name);
-                    return (
-                      <button
-                        type="button"
-                        key={name}
-                        className={`sh-assign-btn ${isAssigned ? "active" : ""}`}
-                        onClick={() => handleToggle(dateStr, name, assignedNames)}
-                      >
-                        <span>{initials(name)}</span>
-                        {name}
-                        {isAssigned && <Check size={13} />}
-                      </button>
-                    );
-                  })
-                ) : (
-                  <span className="sh-no-staff">No staff rostered.</span>
-                )}
-              </div>
-            </div>
-          );
-        })}
+      <div className="sh-month-picker-row" style={{ display: "flex", gap: 12, marginBottom: 20, alignItems: "center" }}>
+        <select
+          value={selectedMonth}
+          onChange={(e) => setSelectedMonth(Number(e.target.value))}
+          style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--sh-line)", background: "var(--sh-canvas)", color: "var(--sh-ink)", fontWeight: 600 }}
+        >
+          {[
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+          ].map((m, idx) => (
+            <option key={idx} value={idx}>{m}</option>
+          ))}
+        </select>
+        <select
+          value={selectedYear}
+          onChange={(e) => setSelectedYear(Number(e.target.value))}
+          style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--sh-line)", background: "var(--sh-canvas)", color: "var(--sh-ink)", fontWeight: 600 }}
+        >
+          {[now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1].map((y) => (
+            <option key={y} value={y}>{y}</option>
+          ))}
+        </select>
       </div>
+
+      {loading ? (
+        <div className="sh-loading"><Loader2 className="spin" /> Loading assignments…</div>
+      ) : (
+        <div className="sh-assignments-list">
+          {dates.map((d) => {
+            const dateStr = toYMD(d);
+            const br = branch === "global" ? (window.FETS?._meBranch || "calicut") : branch;
+            const rostered = window.FETS?.rosterOn?.(d, br) || [];
+            const assign = assignments.find(x => x.date === dateStr);
+            const assignedNames = assign ? assign.staff_names : [];
+
+            return (
+              <div key={dateStr} className="sh-assignment-card sh-card">
+                <div className="sh-assign-info">
+                  <h3>{displayDate(dateStr)}</h3>
+                  <p>{rostered.length} staff rostered</p>
+                </div>
+                <div className="sh-assign-selectors">
+                  {rostered.length ? (
+                    rostered.map((name: string) => {
+                      const isAssigned = assignedNames.includes(name);
+                      return (
+                        <button
+                          type="button"
+                          key={name}
+                          className={`sh-assign-btn ${isAssigned ? "active" : ""}`}
+                          onClick={() => handleToggle(dateStr, name, assignedNames)}
+                        >
+                          <span>{initials(name)}</span>
+                          {name}
+                          {isAssigned && <Check size={13} />}
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <span className="sh-no-staff">No staff rostered.</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
