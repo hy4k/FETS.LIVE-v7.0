@@ -3917,6 +3917,44 @@ function RosterGrid({ offsets, branch }) {
   const [dialog, setDialog] = React.useState(null);   // { name, off, date, cell, defaultCode }
   const [otDialog, setOtDialog] = React.useState(null); // { name, off, date, cell }
 
+  const [leads, setLeads] = React.useState<any[]>([]);
+
+  const loadLeads = React.useCallback(async () => {
+    try {
+      const startOff = offsets[0];
+      const endOff = offsets[offsets.length - 1];
+      const startD = ymdFormat(F().ISO(startOff));
+      const endD = ymdFormat(F().ISO(endOff));
+      
+      let data: any[] = [];
+      if (branch === "global") {
+        const { data: res } = await supabase
+          .from("handover_assignments")
+          .select("*")
+          .gte("date", startD)
+          .lte("date", endD);
+        data = res || [];
+      } else {
+        data = await DB.dbFetchHandoverAssignments(branch, startD, endD);
+      }
+      setLeads(data || []);
+    } catch (err) {
+      console.error("loadLeads error:", err);
+    }
+  }, [branch, offsets]);
+
+  React.useEffect(() => {
+    loadLeads();
+  }, [loadLeads]);
+
+  React.useEffect(() => {
+    const h = () => {
+      loadLeads();
+    };
+    window.addEventListener("fets-roster-changed", h);
+    return () => window.removeEventListener("fets-roster-changed", h);
+  }, [loadLeads]);
+
   const apply = (name, off, cell) => {
     F().rosterSet(name, off, cell);
     const _d = F().ISO(off);
@@ -4062,6 +4100,15 @@ function RosterGrid({ offsets, branch }) {
               const unseenRes = unseenResolutionOf(n, o);
               const isSelf = n === F().user.name;
 
+              // Check if lead staff
+              const dstr = ymdFormat(d);
+              const isLead = leads.some(lead => 
+                lead.date === dstr && 
+                lead.branch === b && 
+                lead.staff_names && 
+                lead.staff_names.includes(n)
+              );
+
               // Premium styles matching the code tint
               const baseColor = m.ink;
               let bg = "var(--panel-3)";
@@ -4090,6 +4137,11 @@ function RosterGrid({ offsets, branch }) {
                 border = `1px solid ${OT_COLOR}`;
               }
 
+              if (isLead) {
+                border = `2px solid #d3ad12`;
+                shadow = `0 0 12px rgba(211, 173, 18, 0.45)${shadow !== "none" ? `, ${shadow}` : ""}`;
+              }
+ 
               const cellStyle = {
                 position: "relative",
                 height: 42,
@@ -4108,18 +4160,18 @@ function RosterGrid({ offsets, branch }) {
                 fontWeight: 800,
                 letterSpacing: "0.02em",
               };
-
+ 
               return (
                 <button key={o} onClick={() => {
                   if (unseenRes) {
                     localStorage.setItem(`fets-seen-req-${unseenRes.id}`, "true");
                     window.dispatchEvent(new Event("fets-roster-changed"));
                   }
-
+ 
                   const dstr = ymdFormat(F().ISO(o));
                   const pid = F()._staffIdByName?.[n];
                   const hasClaim = F()._otClaims?.some(c => c.profile_id === pid && c.date === dstr);
-
+ 
                   if (isSelf || (window.FETS.isAdmin && hasClaim)) {
                     setOtDialog({
                       name: n,
@@ -4135,6 +4187,23 @@ function RosterGrid({ offsets, branch }) {
                   }
                 }} className="tap roster-cell-btn" title={(window.FETS.isAdmin || isSelf) ? `${m.label}${ot > 0 ? ` + OT ${ot}h` : ""} — tap to change` : m.label}
                   style={cellStyle}>
+                  {isLead && (
+                    <span title="Shift Lead (Takes Handover)" style={{
+                      position: "absolute",
+                      top: 2,
+                      left: 3,
+                      fontSize: 7,
+                      fontWeight: 900,
+                      background: "#fffbea",
+                      color: "#b0900e",
+                      border: "1px solid #e1bd16",
+                      padding: "0px 3px",
+                      borderRadius: 3,
+                      lineHeight: 1
+                    }}>
+                      👑 LEAD
+                    </span>
+                  )}
                   <span style={{ fontSize: code.length > 2 ? 9 : 13.5, fontWeight: 900, lineHeight: 1 }}>{code}</span>
                   {ot > 0 && (
                     <span className="mono" style={{
