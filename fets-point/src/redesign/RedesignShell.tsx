@@ -10982,6 +10982,22 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
     setActive(it.id);
   };
 
+  const MODULE_CARD_THEMES = {
+      live: { bg: "linear-gradient(135deg, #5DA2D5, #90CCF4)", text: "#fff", iconBg: "rgba(255,255,255,0.22)", iconColor: "#fff" },
+      "attn-admin": { bg: "linear-gradient(135deg, #F3D250, #E0BE2B)", text: "#2c3e50", iconBg: "rgba(0,0,0,0.07)", iconColor: "#2c3e50" },
+      business: { bg: "linear-gradient(135deg, #F78888, #E26D6D)", text: "#fff", iconBg: "rgba(255,255,255,0.22)", iconColor: "#fff" },
+      "fets-intelligence": { bg: "linear-gradient(135deg, #F3D250, #E0BE2B)", text: "#2c3e50", iconBg: "rgba(0,0,0,0.07)", iconColor: "#2c3e50" },
+      "candidate-tracker": { bg: "linear-gradient(135deg, #90CCF4, #73B5DF)", text: "#2c3e50", iconBg: "rgba(255,255,255,0.45)", iconColor: "#2c3e50" },
+      "access-hub": { bg: "linear-gradient(135deg, #5DA2D5, #4489BC)", text: "#fff", iconBg: "rgba(255,255,255,0.22)", iconColor: "#fff" },
+      "staff-requests": { bg: "linear-gradient(135deg, #F78888, #E26D6D)", text: "#fff", iconBg: "rgba(255,255,255,0.22)", iconColor: "#fff" },
+      "staff-ot": { bg: "linear-gradient(135deg, #F3D250, #E0BE2B)", text: "#2c3e50", iconBg: "rgba(0,0,0,0.07)", iconColor: "#2c3e50" },
+      dashboard: { bg: "linear-gradient(135deg, #5DA2D5, #4489BC)", text: "#fff", iconBg: "rgba(255,255,255,0.22)", iconColor: "#fff" },
+      "news-manager": { bg: "linear-gradient(135deg, #90CCF4, #73B5DF)", text: "#2c3e50", iconBg: "rgba(255,255,255,0.45)", iconColor: "#2c3e50" },
+      "system-manager": { bg: "linear-gradient(135deg, #F78888, #E26D6D)", text: "#fff", iconBg: "rgba(255,255,255,0.22)", iconColor: "#fff" },
+      "user-management": { bg: "linear-gradient(135deg, #5DA2D5, #4489BC)", text: "#fff", iconBg: "rgba(255,255,255,0.22)", iconColor: "#fff" },
+      "branch-delegation": { bg: "linear-gradient(135deg, #F3D250, #E0BE2B)", text: "#2c3e50", iconBg: "rgba(0,0,0,0.07)", iconColor: "#2c3e50" }
+  };
+
   // Filter NAV items and TOOLS
   const allModules = isSuperAdmin ? [
     ...NAV.map((n) => ({ 
@@ -11048,10 +11064,9 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
           box-shadow: 0 3px 10px rgba(243,210,80,0.35) !important;
         }
 
-        /* Cards – Elespacio warm-sky gradient */
+        /* Cards – Elespacio warm-sky gradient base */
         .desk-module-card {
           position: relative;
-          background: linear-gradient(135deg, #5DA2D5, #90CCF4) !important;
           border: none !important;
           border-radius: 22px !important;
           padding: 24px !important;
@@ -11064,16 +11079,15 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
           min-height: 154px;
           overflow: hidden;
           box-shadow:
-            0 6px 20px rgba(93,162,213,0.25),
-            inset 0 1px 0 rgba(255,255,255,0.35) !important;
+            0 6px 20px rgba(93,162,213,0.18),
+            inset 0 1px 0 rgba(255,255,255,0.3) !important;
         }
 
         .desk-module-card:hover {
           transform: translateY(-5px) !important;
-          background: linear-gradient(135deg, #4A92C7, #7DBFE8) !important;
           box-shadow:
-            0 12px 32px rgba(93,162,213,0.35),
-            inset 0 1px 0 rgba(255,255,255,0.4) !important;
+            0 12px 32px rgba(93,162,213,0.28),
+            inset 0 1px 0 rgba(255,255,255,0.35) !important;
         }
 
         /* Shine overlay */
@@ -11106,23 +11120,15 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
           100% { background-position:  200% 0; }
         }
 
-        /* Icon wrap – white frosted pill */
+        /* Icon wrap – white frosted pill base */
         .desk-module-icon-wrap {
           width: 44px;
           height: 44px;
           border-radius: 12px;
           display: grid;
           place-items: center;
-          background: rgba(255,255,255,0.25);
-          border: 1px solid rgba(255,255,255,0.35);
-          color: #fff;
+          border: 1px solid rgba(255,255,255,0.2);
           transition: all 0.3s ease;
-        }
-
-        .desk-module-card:hover .desk-module-icon-wrap {
-          background: rgba(255,255,255,0.35);
-          border-color: rgba(255,255,255,0.5);
-          color: #F3D250;
         }
       `}</style>
 
@@ -11184,14 +11190,16 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
             ) : (
               filtered.map((it) => {
                 const status = getModuleStatus(it);
+                const cardTheme = MODULE_CARD_THEMES[it.id] || { bg: "linear-gradient(135deg, #5DA2D5, #90CCF4)", text: "#fff", iconBg: "rgba(255,255,255,0.22)", iconColor: "#fff" };
                 return (
                   <button 
                     key={it.id} 
                     onClick={() => handlePick(it)} 
                     className="desk-module-card"
+                    style={{ background: cardTheme.bg, border: "none" }}
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", width: "100%" }}>
-                      <div className="desk-module-icon-wrap">
+                      <div className="desk-module-icon-wrap" style={{ background: cardTheme.iconBg, color: cardTheme.iconColor }}>
                         <Icon name={it.icon} size={20} />
                       </div>
                       {/* Status badge */}
