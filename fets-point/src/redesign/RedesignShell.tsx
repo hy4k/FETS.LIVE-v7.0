@@ -4139,7 +4139,6 @@ function RosterGrid({ offsets, branch }) {
 
               if (isLead) {
                 border = `2px solid #d3ad12`;
-                shadow = `0 0 12px rgba(211, 173, 18, 0.45)${shadow !== "none" ? `, ${shadow}` : ""}`;
               }
  
               const cellStyle = {
@@ -4187,23 +4186,6 @@ function RosterGrid({ offsets, branch }) {
                   }
                 }} className="tap roster-cell-btn" title={(window.FETS.isAdmin || isSelf) ? `${m.label}${ot > 0 ? ` + OT ${ot}h` : ""} — tap to change` : m.label}
                   style={cellStyle}>
-                  {isLead && (
-                    <span title="Shift Lead (Takes Handover)" style={{
-                      position: "absolute",
-                      top: 2,
-                      left: 3,
-                      fontSize: 7,
-                      fontWeight: 900,
-                      background: "#fffbea",
-                      color: "#b0900e",
-                      border: "1px solid #e1bd16",
-                      padding: "0px 3px",
-                      borderRadius: 3,
-                      lineHeight: 1
-                    }}>
-                      👑 LEAD
-                    </span>
-                  )}
                   <span style={{ fontSize: code.length > 2 ? 9 : 13.5, fontWeight: 900, lineHeight: 1 }}>{code}</span>
                   {ot > 0 && (
                     <span className="mono" style={{
