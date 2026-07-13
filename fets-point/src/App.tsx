@@ -204,7 +204,8 @@ function AppContent() {
       'command-center', 'fets-calendar', 'fets-roster', 'my-desk',
       'access-hub', 'dashboard', 'candidate-tracker', 'fets-intelligence',
       'incident-log', 'system-manager', 'news-manager', 'user-management',
-      'branch-delegation', 'gbp', 'attn-admin', 'business', 'staff-requests', 'staff-ot'
+      'branch-delegation', 'gbp', 'attn-admin', 'business', 'staff-requests', 'staff-ot',
+      'handover', 'news'
     ].includes(activeTab);
 
     if (isRedesignPage) {
@@ -253,7 +254,7 @@ function AppContent() {
     );
   }
 
-  const isFullscreenPage = activeTab === 'my-desk' || activeTab === 'fets-intelligence' || activeTab === 'command-center' || activeTab === 'fets-roster' || activeTab === 'fets-calendar' || activeTab === 'access-hub' || activeTab === 'dashboard' || activeTab === 'candidate-tracker' || activeTab === 'incident-log' || activeTab === 'system-manager' || activeTab === 'news-manager' || activeTab === 'user-management' || activeTab === 'branch-delegation' || activeTab === 'gbp' || activeTab === 'attn-admin' || activeTab === 'business' || activeTab === 'staff-requests' || activeTab === 'staff-ot';
+  const isFullscreenPage = activeTab === 'my-desk' || activeTab === 'fets-intelligence' || activeTab === 'command-center' || activeTab === 'fets-roster' || activeTab === 'fets-calendar' || activeTab === 'access-hub' || activeTab === 'dashboard' || activeTab === 'candidate-tracker' || activeTab === 'incident-log' || activeTab === 'system-manager' || activeTab === 'news-manager' || activeTab === 'user-management' || activeTab === 'branch-delegation' || activeTab === 'gbp' || activeTab === 'attn-admin' || activeTab === 'business' || activeTab === 'staff-requests' || activeTab === 'staff-ot' || activeTab === 'handover' || activeTab === 'news';
 
   return (
     <div className={`golden-theme min-h-screen h-screen flex flex-col overflow-hidden relative ${getBranchTheme(activeBranch)} ${(activeTab === 'fets-calendar' || activeTab === 'fets-calendar-demo') ? 'fets-calendar-active-page' : ''}`}>

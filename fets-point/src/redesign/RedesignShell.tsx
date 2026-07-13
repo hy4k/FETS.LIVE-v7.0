@@ -11301,6 +11301,40 @@ const ACCENTS = [
 ];
 const DENSITY_VAL = { compact: 0.86, regular: 1, spacious: 1.14 };
 
+/* Distinct theme colour for every top-level view so navigation is obvious
+   and the UI is not a single shade of blue. */
+const VIEW_THEME = {
+  live:             { accent: "#3DA5FF", ink: "#06243f" },
+  calendar:         { accent: "#8B5CF6", ink: "#ffffff" },
+  roster:           { accent: "#14B8A6", ink: "#062b27" },
+  desk:             { accent: "#6366F1", ink: "#ffffff" },
+  case:             { accent: "#FF5A5F", ink: "#ffffff" },
+  handover:         { accent: "#F59E0B", ink: "#3a2400" },
+  news:             { accent: "#EC4899", ink: "#ffffff" },
+  "attn-admin":     { accent: "#FB923C", ink: "#3a1c00" },
+  business:         { accent: "#22C55E", ink: "#06351a" },
+  "staff-requests": { accent: "#FF6B6B", ink: "#ffffff" },
+  "staff-ot":       { accent: "#EAB308", ink: "#3a2e00" },
+  "candidate-tracker": { accent: "#06B6D4", ink: "#062c33" },
+  "access-hub":     { accent: "#64748B", ink: "#ffffff" },
+  "system-manager": { accent: "#A855F7", ink: "#ffffff" },
+  "news-manager":   { accent: "#F43F5E", ink: "#ffffff" },
+  "user-management":{ accent: "#3B82F6", ink: "#ffffff" },
+  "branch-delegation": { accent: "#10B981", ink: "#062b20" },
+  dashboard:        { accent: "#D946EF", ink: "#ffffff" },
+  "fets-intelligence": { accent: "#4F46E5", ink: "#ffffff" },
+  gbp:              { accent: "#4285F4", ink: "#ffffff" },
+};
+
+/* Distinct colour per My Desk module card. */
+const MODULE_COLORS = {
+  live: "#3DA5FF", calendar: "#8B5CF6", roster: "#14B8A6", desk: "#6366F1",
+  "attn-admin": "#FB923C", business: "#22C55E", "fets-intelligence": "#4F46E5",
+  "candidate-tracker": "#06B6D4", "access-hub": "#64748B", "staff-requests": "#FF6B6B",
+  "staff-ot": "#EAB308", dashboard: "#D946EF", "news-manager": "#F43F5E",
+  "system-manager": "#A855F7", "user-management": "#3B82F6", "branch-delegation": "#10B981",
+};
+
 /* primary nav */
 const NAV = [
   { id: "live", label: "Live" },
@@ -12934,9 +12968,15 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
   
   const [active, setActiveState] = React.useState(activeSubPage || "live");
 
+  // Sync only on first mount (deep links / external tab changes). After that,
+  // `setActive` is the single source of truth and updates both the local view
+  // and the parent tab, so we must NOT re-derive `active` from `activeSubPage`
+  // here — that would clobber remapped views like "case" (parent = incident-log).
+  const didInit = React.useRef(false);
   React.useEffect(() => {
-    if (activeSubPage && activeSubPage !== active) {
-      setActiveState(activeSubPage);
+    if (!didInit.current && activeSubPage) {
+      didInit.current = true;
+      if (activeSubPage !== active) setActiveState(activeSubPage);
     }
   }, [activeSubPage]);
 
