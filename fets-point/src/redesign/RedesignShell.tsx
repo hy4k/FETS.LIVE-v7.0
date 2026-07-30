@@ -11948,14 +11948,14 @@ function LivePage({ branch, setDrawer, setActive, bridge }) {
         <MenuRow items={ops} />
       </section>
 
-      {/* Unique Integrated Live Chat Command Deck */}
-      <LiveChatCommandDeck branch={branch} onOpenChat={(staff) => window.dispatchEvent(new CustomEvent("fets-open-chat", { detail: staff }))} />
-
       {/* Existing Menu Tabs (Support) */}
       <section style={{ display: "flex", flexDirection: "column", gap: "calc(16px * var(--density))" }}>
         <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>support</span>}>Quick access &amp; support</SectionLabel>
         <MenuRow items={support} />
       </section>
+
+      {/* Unique Integrated Live Chat Command Deck (Placed below Quick access & support) */}
+      <LiveChatCommandDeck branch={branch} onOpenChat={(staff) => window.dispatchEvent(new CustomEvent("fets-open-chat", { detail: staff }))} />
     </div>
   );
 }
