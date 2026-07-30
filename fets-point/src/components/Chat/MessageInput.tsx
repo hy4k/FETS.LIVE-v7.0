@@ -1,10 +1,10 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    Send, Paperclip, Calculator, Calendar as CalendarIcon, X,
-    FileText, Loader2, Mic, Video, Radio, Plus
+    Send, Paperclip, Calculator, Clock as ClockIcon, X,
+    FileText, Loader2, Mic, Video, Radio, Plus, Calendar as CalendarIcon, Zap
 } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, getYear, getDayOfYear, isLeapYear } from 'date-fns';
 
 interface PendingFile {
     file: File;
@@ -127,11 +127,54 @@ export const StandaloneCalculatorApp: React.FC<{
     );
 };
 
-// ─── Standalone Side-by-Side Calendar App Window ──────────────────────────────
-export const StandaloneCalendarApp: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-    const today = new Date();
-    const days = eachDayOfInterval({ start: startOfMonth(today), end: endOfMonth(today) });
-    const firstDayOffset = startOfMonth(today).getDay();
+// ─── Neumorphic Time & Schedule Dashboard App (Inspired by Attached Image) ──
+export const StandaloneTimeCalendarDashboardApp: React.FC<{
+    onClose: () => void;
+    onSendMessage?: (content: string, type?: 'text' | 'voice' | 'file' | 'image' | 'video') => void;
+    currentUserName?: string;
+}> = ({ onClose, onSendMessage, currentUserName }) => {
+    const [now, setNow] = useState(new Date());
+
+    useEffect(() => {
+        const timer = setInterval(() => setNow(new Date()), 1000);
+        return () => clearInterval(timer);
+    }, []);
+
+    const daysInYear = isLeapYear(now) ? 366 : 365;
+    const currentDay = getDayOfYear(now);
+    const yearRemainingPct = Math.round(((daysInYear - currentDay) / daysInYear) * 100);
+
+    const secondsToday = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+    const dayRemainingPct = Math.round(((86400 - secondsToday) / 86400) * 100);
+
+    const hours = now.getHours() % 12;
+    const minutes = now.getMinutes();
+    const seconds = now.getSeconds();
+
+    const hourDeg = (hours + minutes / 60) * 30;
+    const minuteDeg = (minutes + seconds / 60) * 6;
+    const secondDeg = seconds * 6;
+
+    const days = eachDayOfInterval({ start: startOfMonth(now), end: endOfMonth(now) });
+    const firstDayOffset = startOfMonth(now).getDay();
+
+    const handleShareDayRemaining = () => {
+        if (onSendMessage) {
+            onSendMessage(`⚡ ${currentUserName || 'Staff'} shared live day status: ${dayRemainingPct}% remaining today!`, 'text');
+        }
+    };
+
+    const handleShareEnergy = () => {
+        if (onSendMessage) {
+            onSendMessage(`⚡ ${currentUserName || 'Staff'} shared energy status: 88% active sync power!`, 'text');
+        }
+    };
+
+    const handleSelectDate = (d: Date) => {
+        if (onSendMessage) {
+            onSendMessage(`📅 Scheduled meeting invite for ${format(d, 'EEEE, MMM d, yyyy')} at ${format(now, 'hh:mm a')}`, 'text');
+        }
+    };
 
     return (
         <motion.div
@@ -139,56 +182,121 @@ export const StandaloneCalendarApp: React.FC<{ onClose: () => void }> = ({ onClo
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 20 }}
             transition={{ duration: 0.2, ease: 'easeOut' }}
-            className="absolute right-full mr-3.5 top-0 bottom-0 z-[9999] w-76 bg-[#FFF9EA] border-4 border-white rounded-3xl shadow-[0_30px_70px_rgba(0,0,0,0.3)] overflow-hidden flex flex-col justify-between"
+            className="absolute right-full mr-3.5 top-0 bottom-0 z-[9999] w-[310px] bg-[#FFF9EA] border-4 border-white rounded-3xl shadow-[0_30px_70px_rgba(0,0,0,0.3)] overflow-y-auto p-4 flex flex-col justify-between select-none"
+            style={{ scrollbarWidth: 'none' }}
         >
-            {/* Header */}
-            <div className="px-5 pt-4 pb-3 bg-gradient-to-r from-[#1BB5AC] to-[#149E97] text-white shrink-0">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <p className="text-[10px] font-bold text-white/80 tracking-widest uppercase">live schedule</p>
-                        <h2 className="text-2xl font-black tracking-tight leading-none mt-0.5">
-                            {format(today, 'MMM').toLowerCase()} <span className="text-sm text-white/80 font-bold">{format(today, 'yyyy')}, {format(today, 'EEE dd')}</span>
-                        </h2>
+            <style>{`div::-webkit-scrollbar { display: none; }`}</style>
+
+            {/* Header / Close */}
+            <div className="flex items-center justify-between pb-2">
+                <span className="text-xs font-black text-[#133C44] tracking-wide uppercase flex items-center gap-1.5">
+                    <ClockIcon size={14} className="text-[#1BB5AC]" /> Time & Schedule Hub
+                </span>
+                <button onClick={onClose} className="w-6 h-6 rounded-full bg-[#1BB5AC]/20 hover:bg-[#1BB5AC] text-[#133C44] hover:text-white flex items-center justify-center transition-colors">
+                    <X size={13} />
+                </button>
+            </div>
+
+            {/* 1. Neumorphic Analog Clock & Greeting */}
+            <div className="flex items-center gap-4 bg-[#FFF1C9] border-2 border-[#F3CD67] rounded-3xl p-3 shadow-inner">
+                {/* Analog Clock Dial */}
+                <div className="relative w-20 h-20 rounded-full bg-[#FFF9EA] border-2 border-[#F3CD67] shadow-md flex items-center justify-center shrink-0">
+                    <span className="absolute top-1 text-[9px] font-black text-[#133C44]">12</span>
+                    <span className="absolute right-1 text-[9px] font-black text-[#133C44]">3</span>
+                    <span className="absolute bottom-1 text-[9px] font-black text-[#133C44]">6</span>
+                    <span className="absolute left-1 text-[9px] font-black text-[#133C44]">9</span>
+
+                    {/* Hour Hand */}
+                    <div className="absolute w-1 bg-[#133C44] rounded-full origin-bottom" style={{ height: '22px', transform: `rotate(${hourDeg}deg)`, bottom: '50%' }} />
+                    {/* Minute Hand */}
+                    <div className="absolute w-0.5 bg-[#1BB5AC] rounded-full origin-bottom" style={{ height: '28px', transform: `rotate(${minuteDeg}deg)`, bottom: '50%' }} />
+                    {/* Second Hand */}
+                    <div className="absolute w-0.5 bg-[#F2994A] rounded-full origin-bottom" style={{ height: '32px', transform: `rotate(${secondDeg}deg)`, bottom: '50%' }} />
+                    {/* Center Dot */}
+                    <div className="absolute w-2 h-2 rounded-full bg-[#F2994A] z-10 border border-white" />
+                </div>
+
+                {/* Greeting Text */}
+                <div className="flex flex-col min-w-0">
+                    <h4 className="text-base font-black text-[#133C44] leading-tight">Hello, {format(now, 'MMM')}</h4>
+                    <p className="text-[10px] font-bold text-[#64848A] leading-tight mt-1 italic">Live every day with ease!</p>
+                </div>
+            </div>
+
+            {/* 2. Digital Clock & Date Recessed Card */}
+            <div className="bg-[#FFF1C9] border-2 border-[#F3CD67] rounded-3xl p-3.5 shadow-inner flex items-center justify-between mt-2.5">
+                <div className="bg-[#FFFDF7] border-2 border-[#E9BF50] rounded-2xl px-3 py-1.5 text-center shadow-inner">
+                    <span className="text-xl font-black font-mono text-[#133C44] tracking-wider">{format(now, 'HH:mm')}</span>
+                </div>
+                <div className="text-right">
+                    <p className="text-sm font-black text-[#133C44] leading-tight">{format(now, 'EEEE')}</p>
+                    <p className="text-[10px] font-bold text-[#64848A] font-mono mt-0.5">{format(now, 'yyyy/MM/dd')}</p>
+                </div>
+            </div>
+
+            {/* 3. Year Progress Bar */}
+            <div className="mt-2.5 px-1">
+                <div className="flex justify-between items-center text-[10px] font-bold text-[#133C44] mb-1">
+                    <span>The rest of the year</span>
+                    <span className="font-black text-[#F2994A]">{yearRemainingPct}%</span>
+                </div>
+                <div className="w-full h-3 bg-[#FFF1C9] border border-[#F3CD67] rounded-full overflow-hidden p-0.5 shadow-inner">
+                    <div className="h-full bg-gradient-to-r from-[#1BB5AC] to-[#F2994A] rounded-full transition-all duration-500" style={{ width: `${100 - yearRemainingPct}%` }} />
+                </div>
+            </div>
+
+            {/* 4. Bottom Interactive Cards Row */}
+            <div className="grid grid-cols-3 gap-2 mt-2.5">
+                {/* Remaining Today Capsule */}
+                <button
+                    onClick={handleShareDayRemaining}
+                    title="Click to share Day Progress into chat!"
+                    className="bg-[#FFF1C9] border-2 border-[#F3CD67] rounded-2xl p-2 flex flex-col items-center justify-between hover:border-[#1BB5AC] transition-all active:scale-95 shadow-sm group"
+                >
+                    <span className="text-[8px] font-bold text-[#64848A] text-center leading-tight">The remaining today</span>
+                    <div className="w-full h-12 bg-[#FFFDF7] rounded-xl border border-[#E9BF50] overflow-hidden flex flex-col justify-end p-0.5 my-1">
+                        <div className="w-full bg-[#1BB5AC]/30 group-hover:bg-[#1BB5AC] rounded-lg transition-all" style={{ height: `${dayRemainingPct}%` }} />
                     </div>
-                    <button onClick={onClose} className="w-6 h-6 flex items-center justify-center rounded-full bg-white/20 hover:bg-white/30 text-white transition-colors">
-                        <X size={13} />
-                    </button>
-                </div>
-            </div>
+                    <span className="text-[10px] font-black text-[#133C44]">{dayRemainingPct}%</span>
+                </button>
 
-            {/* Calendar Grid */}
-            <div className="m-4 bg-[#FFF1C9] border-2 border-[#F3CD67] rounded-2xl overflow-hidden shadow-inner flex-1 flex flex-col">
-                {/* Day headers */}
-                <div className="grid grid-cols-7 border-b border-[#F3CD67] bg-[#FCE39E]">
-                    {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
-                        <div key={i} className="py-2 text-center text-[10px] font-black text-[#154E57]">{d}</div>
-                    ))}
-                </div>
-                {/* Days */}
-                <div className="grid grid-cols-7 p-2.5 gap-1.5 flex-1 items-center">
-                    {Array(firstDayOffset).fill(null).map((_, i) => <div key={`empty-${i}`} />)}
-                    {days.map(day => {
-                        const isNow = isToday(day);
-                        return (
-                            <div key={day.toISOString()}
-                                className={`aspect-square flex items-center justify-center rounded-xl text-xs font-bold transition-all cursor-default ${
-                                    isNow
-                                        ? 'bg-[#1BB5AC] text-white shadow-[0_4px_10px_rgba(27,181,172,0.4)] scale-105'
-                                        : 'hover:bg-[#FCE095] text-[#133C44]'
-                                }`}
-                            >
-                                {format(day, 'd')}
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
+                {/* Energy Sync Capsule */}
+                <button
+                    onClick={handleShareEnergy}
+                    title="Click to share Energy Status into chat!"
+                    className="bg-[#FFF1C9] border-2 border-[#F3CD67] rounded-2xl p-2 flex flex-col items-center justify-between hover:border-[#F2994A] transition-all active:scale-95 shadow-sm group"
+                >
+                    <span className="text-[8px] font-bold text-[#64848A] text-center leading-tight">Live Energy</span>
+                    <div className="w-full h-12 bg-[#FFFDF7] rounded-xl border border-[#E9BF50] overflow-hidden flex flex-col justify-end p-0.5 my-1">
+                        <div className="w-full bg-[#F2994A]/30 group-hover:bg-[#F2994A] rounded-lg transition-all" style={{ height: '88%' }} />
+                    </div>
+                    <span className="text-[10px] font-black text-[#133C44]">88%</span>
+                </button>
 
-            {/* Today pill */}
-            <div className="px-4 pb-4 shrink-0">
-                <div className="flex items-center gap-2.5 px-4 py-2.5 bg-[#FFF2D0] border border-[#F3CA59] rounded-2xl shadow-sm">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#1BB5AC] shadow-[0_0_8px_#1BB5AC]" />
-                    <span className="text-xs font-bold text-[#133C44]">Today · {format(today, 'EEEE, MMM d')}</span>
+                {/* Mini Calendar Card */}
+                <div className="bg-[#FFF1C9] border-2 border-[#F3CD67] rounded-2xl p-2 flex flex-col justify-between shadow-sm">
+                    <div className="flex items-center justify-between text-[8px] font-black text-[#133C44]">
+                        <span>{format(now, 'M')}</span>
+                        <span className="uppercase tracking-tighter text-[7px] text-[#64848A]">CALENDAR</span>
+                    </div>
+                    {/* Days grid */}
+                    <div className="grid grid-cols-7 gap-0.5 my-1 text-[7px] text-center font-bold text-[#133C44]">
+                        {days.slice(0, 14).map(d => {
+                            const isNow = isToday(d);
+                            return (
+                                <button
+                                    key={d.toISOString()}
+                                    onClick={() => handleSelectDate(d)}
+                                    title={`Schedule meeting for ${format(d, 'MMM d')}`}
+                                    className={`rounded-md py-0.5 transition-all ${
+                                        isNow ? 'bg-[#F2994A] text-white font-black scale-105 shadow-sm' : 'hover:bg-[#1BB5AC] hover:text-white'
+                                    }`}
+                                >
+                                    {format(d, 'd')}
+                                </button>
+                            );
+                        })}
+                    </div>
                 </div>
             </div>
         </motion.div>
@@ -281,7 +389,7 @@ const MessageInput: React.FC<MessageInputProps> = ({
                 </div>
             )}
 
-            {/* ── ROW: [🧮 Calc] [📅 Cal] [Type a message...] [➕ Media] [Send ➤] ── */}
+            {/* ── ROW: [🧮 Calc] [🕒 Clock Hub] [Type a message...] [➕ Media] [Send ➤] ── */}
             <div className="flex items-center gap-1.5 px-3 py-2.5 relative">
                 {/* 1. Calculator Icon */}
                 <button onClick={toggleCalc}
@@ -294,15 +402,15 @@ const MessageInput: React.FC<MessageInputProps> = ({
                     <Calculator size={16} />
                 </button>
 
-                {/* 2. Calendar Icon */}
+                {/* 2. Neumorphic Time & Schedule Hub Icon */}
                 <button onClick={toggleCal}
-                    title="Live Calendar"
+                    title="Time & Schedule Hub"
                     className={`w-8.5 h-8.5 rounded-xl flex items-center justify-center transition-all shrink-0 active:scale-90 ${
                         isCalOpen
                             ? 'bg-[#F2994A] text-white shadow-md scale-105'
                             : 'bg-[#FFF8E7] border border-[#EBC053] text-[#D97706] hover:bg-[#F2994A] hover:text-white'
                     }`}>
-                    <CalendarIcon size={16} />
+                    <ClockIcon size={16} />
                 </button>
 
                 {/* 3. Textarea Input Box */}

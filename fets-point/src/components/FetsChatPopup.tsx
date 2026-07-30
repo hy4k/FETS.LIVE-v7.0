@@ -9,7 +9,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useGlobalCall } from '../contexts/CallContext'
 import { usePresence, useSendCallLog } from '../hooks/useChat'
 import { toast } from 'react-hot-toast'
-import MessageInput, { CalculatorSyncState, StandaloneCalculatorApp, StandaloneCalendarApp } from './Chat/MessageInput'
+import MessageInput, { CalculatorSyncState, StandaloneCalculatorApp, StandaloneTimeCalendarDashboardApp } from './Chat/MessageInput'
 import Message from './Chat/Message'
 import { StaffProfile } from '../types/shared'
 
@@ -268,7 +268,7 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
             style={{ zIndex, maxWidth: '95vw' }}
             className="fixed bottom-4 right-4 flex flex-col overflow-visible rounded-3xl bg-[#FCD872] border-4 border-white shadow-[0_30px_70px_rgba(0,0,0,0.35)]"
         >
-            {/* Side-by-Side Standalone Foldable Apps (Rendered outside overflow clipping) */}
+            {/* Side-by-Side Standalone Apps (Rendered outside overflow clipping) */}
             <AnimatePresence>
                 {calcSyncState.isOpen && (
                     <StandaloneCalculatorApp
@@ -279,7 +279,13 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
                         currentUserName={activeProfile?.full_name}
                     />
                 )}
-                {showCalApp && <StandaloneCalendarApp onClose={() => setShowCalApp(false)} />}
+                {showCalApp && (
+                    <StandaloneTimeCalendarDashboardApp
+                        onClose={() => setShowCalApp(false)}
+                        onSendMessage={(txt, t) => handleSendMessage(txt, t || 'text')}
+                        currentUserName={activeProfile?.full_name}
+                    />
+                )}
             </AnimatePresence>
 
             {/* Inner Main Container */}
@@ -300,7 +306,7 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
                         </p>
                     </div>
 
-                    {/* Top Action Controls (Single Matching Small Sparkle Icon) */}
+                    {/* Top Action Controls */}
                     <div className="flex items-center gap-1.5 shrink-0 relative">
                         <button
                             onClick={() => setShowTopActionsTooltip(v => !v)}
