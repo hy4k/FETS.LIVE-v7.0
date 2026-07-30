@@ -9,7 +9,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useGlobalCall } from '../contexts/CallContext'
 import { usePresence, useSendCallLog } from '../hooks/useChat'
 import { toast } from 'react-hot-toast'
-import MessageInput, { CalculatorSyncState } from './Chat/MessageInput'
+import MessageInput, { CalculatorSyncState, StandaloneCalculatorApp, StandaloneCalendarApp } from './Chat/MessageInput'
 import Message from './Chat/Message'
 import { StaffProfile } from '../types/shared'
 
@@ -44,6 +44,7 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
         op: null,
         resetNext: false,
     })
+    const [showCalApp, setShowCalApp] = useState(false)
 
     const [currentConvId, setCurrentConvId] = useState<string | null>(conversationId || null)
     const [targetUser] = useState<StaffProfile | any | null>(initialTargetUser || null)
@@ -261,15 +262,29 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
             dragMomentum={false}
             dragConstraints={{ left: -1200, right: 200, top: -600, bottom: 200 }}
             initial={{ opacity: 0, scale: 0.92, y: 40 }}
-            animate={{ opacity: 1, scale: 1, y: 0, height: isMinimized ? 64 : 600, width: 390 }}
+            animate={{ opacity: 1, scale: 1, y: 0, height: isMinimized ? 64 : 520, width: 440 }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
             transition={{ type: 'spring', damping: 24, stiffness: 260 }}
             style={{ zIndex, maxWidth: '95vw' }}
             className="fixed bottom-4 right-4 flex flex-col overflow-visible rounded-3xl bg-[#FCD872] border-4 border-white shadow-[0_30px_70px_rgba(0,0,0,0.35)]"
         >
-            {/* Inner Content Container */}
+            {/* Side-by-Side Standalone Foldable Apps (Rendered outside overflow clipping) */}
+            <AnimatePresence>
+                {calcSyncState.isOpen && (
+                    <StandaloneCalculatorApp
+                        syncState={calcSyncState}
+                        onChange={s => handleCalcSyncChange(s)}
+                        onClose={() => handleCalcSyncChange({ ...calcSyncState, isOpen: false })}
+                        currentUserId={activeProfile?.id}
+                        currentUserName={activeProfile?.full_name}
+                    />
+                )}
+                {showCalApp && <StandaloneCalendarApp onClose={() => setShowCalApp(false)} />}
+            </AnimatePresence>
+
+            {/* Inner Main Container */}
             <div className="flex flex-col h-full w-full overflow-hidden rounded-[20px] relative">
-                {/* ═══════════════ TOP BANNER (Uncluttered & Full Name Visible) ═══════════════ */}
+                {/* ═══════════════ TOP BANNER (Wider & Full Name Visible) ═══════════════ */}
                 <div className="shrink-0 bg-gradient-to-r from-[#1BB5AC] via-[#1AAFA6] to-[#169C94] cursor-grab active:cursor-grabbing px-4 py-3 flex items-center gap-3 border-b border-[#148781] select-none text-white shadow-sm relative">
                     {/* Avatar + Full Name */}
                     <div className="relative shrink-0">
@@ -279,50 +294,49 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
                         <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#1BB5AC] ${isTargetOnline ? 'bg-amber-300 shadow-[0_0_6px_#fcd34d]' : 'bg-slate-400'}`} />
                     </div>
                     <div className="flex-1 min-w-0 pr-1">
-                        <h3 className="font-extrabold text-white text-base leading-tight tracking-wide truncate">{currentName}</h3>
+                        <h3 className="font-black text-white text-base leading-tight tracking-wide truncate">{currentName}</h3>
                         <p className="text-[11px] font-bold text-teal-100 leading-none mt-0.5 flex items-center gap-1">
                             {isGroup ? `${members.length} members` : isTargetOnline ? <><span className="w-1.5 h-1.5 rounded-full bg-amber-300 animate-pulse"/> Active now</> : '○ Offline'}
                         </p>
                     </div>
 
-                    {/* Top Action Controls */}
+                    {/* Top Action Controls (Single Matching Small Sparkle Icon) */}
                     <div className="flex items-center gap-1.5 shrink-0 relative">
-                        {/* Tooltip Quick Actions Trigger */}
                         <button
                             onClick={() => setShowTopActionsTooltip(v => !v)}
-                            className="h-8 px-2.5 rounded-xl bg-white/20 hover:bg-white/35 flex items-center gap-1 text-white text-xs font-bold transition-all shadow-sm active:scale-95"
+                            className="w-8 h-8 rounded-xl bg-white/20 hover:bg-white/35 flex items-center justify-center text-white transition-all shadow-sm active:scale-95"
                             title="Call & Actions Menu"
                         >
-                            <Sparkles size={13} className="text-amber-300 animate-pulse" />
-                            <span>Actions</span>
+                            <Sparkles size={15} className="text-amber-300" />
                         </button>
 
-                        {/* Top Actions Floating Tooltip Menu */}
+                        {/* Actions Dropdown Tooltip */}
                         <AnimatePresence>
                             {showTopActionsTooltip && (
                                 <motion.div
-                                    initial={{ opacity: 0, y: -8, scale: 0.95 }}
-                                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                                    exit={{ opacity: 0, y: -8, scale: 0.95 }}
-                                    className="absolute top-full right-12 mt-2 bg-[#FFF9EA] border-2 border-[#1BB5AC] rounded-2xl shadow-2xl p-2 z-50 min-w-[150px] flex flex-col gap-1 text-[#133C44]"
+                                    initial={{ opacity: 0, y: 6 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: 6 }}
+                                    transition={{ duration: 0.15 }}
+                                    className="absolute top-full right-16 mt-2 bg-[#FFF9EA] border-2 border-[#1BB5AC] rounded-2xl shadow-2xl p-1.5 z-50 min-w-[140px] flex flex-col gap-1 text-[#133C44]"
                                 >
                                     <button
                                         onClick={() => { toast('Add person coming soon'); setShowTopActionsTooltip(false); }}
-                                        className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold hover:bg-[#1BB5AC] hover:text-white transition-colors"
+                                        className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs font-bold hover:bg-[#1BB5AC] hover:text-white transition-colors"
                                     >
                                         <UserPlus size={14} className="text-[#1BB5AC] group-hover:text-white" />
                                         <span>Add Person</span>
                                     </button>
                                     <button
                                         onClick={handleVoiceCall}
-                                        className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold hover:bg-[#1BB5AC] hover:text-white transition-colors"
+                                        className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs font-bold hover:bg-[#1BB5AC] hover:text-white transition-colors"
                                     >
                                         <Phone size={14} className="text-[#1BB5AC] group-hover:text-white" />
                                         <span>Voice Call</span>
                                     </button>
                                     <button
                                         onClick={handleVideoCall}
-                                        className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold hover:bg-[#1BB5AC] hover:text-white transition-colors"
+                                        className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs font-bold hover:bg-[#1BB5AC] hover:text-white transition-colors"
                                     >
                                         <Video size={14} className="text-[#F2994A] group-hover:text-white" />
                                         <span>Video Call</span>
@@ -400,6 +414,8 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
                             isUploading={isUploading}
                             calcSyncState={calcSyncState}
                             onCalcSyncChange={handleCalcSyncChange}
+                            showCalApp={showCalApp}
+                            setShowCalApp={setShowCalApp}
                             currentUserId={activeProfile?.id}
                             currentUserName={activeProfile?.full_name}
                         />

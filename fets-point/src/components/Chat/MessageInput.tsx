@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Send, Paperclip, Calculator, Calendar as CalendarIcon, X,
-    FileText, Loader2, Mic, Video, Radio, PlusCircle
+    FileText, Loader2, Mic, Video, Radio, Plus
 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday } from 'date-fns';
 
@@ -30,11 +30,13 @@ interface MessageInputProps {
     isUploading?: boolean;
     calcSyncState?: CalculatorSyncState;
     onCalcSyncChange?: (newState: CalculatorSyncState) => void;
+    showCalApp?: boolean;
+    setShowCalApp?: React.Dispatch<React.SetStateAction<boolean>>;
     currentUserId?: string;
     currentUserName?: string;
 }
 
-// ─── Foldable Phone Animation Calculator App (Full Height Side-by-Side) ──────────
+// ─── Standalone Side-by-Side Calculator App Window ────────────────────────────
 export const StandaloneCalculatorApp: React.FC<{
     syncState: CalculatorSyncState;
     onChange: (s: CalculatorSyncState) => void;
@@ -61,15 +63,14 @@ export const StandaloneCalculatorApp: React.FC<{
 
     return (
         <motion.div
-            initial={{ opacity: 0, scaleX: 0, rotateY: -90 }}
-            animate={{ opacity: 1, scaleX: 1, rotateY: 0 }}
-            exit={{ opacity: 0, scaleX: 0, rotateY: -90 }}
-            transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-            style={{ transformOrigin: 'right center', perspective: 1000 }}
-            className="absolute right-full mr-3 top-0 bottom-0 z-[9999] w-72 bg-[#FFF9EA] border-4 border-white rounded-3xl shadow-[0_30px_70px_rgba(0,0,0,0.3)] overflow-hidden flex flex-col justify-between"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+            className="absolute right-full mr-3.5 top-0 bottom-0 z-[9999] w-72 bg-[#FFF9EA] border-4 border-white rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] overflow-hidden flex flex-col justify-between"
         >
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 bg.gradient-to-r bg-[#1BB5AC] text-white shrink-0">
+            <div className="flex items-center justify-between px-4 py-3 bg-[#1BB5AC] text-white shrink-0">
                 <div className="flex items-center gap-2">
                     <Radio size={14} className="animate-pulse" />
                     <span className="text-xs font-black tracking-wider uppercase">
@@ -95,14 +96,14 @@ export const StandaloneCalculatorApp: React.FC<{
             </div>
 
             {/* Keypad */}
-            <div className="grid grid-cols-4 gap-2 px-4 pb-5 text-sm font-black flex-1 flex flex-col justify-end">
+            <div className="grid grid-cols-4 gap-2 px-4 pb-4 text-sm font-black flex-1 flex flex-col justify-end">
                 {[
                     { label: 'C', span: 2, action: clear, style: 'bg-red-500 text-white hover:bg-red-600' },
                     { label: '⌫', action: () => push(display.slice(0, -1) || '0', prevVal, op, resetNext), style: 'bg-[#FFE9AF] text-[#133C44] border border-[#F1C454] hover:bg-[#FCE095]' },
                     { label: '÷', action: () => operator('/'), style: 'bg-[#1BB5AC] text-white hover:bg-[#159F98]' },
                 ].map((btn, i) => (
                     <button key={i} onClick={btn.action}
-                        className={`${btn.span === 2 ? 'col-span-2' : ''} p-3 rounded-2xl shadow-sm ${btn.style} active:scale-95 transition-all`}>
+                        className={`${btn.span === 2 ? 'col-span-2' : ''} p-2.5 rounded-2xl shadow-sm ${btn.style} active:scale-95 transition-all`}>
                         {btn.label}
                     </button>
                 ))}
@@ -111,22 +112,22 @@ export const StandaloneCalculatorApp: React.FC<{
                     const isOp = Object.keys(ops).includes(k);
                     return (
                         <button key={i} onClick={() => isOp ? operator(ops[k]) : num(k)}
-                            className={`p-3 rounded-2xl shadow-sm active:scale-95 transition-all ${
+                            className={`p-2.5 rounded-2xl shadow-sm active:scale-95 transition-all ${
                                 isOp ? 'bg-[#1BB5AC] text-white hover:bg-[#159F98]' : 'bg-[#FFFDF7] text-[#133C44] border border-[#EAC053] hover:bg-[#FFF5DC]'
                             }`}>
                             {k}
                         </button>
                     );
                 })}
-                <button onClick={() => num('0')} className="col-span-2 p-3 rounded-2xl bg-[#FFFDF7] text-[#133C44] border border-[#EAC053] hover:bg-[#FFF5DC] active:scale-95 transition-all shadow-sm">0</button>
-                <button onClick={() => num('.')} className="p-3 rounded-2xl bg-[#FFFDF7] text-[#133C44] border border-[#EAC053] hover:bg-[#FFF5DC] active:scale-95 transition-all shadow-sm">.</button>
-                <button onClick={equal} className="p-3 rounded-2xl bg-gradient-to-r from-[#F2994A] to-[#E2802D] text-white font-black hover:from-[#E28736] hover:to-[#D4711D] active:scale-95 transition-all shadow-[0_4px_12px_rgba(242,153,74,0.4)]">=</button>
+                <button onClick={() => num('0')} className="col-span-2 p-2.5 rounded-2xl bg-[#FFFDF7] text-[#133C44] border border-[#EAC053] hover:bg-[#FFF5DC] active:scale-95 transition-all shadow-sm">0</button>
+                <button onClick={() => num('.')} className="p-2.5 rounded-2xl bg-[#FFFDF7] text-[#133C44] border border-[#EAC053] hover:bg-[#FFF5DC] active:scale-95 transition-all shadow-sm">.</button>
+                <button onClick={equal} className="p-2.5 rounded-2xl bg-gradient-to-r from-[#F2994A] to-[#E2802D] text-white font-black hover:from-[#E28736] hover:to-[#D4711D] active:scale-95 transition-all shadow-[0_4px_12px_rgba(242,153,74,0.4)]">=</button>
             </div>
         </motion.div>
     );
 };
 
-// ─── Foldable Phone Animation Calendar App (Full Height Side-by-Side) ───────────
+// ─── Standalone Side-by-Side Calendar App Window ──────────────────────────────
 export const StandaloneCalendarApp: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const today = new Date();
     const days = eachDayOfInterval({ start: startOfMonth(today), end: endOfMonth(today) });
@@ -134,12 +135,11 @@ export const StandaloneCalendarApp: React.FC<{ onClose: () => void }> = ({ onClo
 
     return (
         <motion.div
-            initial={{ opacity: 0, scaleX: 0, rotateY: -90 }}
-            animate={{ opacity: 1, scaleX: 1, rotateY: 0 }}
-            exit={{ opacity: 0, scaleX: 0, rotateY: -90 }}
-            transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-            style={{ transformOrigin: 'right center', perspective: 1000 }}
-            className="absolute right-full mr-3 top-0 bottom-0 z-[9999] w-76 bg-[#FFF9EA] border-4 border-white rounded-3xl shadow-[0_30px_70px_rgba(0,0,0,0.3)] overflow-hidden flex flex-col justify-between"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+            className="absolute right-full mr-3.5 top-0 bottom-0 z-[9999] w-76 bg-[#FFF9EA] border-4 border-white rounded-3xl shadow-[0_30px_70px_rgba(0,0,0,0.3)] overflow-hidden flex flex-col justify-between"
         >
             {/* Header */}
             <div className="px-5 pt-4 pb-3 bg-gradient-to-r from-[#1BB5AC] to-[#149E97] text-white shrink-0">
@@ -198,12 +198,20 @@ export const StandaloneCalendarApp: React.FC<{ onClose: () => void }> = ({ onClo
 // ─── Main MessageInput Component ──────────────────────────────────────────────
 const MessageInput: React.FC<MessageInputProps> = ({
     onSendMessage, onUploadFile, onStartRecordVoice, onStartRecordVideo,
-    isUploading = false, calcSyncState, onCalcSyncChange, currentUserId, currentUserName,
+    isUploading = false, calcSyncState, onCalcSyncChange,
+    showCalApp: propsShowCalApp, setShowCalApp: propsSetShowCalApp,
+    currentUserId, currentUserName,
 }) => {
     const [content, setContent] = useState('');
     const [pendingFile, setPendingFile] = useState<PendingFile | null>(null);
-    const [showCalApp, setShowCalApp] = useState(false);
     const [showMediaTooltip, setShowMediaTooltip] = useState(false);
+    const [internalCalApp, setInternalCalApp] = useState(false);
+
+    const isCalOpen = propsShowCalApp !== undefined ? propsShowCalApp : internalCalApp;
+    const toggleCal = () => {
+        if (propsSetShowCalApp) propsSetShowCalApp(v => !v);
+        else setInternalCalApp(v => !v);
+    };
 
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -259,50 +267,6 @@ const MessageInput: React.FC<MessageInputProps> = ({
 
     return (
         <div className="shrink-0 bg-[#FAD980] border-t-2 border-[#F1C250] relative">
-            {/* Standalone Foldable Apps (unfold beside chat at full height) */}
-            <AnimatePresence>
-                {localCalc.isOpen && (
-                    <StandaloneCalculatorApp syncState={localCalc} onChange={s => onCalcSyncChange?.(s)}
-                        onClose={() => onCalcSyncChange?.({ ...localCalc, isOpen: false })}
-                        currentUserId={currentUserId} currentUserName={currentUserName} />
-                )}
-                {showCalApp && <StandaloneCalendarApp onClose={() => setShowCalApp(false)} />}
-            </AnimatePresence>
-
-            {/* Media Popover Tooltip */}
-            <AnimatePresence>
-                {showMediaTooltip && (
-                    <motion.div
-                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                        className="absolute bottom-full left-3 mb-2 bg-[#FFF9EA] border-2 border-[#1BB5AC] rounded-2xl shadow-xl p-2 z-50 flex items-center gap-2"
-                    >
-                        {/* Attach */}
-                        <button onClick={() => fileInputRef.current?.click()}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FFFDF7] border border-[#EAC053] rounded-xl text-xs font-bold text-[#133C44] hover:bg-[#1BB5AC] hover:text-white transition-all">
-                            <Paperclip size={13} />
-                            <span>Attach</span>
-                        </button>
-
-                        {/* Voice */}
-                        <button onClick={() => { onStartRecordVoice?.(); setShowMediaTooltip(false); }}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FFFDF7] border border-[#EAC053] rounded-xl text-xs font-bold text-[#1BB5AC] hover:bg-[#1BB5AC] hover:text-white transition-all">
-                            <Mic size={13} />
-                            <span>Voice</span>
-                        </button>
-
-                        {/* Video */}
-                        <button onClick={() => { onStartRecordVideo?.(); setShowMediaTooltip(false); }}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FFFDF7] border border-[#EAC053] rounded-xl text-xs font-bold text-[#F2994A] hover:bg-[#1BB5AC] hover:text-white transition-all">
-                            <Video size={13} />
-                            <span>Video</span>
-                        </button>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-            <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileSelect} />
-
             {/* Staged File Preview */}
             {pendingFile && (
                 <div className="mx-3 mt-2 flex items-center gap-2 px-2.5 py-1.5 bg-[#FFF4D4] border border-[#F2C957] rounded-xl">
@@ -317,42 +281,31 @@ const MessageInput: React.FC<MessageInputProps> = ({
                 </div>
             )}
 
-            {/* ── ROW: [🧮 Calc] [📅 Cal] [➕ Media] [Text Area] [Send ➤] ── */}
-            <div className="flex items-center gap-2 px-3 py-2.5">
+            {/* ── ROW: [🧮 Calc] [📅 Cal] [Type a message...] [➕ Media] [Send ➤] ── */}
+            <div className="flex items-center gap-1.5 px-3 py-2.5 relative">
                 {/* 1. Calculator Icon */}
                 <button onClick={toggleCalc}
                     title="Live Calculator"
                     className={`w-8.5 h-8.5 rounded-xl flex items-center justify-center transition-all shrink-0 active:scale-90 ${
                         localCalc.isOpen
-                            ? 'bg-[#1BB5AC] text-white shadow-[0_0_8px_rgba(27,181,172,0.5)] scale-105'
+                            ? 'bg-[#1BB5AC] text-white shadow-md scale-105'
                             : 'bg-[#FFF8E7] border border-[#EBC053] text-[#168D87] hover:bg-[#1BB5AC] hover:text-white'
                     }`}>
                     <Calculator size={16} />
                 </button>
 
                 {/* 2. Calendar Icon */}
-                <button onClick={() => setShowCalApp(v => !v)}
+                <button onClick={toggleCal}
                     title="Live Calendar"
                     className={`w-8.5 h-8.5 rounded-xl flex items-center justify-center transition-all shrink-0 active:scale-90 ${
-                        showCalApp
-                            ? 'bg-[#F2994A] text-white shadow-[0_0_8px_rgba(242,153,74,0.5)] scale-105'
+                        isCalOpen
+                            ? 'bg-[#F2994A] text-white shadow-md scale-105'
                             : 'bg-[#FFF8E7] border border-[#EBC053] text-[#D97706] hover:bg-[#F2994A] hover:text-white'
                     }`}>
                     <CalendarIcon size={16} />
                 </button>
 
-                {/* 3. Media Tooltip Toggle Button */}
-                <button onClick={() => setShowMediaTooltip(v => !v)}
-                    title="Attachments & Media"
-                    className={`w-8.5 h-8.5 rounded-xl flex items-center justify-center transition-all shrink-0 active:scale-90 ${
-                        showMediaTooltip
-                            ? 'bg-[#1BB5AC] text-white'
-                            : 'bg-[#FFF8E7] border border-[#EBC053] text-[#133C44] hover:bg-[#1BB5AC] hover:text-white'
-                    }`}>
-                    <PlusCircle size={16} />
-                </button>
-
-                {/* 4. Textarea Input Box */}
+                {/* 3. Textarea Input Box */}
                 <div className="flex-1 min-w-0 bg-[#FFFDF7] border-2 border-[#E9BF50] rounded-2xl px-3 py-1.5 focus-within:border-[#1BB5AC] shadow-inner transition-colors">
                     <textarea
                         ref={textareaRef}
@@ -365,6 +318,49 @@ const MessageInput: React.FC<MessageInputProps> = ({
                         style={{ maxHeight: 80, scrollbarWidth: 'none' }}
                     />
                 </div>
+
+                {/* 4. Media Plus Button */}
+                <div className="relative shrink-0">
+                    <button onClick={() => setShowMediaTooltip(v => !v)}
+                        title="Attach Media"
+                        className={`w-8.5 h-8.5 rounded-xl flex items-center justify-center transition-all active:scale-90 ${
+                            showMediaTooltip
+                                ? 'bg-[#1BB5AC] text-white'
+                                : 'bg-[#FFF8E7] border border-[#EBC053] text-[#133C44] hover:bg-[#1BB5AC] hover:text-white'
+                        }`}>
+                        <Plus size={17} />
+                    </button>
+
+                    {/* Clean Popover Tooltip for Media */}
+                    <AnimatePresence>
+                        {showMediaTooltip && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 6 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: 6 }}
+                                transition={{ duration: 0.15 }}
+                                className="absolute bottom-full right-0 mb-2 bg-[#FFF9EA] border-2 border-[#1BB5AC] rounded-2xl shadow-xl p-1.5 z-50 flex flex-col gap-1 min-w-[120px]"
+                            >
+                                <button onClick={() => fileInputRef.current?.click()}
+                                    className="flex items-center gap-2 px-2.5 py-1.5 bg-[#FFFDF7] hover:bg-[#1BB5AC] hover:text-white rounded-xl text-xs font-bold text-[#133C44] transition-colors">
+                                    <Paperclip size={13} />
+                                    <span>Attach File</span>
+                                </button>
+                                <button onClick={() => { onStartRecordVoice?.(); setShowMediaTooltip(false); }}
+                                    className="flex items-center gap-2 px-2.5 py-1.5 bg-[#FFFDF7] hover:bg-[#1BB5AC] hover:text-white rounded-xl text-xs font-bold text-[#1BB5AC] transition-colors">
+                                    <Mic size={13} />
+                                    <span>Voice Note</span>
+                                </button>
+                                <button onClick={() => { onStartRecordVideo?.(); setShowMediaTooltip(false); }}
+                                    className="flex items-center gap-2 px-2.5 py-1.5 bg-[#FFFDF7] hover:bg-[#1BB5AC] hover:text-white rounded-xl text-xs font-bold text-[#F2994A] transition-colors">
+                                    <Video size={13} />
+                                    <span>Video Note</span>
+                                </button>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </div>
+                <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileSelect} />
 
                 {/* 5. Send Button */}
                 <button
