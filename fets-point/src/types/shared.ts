@@ -62,6 +62,7 @@ export interface ConversationMember {
   is_muted?: boolean | null;
   joined_at?: string | null;
   last_read_at?: string | null;
+  user?: StaffProfile;
 }
 
 // Shared types for FETS application

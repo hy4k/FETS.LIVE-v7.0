@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 
 // =====================================================
@@ -92,7 +92,7 @@ export const useMessages = (conversationId: string) => {
           )
         `)
         .eq('conversation_id', conversationId)
-        .eq('is_deleted', false)
+        .or('is_deleted.eq.false,is_deleted.is.null')
         .order('created_at', { ascending: true });
 
       if (error) throw new Error(error.message);
@@ -102,7 +102,7 @@ export const useMessages = (conversationId: string) => {
   });
 };
 
-// Send a new message
+// Send a new message with multi-modal support (text, voice, image, video, file)
 export const useSendMessage = () => {
   const queryClient = useQueryClient();
 
@@ -110,19 +110,39 @@ export const useSendMessage = () => {
     mutationFn: async ({
       conversationId,
       senderId,
-      content
+      content,
+      type = 'text',
+      filePath,
     }: {
       conversationId: string;
       senderId: string;
       content: string;
+      type?: 'text' | 'voice' | 'file' | 'image' | 'video';
+      filePath?: string;
     }) => {
-      // Insert the message
+      // Try RPC first for transaction safety
+      const { data: rpcData, error: rpcErr } = await supabase.rpc('send_chat_message', {
+        p_conversation_id: conversationId,
+        p_sender_id: senderId,
+        p_content: content,
+        p_type: type,
+        p_file_path: filePath || null,
+      });
+
+      if (!rpcErr && rpcData) {
+        return rpcData;
+      }
+
+      // Direct fallback table insert
       const { data, error } = await supabase
         .from('messages')
         .insert({
           conversation_id: conversationId,
           sender_id: senderId,
-          content
+          content,
+          type,
+          file_path: filePath,
+          status: 'sent',
         })
         .select()
         .single();
@@ -130,13 +150,15 @@ export const useSendMessage = () => {
       if (error) throw new Error(error.message);
 
       // Update conversation's last_message_at and preview
+      const previewText = type === 'text' ? content.substring(0, 100) : `[${type.toUpperCase()}] Attachment`;
       await supabase
         .from('conversations')
         .update({
           last_message_at: new Date().toISOString(),
-          last_message_preview: content.substring(0, 100)
+          last_message_preview: previewText,
         })
-        .eq('id', conversationId);
+        .eq('id', conversationId)
+        .catch(() => {});
 
       return data;
     },
@@ -151,7 +173,7 @@ export const useSendMessage = () => {
   });
 };
 
-// Update (edit) a message
+// Update (edit) a message content
 export const useUpdateMessage = () => {
   const queryClient = useQueryClient();
 
@@ -159,61 +181,88 @@ export const useUpdateMessage = () => {
     mutationFn: async ({
       messageId,
       content,
-      conversationId
+      conversationId,
     }: {
       messageId: string;
       content: string;
       conversationId: string;
     }) => {
-      const { data, error } = await supabase
-        .from('messages')
-        .update({
-          content,
-          is_edited: true,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', messageId)
-        .select()
-        .single();
+      // Try RPC first
+      const { error: rpcErr } = await supabase.rpc('update_chat_message', {
+        p_message_id: messageId,
+        p_content: content,
+      });
 
-      if (error) throw new Error(error.message);
-      return data;
+      if (rpcErr) {
+        const { data, error } = await supabase
+          .from('messages')
+          .update({
+            content,
+            is_edited: true,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', messageId)
+          .select()
+          .single();
+
+        if (error) throw new Error(error.message);
+        return data;
+      }
+      return { id: messageId, content, is_edited: true };
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['messages', variables.conversationId] });
-      toast.success('Message updated!');
+      toast.success('Message edited');
     },
     onError: (error: Error) => {
-      toast.error(`Failed to update message: ${error.message}`);
+      toast.error(`Failed to edit message: ${error.message}`);
     },
   });
 };
 
-// Delete a message (soft delete)
+// Delete a message (supports delete for me vs delete for everyone)
 export const useDeleteMessage = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async ({
       messageId,
-      conversationId
+      conversationId,
+      forEveryone = false,
     }: {
       messageId: string;
       conversationId: string;
+      forEveryone?: boolean;
     }) => {
-      const { data, error } = await supabase
-        .from('messages')
-        .update({ is_deleted: true })
-        .eq('id', messageId)
-        .select()
-        .single();
+      const { error: rpcErr } = await supabase.rpc('delete_chat_message', {
+        p_message_id: messageId,
+        p_for_everyone: forEveryone,
+      });
 
-      if (error) throw new Error(error.message);
-      return data;
+      if (rpcErr) {
+        if (forEveryone) {
+          const { data, error } = await supabase
+            .from('messages')
+            .update({
+              is_deleted: true,
+              status: 'deleted_for_all',
+              content: '🚫 This message was deleted',
+            })
+            .eq('id', messageId)
+            .select()
+            .single();
+          if (error) throw new Error(error.message);
+          return data;
+        } else {
+          const { error } = await supabase.from('messages').delete().eq('id', messageId);
+          if (error) throw new Error(error.message);
+        }
+      }
+      return { id: messageId, forEveryone };
     },
-    onSuccess: (data, variables) => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['messages', variables.conversationId] });
-      toast.success('Message deleted!');
+      toast.success(variables.forEveryone ? 'Message deleted for everyone' : 'Message deleted');
     },
     onError: (error: Error) => {
       toast.error(`Failed to delete message: ${error.message}`);
@@ -232,28 +281,22 @@ export const useGetOrCreateDM = () => {
   return useMutation({
     mutationFn: async ({
       userId1,
-      userId2
+      userId2,
     }: {
       userId1: string;
       userId2: string;
     }) => {
       // Check if conversation already exists using RPC function
-      const { data: existing, error: searchError } = await supabase
-        .rpc('get_direct_conversation' as any, {
-          user1_id: userId1,
-          user2_id: userId2
-        });
+      const { data: existing, error: searchError } = await supabase.rpc('get_or_create_conversation', {
+        user_id_1: userId1,
+        user_id_2: userId2,
+      });
 
-      if (searchError) {
-        console.error('Error searching for DM:', searchError);
-        // If RPC doesn't exist, create conversation directly
+      if (!searchError && existing) {
+        return { id: existing };
       }
 
-      if (existing && existing.length > 0) {
-        return existing[0];
-      }
-
-      // Create new 1:1 conversation
+      // Fallback direct table logic
       const { data: conversation, error: convError } = await supabase
         .from('conversations')
         .insert({
@@ -266,12 +309,10 @@ export const useGetOrCreateDM = () => {
       if (convError) throw new Error(convError.message);
 
       // Add both members
-      const { error: membersError } = await supabase
-        .from('conversation_members')
-        .insert([
-          { conversation_id: conversation.id, user_id: userId1 },
-          { conversation_id: conversation.id, user_id: userId2 }
-        ]);
+      const { error: membersError } = await supabase.from('conversation_members').insert([
+        { conversation_id: conversation.id, user_id: userId1 },
+        { conversation_id: conversation.id, user_id: userId2 },
+      ]);
 
       if (membersError) throw new Error(membersError.message);
 
@@ -294,36 +335,43 @@ export const useCreateGroupConversation = () => {
     mutationFn: async ({
       name,
       memberIds,
-      createdBy
+      createdBy,
     }: {
       name: string;
       memberIds: string[];
       createdBy: string;
     }) => {
-      // Create the group conversation
+      const allIds = Array.from(new Set([createdBy, ...memberIds]));
+      
+      const { data: rpcConvId, error: rpcErr } = await supabase.rpc('create_group_conversation', {
+        p_name: name,
+        p_member_ids: allIds,
+      });
+
+      if (!rpcErr && rpcConvId) {
+        return { id: rpcConvId, name, is_group: true };
+      }
+
+      // Direct fallback
       const { data: conversation, error: convError } = await supabase
         .from('conversations')
         .insert({
           name,
           is_group: true,
-          created_by: createdBy
+          created_by: createdBy,
         })
         .select()
         .single();
 
       if (convError) throw new Error(convError.message);
 
-      // Add all members (including creator)
-      const uniqueMemberIds = Array.from(new Set([createdBy, ...memberIds]));
-      const members = uniqueMemberIds.map((userId, index) => ({
+      const members = allIds.map((userId) => ({
         conversation_id: conversation.id,
         user_id: userId,
-        is_admin: userId === createdBy // Creator is admin
+        is_admin: userId === createdBy,
       }));
 
-      const { error: membersError } = await supabase
-        .from('conversation_members')
-        .insert(members);
+      const { error: membersError } = await supabase.from('conversation_members').insert(members);
 
       if (membersError) throw new Error(membersError.message);
 
@@ -346,7 +394,7 @@ export const useAddMemberToConversation = () => {
   return useMutation({
     mutationFn: async ({
       conversationId,
-      userId
+      userId,
     }: {
       conversationId: string;
       userId: string;
@@ -355,7 +403,7 @@ export const useAddMemberToConversation = () => {
         .from('conversation_members')
         .insert({
           conversation_id: conversationId,
-          user_id: userId
+          user_id: userId,
         })
         .select()
         .single();
@@ -363,7 +411,7 @@ export const useAddMemberToConversation = () => {
       if (error) throw new Error(error.message);
       return data;
     },
-    onSuccess: (data, variables) => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['conversation', variables.conversationId] });
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
       toast.success('Member added!');
@@ -386,49 +434,56 @@ export const useMarkMessagesAsRead = () => {
     mutationFn: async ({
       messageIds,
       userId,
-      conversationId
+      conversationId,
     }: {
       messageIds: string[];
       userId: string;
       conversationId: string;
     }) => {
-      // Insert read receipts for messages that don't have them
+      if (messageIds.length === 0) return;
       const receipts = messageIds.map(msgId => ({
         message_id: msgId,
-        user_id: userId
+        user_id: userId,
       }));
 
-      const { error } = await supabase
+      await supabase
         .from('message_read_receipts')
-        .upsert(receipts, { onConflict: 'message_id,user_id', ignoreDuplicates: true });
+        .upsert(receipts, { onConflict: 'message_id,user_id', ignoreDuplicates: true })
+        .catch(() => {});
 
-      if (error) throw new Error(error.message);
+      await supabase
+        .from('messages')
+        .update({ status: 'seen' })
+        .in('id', messageIds)
+        .neq('sender_id', userId)
+        .catch(() => {});
 
-      // Update last_read_at for this user in conversation_members
       await supabase
         .from('conversation_members')
         .update({ last_read_at: new Date().toISOString() })
         .eq('conversation_id', conversationId)
-        .eq('user_id', userId);
+        .eq('user_id', userId)
+        .catch(() => {});
     },
-    onSuccess: (data, variables) => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['messages', variables.conversationId] });
     },
   });
 };
 
 // =====================================================
-// REAL-TIME PRESENCE
+// REAL-TIME PRESENCE & ONLINE STATUS
 // =====================================================
 
-// Track online users in a conversation
-export const usePresence = (conversationId: string, currentUserId: string) => {
+// Track online users globally or in a conversation
+export const usePresence = (conversationId?: string | null, currentUserId?: string | null) => {
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
 
   useEffect(() => {
-    if (!conversationId || !currentUserId) return;
+    if (!currentUserId) return;
 
-    const channel = supabase.channel(`presence:${conversationId}`, {
+    const channelName = conversationId ? `presence:${conversationId}` : 'presence:global';
+    const channel = supabase.channel(channelName, {
       config: {
         presence: {
           key: currentUserId,
@@ -438,39 +493,42 @@ export const usePresence = (conversationId: string, currentUserId: string) => {
 
     channel
       .on('presence', { event: 'sync' }, () => {
-        const presenceState = channel.presenceState();
-        const users = Object.keys(presenceState).map(key => {
-          const presence = presenceState[key];
-          return (presence[0] as any)?.user_id;
-        }).filter(Boolean);
-        setOnlineUsers(users);
+        const state = channel.presenceState();
+        const users: string[] = [];
+        Object.keys(state).forEach((key) => {
+          const presences = state[key] as any[];
+          if (presences && presences[0]?.user_id) {
+            users.push(presences[0].user_id);
+          }
+        });
+        setOnlineUsers(Array.from(new Set(users)));
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
-          // Get current user session
-          const { data: { user } } = await supabase.auth.getUser();
-          if (user) {
-            await channel.track({
-              user_id: currentUserId,
-              online_at: new Date().toISOString()
-            });
-          }
+          await channel.track({
+            user_id: currentUserId,
+            online_at: new Date().toISOString(),
+          });
         }
       });
 
     return () => {
-      channel.unsubscribe();
+      supabase.removeChannel(channel);
     };
   }, [conversationId, currentUserId]);
 
   return onlineUsers;
 };
 
+// Global Presence Hook tracking all logged-in active users
+export const useGlobalPresence = (currentUserId?: string | null) => {
+  return usePresence(null, currentUserId);
+};
+
 // =====================================================
 // REAL-TIME MESSAGES SUBSCRIPTION
 // =====================================================
 
-// Subscribe to new messages in a conversation
 export const useMessagesSubscription = (
   conversationId: string,
   onNewMessage?: (message: any) => void
@@ -481,19 +539,19 @@ export const useMessagesSubscription = (
     if (!conversationId) return;
 
     const channel = supabase
-      .channel(`messages:${conversationId}`)
+      .channel(`chat_sub:${conversationId}`)
       .on(
         'postgres_changes',
         {
-          event: 'INSERT',
+          event: '*',
           schema: 'public',
           table: 'messages',
-          filter: `conversation_id=eq.${conversationId}`
+          filter: `conversation_id=eq.${conversationId}`,
         },
         (payload) => {
           queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });
           queryClient.invalidateQueries({ queryKey: ['conversations'] });
-          if (onNewMessage) {
+          if (payload.eventType === 'INSERT' && onNewMessage) {
             onNewMessage(payload.new);
           }
         }
@@ -501,7 +559,7 @@ export const useMessagesSubscription = (
       .subscribe();
 
     return () => {
-      channel.unsubscribe();
+      supabase.removeChannel(channel);
     };
   }, [conversationId, queryClient, onNewMessage]);
 };
@@ -510,35 +568,36 @@ export const useMessagesSubscription = (
 // TYPING INDICATORS
 // =====================================================
 
-// Set typing indicator
 export const useSetTyping = () => {
   return useMutation({
     mutationFn: async ({
       conversationId,
-      userId
+      userId,
     }: {
       conversationId: string;
       userId: string;
     }) => {
       const { error } = await supabase
         .from('typing_indicators')
-        .upsert({
-          conversation_id: conversationId,
-          user_id: userId,
-          started_at: new Date().toISOString()
-        }, { onConflict: 'conversation_id,user_id' });
+        .upsert(
+          {
+            conversation_id: conversationId,
+            user_id: userId,
+            started_at: new Date().toISOString(),
+          },
+          { onConflict: 'conversation_id,user_id' }
+        );
 
       if (error) throw new Error(error.message);
     },
   });
 };
 
-// Clear typing indicator
 export const useClearTyping = () => {
   return useMutation({
     mutationFn: async ({
       conversationId,
-      userId
+      userId,
     }: {
       conversationId: string;
       userId: string;
@@ -554,7 +613,6 @@ export const useClearTyping = () => {
   });
 };
 
-// Subscribe to typing indicators
 export const useTypingIndicators = (conversationId: string, currentUserId: string) => {
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
 
@@ -569,35 +627,31 @@ export const useTypingIndicators = (conversationId: string, currentUserId: strin
           event: '*',
           schema: 'public',
           table: 'typing_indicators',
-          filter: `conversation_id=eq.${conversationId}`
+          filter: `conversation_id=eq.${conversationId}`,
         },
-        async (payload) => {
-          // Fetch all typing indicators for this conversation
+        async () => {
           const { data } = await supabase
             .from('typing_indicators')
             .select('user_id, started_at')
             .eq('conversation_id', conversationId);
 
           if (data) {
-            // Filter out old indicators (>5 seconds) and current user
-            const now = new Date().getTime();
-            const activeTyping = data
-              .filter(t => {
-                const startTime = new Date(t.started_at).getTime();
-                const isRecent = (now - startTime) < 5000;
-                const isNotCurrentUser = t.user_id !== currentUserId;
-                return isRecent && isNotCurrentUser;
+            const now = Date.now();
+            const active = data
+              .filter((t) => {
+                const isRecent = now - new Date(t.started_at).getTime() < 4000;
+                return isRecent && t.user_id !== currentUserId;
               })
-              .map(t => t.user_id);
+              .map((t) => t.user_id);
 
-            setTypingUsers(activeTyping);
+            setTypingUsers(active);
           }
         }
       )
       .subscribe();
 
     return () => {
-      channel.unsubscribe();
+      supabase.removeChannel(channel);
     };
   }, [conversationId, currentUserId]);
 
