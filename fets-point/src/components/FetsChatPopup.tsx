@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import {
-    X, Minus, Phone, Video, Loader2, Move, CornerDownRight
+    X, Minus, Phone, Video, Loader2, Move, Square
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
@@ -44,23 +44,22 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
         resetNext: false,
     })
 
-    // Dynamic Resizing & Dragging State
-    const [dimensions, setDimensions] = useState<{ width: number; height: number }>({ width: 420, height: 560 })
-    const [, setIsResizing] = useState(false)
-    const resizeRef = useRef<{ startX: number; startY: number; startW: number; startH: number } | null>(null)
-
     // Conversation State
     const [currentConvId, setCurrentConvId] = useState<string | null>(conversationId || null)
     const [targetUser] = useState<StaffProfile | any | null>(initialTargetUser || null)
     const [currentName, setCurrentName] = useState('Chat')
     const [members, setMembers] = useState<any[]>([])
 
-    // Voice Note Recording
-    const [isRecording] = useState<'audio' | 'video' | null>(null)
+    // Voice / Video Note Recording
+    const [isRecording, setIsRecording] = useState<'audio' | 'video' | null>(null)
+    const [recordingTime, setRecordingTime] = useState(0)
     const [recordedBlob, setRecordedBlob] = useState<{ blob: Blob; type: 'audio' | 'video'; url: string } | null>(null)
 
     const scrollRef = useRef<HTMLDivElement>(null)
     const channelRef = useRef<any>(null)
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+    const chunksRef = useRef<Blob[]>([])
+    const timerRef = useRef<any>(null)
 
     // Online Presence
     const onlineUserIds = usePresence(currentConvId, activeProfile?.id)
@@ -178,7 +177,6 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
                         if (payload.eventType === 'INSERT') {
                             setMessages(prev => {
                                 if (prev.some(m => m.id === payload.new.id)) return prev
-                                // Remove optimistic match
                                 const filtered = prev.filter(m => !(m.id.startsWith('temp_') && m.sender_id === payload.new.sender_id && m.content === payload.new.content))
                                 return [...filtered, payload.new]
                             })
@@ -226,41 +224,45 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
         }
     }
 
+    // Recording Voice / Video Note
+    const startRecording = async (type: 'audio' | 'video') => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia(
+                type === 'audio' ? { audio: true } : { video: true, audio: true }
+            )
+            const recorder = new MediaRecorder(stream)
+            mediaRecorderRef.current = recorder
+            chunksRef.current = []
+
+            recorder.ondataavailable = e => chunksRef.current.push(e.data)
+            recorder.onstop = () => {
+                const mime = type === 'audio' ? 'audio/webm' : 'video/webm'
+                const blob = new Blob(chunksRef.current, { type: mime })
+                const url = URL.createObjectURL(blob)
+                setRecordedBlob({ blob, type, url })
+                stream.getTracks().forEach(t => t.stop())
+            }
+
+            recorder.start()
+            setIsRecording(type)
+            setRecordingTime(0)
+            if (timerRef.current) clearInterval(timerRef.current)
+            timerRef.current = setInterval(() => setRecordingTime(p => p + 1), 1000)
+        } catch {
+            toast.error('Microphone/Camera access denied')
+        }
+    }
+
+    const stopRecording = () => {
+        mediaRecorderRef.current?.stop()
+        setIsRecording(null)
+        if (timerRef.current) clearInterval(timerRef.current)
+    }
+
     // Auto Scroll
     useEffect(() => {
         if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }, [messages, isMinimized])
-
-    // Resize Handler
-    const startResize = (e: React.MouseEvent) => {
-        e.preventDefault()
-        e.stopPropagation()
-        setIsResizing(true)
-        resizeRef.current = {
-            startX: e.clientX,
-            startY: e.clientY,
-            startW: dimensions.width,
-            startH: dimensions.height,
-        }
-
-        const onMouseMove = (moveEv: MouseEvent) => {
-            if (!resizeRef.current) return
-            const dx = moveEv.clientX - resizeRef.current.startX
-            const dy = moveEv.clientY - resizeRef.current.startY
-            const newW = Math.max(340, Math.min(800, resizeRef.current.startW + dx))
-            const newH = Math.max(380, Math.min(850, resizeRef.current.startH + dy))
-            setDimensions({ width: newW, height: newH })
-        }
-
-        const onMouseUp = () => {
-            setIsResizing(false)
-            window.removeEventListener('mousemove', onMouseMove)
-            window.removeEventListener('mouseup', onMouseUp)
-        }
-
-        window.addEventListener('mousemove', onMouseMove)
-        window.addEventListener('mouseup', onMouseUp)
-    }
 
     // Send Message Handler
     const handleSendMessage = async (content: string, type: 'text' | 'voice' | 'file' | 'image' | 'video' | 'call_log' = 'text', filePath?: string) => {
@@ -366,19 +368,19 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
             animate={{ 
                 opacity: 1, 
                 scale: 1, 
-                height: isMinimized ? 56 : dimensions.height, 
-                width: dimensions.width 
+                height: isMinimized ? 58 : 580, 
+                width: 420 
             }}
             transition={{ duration: 0.2 }}
             style={{ zIndex }}
-            className="fixed bottom-4 right-4 bg-[#0f172a] shadow-[0_20px_50px_rgba(0,0,0,0.7)] border border-slate-700 rounded-2xl overflow-hidden flex flex-col text-white"
+            className="fixed bottom-4 right-4 bg-[#0f172a] shadow-[0_25px_60px_rgba(0,0,0,0.8)] border border-slate-700/80 rounded-3xl overflow-hidden flex flex-col text-white max-w-[95vw]"
         >
             {/* DRAGGABLE HEADER */}
             <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 px-4 py-3 flex items-center justify-between border-b border-white/10 select-none gap-2 shrink-0 cursor-grab active:cursor-grabbing">
                 <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                    <Move size={14} className="text-amber-400 shrink-0" />
+                    <Move size={15} className="text-amber-400 shrink-0" />
                     <div className="relative shrink-0">
-                        <div className="w-8 h-8 rounded-full bg-amber-500/20 border border-amber-400/40 flex items-center justify-center font-bold text-xs uppercase text-amber-300">
+                        <div className="w-8 h-8 rounded-full bg-amber-500/20 border border-amber-400/40 flex items-center justify-center font-bold text-xs uppercase text-amber-300 shadow-md">
                             {currentName.charAt(0)}
                         </div>
                         <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-slate-950 ${isTargetOnline ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-slate-500'}`} />
@@ -391,16 +393,16 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
 
                 {/* Quick Actions */}
                 <div className="flex items-center gap-1 shrink-0">
-                    <button onClick={handleVoiceCall} className="p-1.5 hover:bg-white/10 rounded-lg text-slate-300 hover:text-emerald-400 transition-colors" title="Voice Call">
+                    <button onClick={handleVoiceCall} className="p-1.5 hover:bg-white/10 rounded-xl text-slate-300 hover:text-emerald-400 transition-colors" title="Voice Call">
                         <Phone size={15} />
                     </button>
-                    <button onClick={handleVideoCall} className="p-1.5 hover:bg-white/10 rounded-lg text-slate-300 hover:text-indigo-400 transition-colors" title="Video Call">
+                    <button onClick={handleVideoCall} className="p-1.5 hover:bg-white/10 rounded-xl text-slate-300 hover:text-indigo-400 transition-colors" title="Video Call">
                         <Video size={15} />
                     </button>
-                    <button onClick={() => setIsMinimized(!isMinimized)} className="p-1.5 hover:bg-white/10 rounded-lg text-slate-300 hover:text-white transition-colors" title="Minimize">
+                    <button onClick={() => setIsMinimized(!isMinimized)} className="p-1.5 hover:bg-white/10 rounded-xl text-slate-300 hover:text-white transition-colors" title="Minimize">
                         <Minus size={15} />
                     </button>
-                    <button onClick={onClose} className="p-1.5 bg-red-600/25 hover:bg-red-600 text-red-300 hover:text-white rounded-lg transition-all shrink-0" title="Close">
+                    <button onClick={onClose} className="p-1.5 bg-red-600/25 hover:bg-red-600 text-red-300 hover:text-white rounded-xl transition-all shrink-0" title="Close">
                         <X size={15} />
                     </button>
                 </div>
@@ -427,16 +429,23 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
                     {/* RECORDING PREVIEW BAR */}
                     {recordedBlob ? (
                         <div className="p-3 bg-slate-900 border-t border-white/10 flex items-center justify-between gap-3">
-                            <span className="text-xs font-bold text-amber-400 uppercase">Voice Recording Ready</span>
+                            <span className="text-xs font-bold text-amber-400 uppercase">Recording Ready ({recordedBlob.type})</span>
                             <div className="flex gap-2">
-                                <button onClick={() => setRecordedBlob(null)} className="px-3 py-1 bg-red-500/20 text-red-400 rounded-lg text-xs font-bold">Discard</button>
-                                <button onClick={sendRecordedBlob} className="px-3 py-1 bg-amber-500 text-slate-950 rounded-lg text-xs font-bold">Send</button>
+                                <button onClick={() => setRecordedBlob(null)} className="px-3 py-1.5 bg-red-500/20 text-red-400 rounded-xl text-xs font-bold hover:bg-red-500/30">Discard</button>
+                                <button onClick={sendRecordedBlob} className="px-3 py-1.5 bg-amber-500 text-slate-950 rounded-xl text-xs font-bold hover:bg-amber-400">Send</button>
                             </div>
+                        </div>
+                    ) : isRecording ? (
+                        <div className="p-3 bg-red-950/90 border-t border-red-500/40 flex items-center justify-between text-red-400 font-bold text-xs uppercase animate-pulse">
+                            <span>Recording {isRecording}... {recordingTime}s</span>
+                            <button onClick={stopRecording} className="bg-red-600 text-white p-1.5 rounded-xl hover:bg-red-500"><Square size={14} /></button>
                         </div>
                     ) : (
                         <MessageInput
                             onSendMessage={handleSendMessage}
                             onUploadFile={handleUploadFile}
+                            onStartRecordVoice={() => startRecording('audio')}
+                            onStartRecordVideo={() => startRecording('video')}
                             isUploading={isUploading}
                             calcSyncState={calcSyncState}
                             onCalcSyncChange={handleCalcSyncChange}
@@ -444,15 +453,6 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
                             currentUserName={activeProfile?.full_name}
                         />
                     )}
-
-                    {/* RESIZE CORNER HANDLE */}
-                    <div
-                        onMouseDown={startResize}
-                        className="absolute bottom-0 right-0 p-1 cursor-nwse-resize text-slate-500 hover:text-amber-400 z-50"
-                        title="Drag to Resize Window"
-                    >
-                        <CornerDownRight size={14} />
-                    </div>
                 </>
             )}
 
