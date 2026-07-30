@@ -1,422 +1,346 @@
 import React, { useState, useRef } from 'react';
-import { Send, Paperclip, Calculator, Calendar as CalendarIcon, X, FileText, Loader2, Image as ImageIcon, Video as VideoIcon, Radio, Mic, Video, Sparkles, CalendarDays } from 'lucide-react';
+import {
+    Send, Paperclip, Calculator, Calendar as CalendarIcon, X,
+    FileText, Loader2, Video as VideoIcon, Mic, Video, CalendarDays, Radio
+} from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday } from 'date-fns';
 
 interface PendingFile {
-  file: File;
-  type: 'image' | 'video' | 'voice' | 'file';
-  previewUrl?: string;
+    file: File;
+    type: 'image' | 'video' | 'voice' | 'file';
+    previewUrl?: string;
 }
 
 export interface CalculatorSyncState {
-  isOpen: boolean;
-  display: string;
-  prevVal: number | null;
-  op: string | null;
-  resetNext: boolean;
-  activeUserId?: string;
-  activeUserName?: string;
+    isOpen: boolean;
+    display: string;
+    prevVal: number | null;
+    op: string | null;
+    resetNext: boolean;
+    activeUserId?: string;
+    activeUserName?: string;
 }
 
 interface MessageInputProps {
-  onSendMessage: (content: string, type?: 'text' | 'voice' | 'file' | 'image' | 'video', filePath?: string) => void;
-  onUploadFile?: (file: File) => Promise<string | null>;
-  onStartRecordVoice?: () => void;
-  onStartRecordVideo?: () => void;
-  isUploading?: boolean;
-  // Real-time Collaborative Calculator Sync Props
-  calcSyncState?: CalculatorSyncState;
-  onCalcSyncChange?: (newState: CalculatorSyncState) => void;
-  currentUserId?: string;
-  currentUserName?: string;
+    onSendMessage: (content: string, type?: 'text' | 'voice' | 'file' | 'image' | 'video', filePath?: string) => void;
+    onUploadFile?: (file: File) => Promise<string | null>;
+    onStartRecordVoice?: () => void;
+    onStartRecordVideo?: () => void;
+    isUploading?: boolean;
+    calcSyncState?: CalculatorSyncState;
+    onCalcSyncChange?: (newState: CalculatorSyncState) => void;
+    currentUserId?: string;
+    currentUserName?: string;
 }
 
-// Standalone Floating Calculator App Window (Inspired by Reference Images 1 & 4)
+// ─── Standalone Floating Calculator App ──────────────────────────────────────
 export const StandaloneCalculatorApp: React.FC<{
-  syncState: CalculatorSyncState;
-  onChange: (newState: CalculatorSyncState) => void;
-  onClose: () => void;
-  currentUserId?: string;
-  currentUserName?: string;
+    syncState: CalculatorSyncState;
+    onChange: (s: CalculatorSyncState) => void;
+    onClose: () => void;
+    currentUserId?: string;
+    currentUserName?: string;
 }> = ({ syncState, onChange, onClose, currentUserId, currentUserName }) => {
-  const display = syncState.display || '0';
-  const prevVal = syncState.prevVal;
-  const op = syncState.op;
-  const resetNext = syncState.resetNext;
-  const isPeerCalculating = syncState.activeUserId && syncState.activeUserId !== currentUserId;
-  const peerName = syncState.activeUserName || 'Teammate';
+    const { display, prevVal, op, resetNext } = syncState;
+    const isPeer = syncState.activeUserId && syncState.activeUserId !== currentUserId;
 
-  const updateState = (newDisplay: string, newPrevVal: number | null, newOp: string | null, newResetNext: boolean) => {
-    onChange({
-      isOpen: true,
-      display: newDisplay,
-      prevVal: newPrevVal,
-      op: newOp,
-      resetNext: newResetNext,
-      activeUserId: currentUserId,
-      activeUserName: currentUserName || 'Staff',
-    });
-  };
+    const push = (newDisplay: string, newPrev: number | null, newOp: string | null, newReset: boolean) =>
+        onChange({ isOpen: true, display: newDisplay, prevVal: newPrev, op: newOp, resetNext: newReset, activeUserId: currentUserId, activeUserName: currentUserName || 'Staff' });
 
-  const handleNum = (num: string) => {
-    if (display === '0' || resetNext) {
-      updateState(num, prevVal, op, false);
-    } else {
-      updateState(display + num, prevVal, op, false);
-    }
-  };
+    const num = (n: string) => (display === '0' || resetNext) ? push(n, prevVal, op, false) : push(display + n, prevVal, op, false);
+    const operator = (o: string) => push(display, parseFloat(display), o, true);
+    const equal = () => {
+        if (prevVal === null || !op) return;
+        const cur = parseFloat(display);
+        let res = op === '+' ? prevVal + cur : op === '-' ? prevVal - cur : op === '*' ? prevVal * cur : cur !== 0 ? prevVal / cur : 0;
+        const resStr = Number.isInteger(res) ? String(res) : String(parseFloat(res.toFixed(6)));
+        push(resStr, null, null, true);
+    };
+    const clear = () => push('0', null, null, false);
 
-  const handleOp = (operator: string) => {
-    const current = parseFloat(display);
-    updateState(display, current, operator, true);
-  };
-
-  const handleEqual = () => {
-    if (prevVal === null || op === null) return;
-    const current = parseFloat(display);
-    let res = 0;
-    if (op === '+') res = prevVal + current;
-    if (op === '-') res = prevVal - current;
-    if (op === '*') res = prevVal * current;
-    if (op === '/') res = current !== 0 ? prevVal / current : 0;
-
-    const resStr = Number.isInteger(res) ? String(res) : String(parseFloat(res.toFixed(6)));
-    updateState(resStr, null, null, true);
-  };
-
-  const handleClear = () => {
-    updateState('0', null, null, false);
-  };
-
-  return (
-    <div className="fixed top-16 right-4 sm:right-[450px] z-[3000] p-4 bg-[#182035] border border-amber-500/40 rounded-3xl shadow-[0_25px_60px_rgba(0,0,0,0.8)] w-72 text-white select-none backdrop-blur-2xl">
-      <div className="flex justify-between items-center pb-2.5 mb-3 border-b border-white/10">
-        <div className="flex items-center gap-2">
-          <div className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
-          <span className="text-xs font-black uppercase text-amber-400 tracking-wider">
-            {isPeerCalculating ? `Live: ${peerName}` : 'Calculator App'}
-          </span>
-        </div>
-        <button onClick={onClose} className="p-1 hover:bg-white/10 rounded-lg text-slate-400 hover:text-white transition-colors">
-          <X size={16} />
-        </button>
-      </div>
-
-      {isPeerCalculating && (
-        <div className="text-[10px] font-bold text-amber-300 mb-2 text-center bg-amber-500/15 py-1 rounded-xl border border-amber-500/30 animate-pulse">
-          ⚡ {peerName} is calculating live...
-        </div>
-      )}
-
-      {/* Recessed Digital Display Screen (Reference Image 1) */}
-      <div className="bg-[#0b1222] border border-slate-800 rounded-2xl p-3 mb-4 text-right shadow-[inset_0_2px_8px_rgba(0,0,0,0.8)]">
-        <div className="text-[10px] text-slate-400 font-mono h-4">{prevVal !== null ? `${prevVal} ${op || ''}` : ''}</div>
-        <div className="text-2xl font-mono font-black text-amber-300 truncate tracking-tight">{display}</div>
-      </div>
-
-      {/* Tactile 3D Keypad (Reference Image 4) */}
-      <div className="grid grid-cols-4 gap-2 font-bold text-sm">
-        <button onClick={handleClear} className="col-span-2 p-3 bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 rounded-2xl shadow-md active:translate-y-0.5 transition-all">C</button>
-        <button onClick={() => updateState(display.slice(0, -1) || '0', prevVal, op, resetNext)} className="p-3 bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 rounded-2xl shadow-md active:translate-y-0.5 transition-all">⌫</button>
-        <button onClick={() => handleOp('/')} className="p-3 bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 rounded-2xl shadow-md active:translate-y-0.5 transition-all">÷</button>
-
-        <button onClick={() => handleNum('7')} className="p-3 bg-slate-900 border border-slate-800 text-slate-100 hover:bg-slate-800 rounded-2xl shadow-md active:translate-y-0.5 transition-all">7</button>
-        <button onClick={() => handleNum('8')} className="p-3 bg-slate-900 border border-slate-800 text-slate-100 hover:bg-slate-800 rounded-2xl shadow-md active:translate-y-0.5 transition-all">8</button>
-        <button onClick={() => handleNum('9')} className="p-3 bg-slate-900 border border-slate-800 text-slate-100 hover:bg-slate-800 rounded-2xl shadow-md active:translate-y-0.5 transition-all">9</button>
-        <button onClick={() => handleOp('*')} className="p-3 bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 rounded-2xl shadow-md active:translate-y-0.5 transition-all">×</button>
-
-        <button onClick={() => handleNum('4')} className="p-3 bg-slate-900 border border-slate-800 text-slate-100 hover:bg-slate-800 rounded-2xl shadow-md active:translate-y-0.5 transition-all">4</button>
-        <button onClick={() => handleNum('5')} className="p-3 bg-slate-900 border border-slate-800 text-slate-100 hover:bg-slate-800 rounded-2xl shadow-md active:translate-y-0.5 transition-all">5</button>
-        <button onClick={() => handleNum('6')} className="p-3 bg-slate-900 border border-slate-800 text-slate-100 hover:bg-slate-800 rounded-2xl shadow-md active:translate-y-0.5 transition-all">6</button>
-        <button onClick={() => handleOp('-')} className="p-3 bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 rounded-2xl shadow-md active:translate-y-0.5 transition-all">-</button>
-
-        <button onClick={() => handleNum('1')} className="p-3 bg-slate-900 border border-slate-800 text-slate-100 hover:bg-slate-800 rounded-2xl shadow-md active:translate-y-0.5 transition-all">1</button>
-        <button onClick={() => handleNum('2')} className="p-3 bg-slate-900 border border-slate-800 text-slate-100 hover:bg-slate-800 rounded-2xl shadow-md active:translate-y-0.5 transition-all">2</button>
-        <button onClick={() => handleNum('3')} className="p-3 bg-slate-900 border border-slate-800 text-slate-100 hover:bg-slate-800 rounded-2xl shadow-md active:translate-y-0.5 transition-all">3</button>
-        <button onClick={() => handleOp('+')} className="p-3 bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 rounded-2xl shadow-md active:translate-y-0.5 transition-all">+</button>
-
-        <button onClick={() => handleNum('0')} className="col-span-2 p-3 bg-slate-900 border border-slate-800 text-slate-100 hover:bg-slate-800 rounded-2xl shadow-md active:translate-y-0.5 transition-all">0</button>
-        <button onClick={() => handleNum('.')} className="p-3 bg-slate-900 border border-slate-800 text-slate-100 hover:bg-slate-800 rounded-2xl shadow-md active:translate-y-0.5 transition-all">.</button>
-        <button onClick={handleEqual} className="p-3 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black hover:from-amber-400 hover:to-amber-500 rounded-2xl shadow-[0_4px_15px_rgba(245,158,11,0.4)] active:translate-y-0.5 transition-all">=</button>
-      </div>
-    </div>
-  );
-};
-
-// Standalone Floating Calendar App Window (Inspired by Reference Image 5 - MAY 2025 Style)
-export const StandaloneCalendarApp: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const today = new Date();
-  const days = eachDayOfInterval({ start: startOfMonth(today), end: endOfMonth(today) });
-
-  return (
-    <div className="fixed top-16 right-4 sm:right-[450px] z-[3000] p-5 bg-[#121927] border border-lime-500/40 rounded-3xl shadow-[0_25px_60px_rgba(0,0,0,0.8)] w-80 text-white select-none backdrop-blur-2xl">
-      <div className="flex justify-between items-center pb-3 mb-3 border-b border-white/10">
-        <div className="flex items-center gap-2">
-          <CalendarDays size={16} className="text-lime-400" />
-          <span className="text-xs font-black uppercase text-lime-400 tracking-wider">Calendar App</span>
-        </div>
-        <button onClick={onClose} className="p-1 hover:bg-white/10 rounded-lg text-slate-400 hover:text-white transition-colors">
-          <X size={16} />
-        </button>
-      </div>
-
-      {/* Styled Header like Reference Image 5 */}
-      <div className="flex justify-between items-end mb-4 px-1">
-        <div>
-          <span className="text-[11px] font-bold text-lime-400/80 lowercase italic block">live date schedule</span>
-          <h2 className="text-3xl font-black text-white tracking-tight lowercase">{format(today, 'MMMM')}</h2>
-        </div>
-        <span className="text-xl font-bold text-slate-400">{format(today, 'yyyy')}</span>
-      </div>
-
-      {/* Days Grid */}
-      <div className="bg-[#0a0f1d] border border-white/10 rounded-2xl p-3 mb-4 shadow-inner">
-        <div className="grid grid-cols-7 gap-1 text-center text-xs font-bold text-lime-400 mb-2">
-          {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => (
-            <span key={d}>{d}</span>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-7 gap-1 text-center text-xs">
-          {days.map(day => {
-            const isCurrentToday = isToday(day);
-            return (
-              <div
-                key={day.toISOString()}
-                className={`p-2 rounded-xl font-bold transition-all ${
-                  isCurrentToday
-                    ? 'bg-transparent border-2 border-lime-400 text-lime-400 shadow-[0_0_12px_#a3e635]'
-                    : 'hover:bg-white/5 text-slate-300'
-                }`}
-              >
-                {format(day, 'd')}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Event Pills (Reference Image 5) */}
-      <div className="flex gap-2">
-        <div className="flex-1 px-3 py-2 bg-slate-900 border border-white/10 rounded-xl flex items-center justify-between text-xs">
-          <span className="w-2 h-2 rounded-full bg-lime-400" />
-          <span className="font-bold text-slate-200">Today Active</span>
-          <span className="text-[10px] font-bold text-lime-400">{format(today, 'd MMM')}</span>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const MessageInput: React.FC<MessageInputProps> = ({
-  onSendMessage,
-  onUploadFile,
-  onStartRecordVoice,
-  onStartRecordVideo,
-  isUploading = false,
-  calcSyncState,
-  onCalcSyncChange,
-  currentUserId,
-  currentUserName,
-}) => {
-  const [content, setContent] = useState('');
-  const [pendingFile, setPendingFile] = useState<PendingFile | null>(null);
-  const [showCalApp, setShowCalApp] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const localCalcState: CalculatorSyncState = calcSyncState || {
-    isOpen: false,
-    display: '0',
-    prevVal: null,
-    op: null,
-    resetNext: false,
-  };
-
-  const handleCalcToggle = () => {
-    const nextIsOpen = !localCalcState.isOpen;
-    if (onCalcSyncChange) {
-      onCalcSyncChange({
-        ...localCalcState,
-        isOpen: nextIsOpen,
-        activeUserId: currentUserId,
-        activeUserName: currentUserName,
-      });
-    }
-  };
-
-  const handleCalcChange = (newState: CalculatorSyncState) => {
-    if (onCalcSyncChange) {
-      onCalcSyncChange(newState);
-    }
-  };
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    let type: PendingFile['type'] = 'file';
-    if (file.type.startsWith('image/')) type = 'image';
-    else if (file.type.startsWith('video/')) type = 'video';
-    else if (file.type.startsWith('audio/')) type = 'voice';
-
-    const previewUrl = type === 'image' || type === 'video' ? URL.createObjectURL(file) : undefined;
-    setPendingFile({ file, type, previewUrl });
-
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
-
-  const clearPendingFile = () => {
-    if (pendingFile?.previewUrl) URL.revokeObjectURL(pendingFile.previewUrl);
-    setPendingFile(null);
-  };
-
-  const handleSend = async () => {
-    if (!content.trim() && !pendingFile) return;
-
-    if (pendingFile && onUploadFile) {
-      const fileUrl = await onUploadFile(pendingFile.file);
-      if (fileUrl) {
-        onSendMessage(content.trim() || fileUrl, pendingFile.type, pendingFile.file.name);
-      }
-      clearPendingFile();
-      setContent('');
-      return;
-    }
-
-    if (content.trim()) {
-      onSendMessage(content.trim(), 'text');
-      setContent('');
-    }
-  };
-
-  return (
-    <div className="p-3.5 bg-[#0e1626] border-t border-slate-800 relative shrink-0">
-      {/* Standalone Calculator App (Opens beside chat) */}
-      {localCalcState.isOpen && (
-        <StandaloneCalculatorApp
-          syncState={localCalcState}
-          onChange={handleCalcChange}
-          onClose={() => {
-            if (onCalcSyncChange) onCalcSyncChange({ ...localCalcState, isOpen: false });
-          }}
-          currentUserId={currentUserId}
-          currentUserName={currentUserName}
-        />
-      )}
-
-      {/* Standalone Calendar App (Opens beside chat) */}
-      {showCalApp && <StandaloneCalendarApp onClose={() => setShowCalApp(false)} />}
-
-      {/* Staged Attachment Preview Bar */}
-      {pendingFile && (
-        <div className="flex items-center justify-between p-3 mb-3 bg-slate-950 border border-amber-500/40 rounded-2xl shadow-xl">
-          <div className="flex items-center gap-3 min-w-0">
-            {pendingFile.type === 'image' && pendingFile.previewUrl ? (
-              <img src={pendingFile.previewUrl} alt="" className="w-10 h-10 rounded-xl object-cover border border-white/10 shrink-0" />
-            ) : pendingFile.type === 'video' ? (
-              <VideoIcon className="w-6 h-6 text-amber-400 shrink-0" />
-            ) : (
-              <FileText className="w-6 h-6 text-amber-400 shrink-0" />
-            )}
-            <div className="flex flex-col min-w-0">
-              <span className="text-xs font-bold text-slate-100 truncate">{pendingFile.file.name}</span>
-              <span className="text-[10px] text-amber-400 font-semibold">{(pendingFile.file.size / 1024).toFixed(1)} KB • Staged (Click Send)</span>
+    return (
+        <div className="fixed bottom-[300px] right-[410px] z-[9999] w-64 bg-[#151e2e] border border-amber-500/40 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.7)] overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-3 py-2 bg-amber-500/10 border-b border-amber-500/20">
+                <div className="flex items-center gap-1.5">
+                    <Radio size={11} className="text-amber-400 animate-pulse" />
+                    <span className="text-[10px] font-black uppercase text-amber-400 tracking-wider">
+                        {isPeer ? `Live · ${syncState.activeUserName}` : 'Calculator Live'}
+                    </span>
+                </div>
+                <button onClick={onClose} className="text-slate-500 hover:text-white transition-colors"><X size={14} /></button>
             </div>
-          </div>
-          <button type="button" onClick={clearPendingFile} className="p-1.5 hover:bg-white/10 rounded-xl text-slate-400 hover:text-white">
-            <X size={16} />
-          </button>
+
+            {/* Display */}
+            <div className="px-3 pt-3 pb-2">
+                {isPeer && (
+                    <div className="text-[9px] font-bold text-amber-300 mb-1 bg-amber-500/10 rounded-lg py-0.5 px-2 text-center animate-pulse">
+                        ⚡ {syncState.activeUserName} is typing...
+                    </div>
+                )}
+                <div className="bg-[#0a0f1d] rounded-xl px-3 py-2 text-right shadow-inner border border-white/5">
+                    <div className="text-[10px] text-slate-500 font-mono h-3.5">{prevVal !== null ? `${prevVal} ${op || ''}` : ''}</div>
+                    <div className="text-xl font-black font-mono text-amber-300 truncate">{display}</div>
+                </div>
+            </div>
+
+            {/* Keypad */}
+            <div className="grid grid-cols-4 gap-1.5 px-3 pb-3 text-xs font-bold">
+                {[
+                    { label: 'C', span: 2, action: clear, style: 'bg-red-500/20 text-red-400 border-red-500/30 hover:bg-red-500/30' },
+                    { label: '⌫', action: () => push(display.slice(0, -1) || '0', prevVal, op, resetNext), style: 'bg-slate-800 text-slate-300 border-slate-700' },
+                    { label: '÷', action: () => operator('/'), style: 'bg-amber-500/20 text-amber-300 border-amber-500/30' },
+                ].map((btn, i) => (
+                    <button key={i} onClick={btn.action}
+                        className={`${btn.span === 2 ? 'col-span-2' : ''} p-2.5 rounded-xl border ${btn.style} active:scale-95 transition-all shadow-sm`}>
+                        {btn.label}
+                    </button>
+                ))}
+                {'789×456-123+'.split('').map((k, i) => {
+                    const ops: Record<string, string> = { '×': '*', '+': '+', '-': '-' };
+                    const isOp = Object.keys(ops).includes(k);
+                    return (
+                        <button key={i} onClick={() => isOp ? operator(ops[k]) : num(k)}
+                            className={`p-2.5 rounded-xl border active:scale-95 transition-all shadow-sm ${isOp ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' : 'bg-slate-900 border-slate-800 text-slate-100 hover:bg-slate-800'}`}>
+                            {k}
+                        </button>
+                    );
+                })}
+                <button onClick={() => num('0')} className="col-span-2 p-2.5 rounded-xl border bg-slate-900 border-slate-800 text-slate-100 hover:bg-slate-800 active:scale-95 transition-all shadow-sm">0</button>
+                <button onClick={() => num('.')} className="p-2.5 rounded-xl border bg-slate-900 border-slate-800 text-slate-100 hover:bg-slate-800 active:scale-95 transition-all shadow-sm">.</button>
+                <button onClick={equal} className="p-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black hover:from-amber-400 hover:to-amber-500 active:scale-95 transition-all shadow-[0_4px_12px_rgba(245,158,11,0.4)]">=</button>
+            </div>
         </div>
-      )}
+    );
+};
 
-      {/* Textarea Input Line */}
-      <div className="flex items-center gap-2 mb-2.5">
-        <input
-          type="text"
-          placeholder={pendingFile ? "Add message with attachment..." : "Type your message..."}
-          className="flex-1 bg-[#070c17] border border-slate-700/80 focus:border-amber-500 rounded-2xl px-4 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition-all shadow-inner"
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
-        />
+// ─── Standalone Floating Calendar App ────────────────────────────────────────
+export const StandaloneCalendarApp: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+    const today = new Date();
+    const days = eachDayOfInterval({ start: startOfMonth(today), end: endOfMonth(today) });
+    const firstDayOffset = startOfMonth(today).getDay();
 
-        <button
-          type="button"
-          onClick={handleSend}
-          disabled={(!content.trim() && !pendingFile) || isUploading}
-          className="px-4 py-2.5 bg-gradient-to-r from-amber-500 via-amber-600 to-yellow-600 hover:from-amber-400 hover:to-amber-500 disabled:opacity-30 text-slate-950 font-black rounded-2xl transition-all shadow-[0_4px_15px_rgba(245,158,11,0.4)] shrink-0 flex items-center gap-2 cursor-pointer active:translate-y-0.5"
-          title="Send Message"
-        >
-          {isUploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <><span>Send</span><Send className="w-4 h-4 fill-current" /></>}
-        </button>
-      </div>
+    return (
+        <div className="fixed bottom-[300px] right-[410px] z-[9999] w-72 bg-[#0f1a0f] border border-lime-500/40 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.7)] overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 pt-4 pb-3">
+                <div>
+                    <p className="text-[10px] font-bold text-lime-400/70 lowercase italic">live schedule</p>
+                    <h2 className="text-2xl font-black text-white tracking-tight lowercase leading-tight">
+                        {format(today, 'MMMM')} <span className="text-lg text-slate-400 font-bold">{format(today, 'yyyy')}</span>
+                    </h2>
+                </div>
+                <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 text-slate-400 hover:text-white transition-colors">
+                    <X size={13} />
+                </button>
+            </div>
 
-      {/* High Contrast 3D Tactile Control Pills (Reference Image 2 & 4 Style) */}
-      <div className="flex items-center justify-between gap-1.5 px-1 pt-1 overflow-x-auto custom-scrollbar">
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/90 border border-slate-700 text-slate-200 hover:text-amber-400 hover:bg-slate-700 rounded-xl text-xs font-bold transition-all shadow-sm active:translate-y-0.5 shrink-0"
-            title="Attach Document/Media"
-          >
-            <Paperclip size={14} /> <span>Attach</span>
-          </button>
-          <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileSelect} />
+            {/* Calendar Grid */}
+            <div className="mx-3 mb-3 bg-[#0a1208] border border-white/10 rounded-xl overflow-hidden">
+                {/* Day headers */}
+                <div className="grid grid-cols-7 border-b border-white/10">
+                    {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+                        <div key={i} className="py-2 text-center text-[10px] font-black text-lime-400/70">{d}</div>
+                    ))}
+                </div>
+                {/* Days */}
+                <div className="grid grid-cols-7 p-2 gap-1">
+                    {Array(firstDayOffset).fill(null).map((_, i) => <div key={`empty-${i}`} />)}
+                    {days.map(day => {
+                        const isNow = isToday(day);
+                        return (
+                            <div key={day.toISOString()}
+                                className={`aspect-square flex items-center justify-center rounded-lg text-xs font-bold transition-all cursor-default ${
+                                    isNow
+                                        ? 'bg-transparent border-2 border-lime-400 text-lime-400 shadow-[0_0_10px_rgba(163,230,53,0.4)]'
+                                        : 'hover:bg-white/5 text-slate-400'
+                                }`}
+                            >
+                                {format(day, 'd')}
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
 
-          {onStartRecordVoice && (
-            <button
-              type="button"
-              onClick={onStartRecordVoice}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/90 border border-slate-700 text-slate-200 hover:text-emerald-400 hover:bg-slate-700 rounded-xl text-xs font-bold transition-all shadow-sm active:translate-y-0.5 shrink-0"
-              title="Voice Message"
-            >
-              <Mic size={14} className="text-emerald-400" /> <span>Voice</span>
-            </button>
-          )}
-
-          {onStartRecordVideo && (
-            <button
-              type="button"
-              onClick={onStartRecordVideo}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/90 border border-slate-700 text-slate-200 hover:text-indigo-400 hover:bg-slate-700 rounded-xl text-xs font-bold transition-all shadow-sm active:translate-y-0.5 shrink-0"
-              title="Video Message"
-            >
-              <Video size={14} className="text-indigo-400" /> <span>Video</span>
-            </button>
-          )}
+            {/* Today pill */}
+            <div className="px-3 pb-3">
+                <div className="flex items-center gap-2 px-3 py-2 bg-lime-500/10 border border-lime-500/30 rounded-xl">
+                    <span className="w-2 h-2 rounded-full bg-lime-400 shadow-[0_0_6px_#a3e635]" />
+                    <span className="text-xs font-bold text-lime-300">Today · {format(today, 'EEEE, MMM d')}</span>
+                </div>
+            </div>
         </div>
+    );
+};
 
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={handleCalcToggle}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm active:translate-y-0.5 shrink-0 ${
-              localCalcState.isOpen
-                ? 'bg-amber-500 text-slate-950 font-black shadow-[0_0_10px_#f59e0b]'
-                : 'bg-slate-800/90 border border-slate-700 text-slate-200 hover:text-amber-400 hover:bg-slate-700'
-            }`}
-            title="Calculator App"
-          >
-            <Calculator size={14} /> <span>Calc</span>
-          </button>
+// ─── Main MessageInput Component ──────────────────────────────────────────────
+const MessageInput: React.FC<MessageInputProps> = ({
+    onSendMessage, onUploadFile, onStartRecordVoice, onStartRecordVideo,
+    isUploading = false, calcSyncState, onCalcSyncChange, currentUserId, currentUserName,
+}) => {
+    const [content, setContent] = useState('');
+    const [pendingFile, setPendingFile] = useState<PendingFile | null>(null);
+    const [showCalApp, setShowCalApp] = useState(false);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
-          <button
-            type="button"
-            onClick={() => setShowCalApp(v => !v)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm active:translate-y-0.5 shrink-0 ${
-              showCalApp
-                ? 'bg-lime-400 text-slate-950 font-black shadow-[0_0_10px_#a3e635]'
-                : 'bg-slate-800/90 border border-slate-700 text-slate-200 hover:text-lime-400 hover:bg-slate-700'
-            }`}
-            title="Calendar App"
-          >
-            <CalendarIcon size={14} /> <span>Calendar</span>
-          </button>
+    const localCalc: CalculatorSyncState = calcSyncState || { isOpen: false, display: '0', prevVal: null, op: null, resetNext: false };
+
+    const toggleCalc = () => {
+        onCalcSyncChange?.({ ...localCalc, isOpen: !localCalc.isOpen, activeUserId: currentUserId, activeUserName: currentUserName });
+    };
+
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        let type: PendingFile['type'] = 'file';
+        if (file.type.startsWith('image/')) type = 'image';
+        else if (file.type.startsWith('video/')) type = 'video';
+        else if (file.type.startsWith('audio/')) type = 'voice';
+        const previewUrl = (type === 'image' || type === 'video') ? URL.createObjectURL(file) : undefined;
+        setPendingFile({ file, type, previewUrl });
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+
+    const clearFile = () => {
+        if (pendingFile?.previewUrl) URL.revokeObjectURL(pendingFile.previewUrl);
+        setPendingFile(null);
+    };
+
+    const handleSend = async () => {
+        if (!content.trim() && !pendingFile) return;
+        if (pendingFile && onUploadFile) {
+            const url = await onUploadFile(pendingFile.file);
+            if (url) onSendMessage(content.trim() || url, pendingFile.type, pendingFile.file.name);
+            clearFile();
+            setContent('');
+            return;
+        }
+        if (content.trim()) { onSendMessage(content.trim(), 'text'); setContent(''); }
+    };
+
+    const handleKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+    };
+
+    // Auto-grow textarea
+    const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        setContent(e.target.value);
+        const ta = e.target;
+        ta.style.height = 'auto';
+        ta.style.height = Math.min(ta.scrollHeight, 100) + 'px';
+    };
+
+    const canSend = (!!content.trim() || !!pendingFile) && !isUploading;
+
+    return (
+        <div className="shrink-0 bg-[#0f1620] border-t border-white/[0.07]">
+            {/* Standalone app windows */}
+            {localCalc.isOpen && (
+                <StandaloneCalculatorApp syncState={localCalc} onChange={s => onCalcSyncChange?.(s)}
+                    onClose={() => onCalcSyncChange?.({ ...localCalc, isOpen: false })}
+                    currentUserId={currentUserId} currentUserName={currentUserName} />
+            )}
+            {showCalApp && <StandaloneCalendarApp onClose={() => setShowCalApp(false)} />}
+
+            {/* Staged File Preview */}
+            {pendingFile && (
+                <div className="mx-3 mt-3 flex items-center gap-2.5 px-3 py-2 bg-amber-500/10 border border-amber-500/30 rounded-2xl">
+                    {pendingFile.type === 'image' && pendingFile.previewUrl
+                        ? <img src={pendingFile.previewUrl} alt="" className="w-8 h-8 rounded-lg object-cover border border-white/10" />
+                        : <FileText size={18} className="text-amber-400 shrink-0" />}
+                    <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-slate-100 truncate">{pendingFile.file.name}</p>
+                        <p className="text-[10px] text-amber-400/80">{(pendingFile.file.size / 1024).toFixed(1)} KB · Press send to attach</p>
+                    </div>
+                    <button onClick={clearFile} className="shrink-0 text-slate-500 hover:text-red-400 transition-colors"><X size={14} /></button>
+                </div>
+            )}
+
+            {/* ── ROW 1: [Calc] [Cal] [Text Input] [Send] ── */}
+            <div className="flex items-end gap-2 px-3 pt-3 pb-2">
+                {/* Live Broadcast Icons (left of input) */}
+                <div className="flex flex-col gap-1.5 shrink-0 pb-0.5">
+                    <button onClick={toggleCalc}
+                        title="Live Calculator"
+                        className={`w-9 h-9 rounded-2xl flex items-center justify-center transition-all shadow-md active:scale-90 ${
+                            localCalc.isOpen
+                                ? 'bg-amber-500 text-slate-950 shadow-[0_0_12px_rgba(245,158,11,0.5)]'
+                                : 'bg-slate-800 border border-slate-700/80 text-amber-400 hover:bg-slate-700'
+                        }`}>
+                        <Calculator size={17} />
+                    </button>
+                    <button onClick={() => setShowCalApp(v => !v)}
+                        title="Live Calendar"
+                        className={`w-9 h-9 rounded-2xl flex items-center justify-center transition-all shadow-md active:scale-90 ${
+                            showCalApp
+                                ? 'bg-lime-500 text-slate-950 shadow-[0_0_12px_rgba(163,230,53,0.5)]'
+                                : 'bg-slate-800 border border-slate-700/80 text-lime-400 hover:bg-slate-700'
+                        }`}>
+                        <CalendarIcon size={17} />
+                    </button>
+                </div>
+
+                {/* Text Input */}
+                <div className="flex-1 bg-[#1e2a3a] border border-white/10 rounded-2xl px-3.5 py-2 focus-within:border-amber-500/50 transition-colors">
+                    <textarea
+                        ref={textareaRef}
+                        rows={1}
+                        value={content}
+                        onChange={handleChange}
+                        onKeyDown={handleKey}
+                        placeholder="Type a message..."
+                        className="w-full bg-transparent text-sm text-white placeholder-slate-500 outline-none resize-none leading-relaxed"
+                        style={{ maxHeight: 100, scrollbarWidth: 'none' }}
+                    />
+                </div>
+
+                {/* Send Button */}
+                <button
+                    onClick={handleSend}
+                    disabled={!canSend}
+                    className={`shrink-0 w-10 h-10 rounded-2xl flex items-center justify-center transition-all active:scale-90 shadow-lg ${
+                        canSend
+                            ? 'bg-gradient-to-br from-amber-500 to-orange-500 text-slate-950 shadow-[0_4px_14px_rgba(245,158,11,0.4)] hover:from-amber-400 hover:to-orange-400'
+                            : 'bg-slate-800 text-slate-600 cursor-not-allowed'
+                    }`}
+                    title="Send"
+                >
+                    {isUploading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} className="fill-current" />}
+                </button>
+            </div>
+
+            {/* ── ROW 2: [Attach] [Voice] [Video] ── */}
+            <div className="flex items-center gap-2 px-3 pb-3">
+                {/* Attach */}
+                <button onClick={() => fileInputRef.current?.click()}
+                    className="flex items-center gap-1.5 h-8 px-3 bg-slate-800/80 border border-slate-700/60 rounded-xl text-slate-300 hover:text-amber-400 hover:bg-slate-700 transition-all text-xs font-semibold active:scale-95 shadow-sm">
+                    <Paperclip size={13} />
+                    <span>Attach</span>
+                </button>
+                <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileSelect} />
+
+                {/* Voice Message */}
+                <button
+                    onClick={onStartRecordVoice}
+                    disabled={!onStartRecordVoice}
+                    className="flex items-center gap-1.5 h-8 px-3 bg-slate-800/80 border border-slate-700/60 rounded-xl text-slate-300 hover:text-emerald-400 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all text-xs font-semibold active:scale-95 shadow-sm">
+                    <Mic size={13} className="text-emerald-400" />
+                    <span>Voice</span>
+                </button>
+
+                {/* Video Message */}
+                <button
+                    onClick={onStartRecordVideo}
+                    disabled={!onStartRecordVideo}
+                    className="flex items-center gap-1.5 h-8 px-3 bg-slate-800/80 border border-slate-700/60 rounded-xl text-slate-300 hover:text-indigo-400 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all text-xs font-semibold active:scale-95 shadow-sm">
+                    <Video size={13} className="text-indigo-400" />
+                    <span>Video</span>
+                </button>
+            </div>
         </div>
-      </div>
-    </div>
-  );
+    );
 };
 
 export default MessageInput;
