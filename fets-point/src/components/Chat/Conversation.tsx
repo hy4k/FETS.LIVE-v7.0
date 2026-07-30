@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useMessages, useSendMessage, usePresence } from '../../hooks/useChat';
+import { useMessages, useSendMessage, usePresence, useSendCallLog } from '../../hooks/useChat';
 import { useAuth } from '../../hooks/useAuth';
 import Message from './Message';
-import MessageInput from './MessageInput';
+import MessageInput, { CalculatorSyncState } from './MessageInput';
 import { supabase } from '../../lib/supabase';
 import { useQueryClient } from '@tanstack/react-query';
 import { Conversation as ConversationType } from '../../types';
@@ -17,11 +17,22 @@ interface ConversationProps {
 const Conversation: React.FC<ConversationProps> = ({ conversation }) => {
   const { user } = useAuth();
   const { startCall } = useGlobalCall();
+  const sendCallLog = useSendCallLog();
   const { data: messages = [], isLoading } = useMessages(conversation.id);
   const sendMessage = useSendMessage();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
   const [isUploading, setIsUploading] = useState(false);
+  const channelRef = useRef<any>(null);
+
+  // Calculator Broadcast Sync State
+  const [calcSyncState, setCalcSyncState] = useState<CalculatorSyncState>({
+    isOpen: false,
+    display: '0',
+    prevVal: null,
+    op: null,
+    resetNext: false,
+  });
 
   // Real-time Presence
   const onlineUserIds = usePresence(conversation.id, user?.id);
@@ -34,10 +45,10 @@ const Conversation: React.FC<ConversationProps> = ({ conversation }) => {
     scrollToBottom();
   }, [messages]);
 
-  // Realtime subscription
+  // Realtime subscription with Calculator Broadcast Listener
   useEffect(() => {
     const channel = supabase
-      .channel(`full_chat:${conversation.id}`)
+      .channel(`full_chat_${conversation.id}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversation.id}` },
@@ -46,14 +57,32 @@ const Conversation: React.FC<ConversationProps> = ({ conversation }) => {
           queryClient.invalidateQueries({ queryKey: ['conversations'] });
         }
       )
+      .on('broadcast', { event: 'calculator_sync' }, (payload) => {
+        if (payload.payload) {
+          setCalcSyncState(payload.payload);
+        }
+      })
       .subscribe();
+
+    channelRef.current = channel;
 
     return () => {
       supabase.removeChannel(channel);
     };
   }, [conversation.id, queryClient]);
 
-  const handleSendMessage = (content: string, type: 'text' | 'voice' | 'file' | 'image' | 'video' = 'text', filePath?: string) => {
+  const handleCalcSyncChange = (newState: CalculatorSyncState) => {
+    setCalcSyncState(newState);
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'calculator_sync',
+        payload: newState,
+      }).catch(() => {});
+    }
+  };
+
+  const handleSendMessage = (content: string, type: 'text' | 'voice' | 'file' | 'image' | 'video' | 'call_log' = 'text', filePath?: string) => {
     if (user?.id) {
       sendMessage.mutate({ conversationId: conversation.id, senderId: user.id, content, type, filePath });
     }
@@ -93,14 +122,26 @@ const Conversation: React.FC<ConversationProps> = ({ conversation }) => {
 
   const handleVoiceCall = () => {
     const targets = getRecipientUserIds();
-    if (targets.length > 0) startCall(targets, 'audio');
-    else toast.error('No other participants to call');
+    if (targets.length > 0) {
+      startCall(targets, 'audio');
+      if (user?.id) {
+        sendCallLog({ conversationId: conversation.id, senderId: user.id, callType: 'audio', status: 'completed', durationSeconds: 0 });
+      }
+    } else {
+      toast.error('No other participants to call');
+    }
   };
 
   const handleVideoCall = () => {
     const targets = getRecipientUserIds();
-    if (targets.length > 0) startCall(targets, 'video');
-    else toast.error('No other participants to call');
+    if (targets.length > 0) {
+      startCall(targets, 'video');
+      if (user?.id) {
+        sendCallLog({ conversationId: conversation.id, senderId: user.id, callType: 'video', status: 'completed', durationSeconds: 0 });
+      }
+    } else {
+      toast.error('No other participants to call');
+    }
   };
 
   // Determine header display name
@@ -178,7 +219,15 @@ const Conversation: React.FC<ConversationProps> = ({ conversation }) => {
       </div>
 
       {/* Input */}
-      <MessageInput onSendMessage={handleSendMessage} onUploadFile={handleUploadFile} isUploading={isUploading} />
+      <MessageInput
+        onSendMessage={handleSendMessage}
+        onUploadFile={handleUploadFile}
+        isUploading={isUploading}
+        calcSyncState={calcSyncState}
+        onCalcSyncChange={handleCalcSyncChange}
+        currentUserId={user?.id}
+        currentUserName={(user as any)?.full_name || 'Staff'}
+      />
     </div>
   );
 };

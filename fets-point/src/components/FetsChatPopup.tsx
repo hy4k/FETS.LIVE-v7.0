@@ -1,17 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import {
-    Send, Mic, Paperclip, X, Minus, Edit3, Trash2,
-    Phone, Video, FileText, Square, UserPlus, Check, CheckCheck, Loader2, MoreVertical,
-    Circle, Move, CornerDownRight
+    X, Minus, Phone, Video, Loader2, Move, CornerDownRight
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { useGlobalCall } from '../contexts/CallContext'
 import { usePresence, useSendCallLog } from '../hooks/useChat'
-import { format } from 'date-fns'
 import { toast } from 'react-hot-toast'
-import MessageInput from './Chat/MessageInput'
+import MessageInput, { CalculatorSyncState } from './Chat/MessageInput'
 import Message from './Chat/Message'
 import { StaffProfile } from '../types/shared'
 
@@ -38,34 +35,31 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
     const [isLoading, setIsLoading] = useState(false)
     const [isUploading, setIsUploading] = useState(false)
 
+    // Real-Time Live Collaborative Calculator State
+    const [calcSyncState, setCalcSyncState] = useState<CalculatorSyncState>({
+        isOpen: false,
+        display: '0',
+        prevVal: null,
+        op: null,
+        resetNext: false,
+    })
+
     // Dynamic Resizing & Dragging State
     const [dimensions, setDimensions] = useState<{ width: number; height: number }>({ width: 420, height: 560 })
-    const [isResizing, setIsResizing] = useState(false)
+    const [, setIsResizing] = useState(false)
     const resizeRef = useRef<{ startX: number; startY: number; startW: number; startH: number } | null>(null)
 
     // Conversation State
     const [currentConvId, setCurrentConvId] = useState<string | null>(conversationId || null)
-    const [targetUser, setTargetUser] = useState<StaffProfile | any | null>(initialTargetUser || null)
-    const [isGroup, setIsGroup] = useState(false)
+    const [targetUser] = useState<StaffProfile | any | null>(initialTargetUser || null)
     const [currentName, setCurrentName] = useState('Chat')
     const [members, setMembers] = useState<any[]>([])
 
-    // Add People Panel
-    const [allStaff, setAllStaff] = useState<StaffProfile[]>([])
-    const [showAddPeople, setShowAddPeople] = useState(false)
-
-    // Options Menu
-    const [showMenu, setShowMenu] = useState(false)
-
     // Voice Note Recording
-    const [isRecording, setIsRecording] = useState<'audio' | 'video' | null>(null)
-    const [recordingTime, setRecordingTime] = useState(0)
+    const [isRecording] = useState<'audio' | 'video' | null>(null)
     const [recordedBlob, setRecordedBlob] = useState<{ blob: Blob; type: 'audio' | 'video'; url: string } | null>(null)
 
     const scrollRef = useRef<HTMLDivElement>(null)
-    const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-    const chunksRef = useRef<Blob[]>([])
-    const timerRef = useRef<any>(null)
     const channelRef = useRef<any>(null)
 
     // Online Presence
@@ -103,15 +97,7 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
         return () => { isMounted = false }
     }, [authProfile])
 
-    // Load Staff for Invites
-    useEffect(() => {
-        supabase.from('staff_profiles')
-            .select('*')
-            .order('full_name', { ascending: true })
-            .then(({ data }) => { if (data) setAllStaff(data) })
-    }, [])
-
-    // Initialize Conversation & Realtime Sync with Message Deduplication
+    // Initialize Conversation & Realtime Sync with Message Deduplication & Calculator Sync Broadcast
     useEffect(() => {
         if (!activeProfile?.id) return
 
@@ -162,7 +148,6 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
 
                 if (convInfo && convInfo.length > 0) {
                     const conv = convInfo[0]
-                    setIsGroup(conv.is_group)
                     const memberList = (conv.member_ids || []).map((uid: string, i: number) => ({
                         user_id: uid,
                         staff_profiles: {
@@ -187,7 +172,7 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
                     setMessages(directMsgs || [])
                 }
 
-                // Realtime Channel with Deduplication
+                // Realtime Channel with Deduplication & Calculator Sync Broadcast Listener
                 const channel = supabase.channel(`fets_popup_realtime_${id}`)
                     .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `conversation_id=eq.${id}` }, payload => {
                         if (payload.eventType === 'INSERT') {
@@ -201,6 +186,11 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
                             setMessages(prev => prev.map(m => m.id === payload.new.id ? { ...m, ...payload.new } : m))
                         } else if (payload.eventType === 'DELETE') {
                             setMessages(prev => prev.filter(m => m.id !== payload.old.id))
+                        }
+                    })
+                    .on('broadcast', { event: 'calculator_sync' }, payload => {
+                        if (payload.payload) {
+                            setCalcSyncState(payload.payload)
                         }
                     })
                     .subscribe()
@@ -223,6 +213,18 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
             }
         }
     }, [currentConvId, targetUser?.id, activeProfile?.id])
+
+    // Broadcast Calculator Sync Fired from MessageInput
+    const handleCalcSyncChange = (newState: CalculatorSyncState) => {
+        setCalcSyncState(newState)
+        if (channelRef.current) {
+            channelRef.current.send({
+                type: 'broadcast',
+                event: 'calculator_sync',
+                payload: newState
+            }).catch(() => {})
+        }
+    }
 
     // Auto Scroll
     useEffect(() => {
@@ -260,7 +262,7 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
         window.addEventListener('mouseup', onMouseUp)
     }
 
-    // Send Message Handler with Optimistic Deduplication
+    // Send Message Handler
     const handleSendMessage = async (content: string, type: 'text' | 'voice' | 'file' | 'image' | 'video' | 'call_log' = 'text', filePath?: string) => {
         if (!content || !currentConvId || !activeProfile?.id) return
 
@@ -291,7 +293,7 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
         }
     }
 
-    // Upload File Function for MessageInput
+    // Upload File Function
     const handleUploadFile = async (file: File): Promise<string | null> => {
         if (!currentConvId || !activeProfile?.id) return null
         setIsUploading(true)
@@ -316,46 +318,10 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
         }
     }
 
-    // Recording Voice/Video Notes
-    const startRecording = async (type: 'audio' | 'video') => {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia(
-                type === 'audio' ? { audio: true } : { video: true, audio: true }
-            )
-            const recorder = new MediaRecorder(stream)
-            mediaRecorderRef.current = recorder
-            chunksRef.current = []
-
-            recorder.ondataavailable = e => chunksRef.current.push(e.data)
-            recorder.onstop = () => {
-                const mime = type === 'audio' ? 'audio/webm' : 'video/webm'
-                const blob = new Blob(chunksRef.current, { type: mime })
-                const url = URL.createObjectURL(blob)
-                setRecordedBlob({ blob, type, url })
-                stream.getTracks().forEach(t => t.stop())
-            }
-
-            recorder.start()
-            setIsRecording(type)
-            setRecordingTime(0)
-            if (timerRef.current) clearInterval(timerRef.current)
-            timerRef.current = setInterval(() => setRecordingTime(p => p + 1), 1000)
-        } catch {
-            toast.error('Microphone/Camera access denied')
-        }
-    }
-
-    const stopRecording = () => {
-        mediaRecorderRef.current?.stop()
-        setIsRecording(null)
-        if (timerRef.current) clearInterval(timerRef.current)
-    }
-
     const sendRecordedBlob = async () => {
         if (!recordedBlob || !currentConvId || !activeProfile?.id) return
         const { blob, type } = recordedBlob
-        const ext = 'webm'
-        const file = new File([blob], `rec_${Date.now()}.${ext}`, { type: blob.type })
+        const file = new File([blob], `rec_${Date.now()}.webm`, { type: blob.type })
         setRecordedBlob(null)
 
         const mediaUrl = await handleUploadFile(file)
@@ -390,8 +356,6 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
             toast.error('No other participants to call')
         }
     }
-
-    const addableStaff = allStaff.filter(s => s.id !== activeProfile?.id && !members.map(m => m.user_id).includes(s.id))
 
     return (
         <motion.div
@@ -469,13 +433,16 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
                                 <button onClick={sendRecordedBlob} className="px-3 py-1 bg-amber-500 text-slate-950 rounded-lg text-xs font-bold">Send</button>
                             </div>
                         </div>
-                    ) : isRecording ? (
-                        <div className="p-3 bg-red-950/80 border-t border-red-500/40 flex items-center justify-between text-red-400 font-bold text-xs uppercase animate-pulse">
-                            <span>Recording Voice Note... {recordingTime}s</span>
-                            <button onClick={stopRecording} className="bg-red-600 text-white p-1.5 rounded-lg"><Square size={14} /></button>
-                        </div>
                     ) : (
-                        <MessageInput onSendMessage={handleSendMessage} onUploadFile={handleUploadFile} isUploading={isUploading} />
+                        <MessageInput
+                            onSendMessage={handleSendMessage}
+                            onUploadFile={handleUploadFile}
+                            isUploading={isUploading}
+                            calcSyncState={calcSyncState}
+                            onCalcSyncChange={handleCalcSyncChange}
+                            currentUserId={activeProfile?.id}
+                            currentUserName={activeProfile?.full_name}
+                        />
                     )}
 
                     {/* RESIZE CORNER HANDLE */}
