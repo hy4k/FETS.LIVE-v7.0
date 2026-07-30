@@ -178,12 +178,47 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
     }, [messages, isMinimized])
 
     const handleSendMessage = async (content: string, type: 'text' | 'voice' | 'file' | 'image' | 'video' | 'call_log' = 'text', filePath?: string) => {
-        if (!content || !currentConvId || !activeProfile?.id) return
+        if (!content || !activeProfile?.id) return
+
+        let convId = currentConvId
+        if (!convId && targetUser) {
+            const targetUserId = targetUser.id || targetUser.user_id
+            if (targetUserId) {
+                try {
+                    const { data } = await supabase.rpc('get_or_create_conversation', { user_id_1: activeProfile.id, user_id_2: targetUserId })
+                    if (data) convId = data
+                } catch {}
+                if (!convId) {
+                    const { data: newConv } = await supabase.from('conversations').insert({ name: `Direct: ${targetUser.full_name || 'Staff'}`, is_group: false }).select('id').single()
+                    if (newConv) {
+                        convId = newConv.id
+                        await supabase.from('conversation_members').insert([
+                            { conversation_id: convId, user_id: activeProfile.id },
+                            { conversation_id: convId, user_id: targetUserId }
+                        ]).catch(() => {})
+                    }
+                }
+                if (convId) setCurrentConvId(convId)
+            }
+        }
+
+        if (!convId) {
+            toast.error('Conversation initializing...')
+            return
+        }
+
         const tempId = 'temp_' + Date.now()
-        setMessages(prev => [...prev, { id: tempId, conversation_id: currentConvId, sender_id: activeProfile.id, content, type, file_path: filePath, created_at: new Date().toISOString(), status: 'sent' }])
+        setMessages(prev => [...prev, { id: tempId, conversation_id: convId, sender_id: activeProfile.id, content, type, file_path: filePath, created_at: new Date().toISOString(), status: 'sent' }])
         try {
-            await supabase.from('messages').insert({ conversation_id: currentConvId, sender_id: activeProfile.id, content, type, file_path: filePath, status: 'sent' })
-        } catch { toast.error('Failed to send message') }
+            const { error: insErr } = await supabase.from('messages').insert({ conversation_id: convId, sender_id: activeProfile.id, content, type, file_path: filePath, status: 'sent' })
+            if (insErr) {
+                toast.error('Failed to send message: ' + insErr.message)
+            } else {
+                await supabase.from('conversations').update({ last_message_at: new Date().toISOString(), last_message_preview: content.substring(0, 100) }).eq('id', convId).catch(() => {})
+            }
+        } catch {
+            toast.error('Failed to send message')
+        }
     }
 
     const handleUploadFile = async (file: File): Promise<string | null> => {
@@ -268,7 +303,7 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
             style={{ zIndex, maxWidth: '95vw' }}
             className="fixed bottom-4 right-4 flex flex-col overflow-visible rounded-3xl bg-[#FCD872] border-4 border-white shadow-[0_30px_70px_rgba(0,0,0,0.35)]"
         >
-            {/* Side-by-Side Standalone Apps (Rendered outside overflow clipping) */}
+            {/* Side-by-Side Standalone Apps */}
             <AnimatePresence>
                 {calcSyncState.isOpen && (
                     <StandaloneCalculatorApp
