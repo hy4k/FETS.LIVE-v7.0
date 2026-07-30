@@ -7,12 +7,10 @@ import { toast } from 'react-hot-toast';
 // CONVERSATIONS
 // =====================================================
 
-// Fetch all conversations for the current user
 export const useConversations = (userId: string) => {
   return useQuery({
     queryKey: ['conversations', userId],
     queryFn: async () => {
-      // First get conversation IDs where user is a member
       const { data: memberData, error: memberError } = await supabase
         .from('conversation_members')
         .select('conversation_id')
@@ -26,7 +24,6 @@ export const useConversations = (userId: string) => {
         return [];
       }
 
-      // Then get conversations with full details
       const { data, error } = await supabase
         .from('conversations')
         .select(`
@@ -46,7 +43,6 @@ export const useConversations = (userId: string) => {
   });
 };
 
-// Fetch a single conversation by ID
 export const useConversation = (conversationId: string) => {
   return useQuery({
     queryKey: ['conversation', conversationId],
@@ -76,7 +72,6 @@ export const useConversation = (conversationId: string) => {
 // MESSAGES
 // =====================================================
 
-// Fetch messages for a specific conversation
 export const useMessages = (conversationId: string) => {
   return useQuery({
     queryKey: ['messages', conversationId],
@@ -102,7 +97,6 @@ export const useMessages = (conversationId: string) => {
   });
 };
 
-// Send a new message with multi-modal support (text, voice, image, video, file)
 export const useSendMessage = () => {
   const queryClient = useQueryClient();
 
@@ -117,10 +111,9 @@ export const useSendMessage = () => {
       conversationId: string;
       senderId: string;
       content: string;
-      type?: 'text' | 'voice' | 'file' | 'image' | 'video';
+      type?: 'text' | 'voice' | 'file' | 'image' | 'video' | 'call_log';
       filePath?: string;
     }) => {
-      // Try RPC first for transaction safety
       const { data: rpcData, error: rpcErr } = await supabase.rpc('send_chat_message', {
         p_conversation_id: conversationId,
         p_sender_id: senderId,
@@ -133,7 +126,6 @@ export const useSendMessage = () => {
         return rpcData;
       }
 
-      // Direct fallback table insert
       const { data, error } = await supabase
         .from('messages')
         .insert({
@@ -149,7 +141,6 @@ export const useSendMessage = () => {
 
       if (error) throw new Error(error.message);
 
-      // Update conversation's last_message_at and preview
       const previewText = type === 'text' ? content.substring(0, 100) : `[${type.toUpperCase()}] Attachment`;
       await supabase
         .from('conversations')
@@ -173,7 +164,6 @@ export const useSendMessage = () => {
   });
 };
 
-// Update (edit) a message content
 export const useUpdateMessage = () => {
   const queryClient = useQueryClient();
 
@@ -187,7 +177,6 @@ export const useUpdateMessage = () => {
       content: string;
       conversationId: string;
     }) => {
-      // Try RPC first
       const { error: rpcErr } = await supabase.rpc('update_chat_message', {
         p_message_id: messageId,
         p_content: content,
@@ -210,7 +199,7 @@ export const useUpdateMessage = () => {
       }
       return { id: messageId, content, is_edited: true };
     },
-    onSuccess: (data, variables) => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['messages', variables.conversationId] });
       toast.success('Message edited');
     },
@@ -220,7 +209,6 @@ export const useUpdateMessage = () => {
   });
 };
 
-// Delete a message (supports delete for me vs delete for everyone)
 export const useDeleteMessage = () => {
   const queryClient = useQueryClient();
 
@@ -270,11 +258,45 @@ export const useDeleteMessage = () => {
   });
 };
 
+// Log Voice/Video Call Events in Chat
+export const useSendCallLog = () => {
+  const sendMessage = useSendMessage();
+
+  return useCallback(
+    ({
+      conversationId,
+      senderId,
+      callType,
+      status,
+      durationSeconds,
+    }: {
+      conversationId: string;
+      senderId: string;
+      callType: 'audio' | 'video';
+      status: 'completed' | 'missed' | 'rejected';
+      durationSeconds?: number;
+    }) => {
+      const payload = JSON.stringify({
+        callType,
+        status,
+        durationSeconds: durationSeconds || 0,
+      });
+
+      return sendMessage.mutate({
+        conversationId,
+        senderId,
+        content: payload,
+        type: 'call_log',
+      });
+    },
+    [sendMessage]
+  );
+};
+
 // =====================================================
 // CONVERSATION MANAGEMENT
 // =====================================================
 
-// Create or get 1:1 direct message conversation
 export const useGetOrCreateDM = () => {
   const queryClient = useQueryClient();
 
@@ -286,7 +308,6 @@ export const useGetOrCreateDM = () => {
       userId1: string;
       userId2: string;
     }) => {
-      // Check if conversation already exists using RPC function
       const { data: existing, error: searchError } = await supabase.rpc('get_or_create_conversation', {
         user_id_1: userId1,
         user_id_2: userId2,
@@ -296,7 +317,6 @@ export const useGetOrCreateDM = () => {
         return { id: existing };
       }
 
-      // Fallback direct table logic
       const { data: conversation, error: convError } = await supabase
         .from('conversations')
         .insert({
@@ -308,7 +328,6 @@ export const useGetOrCreateDM = () => {
 
       if (convError) throw new Error(convError.message);
 
-      // Add both members
       const { error: membersError } = await supabase.from('conversation_members').insert([
         { conversation_id: conversation.id, user_id: userId1 },
         { conversation_id: conversation.id, user_id: userId2 },
@@ -327,7 +346,6 @@ export const useGetOrCreateDM = () => {
   });
 };
 
-// Create a new group conversation
 export const useCreateGroupConversation = () => {
   const queryClient = useQueryClient();
 
@@ -352,7 +370,6 @@ export const useCreateGroupConversation = () => {
         return { id: rpcConvId, name, is_group: true };
       }
 
-      // Direct fallback
       const { data: conversation, error: convError } = await supabase
         .from('conversations')
         .insert({
@@ -387,7 +404,6 @@ export const useCreateGroupConversation = () => {
   });
 };
 
-// Add member to group conversation
 export const useAddMemberToConversation = () => {
   const queryClient = useQueryClient();
 
@@ -426,7 +442,6 @@ export const useAddMemberToConversation = () => {
 // READ RECEIPTS
 // =====================================================
 
-// Mark message(s) as read
 export const useMarkMessagesAsRead = () => {
   const queryClient = useQueryClient();
 
@@ -475,7 +490,6 @@ export const useMarkMessagesAsRead = () => {
 // REAL-TIME PRESENCE & ONLINE STATUS
 // =====================================================
 
-// Track online users globally or in a conversation
 export const usePresence = (conversationId?: string | null, currentUserId?: string | null) => {
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
 
@@ -520,7 +534,6 @@ export const usePresence = (conversationId?: string | null, currentUserId?: stri
   return onlineUsers;
 };
 
-// Global Presence Hook tracking all logged-in active users
 export const useGlobalPresence = (currentUserId?: string | null) => {
   return usePresence(null, currentUserId);
 };

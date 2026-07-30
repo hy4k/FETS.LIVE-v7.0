@@ -18,9 +18,15 @@ const RemoteVideoTile = ({ stream, userId, callType }: { stream: MediaStream, us
     const [userName, setUserName] = useState('Loading...');
     const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
+    const audioRef = useRef<HTMLAudioElement>(null);
+
     useEffect(() => {
         if (videoRef.current && stream) {
             videoRef.current.srcObject = stream;
+        }
+        if (audioRef.current && stream) {
+            audioRef.current.srcObject = stream;
+            audioRef.current.play().catch(() => {});
         }
     }, [stream]);
 
@@ -43,6 +49,7 @@ const RemoteVideoTile = ({ stream, userId, callType }: { stream: MediaStream, us
 
     return (
         <div className="relative w-full h-full bg-slate-900 rounded-2xl overflow-hidden border border-white/5 shadow-inner group">
+            <audio ref={audioRef} autoPlay playsInline />
             <video
                 ref={videoRef}
                 autoPlay

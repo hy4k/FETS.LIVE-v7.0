@@ -59,8 +59,8 @@ const Conversation: React.FC<ConversationProps> = ({ conversation }) => {
     }
   };
 
-  const handleUploadFile = async (file: File) => {
-    if (!user?.id || !conversation.id) return;
+  const handleUploadFile = async (file: File): Promise<string | null> => {
+    if (!user?.id || !conversation.id) return null;
     setIsUploading(true);
     try {
       const path = `chat/${conversation.id}/${Date.now()}_${file.name}`;
@@ -77,16 +77,10 @@ const Conversation: React.FC<ConversationProps> = ({ conversation }) => {
           reader.readAsDataURL(file);
         });
       }
-
-      let type: 'text' | 'voice' | 'file' | 'image' | 'video' = 'file';
-      if (file.type.startsWith('image/')) type = 'image';
-      else if (file.type.startsWith('video/')) type = 'video';
-      else if (file.type.startsWith('audio/')) type = 'voice';
-
-      handleSendMessage(mediaUrl, type, file.name);
-      toast.success('File attached');
+      return mediaUrl;
     } catch {
       toast.error('Failed to upload file');
+      return null;
     } finally {
       setIsUploading(false);
     }
