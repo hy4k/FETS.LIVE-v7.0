@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-    X, Minus, Phone, Video, Loader2, Move, Square,
-    UserPlus, ChevronDown, Smile
+    X, Minus, Phone, Video, Loader2, Square,
+    UserPlus, Smile
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
@@ -250,7 +250,6 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
         if (currentConvId) sendCallLog({ conversationId: currentConvId, senderId: activeProfile.id, callType: 'video', status: 'completed', durationSeconds: 0 })
     }
 
-    // Avatar initials
     const avatarLetter = currentName.charAt(0).toUpperCase()
 
     return (
@@ -259,68 +258,68 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
             dragMomentum={false}
             dragConstraints={{ left: -1200, right: 200, top: -600, bottom: 200 }}
             initial={{ opacity: 0, scale: 0.92, y: 40 }}
-            animate={{ opacity: 1, scale: 1, y: 0, height: isMinimized ? 62 : 600, width: 390 }}
+            animate={{ opacity: 1, scale: 1, y: 0, height: isMinimized ? 64 : 600, width: 390 }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
             transition={{ type: 'spring', damping: 24, stiffness: 260 }}
             style={{ zIndex, maxWidth: '95vw' }}
-            className="fixed bottom-4 right-4 flex flex-col overflow-hidden rounded-3xl shadow-[0_30px_70px_rgba(0,0,0,0.5)] border border-white/10"
+            className="fixed bottom-4 right-4 flex flex-col overflow-hidden rounded-3xl bg-[#FCD872] border-4 border-white shadow-[0_30px_70px_rgba(0,0,0,0.35)]"
         >
-            {/* ═══════════════ HEADER ═══════════════ */}
-            <div className="shrink-0 bg-[#1a2236] cursor-grab active:cursor-grabbing px-4 py-3 flex items-center gap-2 border-b border-white/10 select-none">
+            {/* ═══════════════ TOP BANNER (Vibrant Teal in Image) ═══════════════ */}
+            <div className="shrink-0 bg-gradient-to-r from-[#1BB5AC] via-[#1AAFA6] to-[#169C94] cursor-grab active:cursor-grabbing px-4 py-3.5 flex items-center gap-2 border-b border-[#148781] select-none text-white">
                 {/* Avatar + Name */}
                 <div className="relative shrink-0">
-                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center font-black text-slate-950 text-sm shadow-lg">
+                    <div className="w-9.5 h-9.5 rounded-full bg-[#FCD872] flex items-center justify-center font-black text-[#133C44] text-sm shadow-md border-2 border-white">
                         {avatarLetter}
                     </div>
-                    <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#1a2236] ${isTargetOnline ? 'bg-emerald-400 shadow-[0_0_6px_#34d399]' : 'bg-slate-600'}`} />
+                    <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#1BB5AC] ${isTargetOnline ? 'bg-amber-300 shadow-[0_0_6px_#fcd34d]' : 'bg-slate-400'}`} />
                 </div>
                 <div className="flex-1 min-w-0">
-                    <p className="font-bold text-white text-sm leading-tight truncate">{currentName}</p>
-                    <p className="text-[10px] font-medium text-slate-400 leading-none mt-0.5">{isGroup ? `${members.length} members` : isTargetOnline ? '● Active now' : '○ Offline'}</p>
+                    <p className="font-extrabold text-white text-sm leading-tight truncate">{currentName}</p>
+                    <p className="text-[10px] font-bold text-teal-100 leading-none mt-0.5">{isGroup ? `${members.length} members` : isTargetOnline ? '● Active now' : '○ Offline'}</p>
                 </div>
 
-                {/* Action Buttons */}
+                {/* Quick Action Icons */}
                 <div className="flex items-center gap-1 shrink-0">
                     {/* Add Person */}
-                    <button onClick={() => toast('Add person feature coming soon')} className="w-7 h-7 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-slate-300 hover:text-amber-400 transition-all" title="Add Person">
+                    <button onClick={() => toast('Add person feature coming soon')} className="w-7 h-7 rounded-xl bg-white/20 hover:bg-white/35 flex items-center justify-center text-white transition-all shadow-sm" title="Add Person">
                         <UserPlus size={13} />
                     </button>
                     {/* Voice Call */}
-                    <button onClick={handleVoiceCall} className="w-7 h-7 rounded-xl bg-white/10 hover:bg-emerald-500/30 flex items-center justify-center text-slate-300 hover:text-emerald-400 transition-all" title="Voice Call">
+                    <button onClick={handleVoiceCall} className="w-7 h-7 rounded-xl bg-white/20 hover:bg-white/35 flex items-center justify-center text-white transition-all shadow-sm" title="Voice Call">
                         <Phone size={13} />
                     </button>
                     {/* Video Call */}
-                    <button onClick={handleVideoCall} className="w-7 h-7 rounded-xl bg-white/10 hover:bg-indigo-500/30 flex items-center justify-center text-slate-300 hover:text-indigo-400 transition-all" title="Video Call">
+                    <button onClick={handleVideoCall} className="w-7 h-7 rounded-xl bg-white/20 hover:bg-white/35 flex items-center justify-center text-white transition-all shadow-sm" title="Video Call">
                         <Video size={13} />
                     </button>
                     {/* Minimize */}
-                    <button onClick={() => setIsMinimized(v => !v)} className="w-7 h-7 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-slate-300 hover:text-white transition-all" title="Minimize">
+                    <button onClick={() => setIsMinimized(v => !v)} className="w-7 h-7 rounded-xl bg-white/20 hover:bg-white/35 flex items-center justify-center text-white transition-all shadow-sm" title="Minimize">
                         <Minus size={13} />
                     </button>
                     {/* Close */}
-                    <button onClick={onClose} className="w-7 h-7 rounded-xl bg-red-500/20 hover:bg-red-500 flex items-center justify-center text-red-300 hover:text-white transition-all" title="Close">
+                    <button onClick={onClose} className="w-7 h-7 rounded-xl bg-red-500/80 hover:bg-red-600 flex items-center justify-center text-white transition-all shadow-sm" title="Close">
                         <X size={13} />
                     </button>
                 </div>
             </div>
 
-            {/* ═══════════════ MESSAGES FEED ═══════════════ */}
+            {/* ═══════════════ CHAT SECTION / MESSAGES FEED ═══════════════ */}
             {!isMinimized && (
                 <>
                     <div
                         ref={scrollRef}
-                        className="flex-1 overflow-y-scroll bg-[#111827] px-3 py-4 space-y-2"
+                        className="flex-1 overflow-y-scroll bg-[#FDE6A2] px-3.5 py-4 space-y-2"
                         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
                     >
                         <style>{`div::-webkit-scrollbar { display: none; }`}</style>
                         {isLoading ? (
-                            <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-500">
-                                <Loader2 size={20} className="animate-spin text-amber-400" />
-                                <span className="text-xs">Syncing messages...</span>
+                            <div className="flex flex-col items-center justify-center h-full gap-3 text-[#5A7C82]">
+                                <Loader2 size={22} className="animate-spin text-[#1BB5AC]" />
+                                <span className="text-xs font-bold">Syncing messages...</span>
                             </div>
                         ) : messages.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center h-full gap-2 text-slate-600 text-xs">
-                                <Smile size={28} className="opacity-30" />
+                            <div className="flex flex-col items-center justify-center h-full gap-2 text-[#6C8E95] text-xs font-bold">
+                                <Smile size={32} className="opacity-40" />
                                 <span>Start the conversation!</span>
                             </div>
                         ) : (
@@ -332,28 +331,28 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
                     <AnimatePresence>
                         {recordedBlob && (
                             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-                                className="shrink-0 px-3 py-2 bg-amber-500/10 border-t border-amber-500/30 flex items-center justify-between gap-2">
-                                <span className="text-xs font-bold text-amber-400 uppercase">✓ Recording Ready</span>
+                                className="shrink-0 px-3.5 py-2.5 bg-[#FFF2D0] border-t border-[#F3CA59] flex items-center justify-between gap-2">
+                                <span className="text-xs font-bold text-[#1BB5AC] uppercase">✓ Recording Ready</span>
                                 <div className="flex gap-2">
-                                    <button onClick={() => setRecordedBlob(null)} className="px-3 py-1 bg-white/10 text-slate-300 rounded-xl text-xs font-bold hover:bg-red-500/20 hover:text-red-400 transition-colors">Discard</button>
-                                    <button onClick={sendRecordedBlob} className="px-3 py-1 bg-amber-500 text-slate-950 rounded-xl text-xs font-bold hover:bg-amber-400 transition-colors">Send</button>
+                                    <button onClick={() => setRecordedBlob(null)} className="px-3 py-1 bg-[#FFFDF7] text-[#133C44] border border-[#EAC053] rounded-xl text-xs font-bold hover:bg-red-50 hover:text-red-600 transition-colors">Discard</button>
+                                    <button onClick={sendRecordedBlob} className="px-3 py-1 bg-[#1BB5AC] text-white rounded-xl text-xs font-bold hover:bg-[#159F98] transition-colors shadow-sm">Send</button>
                                 </div>
                             </motion.div>
                         )}
                         {isRecording && !recordedBlob && (
                             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-                                className="shrink-0 px-3 py-2 bg-red-500/10 border-t border-red-500/30 flex items-center justify-between gap-2">
-                                <span className="text-xs font-bold text-red-400 flex items-center gap-2 animate-pulse">
-                                    <span className="w-2 h-2 bg-red-500 rounded-full" /> REC {isRecording.toUpperCase()} {recordingTime}s
+                                className="shrink-0 px-3.5 py-2.5 bg-red-100 border-t border-red-300 flex items-center justify-between gap-2">
+                                <span className="text-xs font-bold text-red-600 flex items-center gap-2 animate-pulse">
+                                    <span className="w-2.5 h-2.5 bg-red-600 rounded-full" /> REC {isRecording.toUpperCase()} {recordingTime}s
                                 </span>
-                                <button onClick={stopRecording} className="px-3 py-1 bg-red-500 text-white rounded-xl text-xs font-bold hover:bg-red-600 transition-colors flex items-center gap-1">
+                                <button onClick={stopRecording} className="px-3 py-1 bg-red-600 text-white rounded-xl text-xs font-bold hover:bg-red-700 transition-colors flex items-center gap-1 shadow-sm">
                                     <Square size={11} /> Stop
                                 </button>
                             </motion.div>
                         )}
                     </AnimatePresence>
 
-                    {/* ═══════════════ INPUT AREA ═══════════════ */}
+                    {/* ═══════════════ TYPING SECTION / ENTERING AREA ═══════════════ */}
                     <MessageInput
                         onSendMessage={handleSendMessage}
                         onUploadFile={handleUploadFile}
