@@ -3204,17 +3204,17 @@ function CalendarPage({ branch }) {
    ===================================================================== */
 /* shift codes shown in every roster cell (OT is an add-on, not a base code) */
 const ROSTER_CODES = {
-  D:    { label: "Day shift",        color: "color-mix(in oklch, var(--accent) 38%, var(--panel-3))",       ink: "var(--accent)",      solid: true },
-  E:    { label: "Evening shift",    color: "color-mix(in oklch, var(--v-prometric) 40%, var(--panel-3))",  ink: "var(--v-prometric)", solid: true },
-  HD:   { label: "Half day",         color: "color-mix(in oklch, var(--warn) 40%, var(--panel-3))",         ink: "var(--warn)",        solid: true },
-  RD:   { label: "Rest day",         color: "var(--panel-3)",                                               ink: "var(--ink-4)",       solid: false },
-  PH:   { label: "Public holiday",   color: "color-mix(in oklch, var(--bad) 30%, var(--panel-3))",          ink: "var(--bad)",         solid: true },
-  L:    { label: "Leave",            color: "color-mix(in oklch, var(--bad) 38%, var(--panel-3))",          ink: "var(--bad)",         solid: true },
-  TOIL: { label: "TOIL Earned",      color: "color-mix(in oklch, var(--v-cma) 42%, var(--panel-3))",        ink: "var(--v-cma)",       solid: true },
-  TR:   { label: "TOIL Redeemed",    color: "color-mix(in oklch, var(--v-ielts) 40%, var(--panel-3))",      ink: "var(--v-ielts)",     solid: true },
-  TP:   { label: "Monthly TOIL Approved",    color: "color-mix(in oklch, var(--v-pearson) 40%, var(--panel-3))",    ink: "var(--v-pearson)",   solid: true },
-  SW:   { label: "Shift swapped",    color: "color-mix(in oklch, var(--v-prometric) 50%, var(--panel-3))",  ink: "var(--v-prometric)", solid: true },
-  TRD:  { label: "TOIL Rest Day",    color: "color-mix(in oklch, var(--v-cma) 20%, var(--panel-3))",        ink: "var(--v-cma)",       solid: true },
+  D:    { label: "Day shift",        color: "rgba(27, 181, 172, 0.25)",      ink: "#1BB5AC",            solid: true },
+  E:    { label: "Evening shift",    color: "rgba(242, 153, 74, 0.25)",      ink: "#F2994A",            solid: true },
+  HD:   { label: "Half day",         color: "rgba(252, 216, 114, 0.3)",      ink: "#FCD872",            solid: true },
+  RD:   { label: "Rest day",         color: "var(--panel-3)",                 ink: "var(--ink-4)",       solid: false },
+  PH:   { label: "Public holiday",   color: "rgba(229, 62, 62, 0.25)",       ink: "#E53E3E",            solid: true },
+  L:    { label: "Leave",            color: "rgba(229, 62, 62, 0.3)",        ink: "#E53E3E",            solid: true },
+  TOIL: { label: "TOIL Earned",      color: "rgba(16, 185, 129, 0.25)",      ink: "#10B981",            solid: true },
+  TR:   { label: "TOIL Redeemed",    color: "rgba(139, 92, 246, 0.25)",      ink: "#8B5CF6",            solid: true },
+  TP:   { label: "Monthly TOIL Approved", color: "rgba(59, 130, 246, 0.25)", ink: "#3B82F6",            solid: true },
+  SW:   { label: "Shift swapped",    color: "rgba(242, 153, 74, 0.3)",       ink: "#F2994A",            solid: true },
+  TRD:  { label: "TOIL Rest Day",    color: "rgba(16, 185, 129, 0.2)",       ink: "#10B981",            solid: true },
 };
 const RC_LIST = ["D", "E", "HD", "RD", "PH", "L", "TOIL", "TR", "TP", "SW", "TRD"];
 const WORK_CODES = ["D", "E", "HD"];
@@ -3890,9 +3890,19 @@ function OtToilClaimDialog({ ctx, onClose }) {
 }
 
 function RosterGrid({ offsets, branch }) {
-  const pool = branch === "global"
+  const rawPool = branch === "global"
     ? [...F().STAFF.calicut.map((n) => ({ n, b: "calicut" })), ...F().STAFF.cochin.map((n) => ({ n, b: "cochin" }))]
     : F().STAFF[branch].map((n) => ({ n, b: branch }));
+
+  // Exclude staff marked is_roster_active: false for current month in User Management
+  const isStaffActiveInRoster = (name) => {
+    if (!F()._staffList) return true;
+    const staffObj = F()._staffList.find(s => s.full_name === name || s.name === name);
+    if (!staffObj) return true;
+    const isRosterActive = (staffObj.permissions as any)?.is_roster_active !== false && (staffObj as any).is_roster_active !== false;
+    return isRosterActive;
+  };
+  const pool = rawPool.filter(({ n }) => isStaffActiveInRoster(n));
 
   const build = () => {
     const g = {};
@@ -3987,10 +3997,10 @@ function RosterGrid({ offsets, branch }) {
 
   return (
     <React.Fragment>
-    <div className="glass scroll-soft" style={{ borderRadius: "var(--radius)", overflow: "auto", padding: 4 }}>
+    <div className="glass scroll-soft" style={{ borderRadius: "var(--radius)", overflow: "auto", padding: 6 }}>
       <div style={{ minWidth: 190 + offsets.length * 50 }}>
         <div style={{ display: "grid", gridTemplateColumns: cols, gap: 4, padding: "8px 8px 6px" }}>
-          <div className="eyebrow" style={{ alignSelf: "center", color: "var(--ink-4)", paddingLeft: 6 }}>Staff</div>
+          <div className="eyebrow" style={{ alignSelf: "center", color: "var(--ink-4)", paddingLeft: 6 }}>Staff Member</div>
           {offsets.map((o) => {
             const d = F().ISO(o), isToday = o === 0;
             const daySessions = window.branchSessions(o, branch) || [];
@@ -4070,8 +4080,17 @@ function RosterGrid({ offsets, branch }) {
           })}
         </div>
         {pool.map(({ n, b }, ri) => (
-          <div key={n} style={{ display: "grid", gridTemplateColumns: cols, gap: 4, padding: "4px 8px",
-            background: ri % 2 ? "var(--inset)" : "transparent", borderRadius: 8 }}>
+          <div key={n} style={{
+            display: "grid",
+            gridTemplateColumns: cols,
+            gap: 6,
+            padding: "10px 10px",
+            margin: "8px 0",
+            background: "var(--panel-2, rgba(255, 253, 245, 0.04))",
+            border: "1px solid var(--hairline)",
+            borderRadius: 16,
+            boxShadow: "0 2px 10px rgba(0,0,0,0.12)"
+          }}>
             <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
               <Avatar name={n} size={28} />
               <div style={{ minWidth: 0 }}>
