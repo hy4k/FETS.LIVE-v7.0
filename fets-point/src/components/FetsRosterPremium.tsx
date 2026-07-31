@@ -1129,7 +1129,7 @@ export function FetsRosterPremium() {
 
   // ── Desktop ──────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-[#de5827] -mt-32 pt-56 px-6 pb-24"
+    <div className="min-h-screen bg-[#FFFDF5] -mt-32 pt-56 px-6 pb-24"
       style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}>
       <div className="max-w-[1800px] mx-auto">
 
@@ -1140,20 +1140,20 @@ export function FetsRosterPremium() {
           className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8 mb-6 mt-4 relative z-40"
         >
           <div className="relative min-w-0">
-            <div className="flex items-center gap-4 mb-2">
-              <div className="h-[2px] w-12 bg-black" />
-              <span className="text-[11px] uppercase tracking-[0.2em] font-black text-black">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="h-[3px] w-10 bg-[#1BB5AC] rounded-full" />
+              <span className="text-[11px] uppercase tracking-[0.2em] font-black text-[#133C44]">
                 Roster {activeBranch !== 'global' && `// ${activeBranch.toUpperCase()}`}
               </span>
             </div>
-            <div className="text-5xl md:text-7xl font-black text-black tracking-tighter leading-none uppercase">
-              Roster
+            <div className="text-4xl md:text-6xl font-black text-[#133C44] tracking-tighter leading-none uppercase">
+              Duty Roster Control
             </div>
           </div>
 
           <div className="flex items-center gap-4 flex-wrap justify-end w-full lg:w-auto">
             {/* Centre Selector Thread for Desktop */}
-            <div className="bg-[#f4f3ef] border border-[#d5d4ce] rounded-2xl p-1 shadow-sm">
+            <div className="bg-[#FFF9EA] border border-[#FCD872]/40 rounded-2xl p-1 shadow-sm">
               <LocationSelectorThread
                 activeBranch={activeBranch}
                 setActiveBranch={setActiveBranch as (b: string) => void}
@@ -1161,12 +1161,12 @@ export function FetsRosterPremium() {
                 canSwitch={canSwitchCentre}
               />
             </div>
-            <div className="flex items-center gap-2 px-4 py-3 bg-[#f4f3ef] border border-[#d5d4ce] text-black font-bold rounded-2xl text-xs uppercase tracking-wider shadow-sm">
-              <Users size={14} className="text-black" />
-              <span>{staffProfiles.length} staff</span>
+            <div className="flex items-center gap-2 px-4 py-3 bg-[#FFF9EA] border border-[#FCD872]/40 text-[#133C44] font-bold rounded-2xl text-xs uppercase tracking-wider shadow-sm">
+              <Users size={14} className="text-[#1BB5AC]" />
+              <span>{staffProfiles.length} active staff</span>
             </div>
-            <div className="flex items-center gap-2 px-4 py-3 bg-[#f4f3ef] border border-[#d5d4ce] text-black font-bold rounded-2xl text-xs uppercase tracking-wider shadow-sm">
-              <Calendar size={14} className="text-black" />
+            <div className="flex items-center gap-2 px-4 py-3 bg-[#FFF9EA] border border-[#FCD872]/40 text-[#133C44] font-bold rounded-2xl text-xs uppercase tracking-wider shadow-sm">
+              <Calendar size={14} className="text-[#1BB5AC]" />
               <span>{new Date().toLocaleDateString('en-GB', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}</span>
             </div>
           </div>
@@ -1174,7 +1174,7 @@ export function FetsRosterPremium() {
 
         {/* ── NOTIFICATION ── */}
         {notification && (
-          <div className={`fixed top-4 right-4 z-50 p-4 rounded-xl bg-[#f4f3ef] shadow-xl border ${
+          <div className={`fixed top-4 right-4 z-50 p-4 rounded-xl bg-[#FFFDF5] shadow-xl border ${
             notification.type === 'success' ? 'border-emerald-500 text-emerald-800' :
             notification.type === 'error' ? 'border-rose-500 text-rose-800' : 'border-amber-500 text-amber-800'
           }`}>
@@ -1188,14 +1188,14 @@ export function FetsRosterPremium() {
         )}
 
         {/* ── SUB-HEADER MENU HEADER ── */}
-        <div className="flex items-center gap-2 bg-[#eae9e4] border border-[#d5d4ce] rounded-3xl p-2 mb-4 w-full justify-start overflow-x-auto no-scrollbar shadow-md">
+        <div className="flex items-center gap-2 bg-[#FFF9EA] border border-[#FCD872]/40 rounded-3xl p-2 mb-4 w-full justify-start overflow-x-auto no-scrollbar shadow-sm">
           {[
-            { id: 'roster', label: 'Roster Grid', icon: <Calendar size={15} /> },
-            { id: 'check-in', label: 'Check-in', icon: <LogIn size={15} /> },
-            { id: 'my-attendance', label: 'My Attendance', icon: <Clock size={15} /> },
-            { id: 'leave', label: 'Leave', icon: <Calendar size={15} /> },
+            { id: 'roster', label: 'Roster Matrix', icon: <Calendar size={15} /> },
+            { id: 'check-in', label: 'Check-in Log', icon: <LogIn size={15} /> },
+            { id: 'my-attendance', label: 'Attendance Analytics', icon: <Clock size={15} /> },
+            { id: 'leave', label: 'Leave Requests', icon: <Calendar size={15} /> },
             { id: 'shift-swap', label: 'Shift Swap', icon: <RefreshCw size={15} /> },
-            { id: 'tool', label: 'Tool', icon: <Shield size={15} />, adminOnly: true },
+            { id: 'tool', label: 'Roster Tools', icon: <Shield size={15} />, adminOnly: true },
           ].map(item => {
             if (item.adminOnly && !canEdit) return null
             const isActive = activeMenu === item.id
@@ -1205,8 +1205,8 @@ export function FetsRosterPremium() {
                 onClick={() => setActiveMenu(item.id as any)}
                 className={`flex items-center gap-2 px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap ${
                   isActive
-                    ? 'bg-black text-[#f4f3ef] shadow-sm'
-                    : 'text-black/60 hover:text-black hover:bg-black/5'
+                    ? 'bg-[#1BB5AC] text-white shadow-md'
+                    : 'text-[#133C44]/70 hover:text-[#133C44] hover:bg-[#1BB5AC]/10'
                 }`}
               >
                 {item.icon}
@@ -1225,22 +1225,22 @@ export function FetsRosterPremium() {
         </div>
 
         {/* ── HELLO USER BANNER ── */}
-        <div className="bg-[#f4f3ef] border border-[#d5d4ce] rounded-3xl p-6 mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-md">
+        <div className="bg-[#FFFDF5] border border-[#FCD872]/40 rounded-3xl p-6 mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-sm">
           <div>
-            <h2 className="text-2xl font-black text-[#1a1a1a]">Hello, {profile?.full_name || 'User'}!</h2>
-            <p className="text-sm text-black/60 font-bold mt-1">
-              {profile?.role ? `${profile.role.replace('_', ' ').toUpperCase()} // ` : ''}Welcome back to your shift roster.
+            <h2 className="text-2xl font-black text-[#133C44]">Hello, {profile?.full_name || 'User'}!</h2>
+            <p className="text-sm text-[#133C44]/70 font-bold mt-1">
+              {profile?.role ? `${profile.role.replace('_', ' ').toUpperCase()} // ` : ''}Welcome back to your shift roster console.
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-xs font-black px-4 py-2 rounded-full bg-black text-[#f4f3ef] uppercase tracking-wider">
+            <span className="text-xs font-black px-4 py-2 rounded-full bg-[#1BB5AC] text-white uppercase tracking-wider shadow-sm">
               {activeBranch.toUpperCase()} BRANCH
             </span>
           </div>
         </div>
 
         {/* ── MAIN CONTENT CONTAINER ── */}
-        <div className="bg-[#f4f3ef] border border-[#d5d4ce] rounded-3xl p-6 min-h-[600px] shadow-lg">
+        <div className="bg-[#FFFDF5] border border-[#FCD872]/40 rounded-3xl p-6 min-h-[600px] shadow-sm">
           <AnimatePresence mode="wait">
 
             {/* DEFAULT ROSTER VIEW */}
