@@ -42,7 +42,7 @@ const getCodeLabel = (code: string) => {
   return code
 }
 
-// Generate consistent refined colors for avatars (darker text for white/grey backgrounds)
+// Generate consistent refined colors for avatars
 const getAvatarColor = (name: string) => {
   const colors = [
     'text-rose-700',
@@ -71,6 +71,14 @@ export const MonthlyRosterTimeline: React.FC<Props> = ({
 
   const daysInMonth = useMemo(() => new Date(year, month + 1, 0).getDate(), [year, month])
 
+  // Filter out staff profiles that are explicitly marked inactive for the month
+  const activeStaffProfiles = useMemo(() => {
+    return staffProfiles.filter(s => {
+      const isRosterActive = (s as any).permissions?.is_roster_active !== false && (s as any).is_roster_active !== false;
+      return isRosterActive;
+    });
+  }, [staffProfiles]);
+
   const scheduleMap = useMemo(() => {
     const map = new Map<string, Schedule>()
     for (const s of schedules) {
@@ -81,12 +89,11 @@ export const MonthlyRosterTimeline: React.FC<Props> = ({
 
   const days: Date[] = useMemo(() => {
     if (viewType === '7day') {
-      // Find start of week (Monday) based on currentDate in UTC
       const start = new Date(currentDate)
-      const day = start.getDay() // 0 is Sunday, 1 is Monday
-      const diff = start.getDate() - day + (day === 0 ? -6 : 1) // Monday
+      const day = start.getDay()
+      const diff = start.getDate() - day + (day === 0 ? -6 : 1)
       const monday = new Date(start.setDate(diff))
-      
+
       return Array.from({ length: 7 }, (_, i) => {
         return new Date(Date.UTC(monday.getFullYear(), monday.getMonth(), monday.getDate() + i))
       })
@@ -118,13 +125,14 @@ export const MonthlyRosterTimeline: React.FC<Props> = ({
       }
     `}</style>
 
-      <div className="bg-[#f4f3ef] rounded-3xl border border-[#d5d4ce] overflow-hidden flex flex-col h-full font-sans shadow-lg">
+      <div className="bg-[#f4f3ef] rounded-3xl border border-[#d5d4ce] overflow-hidden flex flex-col h-full font-sans shadow-lg p-3">
         <div className="overflow-x-auto flex-1 premium-scrollbar pb-2">
-          <table className="min-w-full border-separate border-spacing-0">
+          {/* border-spacing-y-4 creates a physical gap between every staff member row */}
+          <table className="min-w-full border-separate border-spacing-y-4 border-spacing-x-0">
             <thead>
               <tr>
                 {/* Sticky Staff Column Header */}
-                <th className="sticky left-0 z-20 bg-[#f4f3ef] border-b border-r border-[#d5d4ce] px-8 py-6 w-72 shadow-[2px_0_6px_rgba(0,0,0,0.05)]">
+                <th className="sticky left-0 z-20 bg-[#f4f3ef] border-b-2 border-r border-[#d5d4ce] px-8 py-5 w-72 shadow-[2px_0_6px_rgba(0,0,0,0.05)] rounded-tl-2xl">
                   <div className="flex items-center gap-3 text-[#1a1a1a]">
                     <User className="w-5 h-5" />
                     <span className="text-sm font-black tracking-[0.2em] uppercase">Staff Member</span>
@@ -135,7 +143,7 @@ export const MonthlyRosterTimeline: React.FC<Props> = ({
                 {days.map((d, idx) => {
                   const today = isToday(d);
                   return (
-                    <th key={idx} className={`relative z-10 border-b border-[#d5d4ce] px-2 py-4 min-w-[64px] text-center transition-colors hover:bg-black/5 ${today ? 'bg-[#1a1a1a]/5' : 'bg-[#f4f3ef]'}`}>
+                    <th key={idx} className={`relative z-10 border-b-2 border-[#d5d4ce] px-2 py-4 min-w-[64px] text-center transition-colors hover:bg-black/5 ${today ? 'bg-[#1a1a1a]/5' : 'bg-[#f4f3ef]'}`}>
                       <div className="flex flex-col items-center gap-2">
                         <span className={`text-[10px] uppercase font-black tracking-[0.2em] ${today ? 'text-[#1a1a1a]' : 'text-black/40'}`}>
                           {d.toLocaleDateString('en-US', { weekday: 'short' }).charAt(0)}
@@ -155,22 +163,23 @@ export const MonthlyRosterTimeline: React.FC<Props> = ({
               </tr>
             </thead>
             <tbody>
-              {staffProfiles.map((staff, rIdx) => (
-                <tr key={staff.id} className="group hover:bg-black/5 transition-colors duration-200">
+              {activeStaffProfiles.map((staff) => (
+                /* Each staff member is rendered as a spacious card row with rounded corners & vertical gaps */
+                <tr key={staff.id} className="group transition-all duration-200 hover:shadow-md">
 
-                  {/* Sticky Name Cell */}
-                  <td className="sticky left-0 z-10 bg-[#f4f3ef] group-hover:bg-[#eae9e4] border-b border-r border-[#d5d4ce] px-8 py-5 transition-colors shadow-[2px_0_6px_rgba(0,0,0,0.05)]">
+                  {/* Sticky Name Cell with spacious padding */}
+                  <td className="sticky left-0 z-10 bg-white group-hover:bg-[#FAF9F5] border-t border-b border-l border-[#D5D4CE] rounded-l-2xl px-6 py-6 transition-colors shadow-[2px_0_10px_rgba(0,0,0,0.06)]">
                     <div className="flex items-center gap-4">
                       {/* Initials Avatar */}
-                      <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br from-[#eae9e4] to-[#f4f3ef] border border-[#d5d4ce] flex items-center justify-center font-black shrink-0 text-sm shadow-inner ${getAvatarColor(staff.full_name)}`}>
+                      <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br from-[#EAE9E4] to-[#F4F3EF] border border-[#D5D4CE] flex items-center justify-center font-black shrink-0 text-sm shadow-inner ${getAvatarColor(staff.full_name)}`}>
                         {staff.full_name.substring(0, 2).toUpperCase()}
                       </div>
                       <div className="flex flex-col min-w-0">
-                        <span className="text-[#1a1a1a] font-black text-sm tracking-wide truncate leading-tight group-hover:text-black transition-colors">
+                        <span className="text-[#1A1A1A] font-black text-sm tracking-wide truncate leading-tight group-hover:text-black transition-colors">
                           {staff.full_name}
                         </span>
                         {staff.department && (
-                          <span className="text-[9px] text-[#1a1a1a]/60 font-bold tracking-[0.2em] uppercase mt-1 truncate">
+                          <span className="text-[9px] text-[#1A1A1A]/60 font-bold tracking-[0.2em] uppercase mt-1 truncate">
                             {staff.department}
                           </span>
                         )}
@@ -185,12 +194,13 @@ export const MonthlyRosterTimeline: React.FC<Props> = ({
                     const s = scheduleMap.get(key)
                     const code = s?.shift_code || ''
                     const today = isToday(d)
+                    const isLastCol = cIdx === days.length - 1
 
                     return (
                       <td
                         key={cIdx}
                         onClick={() => onCellClick(staff.id, d)}
-                        className={`border-b border-[#d5d4ce] px-1 py-2 text-center align-middle cursor-pointer relative transition-colors ${today ? 'bg-[#1a1a1a]/5' : ''
+                        className={`bg-white group-hover:bg-[#FAF9F5] border-t border-b border-[#D5D4CE] ${isLastCol ? 'border-r rounded-r-2xl' : ''} px-1.5 py-4 text-center align-middle cursor-pointer relative transition-colors ${today ? 'bg-[#1A1A1A]/5' : ''
                           }`}
                       >
                         {/* Interactive Hover Area */}
@@ -198,15 +208,10 @@ export const MonthlyRosterTimeline: React.FC<Props> = ({
                           {s ? (
                             <div className={`relative ${getShiftStyle(code)}`}>
                               <span>{getCodeLabel(code)}</span>
-                              {(s.overtime_hours || 0) > 0 && (
-                                <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[#1a1a1a] text-white text-[9px] flex items-center justify-center rounded-full border border-white/50 shadow-sm font-black z-10" title={`Overtime: ${s.overtime_hours} hrs`}>
-                                  OT
-                                </div>
-                              )}
                             </div>
                           ) : (
-                            <div className="w-10 h-10 rounded-xl bg-transparent border border-transparent hover:border-black/10 hover:bg-black/5 transition-all duration-300 flex items-center justify-center group-hover/cell:scale-110">
-                              <div className="w-1.5 h-1.5 rounded-full bg-black/10"></div>
+                            <div className="w-10 h-10 rounded-xl border border-dashed border-black/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:border-black/30 hover:bg-black/5">
+                              <span className="text-black/30 text-xs font-bold">+</span>
                             </div>
                           )}
                         </div>
@@ -218,50 +223,7 @@ export const MonthlyRosterTimeline: React.FC<Props> = ({
             </tbody>
           </table>
         </div>
-
-        {/* Color Legend */}
-        <div className="bg-[#eae9e4] p-4 border-t border-[#d5d4ce]">
-          <div className="flex flex-wrap items-center justify-center gap-6">
-            <div className="flex items-center space-x-2">
-              <div className="w-4 h-4 rounded-md bg-gradient-to-br from-[#2563EB] to-[#3B82F6] border border-[#2563EB]/30"></div>
-              <span className="text-xs font-bold text-[#1a1a1a]">D (Day)</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className="w-4 h-4 rounded-md bg-gradient-to-br from-[#059669] to-[#10B981] border border-[#059669]/30"></div>
-              <span className="text-xs font-bold text-[#1a1a1a]">E (Evening)</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className="w-4 h-4 rounded-md bg-gradient-to-br from-[#D97706] to-[#F59E0B] border border-[#D97706]/30"></div>
-              <span className="text-xs font-bold text-[#1a1a1a]">HD (Half Day)</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className="w-4 h-4 rounded-md bg-gradient-to-br from-[#eae9e4] to-[#f4f3ef] border border-[#d5d4ce] border-dashed"></div>
-              <span className="text-xs font-bold text-[#1a1a1a]">RD (Rest Day)</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className="w-4 h-4 rounded-md bg-gradient-to-br from-[#DC2626] to-[#EF4444] border border-[#DC2626]/30"></div>
-              <span className="text-xs font-bold text-[#1a1a1a]">L (Leave)</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className="w-4 h-4 rounded-md bg-gradient-to-br from-[#DB2777] to-[#EC4899] border border-[#DB2777]/30"></div>
-              <span className="text-xs font-bold text-[#1a1a1a]">OT (Overtime)</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className="w-4 h-4 rounded-md bg-gradient-to-br from-[#4F46E5] to-[#6366F1] border border-[#4F46E5]/30"></div>
-              <span className="text-xs font-bold text-[#1a1a1a]">T (Training)</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className="w-4 h-4 rounded-md bg-gradient-to-br from-[#7C3AED] to-[#8B5CF6] border border-[#7C3AED]/30"></div>
-              <span className="text-xs font-bold text-[#1a1a1a]">TOIL</span>
-            </div>
-          </div>
-        </div>
       </div>
     </>
   )
 }
-
-export default MonthlyRosterTimeline
-
-
-

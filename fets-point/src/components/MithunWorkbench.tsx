@@ -1,27 +1,23 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { motion } from 'framer-motion'
+import React, { useEffect, useState, useMemo } from 'react'
 import {
   ArrowLeft,
-  BarChart3,
-  BookOpen,
   Briefcase,
-  Calculator,
-  Calendar,
   Check,
   ClipboardList,
   Coins,
-  FileText,
-  Layers,
   NotebookText,
   Plus,
-  Search,
   Sparkles,
   Target,
-  Trash2,
+  Clock,
+  RefreshCw,
 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { isMithunEmail } from '../utils/authUtils'
 import { supabase } from '../lib/supabase'
+import { ShiftSwapModal } from './ShiftSwapModal'
+import { EnhancedRequestsModal } from './EnhancedRequestsModal'
+import { StaffProfile } from '../types/shared'
 
 type Todo = {
   id: string
@@ -44,7 +40,6 @@ type WorkbookPage = {
 }
 
 const storageKey = 'fets.mithun.workbench.v1'
-
 const tableMissingCodes = new Set(['42P01', 'PGRST205'])
 
 const defaultState = {
@@ -72,14 +67,22 @@ export function MithunWorkbench({ onNavigate }: { onNavigate?: (tab: string) => 
   const [ledger, setLedger] = useState<LedgerEntry[]>(defaultState.ledger)
   const [pages, setPages] = useState<WorkbookPage[]>(defaultState.pages)
   const [todoText, setTodoText] = useState('')
-  const [ledgerLabel, setLedgerLabel] = useState('')
-  const [ledgerAmount, setLedgerAmount] = useState('')
-  const [pageSearch, setPageSearch] = useState('')
   const [remoteReady, setRemoteReady] = useState(false)
   const [dbAvailable, setDbAvailable] = useState(true)
   const [saveStatus, setSaveStatus] = useState<'loading' | 'cloud' | 'saving' | 'local'>('loading')
+  const [staffList, setStaffList] = useState<StaffProfile[]>([])
+
+  // Modals for Shift & Swap tools moved to My Desk
+  const [showSwapModal, setShowSwapModal] = useState(false)
+  const [showRequestsModal, setShowRequestsModal] = useState(false)
 
   const allowed = isMithunEmail(profile?.email)
+
+  useEffect(() => {
+    supabase.from('staff_profiles').select('*').then(({ data }) => {
+      if (data) setStaffList(data as StaffProfile[])
+    }).catch(() => {})
+  }, [])
 
   useEffect(() => {
     try {
@@ -91,7 +94,7 @@ export function MithunWorkbench({ onNavigate }: { onNavigate?: (tab: string) => 
       setLedger(parsed.ledger ?? defaultState.ledger)
       setPages(parsed.pages ?? defaultState.pages)
     } catch {
-      // Ignore corrupted local storage and keep defaults.
+      // Keep defaults on read fail
     }
   }, [])
 
@@ -120,8 +123,6 @@ export function MithunWorkbench({ onNavigate }: { onNavigate?: (tab: string) => 
       if (error) {
         if (tableMissingCodes.has(error.code)) {
           setDbAvailable(false)
-        } else {
-          console.error('mithun_workbench_state load failed', error)
         }
         setSaveStatus('local')
       } else if (data) {
@@ -142,60 +143,13 @@ export function MithunWorkbench({ onNavigate }: { onNavigate?: (tab: string) => 
     }
   }, [allowed, user?.id])
 
-  useEffect(() => {
-    if (!allowed || !user?.id || !remoteReady || !dbAvailable) return
-
-    const timer = window.setTimeout(async () => {
-      setSaveStatus('saving')
-      const { error } = await supabase
-        .from('mithun_workbench_state')
-        .upsert({
-          user_id: user.id,
-          active_note: activeNote,
-          todos,
-          ledger,
-          pages,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'user_id' })
-
-      if (error) {
-        if (tableMissingCodes.has(error.code)) setDbAvailable(false)
-        console.error('mithun_workbench_state save failed', error)
-        setSaveStatus('local')
-      } else {
-        setSaveStatus('cloud')
-      }
-    }, 700)
-
-    return () => window.clearTimeout(timer)
-  }, [activeNote, todos, ledger, pages, allowed, user?.id, remoteReady, dbAvailable])
-
-  const openTodos = todos.filter((todo) => todo.status === 'open').length
-  const doneTodos = todos.filter((todo) => todo.status === 'done').length
-  const income = ledger.filter((entry) => entry.type === 'income').reduce((sum, entry) => sum + entry.amount, 0)
-  const expense = ledger.filter((entry) => entry.type === 'expense').reduce((sum, entry) => sum + entry.amount, 0)
-  const balance = income - expense
-
-  const filteredPages = useMemo(() => {
-    const q = pageSearch.toLowerCase().trim()
-    if (!q) return pages
-    return pages.filter((page) => `${page.title} ${page.body}`.toLowerCase().includes(q))
-  }, [pages, pageSearch])
-
-  if (!allowed) {
-    return (
-      <div className="min-h-screen bg-[#0A0A0B] text-white flex items-center justify-center p-6">
-        <div className="max-w-md rounded-3xl border border-white/10 bg-[#121214] p-8 text-center">
-          <Layers size={36} className="mx-auto text-white/20 mb-4" />
-          <h1 className="text-xl font-black">Private Workspace</h1>
-          <p className="mt-2 text-sm text-white/45">This My Desk workspace is restricted to Mithun.</p>
-          <button onClick={() => onNavigate?.('command-center')} className="mt-6 rounded-xl bg-[#FACC15] px-5 py-3 text-xs font-black text-black">
-            Back to Home
-          </button>
-        </div>
-      </div>
-    )
-  }
+  const openTodos = useMemo(() => todos.filter((t) => t.status === 'open').length, [todos])
+  const doneTodos = useMemo(() => todos.filter((t) => t.status === 'done').length, [todos])
+  const balance = useMemo(() => {
+    const inc = ledger.filter((l) => l.type === 'income').reduce((acc, curr) => acc + curr.amount, 0)
+    const exp = ledger.filter((l) => l.type === 'expense').reduce((acc, curr) => acc + curr.amount, 0)
+    return inc - exp
+  }, [ledger])
 
   const addTodo = () => {
     if (!todoText.trim()) return
@@ -203,20 +157,12 @@ export function MithunWorkbench({ onNavigate }: { onNavigate?: (tab: string) => 
     setTodoText('')
   }
 
-  const addLedgerEntry = (type: LedgerEntry['type']) => {
-    const amount = Number(ledgerAmount)
-    if (!ledgerLabel.trim() || Number.isNaN(amount)) return
-    setLedger([{ id: crypto.randomUUID(), label: ledgerLabel.trim(), type, amount }, ...ledger])
-    setLedgerLabel('')
-    setLedgerAmount('')
-  }
-
-  const addPage = () => {
-    setPages([{ id: crypto.randomUUID(), title: 'New Page', body: 'Start writing...' }, ...pages])
-  }
-
   return (
     <div className="min-h-screen bg-[#0A0A0B] text-white pb-16">
+      {/* Modals for Shift & Swap Tools on My Desk */}
+      <ShiftSwapModal isOpen={showSwapModal} onClose={() => setShowSwapModal(false)} onSuccess={() => {}} />
+      <EnhancedRequestsModal isOpen={showRequestsModal} onClose={() => setShowRequestsModal(false)} onSuccess={() => {}} staffProfiles={staffList} />
+
       <div className="max-w-[1700px] mx-auto px-4 md:px-8 py-8 space-y-6">
         <section className="relative overflow-hidden rounded-[32px] border border-[#FACC15]/15 bg-gradient-to-br from-[#1a3a3d] via-[#121214] to-[#0A0A0B] p-6 md:p-8">
           <div className="absolute inset-y-0 right-0 w-1/2 bg-gradient-to-l from-[#FACC15]/12 to-transparent blur-3xl" />
@@ -227,11 +173,11 @@ export function MithunWorkbench({ onNavigate }: { onNavigate?: (tab: string) => 
               </button>
               <div className="flex items-center gap-3 mb-4">
                 <Sparkles size={18} className="text-[#FACC15]" />
-                <span className="text-[10px] font-black uppercase tracking-[0.28em] text-[#FACC15]/70">Mithun Private Desk</span>
+                <span className="text-[10px] font-black uppercase tracking-[0.28em] text-[#FACC15]/70">My Desk Executive Control</span>
               </div>
-              <h1 className="text-4xl md:text-7xl font-black tracking-tighter leading-none">Executive Workbook</h1>
+              <h1 className="text-4xl md:text-6xl font-black tracking-tighter leading-none">My Desk & Operations Hub</h1>
               <p className="mt-4 max-w-3xl text-sm md:text-base text-white/55">
-                Notes, action tracking, workbook pages, and accounting scratchpad for FETS.LIVE leadership work.
+                Executive workbook, staff shift swap tools, leave requests, and operational control.
               </p>
             </div>
             <div className="grid grid-cols-3 gap-3 w-full lg:w-[520px]">
@@ -250,6 +196,40 @@ export function MithunWorkbench({ onNavigate }: { onNavigate?: (tab: string) => 
           </div>
         </section>
 
+        {/* ── SHIFT & SWAP TOOLS SECTION MOVED TO MY DESK ── */}
+        <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Shift & Time-off Requests Tool */}
+          <div
+            onClick={() => setShowRequestsModal(true)}
+            className="group cursor-pointer rounded-3xl border border-[#1BB5AC]/30 bg-gradient-to-r from-[#1A3A3D] to-[#121214] p-6 transition-all hover:border-[#1BB5AC] hover:shadow-[0_10px_30px_rgba(27,181,172,0.2)]"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-12 h-12 rounded-2xl bg-[#1BB5AC]/20 flex items-center justify-center text-[#1BB5AC] group-hover:scale-110 transition-transform">
+                <Clock size={22} />
+              </div>
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-full bg-[#1BB5AC]/10 text-[#1BB5AC] border border-[#1BB5AC]/30">Shift Tool</span>
+            </div>
+            <h3 className="text-xl font-black text-white group-hover:text-[#1BB5AC] transition-colors">Shifts & Time Off Requests</h3>
+            <p className="text-xs text-white/50 mt-1">Submit leave requests, TOIL claims, and view shift request history.</p>
+          </div>
+
+          {/* Shift Swap Tool */}
+          <div
+            onClick={() => setShowSwapModal(true)}
+            className="group cursor-pointer rounded-3xl border border-[#F2994A]/30 bg-gradient-to-r from-[#3A2518] to-[#121214] p-6 transition-all hover:border-[#F2994A] hover:shadow-[0_10px_30px_rgba(242,153,74,0.2)]"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-12 h-12 rounded-2xl bg-[#F2994A]/20 flex items-center justify-center text-[#F2994A] group-hover:scale-110 transition-transform">
+                <RefreshCw size={22} />
+              </div>
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-full bg-[#F2994A]/10 text-[#F2994A] border border-[#F2994A]/30">Swap Tool</span>
+            </div>
+            <h3 className="text-xl font-black text-white group-hover:text-[#F2994A] transition-colors">Shift Swap Tool</h3>
+            <p className="text-xs text-white/50 mt-1">Request shift swaps with colleagues or manage pending duty exchanges.</p>
+          </div>
+        </section>
+
+        {/* Workbook Notes and To-Do */}
         <div className="grid grid-cols-1 xl:grid-cols-[1.05fr_0.95fr] gap-6">
           <section className="rounded-3xl border border-white/[0.08] bg-[#121214] p-5 md:p-6">
             <div className="flex items-center gap-3 mb-5">
@@ -260,14 +240,14 @@ export function MithunWorkbench({ onNavigate }: { onNavigate?: (tab: string) => 
                   {saveStatus === 'cloud' && 'Auto-saved to Supabase with local backup.'}
                   {saveStatus === 'saving' && 'Saving to Supabase...'}
                   {saveStatus === 'loading' && 'Loading cloud backup...'}
-                  {saveStatus === 'local' && 'Auto-saved locally. Supabase backup table is not available yet.'}
+                  {saveStatus === 'local' && 'Auto-saved locally.'}
                 </p>
               </div>
             </div>
             <textarea
               value={activeNote}
               onChange={(event) => setActiveNote(event.target.value)}
-              className="min-h-[520px] w-full resize-none rounded-3xl border border-white/10 bg-black/25 p-5 text-sm leading-7 text-white outline-none placeholder:text-white/25 focus:border-[#FACC15]/50"
+              className="min-h-[480px] w-full resize-none rounded-3xl border border-white/10 bg-black/25 p-5 text-sm leading-7 text-white outline-none placeholder:text-white/25 focus:border-[#FACC15]/50"
             />
           </section>
 
@@ -301,113 +281,14 @@ export function MithunWorkbench({ onNavigate }: { onNavigate?: (tab: string) => 
                     >
                       <Check size={15} />
                     </button>
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-sm font-bold ${todo.status === 'done' ? 'text-white/35 line-through' : 'text-white'}`}>{todo.text}</p>
-                      <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#FACC15]/50">{todo.priority}</p>
-                    </div>
-                    <button onClick={() => setTodos(todos.filter((item) => item.id !== todo.id))} className="text-white/20 hover:text-rose-400">
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="rounded-3xl border border-white/[0.08] bg-[#121214] p-5 md:p-6">
-              <div className="flex items-center gap-3 mb-5">
-                <Calculator size={20} className="text-[#FACC15]" />
-                <div>
-                  <h2 className="text-xl font-black">Accounting Scratchpad</h2>
-                  <p className="text-xs text-white/35">Quick income/expense tracker for operational notes.</p>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-[1fr_120px] gap-2 mb-3">
-                <input value={ledgerLabel} onChange={(e) => setLedgerLabel(e.target.value)} placeholder="Entry label" className="h-11 rounded-xl border border-white/10 bg-black/25 px-4 text-sm text-white outline-none focus:border-[#FACC15]/50" />
-                <input value={ledgerAmount} onChange={(e) => setLedgerAmount(e.target.value)} placeholder="Amount" type="number" className="h-11 rounded-xl border border-white/10 bg-black/25 px-4 text-sm text-white outline-none focus:border-[#FACC15]/50" />
-              </div>
-              <div className="grid grid-cols-2 gap-2 mb-4">
-                <button onClick={() => addLedgerEntry('income')} className="h-10 rounded-xl bg-emerald-500/15 text-emerald-300 text-xs font-black uppercase tracking-wider border border-emerald-500/25">Income</button>
-                <button onClick={() => addLedgerEntry('expense')} className="h-10 rounded-xl bg-rose-500/15 text-rose-300 text-xs font-black uppercase tracking-wider border border-rose-500/25">Expense</button>
-              </div>
-              <div className="grid grid-cols-3 gap-2 mb-4">
-                <div className="rounded-xl bg-black/20 border border-white/[0.06] p-3"><div className="text-[8px] text-white/30 font-black uppercase tracking-wider">Income</div><div className="text-lg font-black text-emerald-300">{income.toLocaleString('en-IN')}</div></div>
-                <div className="rounded-xl bg-black/20 border border-white/[0.06] p-3"><div className="text-[8px] text-white/30 font-black uppercase tracking-wider">Expense</div><div className="text-lg font-black text-rose-300">{expense.toLocaleString('en-IN')}</div></div>
-                <div className="rounded-xl bg-black/20 border border-white/[0.06] p-3"><div className="text-[8px] text-white/30 font-black uppercase tracking-wider">Net</div><div className="text-lg font-black text-[#FACC15]">{balance.toLocaleString('en-IN')}</div></div>
-              </div>
-              <div className="space-y-2 max-h-[190px] overflow-y-auto pr-1">
-                {ledger.map((entry) => (
-                  <div key={entry.id} className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-black/20 p-3">
-                    <div>
-                      <p className="text-sm font-bold text-white">{entry.label}</p>
-                      <p className={`text-[9px] font-black uppercase tracking-wider ${entry.type === 'income' ? 'text-emerald-300' : 'text-rose-300'}`}>{entry.type}</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="font-black tabular-nums">{entry.amount.toLocaleString('en-IN')}</span>
-                      <button onClick={() => setLedger(ledger.filter((item) => item.id !== entry.id))} className="text-white/20 hover:text-rose-400"><Trash2 size={14} /></button>
-                    </div>
+                    <span className={`text-sm flex-1 ${todo.status === 'done' ? 'line-through text-white/30' : 'text-white'}`}>{todo.text}</span>
                   </div>
                 ))}
               </div>
             </section>
           </div>
         </div>
-
-        <section className="rounded-3xl border border-white/[0.08] bg-[#121214] p-5 md:p-6">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-5">
-            <div className="flex items-center gap-3">
-              <BookOpen size={20} className="text-[#FACC15]" />
-              <div>
-                <h2 className="text-xl font-black">Workbook Pages</h2>
-                <p className="text-xs text-white/35">Organize ideas, client follow-ups, finance notes, and decisions.</p>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <div className="relative">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/25" />
-                <input value={pageSearch} onChange={(e) => setPageSearch(e.target.value)} placeholder="Search pages" className="h-10 rounded-xl border border-white/10 bg-black/25 pl-9 pr-3 text-xs text-white outline-none focus:border-[#FACC15]/50" />
-              </div>
-              <button onClick={addPage} className="h-10 rounded-xl bg-[#FACC15] px-4 text-xs font-black text-black uppercase tracking-wider">New Page</button>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {filteredPages.map((page) => (
-              <div key={page.id} className="rounded-2xl border border-white/[0.08] bg-black/20 p-4">
-                <div className="flex items-start justify-between gap-3 mb-3">
-                  <input
-                    value={page.title}
-                    onChange={(event) => setPages(pages.map((item) => item.id === page.id ? { ...item, title: event.target.value } : item))}
-                    className="min-w-0 flex-1 bg-transparent text-lg font-black text-white outline-none"
-                  />
-                  <button onClick={() => setPages(pages.filter((item) => item.id !== page.id))} className="text-white/20 hover:text-rose-400">
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-                <textarea
-                  value={page.body}
-                  onChange={(event) => setPages(pages.map((item) => item.id === page.id ? { ...item, body: event.target.value } : item))}
-                  className="min-h-[160px] w-full resize-none bg-transparent text-sm leading-6 text-white/65 outline-none"
-                />
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          {[
-            { label: 'Client Portal', tab: 'client-portal', icon: Briefcase },
-            { label: 'Calendar', tab: 'fets-calendar', icon: Calendar },
-            { label: 'Register', tab: 'candidate-tracker', icon: FileText },
-            { label: 'Analytics', tab: 'fets-intelligence', icon: BarChart3 },
-          ].map((item) => (
-            <button key={item.label} onClick={() => onNavigate?.(item.tab)} className="rounded-2xl border border-white/[0.08] bg-[#121214] p-4 text-left hover:border-[#FACC15]/30">
-              <item.icon size={18} className="text-[#FACC15] mb-4" />
-              <span className="text-sm font-black uppercase tracking-[0.14em] text-white">{item.label}</span>
-            </button>
-          ))}
-        </section>
       </div>
     </div>
   )
 }
-
-export default MithunWorkbench

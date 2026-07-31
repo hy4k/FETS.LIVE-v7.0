@@ -671,7 +671,7 @@ export function FetsRosterPremium() {
       setLoading(true)
       const { data: profiles, error: profilesError } = await supabase
         .from('staff_profiles')
-        .select('id, user_id, full_name, role, email, department, branch_assigned, is_active, employment_end_date')
+        .select('id, user_id, full_name, role, email, department, branch_assigned, is_active, employment_end_date, permissions')
         .not('full_name', 'in', '("MITHUN","NIYAS","Mithun","Niyas")')
         .order('full_name')
 
@@ -680,7 +680,7 @@ export function FetsRosterPremium() {
       const mappedProfiles: StaffProfile[] = (profiles || []).map(p => ({
         id: p.id, user_id: p.user_id, full_name: p.full_name,
         role: p.role, email: p.email || '', department: p.department, branch_assigned: p.branch_assigned,
-        is_active: p.is_active, employment_end_date: p.employment_end_date
+        is_active: p.is_active, employment_end_date: p.employment_end_date, permissions: p.permissions
       } as StaffProfile))
 
       const { startDate, endDate } = getViewDateRange()
@@ -697,6 +697,10 @@ export function FetsRosterPremium() {
       const sData = scheduleData || []
 
       const relevantProfiles = mappedProfiles.filter(p => {
+        // Exclude staff temporarily marked inactive in roster for current month (e.g. Anshitha)
+        const isRosterActive = (p.permissions as any)?.is_roster_active !== false && (p as any).is_roster_active !== false;
+        if (!isRosterActive) return false;
+
         let branchOk = false
         if (activeBranch === 'global') branchOk = true
         else if (p.branch_assigned === activeBranch) branchOk = true

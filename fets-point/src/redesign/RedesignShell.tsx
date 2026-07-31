@@ -7611,9 +7611,7 @@ function RosterPage({ branch }) {
       <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 12 }}>
         {[
           { id: "duty", label: "Duty Roster" },
-          { id: "time", label: "My Attendance" },
-          { id: "shift", label: "Shifts" },
-          { id: "swap", label: "Swap Tools" },
+          { id: "time", label: "Attendance Analytics" },
           ...(isAdmin ? [{ id: "review", label: "Review Desk" }] : [])
         ].map((t) => {
           const isActive = activeRosterTab === t.id;
@@ -7685,176 +7683,25 @@ function RosterPage({ branch }) {
       )}
 
       {activeRosterTab === "time" && (
-        <section style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-          {/* Combined Gamified Performance, Streak, and Goals */}
-          {(() => {
-            const totalShifts = workLogs ? workLogs.length : 0;
-            const latesCount = workLogs ? workLogs.filter(r => String(r.status).toLowerCase() === "late").length : 0;
-            const punctuality = totalShifts > 0 ? Math.round(((totalShifts - latesCount) / totalShifts) * 100) : 100;
-            
-            let currentStreak = 0;
-            if (workLogs) {
-              const sorted = [...workLogs].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-              for (const r of sorted) {
-                if (r.check_in && String(r.status).toLowerCase() !== "late") {
-                  currentStreak++;
-                } else {
-                  break;
-                }
-              }
-            }
+        <section style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          {/* Header Banner for Attendance Analytics */}
+          <div style={{ 
+            background: "linear-gradient(135deg, rgba(27,181,172,0.12), rgba(242,153,74,0.12))", 
+            border: "1px solid rgba(27,181,172,0.25)", 
+            borderRadius: 20, 
+            padding: "20px 24px", 
+            display: "flex", 
+            alignItems: "center", 
+            justify: "space-between" 
+          }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.2em", color: "#1BB5AC" }}>Operations & Analytics</div>
+              <h2 style={{ fontSize: 22, fontWeight: 900, color: "var(--ink)", margin: "4px 0 0 0", tracking: "-0.02em" }}>Attendance Analytics</h2>
+              <p style={{ fontSize: 12, color: "var(--ink-3)", margin: "4px 0 0 0" }}>Clean attendance tracking: View personal self-attendance history and daily team attendance logs.</p>
+            </div>
+          </div>
 
-            // SVG Circle properties
-            const radius = 36;
-            const circumference = 2 * Math.PI * radius;
-            const strokeDashoffset = circumference - (punctuality / 100) * circumference;
-
-            // Goals calculation
-            const goalPunctuality = 95;
-            const goalShifts = 20;
-            const goalOt = 5;
-
-            // Badges check
-            const badges = [
-              { id: "early", name: "Early Bird", desc: ">= 95% Punctuality", icon: "zap", active: punctuality >= 95, color: "var(--warn)" },
-              { id: "perfect", name: "Perfect Month", desc: "15+ shifts, 0 lates", active: totalShifts >= 15 && latesCount === 0, icon: "award", color: "var(--ok)" },
-              { id: "toil", name: "TOIL Collector", desc: "TOIL balance >= 3 days", active: toilBalance >= 3, icon: "clock", color: "var(--accent)" },
-              { id: "iron", name: "Iron Staff", desc: "Worked >= 20 shifts", active: workedDays >= 20, icon: "shield", color: "var(--v-ielts)" }
-            ];
-
-            return (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20 }}>
-                {/* Presence & Streak */}
-                <div className="glass rise" style={{ padding: 24, borderRadius: "var(--radius)", display: "flex", flexDirection: "column", gap: 20 }}>
-                  <SectionLabel style={{ margin: 0 }} right={<span className="mono" style={{ fontSize: 11, color: "var(--accent)" }}>gamified performance</span>}>Presence & Streaks</SectionLabel>
-                  
-                  <div style={{ display: "flex", alignItems: "center", gap: 24, padding: "10px 0" }}>
-                    <div style={{ position: "relative", width: 90, height: 90, flexShrink: 0 }}>
-                      <svg width="90" height="90" viewBox="0 0 90 90">
-                        <circle cx="45" cy="45" r={radius} stroke="var(--hairline)" strokeWidth="6" fill="transparent" />
-                        <circle cx="45" cy="45" r={radius} stroke={punctuality >= 90 ? "var(--ok)" : "var(--warn)"} strokeWidth="6" fill="transparent" 
-                                strokeDasharray={circumference} strokeDashoffset={strokeDashoffset} strokeLinecap="round"
-                                transform="rotate(-90 45 45)" style={{ transition: "stroke-dashoffset 0.5s ease" }} />
-                      </svg>
-                      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-                        <span style={{ fontSize: 16, fontWeight: 850, color: "var(--ink)" }}>{punctuality}%</span>
-                        <span style={{ fontSize: 8, color: "var(--ink-4)", fontWeight: 700, textTransform: "uppercase" }}>on time</span>
-                      </div>
-                    </div>
-
-                    <div>
-                      <div style={{ fontSize: 13, color: "var(--ink-3)", fontWeight: 600 }}>Active Attendance Streak</div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
-                        <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(255, 121, 63, 0.12)", display: "grid", placeItems: "center", color: "#FF793F" }}>
-                          <Icon name="zap" size={16} />
-                        </div>
-                        <div>
-                          <div style={{ fontSize: 18, fontWeight: 850, color: "var(--ink)" }}>{currentStreak} Day{currentStreak === 1 ? "" : "s"}</div>
-                          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 1 }}>Consecutive shifts on-time</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Allocation bar */}
-                  <div style={{ borderTop: "1px solid var(--hairline)", paddingTop: 16 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, fontWeight: 750, color: "var(--ink-4)", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                      <span>Monthly Allocation Ratio</span>
-                      <span>{workedDays}W / {restDays}R / {leaveDays}L</span>
-                    </div>
-                    <div style={{ height: 16, borderRadius: 99, overflow: "hidden", display: "flex", background: "var(--inset)", border: "1px solid var(--hairline)" }}>
-                      {workedDays > 0 && <div style={{ width: `${workedPercent}%`, background: "var(--accent)" }} title={`${workedDays} Days Worked`} />}
-                      {restDays > 0 && <div style={{ width: `${restPercent}%`, background: "var(--ink-4)" }} title={`${restDays} Rest Days`} />}
-                      {leaveDays > 0 && <div style={{ width: `${leavePercent}%`, background: "var(--bad)" }} title={`${leaveDays} Leave Days`} />}
-                    </div>
-                    <div style={{ display: "flex", gap: 12, marginTop: 10, fontSize: 11, color: "var(--ink-3)" }}>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: 99, background: "var(--accent)" }} /> Worked ({workedPercent}%)</span>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: 99, background: "var(--ink-4)" }} /> Rest ({restPercent}%)</span>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: 99, background: "var(--bad)" }} /> Leave ({leavePercent}%)</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Performance Goals */}
-                <div className="glass rise" style={{ padding: 24, borderRadius: "var(--radius)", display: "flex", flexDirection: "column", gap: 20 }}>
-                  <SectionLabel style={{ margin: 0 }} right={<span className="mono" style={{ fontSize: 11, color: "var(--v-ielts)" }}>monthly focus</span>}>Active Performance Goals</SectionLabel>
-                  
-                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                    {/* Goal 1: Punctuality */}
-                    <div>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5, marginBottom: 6 }}>
-                        <span style={{ fontWeight: 650, color: "var(--ink)" }}>Punctuality Target</span>
-                        <span style={{ fontSize: 11.5, color: "var(--ink-3)" }}><strong style={{ color: "var(--ink)" }}>{punctuality}%</strong> / {goalPunctuality}%</span>
-                      </div>
-                      <div style={{ height: 6, background: "var(--inset)", borderRadius: 99, overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${Math.min(100, (punctuality / goalPunctuality) * 100)}%`, background: punctuality >= goalPunctuality ? "var(--ok)" : "var(--warn)", borderRadius: 99 }} />
-                      </div>
-                    </div>
-
-                    {/* Goal 2: Shift Fulfillment */}
-                    <div>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5, marginBottom: 6 }}>
-                        <span style={{ fontWeight: 650, color: "var(--ink)" }}>Shift Fulfillment</span>
-                        <span style={{ fontSize: 11.5, color: "var(--ink-3)" }}><strong style={{ color: "var(--ink)" }}>{workedDays}</strong> / {goalShifts} shifts</span>
-                      </div>
-                      <div style={{ height: 6, background: "var(--inset)", borderRadius: 99, overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${Math.min(100, (workedDays / goalShifts) * 100)}%`, background: "var(--accent)", borderRadius: 99 }} />
-                      </div>
-                    </div>
-
-                    {/* Goal 3: Overtime Contribution */}
-                    <div>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5, marginBottom: 6 }}>
-                        <span style={{ fontWeight: 650, color: "var(--ink)" }}>Overtime Contribution</span>
-                        <span style={{ fontSize: 11.5, color: "var(--ink-3)" }}><strong style={{ color: "var(--ink)" }}>{totalMonthOt.toFixed(1)}h</strong> / {goalOt}h</span>
-                      </div>
-                      <div style={{ height: 6, background: "var(--inset)", borderRadius: 99, overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${Math.min(100, (totalMonthOt / goalOt) * 100)}%`, background: "var(--v-ielts)", borderRadius: 99 }} />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Achievements & Badges */}
-                <div className="glass rise" style={{ padding: 24, borderRadius: "var(--radius)", display: "flex", flexDirection: "column", gap: 16 }}>
-                  <SectionLabel style={{ margin: 0 }} right={<span className="mono" style={{ fontSize: 11, color: "var(--ok)" }}>staff credentials</span>}>Unlocked Achievements</SectionLabel>
-                  
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                    {badges.map((b) => (
-                      <div key={b.id} className="inset" style={{ 
-                        padding: "12px", 
-                        borderRadius: 12, 
-                        display: "flex", 
-                        flexDirection: "column", 
-                        alignItems: "center", 
-                        textAlign: "center",
-                        opacity: b.active ? 1 : 0.45,
-                        border: b.active ? `1px solid ${b.color}40` : "1px solid transparent",
-                        background: b.active ? `color-mix(in oklch, ${b.color} 5%, var(--inset))` : "var(--inset)"
-                      }}>
-                        <div style={{ 
-                          width: 32, 
-                          height: 32, 
-                          borderRadius: 999, 
-                          background: b.active ? `color-mix(in oklch, ${b.color} 15%, transparent)` : "rgba(255,255,255,0.03)", 
-                          display: "grid", 
-                          placeItems: "center",
-                          color: b.active ? b.color : "var(--ink-4)",
-                          border: `1px solid ${b.active ? b.color : "var(--hairline)"}30`
-                        }}>
-                          <Icon name={b.icon} size={15} />
-                        </div>
-                        <div style={{ fontSize: 11.5, fontWeight: 750, color: b.active ? "var(--ink)" : "var(--ink-3)", marginTop: 8 }}>{b.name}</div>
-                        <div style={{ fontSize: 9, color: "var(--ink-4)", marginTop: 2 }}>{b.desc}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* Logs and History */}
+          {/* Clean 2-Feature Layout: 1. Self Attendance | 2. Daily Team Attendance */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: 20 }}>
             <ShiftHistory />
             <DailyAttendanceLog />
