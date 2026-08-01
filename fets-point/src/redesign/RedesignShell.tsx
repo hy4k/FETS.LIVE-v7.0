@@ -3889,6 +3889,145 @@ function OtToilClaimDialog({ ctx, onClose }) {
   );
 }
 
+/* Compact per-row attendance console — shown ONLY on the logged-in staff member's own roster row.
+   Check In → (clock + Step Out / Check Out) in the same spot, mirroring the desk console. */
+function RosterRowAttendance({ branch }) {
+  const [row, setRow] = React.useState(undefined);
+  const [nowTime, setNowTime] = React.useState(new Date());
+
+  const load = () => ATT.attToday().then((r) => setRow(r || null));
+
+  React.useEffect(() => {
+    load();
+    const h = () => load();
+    window.addEventListener("fets-roster-changed", h);
+    return () => window.removeEventListener("fets-roster-changed", h);
+  }, [branch]);
+
+  const onBreak = row && ATT.attOnBreak(row);
+  const checkedIn = row && row.check_in && !row.check_out;
+  const done = !!(row && row.check_out);
+  const worked = row ? ATT.attWorked(row) : 0;
+
+  React.useEffect(() => {
+    if (checkedIn) {
+      const i = setInterval(() => setNowTime(new Date()), 1000);
+      return () => clearInterval(i);
+    }
+  }, [checkedIn]);
+
+  const act = async (fn, ok) => {
+    const r = await fn();
+    if (r && r.error) {
+      toast(r.error, "alert");
+    } else {
+      toast(ok, "check");
+      window.dispatchEvent(new Event("fets-roster-changed"));
+      load();
+    }
+  };
+
+  const parseDateTime = (dateStr: string, timeStr: string) => {
+    if (!dateStr || !timeStr) return new Date();
+    const [year, month, day] = dateStr.split("-").map(Number);
+    const parts = timeStr.split(":");
+    return new Date(year, month - 1, day, Number(parts[0]) || 0, Number(parts[1]) || 0, Number(parts[2]) || 0);
+  };
+
+  let workedSeconds = 0;
+  if (row && row.check_in) {
+    const checkInDate = parseDateTime(row.date, row.check_in);
+    const endTime = row.check_out ? parseDateTime(row.date, row.check_out) : nowTime;
+    const elapsedSeconds = Math.max(0, Math.floor((endTime.getTime() - checkInDate.getTime()) / 1000));
+    const notes = row.notes ? (typeof row.notes === "string" ? JSON.parse(row.notes) : row.notes) : {};
+    const completedBreakMins = notes.breakMins || 0;
+    let currentBreakSeconds = 0;
+    const steps = notes.steps || [];
+    const lastStep = steps[steps.length - 1];
+    if (lastStep && lastStep.out && !lastStep.in) {
+      const breakStartDate = parseDateTime(row.date, lastStep.out);
+      currentBreakSeconds = Math.max(0, Math.floor((endTime.getTime() - breakStartDate.getTime()) / 1000));
+    }
+    workedSeconds = Math.max(0, elapsedSeconds - ((completedBreakMins * 60) + currentBreakSeconds));
+  }
+
+  const formatSeconds = (totalSecs) => {
+    const h = Math.floor(totalSecs / 3600);
+    const m = Math.floor((totalSecs % 3600) / 60);
+    const s = totalSecs % 60;
+    return [h, m, s].map((v) => String(v).padStart(2, "0")).join(":");
+  };
+
+  const Btn = ({ on, label, icon, primary }) => (
+    <button onClick={on} className="tap" style={{
+      display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 11px",
+      borderRadius: 9, border: primary ? "none" : "1px solid var(--hairline)", cursor: "pointer",
+      fontFamily: "var(--font)", fontSize: 11.5, fontWeight: 750,
+      color: primary ? "var(--accent-ink)" : "var(--ink)",
+      background: primary ? "var(--accent)" : "var(--glass-2)", transition: "all 0.2s",
+    }}>
+      <Icon name={icon} size={13} /> {label}
+    </button>
+  );
+
+  if (row === undefined) return <span style={{ fontSize: 11, color: "var(--ink-4)" }}>Loading…</span>;
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 7, alignItems: "center", flexWrap: "wrap" }}>
+        {!row && (
+          <Btn on={() => act(() => ATT.attCheckIn(branch), "Checked in")} label="Check In" icon="power" primary />
+        )}
+        {checkedIn && !onBreak && (
+          <React.Fragment>
+            <Btn on={() => act(ATT.attStepOut, "Stepped out")} label="Step Out" icon="coffee" />
+            <Btn on={() => act(ATT.attCheckOut, "Checked out")} label="Check Out" icon="power" primary />
+          </React.Fragment>
+        )}
+        {onBreak && (
+          <React.Fragment>
+            <Btn on={() => act(ATT.attBack, "Back on shift")} label="Back In" icon="arrowR" primary />
+            <Btn on={() => act(ATT.attCheckOut, "Checked out")} label="Check Out" icon="power" />
+          </React.Fragment>
+        )}
+        {done && (
+          <span className="mono" style={{ fontSize: 11, color: "var(--ok)", fontWeight: 700, padding: "5px 9px", background: "rgba(0, 184, 148, 0.1)", borderRadius: 8 }}>
+            ✓ Checked out ({ATT.attFmtMins(worked)})
+          </span>
+        )}
+      </div>
+
+      {checkedIn && (
+        <div className="glass rise" style={{
+          display: "flex", alignItems: "center", gap: 12, padding: "8px 14px",
+          borderRadius: 14, border: "1px solid var(--hairline)", background: "var(--glass-2)",
+          boxShadow: "0 4px 16px rgba(0, 0, 0, 0.22)",
+        }}>
+          {/* Analog clock — slightly larger than the desk widget, scaled to match the row vibe */}
+          <div style={{ width: 58, height: 58, display: "grid", placeItems: "center" }}>
+            <div style={{ transform: "scale(1.32)", transformOrigin: "center" }}>
+              <ClockWidget />
+            </div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 1 }}>
+            <span className="mono" style={{
+              fontSize: 19, fontWeight: 850,
+              color: onBreak ? "var(--warn)" : "var(--accent)",
+              textShadow: onBreak ? "0 0 8px var(--warn-soft)" : "0 0 8px var(--accent-soft)",
+              lineHeight: 1.1, letterSpacing: "0.5px",
+            }}>
+              {formatSeconds(workedSeconds)}
+            </span>
+            <span style={{ fontSize: 8.5, color: "var(--ink-4)", fontWeight: 750, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+              {onBreak ? "On Break" : "Worked today"}
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function RosterGrid({ offsets, branch }) {
   const rawPool = branch === "global"
     ? [...F().STAFF.calicut.map((n) => ({ n, b: "calicut" })), ...F().STAFF.cochin.map((n) => ({ n, b: "cochin" }))]
@@ -3976,7 +4115,7 @@ function RosterGrid({ offsets, branch }) {
     });
     setDialog(null);
   };
-  const cols = `190px repeat(${offsets.length}, minmax(46px,1fr))`;
+  const cols = `250px repeat(${offsets.length}, minmax(46px,1fr))`;
 
   const ymdFormat = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const reqMarkOf = (name, off) => {
@@ -3998,7 +4137,7 @@ function RosterGrid({ offsets, branch }) {
   return (
     <React.Fragment>
     <div className="glass scroll-soft" style={{ borderRadius: "var(--radius)", overflow: "auto", padding: 6 }}>
-      <div style={{ minWidth: 190 + offsets.length * 50 }}>
+      <div style={{ minWidth: 250 + offsets.length * 50 }}>
         <div style={{ display: "grid", gridTemplateColumns: cols, gap: 4, padding: "8px 8px 6px" }}>
           <div className="eyebrow" style={{ alignSelf: "center", color: "var(--ink-4)", paddingLeft: 6 }}>Staff Member</div>
           {offsets.map((o) => {
@@ -4091,24 +4230,28 @@ function RosterGrid({ offsets, branch }) {
             borderRadius: 16,
             boxShadow: "0 2px 10px rgba(0,0,0,0.12)"
           }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
-              <Avatar name={n} size={28} />
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 12.5, fontWeight: 650, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{n}</div>
-                <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap", marginTop: 1 }}>
-                  {branch === "global" ? (
-                    <span className="eyebrow" style={{ fontSize: 8.5, color: "var(--ink-4)" }}>{b}</span>
-                  ) : (
-                    n === F().user.name && <span className="eyebrow" style={{ fontSize: 8.5, color: "var(--accent)" }}>you</span>
-                  )}
-                  {((branch === "global") || (n === F().user.name)) && (
-                    <span style={{ fontSize: 8.5, color: "var(--ink-4)", opacity: 0.6 }}>·</span>
-                  )}
-                  <span className="mono" style={{ fontSize: 8.5, color: "var(--ink-4)", fontWeight: 500 }}>
-                    Day {F()._staffDays?.[n] || 1}
-                  </span>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0, justifyContent: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
+                <Avatar name={n} size={28} />
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 650, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{n}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap", marginTop: 1 }}>
+                    {branch === "global" ? (
+                      <span className="eyebrow" style={{ fontSize: 8.5, color: "var(--ink-4)" }}>{b}</span>
+                    ) : (
+                      n === F().user.name && <span className="eyebrow" style={{ fontSize: 8.5, color: "var(--accent)" }}>you</span>
+                    )}
+                    {((branch === "global") || (n === F().user.name)) && (
+                      <span style={{ fontSize: 8.5, color: "var(--ink-4)", opacity: 0.6 }}>·</span>
+                    )}
+                    <span className="mono" style={{ fontSize: 8.5, color: "var(--ink-4)", fontWeight: 500 }}>
+                      Day {F()._staffDays?.[n] || 1}
+                    </span>
+                  </div>
                 </div>
               </div>
+              {/* Personal check-in console — visible only on the logged-in staff member's own row */}
+              {n === F().user.name && <RosterRowAttendance branch={b} />}
             </div>
             {offsets.map((o) => {
               const cell = grid[n]?.[o] || { code: "RD", ot: 0 };
@@ -7553,13 +7696,26 @@ function RosterPage({ branch }) {
     } as React.CSSProperties}>
       <RosterStyleBlock />
 
-      {/* Roster Header and Top-Right Check-in button */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 20 }}>
-        <PageHeader eyebrow={`Staffing // ${capBranch(branch)}`} title="Roster" />
-        
-        {/* Check in / out button widget on the right, but positioned slightly down */}
-        <div style={{ marginTop: 24, display: "flex", flexDirection: "column", alignItems: "flex-end", position: "relative", zIndex: 110 }}>
-          <RosterAttendanceControls branch={branch} />
+      {/* Roster Header — calendar-style hero with stat chips on the right */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 24 }}>
+        <PageHeader eyebrow={`Roster Operations // ${capBranch(branch)}`} title="Duty Roster"
+          sub={`${win.monthName} ${win.year} · shift schedules, attendance & cover for ${capBranch(branch)}`} />
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", paddingBottom: 10 }}>
+          {[
+            { icon: "users", value: onDutyToday, label: "on duty today" },
+            { icon: "briefcase", value: poolSize, label: "staff in pool" },
+            { icon: "layers", value: avgCover, label: "avg cover / day" },
+          ].map((c) => (
+            <div key={c.label} style={{
+              display: "flex", alignItems: "center", gap: 7, padding: "8px 14px",
+              background: "var(--panel-3)", border: "1px solid var(--hairline)", borderRadius: 10,
+              color: "var(--accent)", fontSize: 12.5, fontWeight: 800,
+            }}>
+              <Icon name={c.icon} size={13} />
+              {c.value}
+              <span style={{ color: "var(--ink-3)", fontWeight: 600 }}>{c.label}</span>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -7626,29 +7782,54 @@ function RosterPage({ branch }) {
         );
       })()}
 
-      {/* Desk Tab Selection using Custom Neon Menu Button design */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 12 }}>
-        {[
-          { id: "duty", label: "Duty Roster" },
-          { id: "time", label: "Attendance Analytics" },
-          ...(isAdmin ? [{ id: "review", label: "Review Desk" }] : [])
-        ].map((t) => {
-          const isActive = activeRosterTab === t.id;
-          return (
-            <button 
-              key={t.id} 
-              onClick={() => setActiveRosterTab(t.id)} 
-              className={`fets-menu-btn ${isActive ? "active" : ""}`}
-            >
-              <span className="fets-btn-text">{t.label}</span>
-              <span className="fets-btn-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" viewBox="0 0 24 24">
-                  <path fill="currentColor" d="M5 13h11.17l-4.88 4.88c-.39.39-.39 1.03 0 1.42s1.02.39 1.41 0l6.59-6.59a.996.996 0 0 0 0-1.41l-6.58-6.6a.996.996 0 1 0-1.41 1.41L16.17 11H5c-.55 0-1 .45-1 1s.45 1 1 1" />
-                </svg>
-              </span>
-            </button>
-          );
-        })}
+      {/* Desk tabs & tools — calendar-style toolbar card */}
+      <div style={{
+        display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12,
+        background: "var(--panel-3)", border: "1px solid var(--hairline)", borderRadius: 14, padding: "10px 14px",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", background: "var(--inset)", border: "1px solid var(--hairline)", borderRadius: 10, padding: 3 }}>
+            {[
+              { id: "duty", label: "Duty Roster", icon: "layers" },
+              { id: "time", label: "Attendance Analytics", icon: "clock" },
+              ...(isAdmin ? [{ id: "review", label: "Review Desk", icon: "check" }] : [])
+            ].map((t) => {
+              const isActive = activeRosterTab === t.id;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setActiveRosterTab(t.id)}
+                  className="tap"
+                  style={{
+                    display: "flex", alignItems: "center", gap: 7, padding: "8px 15px",
+                    borderRadius: 8, border: "none", cursor: "pointer", fontFamily: "var(--font)",
+                    fontSize: 12.5, fontWeight: 750, transition: "all 0.2s",
+                    background: isActive ? "var(--accent)" : "transparent",
+                    color: isActive ? "var(--accent-ink)" : "var(--ink-3)",
+                    boxShadow: isActive ? "0 2px 8px color-mix(in oklch, var(--accent) 35%, transparent)" : "none",
+                  }}
+                >
+                  <Icon name={t.icon} size={13} /> {t.label}
+                </button>
+              );
+            })}
+          </div>
+          {activeRosterTab === "duty" && view === "days" && <RangeNav win={win} unit="month" />}
+        </div>
+        {activeRosterTab === "duty" && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <Segmented value={view} onChange={setView} size="sm" options={[
+              { value: "days", label: "Monthly Grid" }, { value: "analysis", label: "Overview" },
+            ]} />
+            {isAdmin && (
+              <button onClick={() => setQuickOpen(true)} className="tap" title="Quick add roster (6+1 pattern)"
+                style={{ display: "inline-flex", alignItems: "center", gap: 7, height: 36, padding: "0 14px", borderRadius: 10,
+                  cursor: "pointer", border: "none", fontFamily: "var(--font)", fontSize: 12, fontWeight: 750, color: "var(--accent-ink)", background: "var(--accent)" }}>
+                <Icon name="plus" size={14} /> Quick add
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {divider}
@@ -7656,26 +7837,6 @@ function RosterPage({ branch }) {
       {/* Desk Subviews */}
       {activeRosterTab === "duty" && (
         <section style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-              <span style={{ width: 22, height: 3, background: "var(--accent)", borderRadius: 99 }} />
-              <SectionLabel style={{ margin: 0 }}>Roster — {win.monthName} {win.year}</SectionLabel>
-            </div>
-            <div style={{ flex: 1 }} />
-            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              {view === "days" && <RangeNav win={win} unit="month" />}
-              <Segmented value={view} onChange={setView} size="sm" options={[
-                { value: "days", label: "Monthly Grid" }, { value: "analysis", label: "Overview" },
-              ]} />
-              {isAdmin && (
-                <button onClick={() => setQuickOpen(true)} className="tap" title="Quick add roster (6+1 pattern)"
-                  style={{ display: "inline-flex", alignItems: "center", gap: 7, height: 36, padding: "0 14px", borderRadius: 10,
-                    cursor: "pointer", border: "none", fontFamily: "var(--font)", fontSize: 12, fontWeight: 750, color: "var(--accent-ink)", background: "var(--accent)" }}>
-                  <Icon name="plus" size={14} /> Quick add
-                </button>
-              )}
-            </div>
-          </div>
 
           {view === "days" && <RosterGrid key={branch} offsets={win.offsets} branch={branch} />}
           {view === "analysis" && (
