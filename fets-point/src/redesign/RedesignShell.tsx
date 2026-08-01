@@ -3889,11 +3889,11 @@ function OtToilClaimDialog({ ctx, onClose }) {
   );
 }
 
-/* Compact per-row attendance console — shown ONLY on the logged-in staff member's own roster row.
-   Check In → (clock + Step Out / Check Out) in the same spot, mirroring the desk console. */
+/* Personal Check In button — shown ONLY on the logged-in staff member's own roster row.
+   After check-in, the Step Out / Check Out buttons and clock live in the page header
+   (RosterAttendanceControls), exactly where they always were. */
 function RosterRowAttendance({ branch }) {
   const [row, setRow] = React.useState(undefined);
-  const [nowTime, setNowTime] = React.useState(new Date());
 
   const load = () => ATT.attToday().then((r) => setRow(r || null));
 
@@ -3903,18 +3903,6 @@ function RosterRowAttendance({ branch }) {
     window.addEventListener("fets-roster-changed", h);
     return () => window.removeEventListener("fets-roster-changed", h);
   }, [branch]);
-
-  const onBreak = row && ATT.attOnBreak(row);
-  const checkedIn = row && row.check_in && !row.check_out;
-  const done = !!(row && row.check_out);
-  const worked = row ? ATT.attWorked(row) : 0;
-
-  React.useEffect(() => {
-    if (checkedIn) {
-      const i = setInterval(() => setNowTime(new Date()), 1000);
-      return () => clearInterval(i);
-    }
-  }, [checkedIn]);
 
   const act = async (fn, ok) => {
     const r = await fn();
@@ -3927,103 +3915,22 @@ function RosterRowAttendance({ branch }) {
     }
   };
 
-  const parseDateTime = (dateStr: string, timeStr: string) => {
-    if (!dateStr || !timeStr) return new Date();
-    const [year, month, day] = dateStr.split("-").map(Number);
-    const parts = timeStr.split(":");
-    return new Date(year, month - 1, day, Number(parts[0]) || 0, Number(parts[1]) || 0, Number(parts[2]) || 0);
-  };
-
-  let workedSeconds = 0;
-  if (row && row.check_in) {
-    const checkInDate = parseDateTime(row.date, row.check_in);
-    const endTime = row.check_out ? parseDateTime(row.date, row.check_out) : nowTime;
-    const elapsedSeconds = Math.max(0, Math.floor((endTime.getTime() - checkInDate.getTime()) / 1000));
-    const notes = row.notes ? (typeof row.notes === "string" ? JSON.parse(row.notes) : row.notes) : {};
-    const completedBreakMins = notes.breakMins || 0;
-    let currentBreakSeconds = 0;
-    const steps = notes.steps || [];
-    const lastStep = steps[steps.length - 1];
-    if (lastStep && lastStep.out && !lastStep.in) {
-      const breakStartDate = parseDateTime(row.date, lastStep.out);
-      currentBreakSeconds = Math.max(0, Math.floor((endTime.getTime() - breakStartDate.getTime()) / 1000));
-    }
-    workedSeconds = Math.max(0, elapsedSeconds - ((completedBreakMins * 60) + currentBreakSeconds));
-  }
-
-  const formatSeconds = (totalSecs) => {
-    const h = Math.floor(totalSecs / 3600);
-    const m = Math.floor((totalSecs % 3600) / 60);
-    const s = totalSecs % 60;
-    return [h, m, s].map((v) => String(v).padStart(2, "0")).join(":");
-  };
-
-  const Btn = ({ on, label, icon, primary }) => (
-    <button onClick={on} className="tap" style={{
-      display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 11px",
-      borderRadius: 9, border: primary ? "none" : "1px solid var(--hairline)", cursor: "pointer",
-      fontFamily: "var(--font)", fontSize: 11.5, fontWeight: 750,
-      color: primary ? "var(--accent-ink)" : "var(--ink)",
-      background: primary ? "var(--accent)" : "var(--glass-2)", transition: "all 0.2s",
-    }}>
-      <Icon name={icon} size={13} /> {label}
-    </button>
-  );
-
   if (row === undefined) return <span style={{ fontSize: 11, color: "var(--ink-4)" }}>Loading…</span>;
+  // Already checked in or done for the day — the header console takes over from here
+  if (row) return null;
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-      <div style={{ display: "flex", gap: 7, alignItems: "center", flexWrap: "wrap" }}>
-        {!row && (
-          <Btn on={() => act(() => ATT.attCheckIn(branch), "Checked in")} label="Check In" icon="power" primary />
-        )}
-        {checkedIn && !onBreak && (
-          <React.Fragment>
-            <Btn on={() => act(ATT.attStepOut, "Stepped out")} label="Step Out" icon="coffee" />
-            <Btn on={() => act(ATT.attCheckOut, "Checked out")} label="Check Out" icon="power" primary />
-          </React.Fragment>
-        )}
-        {onBreak && (
-          <React.Fragment>
-            <Btn on={() => act(ATT.attBack, "Back on shift")} label="Back In" icon="arrowR" primary />
-            <Btn on={() => act(ATT.attCheckOut, "Checked out")} label="Check Out" icon="power" />
-          </React.Fragment>
-        )}
-        {done && (
-          <span className="mono" style={{ fontSize: 11, color: "var(--ok)", fontWeight: 700, padding: "5px 9px", background: "rgba(0, 184, 148, 0.1)", borderRadius: 8 }}>
-            ✓ Checked out ({ATT.attFmtMins(worked)})
-          </span>
-        )}
-      </div>
-
-      {checkedIn && (
-        <div className="glass rise" style={{
-          display: "flex", alignItems: "center", gap: 12, padding: "8px 14px",
-          borderRadius: 14, border: "1px solid var(--hairline)", background: "var(--glass-2)",
-          boxShadow: "0 4px 16px rgba(0, 0, 0, 0.22)",
-        }}>
-          {/* Analog clock — slightly larger than the desk widget, scaled to match the row vibe */}
-          <div style={{ width: 58, height: 58, display: "grid", placeItems: "center" }}>
-            <div style={{ transform: "scale(1.32)", transformOrigin: "center" }}>
-              <ClockWidget />
-            </div>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 1 }}>
-            <span className="mono" style={{
-              fontSize: 19, fontWeight: 850,
-              color: onBreak ? "var(--warn)" : "var(--accent)",
-              textShadow: onBreak ? "0 0 8px var(--warn-soft)" : "0 0 8px var(--accent-soft)",
-              lineHeight: 1.1, letterSpacing: "0.5px",
-            }}>
-              {formatSeconds(workedSeconds)}
-            </span>
-            <span style={{ fontSize: 8.5, color: "var(--ink-4)", fontWeight: 750, textTransform: "uppercase", letterSpacing: "0.5px" }}>
-              {onBreak ? "On Break" : "Worked today"}
-            </span>
-          </div>
-        </div>
-      )}
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <button onClick={() => act(() => ATT.attCheckIn(branch), "Checked in")} className="tap" style={{
+        display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px",
+        borderRadius: 9, border: "none", cursor: "pointer",
+        fontFamily: "var(--font)", fontSize: 11.5, fontWeight: 750,
+        color: "var(--accent-ink)", background: "var(--accent)",
+        boxShadow: "0 2px 8px color-mix(in oklch, var(--accent) 35%, transparent)",
+        transition: "all 0.2s",
+      }}>
+        <Icon name="power" size={13} /> Check In
+      </button>
     </div>
   );
 }
@@ -7200,9 +7107,7 @@ function RosterAttendanceControls({ branch }) {
   return (
     <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        {!row && (
-          <Btn on={() => act(() => ATT.attCheckIn(branch), "Checked in")} label="Check In" icon="power" primary />
-        )}
+        {/* Check In lives on the staff member's own roster row now — this console handles the shift from there */}
         {checkedIn && !onBreak && (
           <React.Fragment>
             <Btn on={() => act(ATT.attStepOut, "Stepped out")} label="Step Out" icon="coffee" />
@@ -7226,20 +7131,24 @@ function RosterAttendanceControls({ branch }) {
         <div className="glass rise" style={{
           display: "flex",
           alignItems: "center",
-          gap: 12,
-          padding: "6px 14px",
+          gap: 13,
+          padding: "8px 16px",
           borderRadius: 16,
           border: "1px solid var(--hairline)",
           background: "var(--glass-2)",
           boxShadow: "0 4px 20px rgba(0, 0, 0, 0.25)"
         }}>
-          {/* Working Analog Clock */}
-          <ClockWidget />
+          {/* Working Analog Clock — slightly enlarged to match the page hero */}
+          <div style={{ width: 57, height: 57, display: "grid", placeItems: "center" }}>
+            <div style={{ transform: "scale(1.3)", transformOrigin: "center" }}>
+              <ClockWidget />
+            </div>
+          </div>
 
           {/* Digital stopwatch with seconds */}
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 1 }}>
             <span className="mono" style={{ 
-              fontSize: 17, 
+              fontSize: 19, 
               fontWeight: 850, 
               color: onBreak ? "var(--warn)" : "var(--accent)", 
               textShadow: onBreak ? "0 0 8px var(--warn-soft)" : "0 0 8px var(--accent-soft)",
@@ -7696,26 +7605,22 @@ function RosterPage({ branch }) {
     } as React.CSSProperties}>
       <RosterStyleBlock />
 
-      {/* Roster Header — calendar-style hero with stat chips on the right */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 24 }}>
-        <PageHeader eyebrow={`Roster Operations // ${capBranch(branch)}`} title="Duty Roster"
-          sub={`${win.monthName} ${win.year} · shift schedules, attendance & cover for ${capBranch(branch)}`} />
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", paddingBottom: 10 }}>
-          {[
-            { icon: "users", value: onDutyToday, label: "on duty today" },
-            { icon: "briefcase", value: poolSize, label: "staff in pool" },
-            { icon: "layers", value: avgCover, label: "avg cover / day" },
-          ].map((c) => (
-            <div key={c.label} style={{
-              display: "flex", alignItems: "center", gap: 7, padding: "8px 14px",
-              background: "var(--panel-3)", border: "1px solid var(--hairline)", borderRadius: 10,
-              color: "var(--accent)", fontSize: 12.5, fontWeight: 800,
-            }}>
-              <Icon name={c.icon} size={13} />
-              {c.value}
-              <span style={{ color: "var(--ink-3)", fontWeight: 600 }}>{c.label}</span>
-            </div>
-          ))}
+      {/* Roster Header — FETS ROSTER hero matching the FETS CALENDAR title style */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 24 }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
+            <span style={{ width: 48, height: 1, background: "var(--accent)", borderRadius: 99 }} />
+            <span className="eyebrow" style={{ color: "var(--accent)", letterSpacing: "0.2em" }}>{`Roster Operations // ${capBranch(branch)}`}</span>
+          </div>
+          <h1 style={{ margin: 0, fontFamily: '"Archivo Expanded", var(--font)', fontWeight: 900,
+            fontSize: "clamp(48px, 6.5vw, 96px)", lineHeight: 0.9, letterSpacing: "-0.03em", color: "var(--accent)" }}>
+            FETS ROSTER
+          </h1>
+        </div>
+
+        {/* Step Out / Check Out + shift clock — back in its original spot */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", position: "relative", zIndex: 110 }}>
+          <RosterAttendanceControls branch={branch} />
         </div>
       </div>
 
