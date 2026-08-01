@@ -1,23 +1,25 @@
-/* Custom Sage-Theme Neumorphic & Claymorphic Styles for standalone FetsCalendarPremium */
+/* Custom Lagoon-Theme Neumorphic & Claymorphic Styles for standalone FetsCalendarPremium */
+/* Deep teal + aqua palette, harmonized with the app-wide sage/aqua theme
+   (liquid-glass.css: --accent #88BDA4, --accent-2 #6FBEB2) but with its own identity */
 
 .fets-calendar-standalone-mint,
 .fets-calendar-active-page {
-  /* Sage & Bronze Theme colors */
-  --accent-mint: #b17729; /* Warm bronze */
-  --accent-mint-hover: #9c6620;
-  --accent-mint-glow: rgba(177, 119, 41, 0.25);
-  
+  /* Lagoon Theme colors — aqua accent (family of global --accent-2 #6FBEB2) */
+  --accent-mint: #6FBEB2; /* Aqua — matches global accent-2 */
+  --accent-mint-hover: #57a99d;
+  --accent-mint-glow: rgba(111, 190, 178, 0.25);
+
   /* Page backgrounds & UI elements (Dark Mode) */
-  --page-bg: #1c2825; /* Rich deep sage green background */
-  --card-bg: #263531; /* Premium sage card surface */
-  --recessed-bg: #151e1c; /* Recessed dark sage background */
-  
-  --border-color: rgba(183, 162, 128, 0.2); /* Muted sand border */
-  --border-color-hover: rgba(177, 119, 41, 0.4); /* Bronze border on hover */
-  
-  --text-primary: #f2f5f4; /* Clean off-white primary text */
-  --text-secondary: #a5beb1; /* Light sage-gray secondary text */
-  --text-accent: #b7a280; /* Sand accent text */
+  --page-bg: #14272a; /* Deep lagoon teal background */
+  --card-bg: #1e373b; /* Premium lagoon card surface */
+  --recessed-bg: #0f1d1f; /* Recessed abyss-teal background */
+
+  --border-color: rgba(136, 189, 164, 0.2); /* Sage-tinted border (family of global --accent) */
+  --border-color-hover: rgba(111, 190, 178, 0.45); /* Aqua border on hover */
+
+  --text-primary: #eef6f3; /* Clean seafoam-white primary text */
+  --text-secondary: #9dbdb4; /* Muted sea-glass secondary text */
+  --text-accent: #88BDA4; /* Sage accent text — matches global --accent */
 }
 
 /* Light mode overrides */
@@ -27,17 +29,22 @@ body:not(.dark-mode) .fets-calendar-active-page,
 .fets-calendar-standalone-mint[data-theme="light"],
 [data-theme="light"] .fets-calendar-active-page,
 .fets-calendar-active-page[data-theme="light"] {
+  /* Deeper teal accent for contrast on light surfaces */
+  --accent-mint: #2f9c8c;
+  --accent-mint-hover: #258577;
+  --accent-mint-glow: rgba(47, 156, 140, 0.22);
+
   /* Page backgrounds & UI elements (Light Mode) */
-  --page-bg: #f0f4f2; /* Very soft light sage green-gray based on #8ca197 */
+  --page-bg: #ecf5f2; /* Soft aqua-mint wash */
   --card-bg: #ffffff; /* Clean white card surfaces */
-  --recessed-bg: #e2eae6; /* Recessed sage-gray */
-  
-  --border-color: rgba(183, 162, 128, 0.45); /* Muted sand border */
-  --border-color-hover: rgba(177, 119, 41, 0.6);
-  
-  --text-primary: #1e2d28; /* Dark sage-slate primary text */
-  --text-secondary: #5a7067; /* Sage secondary text */
-  --text-accent: #8e6224; /* Muted bronze accent text */
+  --recessed-bg: #dbeae5; /* Recessed sea-glass */
+
+  --border-color: rgba(70, 130, 118, 0.28); /* Muted teal border */
+  --border-color-hover: rgba(47, 156, 140, 0.5);
+
+  --text-primary: #16302a; /* Deep lagoon-slate primary text */
+  --text-secondary: #4d7267; /* Sea-glass secondary text */
+  --text-accent: #2c7d6f; /* Deep teal accent text */
 }
 
 /* Page Background & Global Text Color Override */
@@ -69,21 +76,21 @@ body.dark-mode .fets-calendar-active-page {
   min-height: 185px !important;
   padding: 14px !important;
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
-  /* Neumorphic outer shadow for dark mode with subtle sage #8ca197 ambient tint */
+  /* Neumorphic outer shadow for dark mode with subtle lagoon-teal ambient tint */
   box-shadow: 
-    6px 6px 16px rgba(10, 16, 15, 0.5), 
+    6px 6px 16px rgba(8, 18, 19, 0.5), 
     -6px -6px 16px rgba(255, 255, 255, 0.02),
     inset 2px 2px 4px rgba(255, 255, 255, 0.04), 
     inset -2px -2px 6px rgba(0, 0, 0, 0.4) !important;
 }
 
 [data-theme="light"] .fets-calendar-standalone-mint .month-day-cell-premium {
-  /* Light Mode Neumorphism with Sage-gray shadow */
+  /* Light Mode Neumorphism with sea-glass shadow */
   box-shadow: 
-    6px 6px 14px rgba(140, 161, 151, 0.35), 
+    6px 6px 14px rgba(95, 143, 131, 0.32), 
     -6px -6px 14px #ffffff,
     inset 2px 2px 4px #ffffff,
-    inset -2px -2px 5px rgba(183, 162, 128, 0.12) !important;
+    inset -2px -2px 5px rgba(136, 189, 164, 0.14) !important;
 }
 
 .fets-calendar-standalone-mint .month-day-cell-premium:hover {
@@ -91,7 +98,7 @@ body.dark-mode .fets-calendar-active-page {
   border-color: var(--accent-mint) !important;
   z-index: 10;
   box-shadow: 
-    10px 10px 24px rgba(10, 16, 15, 0.7), 
+    10px 10px 24px rgba(8, 18, 19, 0.7), 
     -10px -10px 24px rgba(255, 255, 255, 0.04),
     inset 3px 3px 6px rgba(255, 255, 255, 0.08), 
     inset -3px -3px 8px rgba(0, 0, 0, 0.5) !important;
@@ -99,29 +106,29 @@ body.dark-mode .fets-calendar-active-page {
 
 [data-theme="light"] .fets-calendar-standalone-mint .month-day-cell-premium:hover {
   box-shadow: 
-    10px 10px 20px rgba(140, 161, 151, 0.45), 
+    10px 10px 20px rgba(95, 143, 131, 0.4), 
     -10px -10px 20px #ffffff,
     inset 3px 3px 6px #ffffff,
-    inset -3px -3px 8px rgba(177, 119, 41, 0.15) !important;
+    inset -3px -3px 8px rgba(47, 156, 140, 0.15) !important;
 }
 
 /* Today highlighted cell */
 .fets-calendar-standalone-mint .month-day-cell-premium.today {
   border: 2px solid var(--accent-mint) !important;
-  background: linear-gradient(135deg, rgba(177, 119, 41, 0.08) 0%, rgba(183, 162, 128, 0.05) 100%) !important;
+  background: linear-gradient(135deg, rgba(111, 190, 178, 0.1) 0%, rgba(136, 189, 164, 0.06) 100%) !important;
   box-shadow: 
-    0 0 20px rgba(177, 119, 41, 0.25), 
+    0 0 20px rgba(111, 190, 178, 0.28), 
     inset 2px 2px 4px rgba(255, 255, 255, 0.08),
     inset -2px -2px 6px rgba(0, 0, 0, 0.4) !important;
 }
 
 [data-theme="light"] .fets-calendar-standalone-mint .month-day-cell-premium.today {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(183, 162, 128, 0.08) 100%) !important;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(136, 189, 164, 0.12) 100%) !important;
   box-shadow: 
-    6px 6px 14px rgba(140, 161, 151, 0.35), 
+    6px 6px 14px rgba(95, 143, 131, 0.32), 
     -6px -6px 14px #ffffff,
     inset 2px 2px 4px #ffffff,
-    inset -2px -2px 6px rgba(177, 119, 41, 0.08) !important;
+    inset -2px -2px 6px rgba(47, 156, 140, 0.1) !important;
 }
 
 .fets-calendar-standalone-mint .month-day-cell-premium.today .text-white {

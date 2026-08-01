@@ -40,7 +40,7 @@ interface Session {
 
 type CalendarViewMode = 'month' | 'week' | 'day'
 
-// ─── Luxury exam palette (distinct, restrained — not all gold) ─────────────
+// ─── Lagoon exam palette (distinct, restrained — aqua & sage family) ───────
 const EXAM_COLORS: Record<string, {
   bg: string; text: string; border: string; dot: string; badge: string; badgeText: string
 }> = {
@@ -50,12 +50,12 @@ const EXAM_COLORS: Record<string, {
     badge: 'var(--recessed-bg)', badgeText: 'var(--accent-mint)',
   },
   PEARSON: {
-    bg: 'rgba(183, 162, 128, 0.08)', text: 'var(--text-accent)',
+    bg: 'rgba(136, 189, 164, 0.1)', text: 'var(--text-accent)',
     border: 'var(--border-color)', dot: 'var(--text-accent)',
     badge: 'var(--recessed-bg)', badgeText: 'var(--text-accent)',
   },
   PSI: {
-    bg: 'rgba(183, 162, 128, 0.08)', text: 'var(--text-accent)',
+    bg: 'rgba(136, 189, 164, 0.1)', text: 'var(--text-accent)',
     border: 'var(--border-color)', dot: 'var(--text-accent)',
     badge: 'var(--recessed-bg)', badgeText: 'var(--text-accent)',
   },
@@ -65,12 +65,12 @@ const EXAM_COLORS: Record<string, {
     badge: 'var(--recessed-bg)', badgeText: 'var(--accent-mint)',
   },
   CMA: {
-    bg: 'rgba(140, 161, 151, 0.08)', text: 'var(--text-secondary)',
+    bg: 'rgba(111, 190, 178, 0.09)', text: 'var(--text-secondary)',
     border: 'var(--border-color)', dot: 'var(--text-secondary)',
     badge: 'var(--recessed-bg)', badgeText: 'var(--text-secondary)',
   },
   ITTS: {
-    bg: 'rgba(183, 162, 128, 0.08)', text: 'var(--text-accent)',
+    bg: 'rgba(136, 189, 164, 0.1)', text: 'var(--text-accent)',
     border: 'var(--border-color)', dot: 'var(--text-accent)',
     badge: 'var(--recessed-bg)', badgeText: 'var(--text-accent)',
   },
@@ -80,7 +80,7 @@ const EXAM_COLORS: Record<string, {
     badge: 'var(--recessed-bg)', badgeText: 'var(--accent-mint)',
   },
   OTHER: {
-    bg: 'rgba(140, 161, 151, 0.05)', text: 'var(--text-secondary)',
+    bg: 'rgba(111, 190, 178, 0.05)', text: 'var(--text-secondary)',
     border: 'var(--border-color)', dot: 'var(--text-secondary)',
     badge: 'var(--recessed-bg)', badgeText: 'var(--text-secondary)',
   },

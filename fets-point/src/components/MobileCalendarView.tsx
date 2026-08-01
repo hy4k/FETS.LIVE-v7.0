@@ -11,12 +11,12 @@ interface MobileCalendarViewProps {
   setActiveTab?: (tab: string) => void;
 }
 
-// Same client color system as desktop for consistency
+// Client color system — coordinated cool-toned pastel set matching the Lagoon calendar theme
 const CLIENT_COLORS: Record<string, { bg: string; text: string; dot: string; badge: string; badgeText: string }> = {
   PEARSON: { bg: '#EFF6FF', text: '#1D4ED8', dot: '#3B82F6', badge: '#DBEAFE', badgeText: '#1E40AF' },
-  PSI: { bg: '#FDF2F8', text: '#BE185D', dot: '#E11D48', badge: '#FCE7F3', badgeText: '#9D174D' },
-  ITTS: { bg: '#FFF7ED', text: '#C2410C', dot: '#EA580C', badge: '#FFEDD5', badgeText: '#9A3412' },
-  PROMETRIC: { bg: '#FFFBEB', text: '#A16207', dot: '#D4AF37', badge: '#FEF9C3', badgeText: '#854D0E' },
+  PSI: { bg: '#F5F3FF', text: '#6D28D9', dot: '#8B5CF6', badge: '#EDE9FE', badgeText: '#5B21B6' },
+  ITTS: { bg: '#F0FDFA', text: '#0F766E', dot: '#14B8A6', badge: '#CCFBF1', badgeText: '#115E59' },
+  PROMETRIC: { bg: '#ECFEFF', text: '#0E7490', dot: '#06B6D4', badge: '#CFFAFE', badgeText: '#155E75' },
   CELPIP: { bg: '#FEF2F2', text: '#B91C1C', dot: '#EF4444', badge: '#FEE2E2', badgeText: '#991B1B' },
   CMA: { bg: '#ECFDF5', text: '#047857', dot: '#10B981', badge: '#D1FAE5', badgeText: '#065F46' },
   IELTS: { bg: '#EEF2FF', text: '#4338CA', dot: '#818CF8', badge: '#E0E7FF', badgeText: '#3730A3' },
@@ -151,15 +151,15 @@ export function MobileCalendarView({ setActiveTab }: MobileCalendarViewProps) {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#FAFBFD] pb-32" style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}>
+    <div className="flex flex-col min-h-screen bg-[#EDF5F2] pb-32" style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}>
 
       {/* ── HEADER ── */}
-      <div className="bg-white border-b border-slate-100 px-5 pt-4 pb-3 sticky top-0 z-50 shadow-sm">
+      <div className="bg-white border-b border-[#d8e8e2] px-5 pt-4 pb-3 sticky top-0 z-50 shadow-sm">
         <div className="flex items-center justify-between mb-3">
-          <h1 className="text-lg font-extrabold text-slate-800 tracking-tight">Exam Calendar</h1>
-          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 rounded-lg">
-            <CalendarIcon size={13} className="text-amber-600" />
-            <span className="text-[10px] font-bold text-amber-700">{format(currentMonth, 'MMM yyyy')}</span>
+          <h1 className="text-lg font-extrabold text-[#16302a] tracking-tight">Exam Calendar</h1>
+          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-[#e2f2ee] rounded-lg">
+            <CalendarIcon size={13} className="text-[#2f9c8c]" />
+            <span className="text-[10px] font-bold text-[#2c7d6f]">{format(currentMonth, 'MMM yyyy')}</span>
           </div>
         </div>
 
@@ -188,16 +188,16 @@ export function MobileCalendarView({ setActiveTab }: MobileCalendarViewProps) {
                 onClick={() => setSelectedDate(date)}
                 className={`flex-none w-14 h-20 rounded-2xl flex flex-col items-center justify-between py-2 transition-all duration-200 border ${
                   isSelected
-                    ? 'bg-slate-900 border-slate-900 text-white shadow-lg shadow-slate-200/80 scale-105 z-10'
+                    ? 'bg-[#16302a] border-[#16302a] text-white shadow-lg shadow-[#9dbdb4]/60 scale-105 z-10'
                     : isCurr
-                      ? 'bg-amber-50/80 border-amber-400/70 text-slate-800 shadow-sm shadow-amber-100/50'
+                      ? 'bg-[#e2f2ee]/80 border-[#5bbfae]/70 text-[#16302a] shadow-sm shadow-[#d0e9e2]/50'
                       : exists
                         ? 'bg-slate-50 border-slate-200 text-slate-800 hover:bg-slate-100'
                         : 'bg-white border-slate-100 text-slate-600 hover:bg-slate-50'
                 }`}
               >
                 <span className={`text-[9px] font-extrabold uppercase tracking-wider ${
-                  isSelected ? 'text-slate-400' : isCurr ? 'text-amber-700/80' : 'text-slate-400'
+                  isSelected ? 'text-[#9dbdb4]' : isCurr ? 'text-[#2c7d6f]/80' : 'text-slate-400'
                 }`}>
                   {format(date, 'EEE')}
                 </span>
@@ -208,9 +208,9 @@ export function MobileCalendarView({ setActiveTab }: MobileCalendarViewProps) {
                   {exists ? (
                     <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black tabular-nums leading-none ${
                       isSelected 
-                        ? 'bg-[#f6c810] text-slate-950'
+                        ? 'bg-[#6FBEB2] text-[#16302a]'
                         : isCurr
-                          ? 'bg-slate-900 text-white'
+                          ? 'bg-[#16302a] text-white'
                           : 'bg-slate-200 text-slate-700'
                     }`}>
                       {count}
@@ -229,7 +229,7 @@ export function MobileCalendarView({ setActiveTab }: MobileCalendarViewProps) {
       <div className="px-5 mt-4">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h3 className="text-base font-extrabold text-slate-800">{format(selectedDate, 'EEEE, do MMMM')}</h3>
+            <h3 className="text-base font-extrabold text-[#16302a]">{format(selectedDate, 'EEEE, do MMMM')}</h3>
             <p className="text-[11px] text-slate-400 font-medium mt-0.5">
               {selectedDateSessions.length} session{selectedDateSessions.length !== 1 ? 's' : ''} · {totalSelected} candidate{totalSelected !== 1 ? 's' : ''}
             </p>
@@ -268,7 +268,7 @@ export function MobileCalendarView({ setActiveTab }: MobileCalendarViewProps) {
                             </span>
                             <p className="text-[9px] text-slate-400 font-medium truncate mb-0.5">{session.client_name}</p>
                             {/* Exam */}
-                            <h4 className="text-sm font-bold text-slate-800 leading-snug truncate">{session.exam_name}</h4>
+                            <h4 className="text-sm font-bold text-[#16302a] leading-snug truncate">{session.exam_name}</h4>
                           </div>
 
                           {/* Candidate count */}
@@ -281,7 +281,7 @@ export function MobileCalendarView({ setActiveTab }: MobileCalendarViewProps) {
                         {/* Meta row */}
                         <div className="flex items-center gap-3 mt-2.5 pt-2.5 border-t border-slate-50 text-[11px] text-slate-500">
                           <div className="flex items-center gap-1">
-                            <Clock size={12} className="text-amber-500" />
+                            <Clock size={12} className="text-[#2f9c8c]" />
                             <span className="font-semibold">{formatTime(session.start_time)} – {formatTime(session.end_time)}</span>
                           </div>
                           {session.branch_location && (
