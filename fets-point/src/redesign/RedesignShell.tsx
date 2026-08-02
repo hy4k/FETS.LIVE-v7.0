@@ -4066,7 +4066,7 @@ function RosterGrid({ offsets, branch }) {
     <React.Fragment>
     <div className="glass scroll-soft" style={{ borderRadius: "var(--radius)", overflow: "auto", padding: 6 }}>
       <div style={{ minWidth: 250 + offsets.length * 50 }}>
-        <div style={{ display: "grid", gridTemplateColumns: cols, gap: 4, padding: "8px 8px 6px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: cols, gap: 6, padding: "8px 10px 6px" }}>
           <div className="eyebrow" style={{ alignSelf: "center", color: "var(--ink-4)", paddingLeft: 6 }}>Staff Member</div>
           {offsets.map((o) => {
             const d = F().ISO(o), isToday = o === 0;
