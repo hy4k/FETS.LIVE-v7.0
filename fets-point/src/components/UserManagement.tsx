@@ -13,11 +13,12 @@ import { toast } from 'react-hot-toast'
 import { StaffProfile } from '../types/shared'
 import { getAvailableBranches, formatBranchName, isMithunEmail } from '../utils/authUtils'
 import { getCurrentISTDateString } from '../utils/dateUtils'
+import { currentRosterMonthKey } from '../utils/rosterVisibility'
 import { ClientControl } from './ClientControl'
 import { useAppModules } from '../hooks/useAppModules'
 
 const PERMISSION_KEYS = [
-    { key: 'is_roster_active', label: 'Include in Roster (Current Month)', icon: Users, description: 'Keep enabled for active staff. Disable to temporarily hide staff from duty roster for the month (e.g. Anshitha).' },
+    { key: 'is_roster_active', label: 'Include in Roster (Current Month)', icon: Users, description: 'Keep enabled for active staff. Disable to hide staff from the duty roster for the rest of the current month — they automatically return next month.' },
     { key: 'can_edit_roster', label: 'Roster Management Authority', icon: Users, description: 'Create and edit staff rosters' },
     { key: 'user_management_edit', label: 'User Management Authority', icon: Shield, description: 'Manage user profiles, roles and critical permissions' },
 ]
@@ -308,13 +309,20 @@ export function UserManagement({ onNavigate }: UserManagementProps = {}) {
                                                 <div className="p-4 rounded-xl border flex items-center justify-between bg-slate-800/80 border-slate-700">
                                                     <div>
                                                         <p className="text-sm font-semibold text-white">Include in Roster (Current Month)</p>
-                                                        <p className="text-xs text-slate-400 mt-0.5">Toggle off to temporarily hide staff from the duty roster for this month (e.g. staff on leave or inactive for month)</p>
+                                                        <p className="text-xs text-slate-400 mt-0.5">Toggle off to hide this staff member from the duty roster for the rest of the current month — they automatically return next month, or re-enable anytime.</p>
                                                     </div>
                                                     <button
                                                         type="button"
                                                         onClick={() => {
                                                             const currentVal = permissions['is_roster_active'] !== false;
-                                                            const updatedPerms = { ...permissions, is_roster_active: !currentVal };
+                                                            const updatedPerms: Record<string, any> = { ...permissions, is_roster_active: !currentVal };
+                                                            if (currentVal) {
+                                                                // Turning OFF — stamp the exclusion with the current month so it auto-expires next month
+                                                                updatedPerms.roster_excluded_month = currentRosterMonthKey();
+                                                            } else {
+                                                                // Turning ON — clear any month stamp
+                                                                delete updatedPerms.roster_excluded_month;
+                                                            }
                                                             setPermissions(updatedPerms);
                                                             setFormData({ ...formData, permissions: updatedPerms });
                                                         }}
@@ -337,7 +345,14 @@ export function UserManagement({ onNavigate }: UserManagementProps = {}) {
                                                     return (
                                                         <button
                                                             key={perm.key}
-                                                            onClick={() => setPermissions(prev => ({ ...prev, [perm.key]: !prev[perm.key] }))}
+                                                            onClick={() => setPermissions(prev => {
+                                                                const next: Record<string, any> = { ...prev, [perm.key]: !prev[perm.key] };
+                                                                if (perm.key === 'is_roster_active') {
+                                                                    if (next.is_roster_active === false) next.roster_excluded_month = currentRosterMonthKey();
+                                                                    else delete next.roster_excluded_month;
+                                                                }
+                                                                return next;
+                                                            })}
                                                             className="w-full p-4 rounded-xl text-left transition-all flex items-center gap-4 bg-slate-800/80 border border-slate-700"
                                                         >
                                                             <div className="flex-1">

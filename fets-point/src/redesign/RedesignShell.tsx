@@ -15,6 +15,7 @@ import { supabase } from "../lib/supabase";
 import * as DB from "./write-data";
 import * as LAB from "./lab-data";
 import * as ATT from "./attendance-data";
+import { isStaffRosterVisible } from "../utils/rosterVisibility";
 import html2canvas from "html2canvas";
 import { FetsChatPopup } from "../components/FetsChatPopup";
 import { FetsIncidentPremium } from "../components/FetsIncidentPremium";
@@ -3940,15 +3941,35 @@ function RosterGrid({ offsets, branch }) {
     ? [...F().STAFF.calicut.map((n) => ({ n, b: "calicut" })), ...F().STAFF.cochin.map((n) => ({ n, b: "cochin" }))]
     : F().STAFF[branch].map((n) => ({ n, b: branch }));
 
-  // Exclude staff marked is_roster_active: false for current month in User Management
+  // Exclude staff the Super Admin hid for the current month via User Management.
+  // Fetched fresh from staff_profiles so a toggle applies on next visit / roster refresh.
+  const [rosterVisibility, setRosterVisibility] = React.useState<Record<string, boolean> | null>(null);
+  const loadVisibility = React.useCallback(async () => {
+    try {
+      const { data } = await supabase.from("staff_profiles").select("full_name, permissions");
+      const map: Record<string, boolean> = {};
+      (data || []).forEach((p: any) => { if (p.full_name) map[p.full_name] = isStaffRosterVisible(p); });
+      setRosterVisibility(map);
+    } catch (e) {
+      // fail open — never hide staff because of a fetch error
+    }
+  }, []);
+  React.useEffect(() => { loadVisibility(); }, [loadVisibility]);
+  React.useEffect(() => {
+    const h = () => loadVisibility();
+    window.addEventListener("fets-roster-changed", h);
+    return () => window.removeEventListener("fets-roster-changed", h);
+  }, [loadVisibility]);
+
+  // Fallback while the fresh map loads: hydrated staff profiles from live-data
   const isStaffActiveInRoster = (name) => {
-    if (!F()._staffList) return true;
-    const staffObj = F()._staffList.find(s => s.full_name === name || s.name === name);
+    const list = F()._staffList || F()._staffProfiles;
+    if (!list) return true;
+    const staffObj = list.find(s => s.full_name === name || s.name === name);
     if (!staffObj) return true;
-    const isRosterActive = (staffObj.permissions as any)?.is_roster_active !== false && (staffObj as any).is_roster_active !== false;
-    return isRosterActive;
+    return isStaffRosterVisible(staffObj);
   };
-  const pool = rawPool.filter(({ n }) => isStaffActiveInRoster(n));
+  const pool = rawPool.filter(({ n }) => (rosterVisibility ? rosterVisibility[n] !== false : isStaffActiveInRoster(n)));
 
   const build = () => {
     const g = {};

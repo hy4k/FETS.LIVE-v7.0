@@ -2,6 +2,7 @@ import React, { useMemo } from 'react'
 import { Schedule, StaffProfile } from '../types/shared'
 import { User, Clock, Calendar, Sparkles } from 'lucide-react'
 import { formatDateForIST } from '../utils/dateUtils'
+import { isStaffRosterVisible } from '../utils/rosterVisibility'
 
 type Props = {
   staffProfiles: StaffProfile[]
@@ -70,12 +71,9 @@ export const MonthlyRosterTimeline: React.FC<Props> = ({
 
   const daysInMonth = useMemo(() => new Date(year, month + 1, 0).getDate(), [year, month])
 
-  // Filter out staff profiles explicitly marked inactive for the month
+  // Filter out staff the Super Admin hid for the current month (month-stamped, auto-returns next month)
   const activeStaffProfiles = useMemo(() => {
-    return staffProfiles.filter(s => {
-      const isRosterActive = (s as any).permissions?.is_roster_active !== false && (s as any).is_roster_active !== false;
-      return isRosterActive;
-    });
+    return staffProfiles.filter(s => isStaffRosterVisible(s));
   }, [staffProfiles]);
 
   const scheduleMap = useMemo(() => {

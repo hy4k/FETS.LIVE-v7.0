@@ -20,6 +20,7 @@ import { useBranch } from '../hooks/useBranch'
 import { canSwitchBranches, getAvailableBranches } from '../utils/authUtils'
 import { supabase } from '../lib/supabase'
 import { formatDateForIST, getCurrentISTDateString } from '../utils/dateUtils'
+import { isStaffRosterVisible } from '../utils/rosterVisibility'
 import { LeaveRequest, Schedule, StaffProfile, SHIFT_CODES, ShiftCode } from '../types/shared'
 import { useIsMobile } from '../hooks/use-mobile'
 import { useAttendance, useAttendanceMutations, getWeeklyAttendanceSummary, AttendanceRecord } from '../hooks/useAttendance'
@@ -697,9 +698,8 @@ export function FetsRosterPremium() {
       const sData = scheduleData || []
 
       const relevantProfiles = mappedProfiles.filter(p => {
-        // Exclude staff temporarily marked inactive in roster for current month (e.g. Anshitha)
-        const isRosterActive = (p.permissions as any)?.is_roster_active !== false && (p as any).is_roster_active !== false;
-        if (!isRosterActive) return false;
+        // Exclude staff the Super Admin hid for the current month (month-stamped, auto-returns next month)
+        if (!isStaffRosterVisible(p)) return false;
 
         let branchOk = false
         if (activeBranch === 'global') branchOk = true
