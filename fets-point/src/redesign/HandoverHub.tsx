@@ -8,10 +8,12 @@ import {
   Calendar, Clock, Users, Crown, Check, X, ChevronRight, ChevronLeft,
   RefreshCcw, Plus, Trash2, Settings, Download, AlertTriangle,
   ClipboardCheck, Sunrise, ListChecks, MoonStar, BarChart3, UserCheck, ArrowLeftRight,
+  MessageSquare,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { ShiftBeginning, ShiftEnd, HandoverHistory } from "./ShiftHandoverModern";
 import * as DD from "./dutyData";
+import { sendChatAlert } from "./chatNotify";
 import "./handover-atelier.css";
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
@@ -45,7 +47,7 @@ function AtAvatar({ name, size = 26 }: { name: string; size?: number }) {
 
 /* ═══ TODAY'S DUTY TIMELINE + LEAD CONSOLE ═══════════════════════════════ */
 function DutyTimeline({ hub }: { hub: any }) {
-  const { duties, logs, lead, presentStaff, me, isAdmin, reload } = hub;
+  const { duties, logs, lead, presentStaff, me, isAdmin, branch, reload } = hub;
   const isLead = me === lead;
   const canVerify = isAdmin || isLead;
 
@@ -139,7 +141,13 @@ function DutyTimeline({ hub }: { hub: any }) {
                 </button>
               )}
               {canVerify && status !== "missed" && status !== "done" && (
-                <button className="at-btn at-btn-blush at-btn-sm" onClick={() => log && act(() => DD.setLogStatus(log.id, "missed", me), "Marked missed")}>
+                <button
+                  className="at-btn at-btn-blush at-btn-sm"
+                  onClick={() => log && act(async () => {
+                    await DD.setLogStatus(log.id, "missed", me);
+                    sendChatAlert({ kind: "missed", branch, duty: duty.title, owner, by: me });
+                  }, "Marked missed")}
+                >
                   <X size={13} /> Missed
                 </button>
               )}
@@ -150,7 +158,11 @@ function DutyTimeline({ hub }: { hub: any }) {
                   title={ownerOff ? `${owner} is off today — reassign` : "Reassign for today"}
                   onChange={(e) => {
                     if (!e.target.value || !log) return;
-                    act(() => DD.reassignLog(log.id, e.target.value, me), `Reassigned to ${e.target.value}`);
+                    const to = e.target.value;
+                    act(async () => {
+                      await DD.reassignLog(log.id, to, me);
+                      sendChatAlert({ kind: "reassigned", branch, duty: duty.title, from: owner, to, by: me });
+                    }, `Reassigned to ${to}`);
                   }}
                 >
                   <option value="">Reassign…</option>
@@ -414,6 +426,17 @@ td{padding:8px 12px;border-bottom:1px solid #e5e9ef;font-size:13px}</style></hea
         <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.65, color: "var(--at-ink-2)" }}>{summaryText}</p>
         <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
           <button className="at-btn at-btn-primary" onClick={download}><Download size={14} /> Download report</button>
+          <button
+            className="at-btn"
+            title="Send this summary to the Google Chat space"
+            onClick={async () => {
+              const ok = await sendChatAlert({ kind: "summary", branch, weekLabel: weekLabel(), text: summaryText });
+              if (ok) toast.success("Summary sent to Google Chat");
+              else toast.error("Chat not configured yet — webhook missing");
+            }}
+          >
+            <MessageSquare size={14} /> Send summary → Chat
+          </button>
         </div>
       </div>
 
@@ -438,7 +461,10 @@ td{padding:8px 12px;border-bottom:1px solid #e5e9ef;font-size:13px}</style></hea
 /* ═══ MAIN PAGE ════════════════════════════════════════════════════════════ */
 export default function HandoverHub({ branch: branchProp, setActive }: any) {
   const W: any = window as any;
-  const branch = branchProp === "global" ? (W.FETS?._meBranch || "calicut") : branchProp;
+  // Never operate on a phantom "global" branch — super admins with branch_assigned
+  // "global" get _meBranch "global", which must resolve to a real centre.
+  const rawBranch = branchProp === "global" ? (W.FETS?._meBranch || "calicut") : branchProp;
+  const branch = rawBranch === "global" ? "calicut" : rawBranch;
   const me = W.FETS?._meName || W.FETS?.user?.name || "Staff";
   const isAdmin = !!W.FETS?.isAdmin;
 
@@ -568,6 +594,27 @@ export default function HandoverHub({ branch: branchProp, setActive }: any) {
                       {presentStaff.map((n) => <option key={n} value={n}>{n}</option>)}
                     </select>
                   )}
+                  <button
+                    className="at-btn at-btn-sm"
+                    title="Post today's duty briefing to Google Chat"
+                    onClick={async () => {
+                      const lines = [...duties]
+                        .sort((a: any, b: any) => (a.scheduled_time || "99:99").localeCompare(b.scheduled_time || "99:99"))
+                        .map((d: any) => {
+                          const log = logs.find((l: any) => l.duty_id === d.id);
+                          return `${fmtTime(d.scheduled_time)} — ${d.title} → ${log?.staff_name || "Unassigned"}`;
+                        });
+                      const ok = await sendChatAlert({
+                        kind: "briefing", branch,
+                        dateLabel: new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }),
+                        lead, lines,
+                      });
+                      if (ok) toast.success("Briefing posted to Google Chat");
+                      else toast.error("Chat not configured yet — webhook missing");
+                    }}
+                  >
+                    <MessageSquare size={13} /> Briefing → Chat
+                  </button>
                   <button className="at-btn at-btn-sm" onClick={reload} title="Refresh"><RefreshCcw size={13} /></button>
                 </div>
 
