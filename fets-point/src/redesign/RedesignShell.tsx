@@ -22,7 +22,7 @@ import { FetsIncidentPremium } from "../components/FetsIncidentPremium";
 import FetsRoster from "../components/FetsRosterPremium";
 import { FetsCalendarPremium as FetsCalendar } from "../components/FetsCalendarPremium";
 import { MobileCalendarView as MobileCalendar } from "../components/MobileCalendarView";
-import ShiftHandoverModern from "./ShiftHandoverModern";
+import HandoverHub from "./HandoverHub";
 import { AccessHub as AccessHubPage } from "../components/AccessHub";
 import { CandidateTrackerPremium as CandidateTracker } from "../components/CandidateTrackerPremium";
 import SystemManager from "../components/SystemManager";
@@ -13464,7 +13464,7 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
         )}
         {active === "roster" && <RosterPage branch={branch} />}
         {active === "case" && <RaiseCasePage branch={branch} setActive={setActive} />}
-        {active === "handover" && <ShiftHandoverModern branch={branch} setActive={setActive} />}
+        {active === "handover" && <HandoverHub branch={branch} setActive={setActive} />}
         {active === "desk" && <MyDeskPage branch={branch} setActive={setActive} setDrawer={setDrawer} bridge={bridge} />}
         {active === "business" && <BusinessPage branch={branch} />}
         {active === "news" && <TheLabPage branch={branch} />}

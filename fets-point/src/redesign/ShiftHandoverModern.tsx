@@ -199,7 +199,7 @@ function QuestionManagerModal({ open, onClose, onRefresh }: any) {
   );
 }
 
-function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestions }: any) {
+export function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestions, trimmed }: any) {
   const me = window.FETS?._meName || window.FETS?.user?.name || "Staff";
   const isAdmin = !!window.FETS?.isAdmin;
   const people = React.useMemo(() => {
@@ -639,6 +639,8 @@ function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestions }: a
           )}
         </div>
         {!incoming.length && <p className="sh-inline-error">Select at least one opening staff member.</p>}
+        {!trimmed && (
+          <React.Fragment>
         <div className="sh-sub-label">Overall centre status</div>
         <div className="sh-overall">
           {[
@@ -660,6 +662,8 @@ function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestions }: a
             </button>
           ))}
         </div>
+          </React.Fragment>
+        )}
       </Section>
 
       <Section number={2} eyebrow="Step 2" title="Today’s closing summary" description="Completed sessions, candidate counts and exceptions.">
@@ -685,13 +689,15 @@ function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestions }: a
         <Field label="Important notes from today" wide><textarea rows={3} value={summary.notes} onChange={(e) => updateSummary("notes", e.target.value)} placeholder="Add only information the next team needs to know…" disabled={isLocked} /></Field>
       </Section>
 
+      {!trimmed && (
       <Section number={3} eyebrow="Step 3" title="Next-day exam schedule" description={`${displayDate(toYMD(tomorrow))} · automatically loaded from Calendar.`}>
         {sessions.length ? <div className="sh-sessions">{sessions.map((session: any) => <div key={session.id}><span className="sh-session-time">{session.start}</span><span className="sh-session-logo">{String(session.client).slice(0, 1).toUpperCase()}</span><span><strong>{session.client} · {session.exam}</strong><small>Scheduled examination</small></span><span className="sh-session-count"><strong>{session.candidates}</strong><small>candidates</small></span></div>)}</div> : <EmptyState icon={CalendarDays} title="No sessions found" text="Add tomorrow’s sessions in FETS Calendar if this is not correct." />}
       </Section>
+      )}
 
       <Section
-        number={4}
-        eyebrow="Step 4"
+        number={trimmed ? 3 : 4}
+        eyebrow={trimmed ? "Step 3" : "Step 4"}
         title="Centre readiness"
         description="Use Not checked when a closing verification was not performed."
         action={isAdmin && (
@@ -712,6 +718,7 @@ function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestions }: a
         {(issueCount > 0 || uncheckedCount > 0) && <div className="sh-warning"><AlertTriangle size={18} /><p><strong>{issueCount} issue{issueCount === 1 ? "" : "s"}, {uncheckedCount} not checked.</strong> Unchecked items must be reviewed before submission.</p></div>}
       </Section>
 
+      {!trimmed && (
       <Section number={5} eyebrow="Step 5" title="Pending tasks" description="Every pending action needs an owner and deadline.">
         <div className="sh-task-list">
           {tasks.map((task) => <div className="sh-task" key={task.id}>
@@ -724,8 +731,9 @@ function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestions }: a
         {!tasks.length && <p className="sh-no-tasks">No pending tasks added.</p>}
         <button type="button" className="sh-add" onClick={addTask} disabled={isLocked}><Plus size={15} /> Add pending task</button>
       </Section>
+      )}
 
-      <Section number={6} eyebrow="Final step" title="Confirm and send handover" description="The opening staff will receive this record for review and acceptance.">
+      <Section number={trimmed ? 4 : 6} eyebrow={trimmed ? "Final step" : "Final step"} title="Confirm and send handover" description="The opening staff will receive this record for review and acceptance.">
         <label className="sh-declaration"><input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} disabled={isLocked} /><span><strong>I confirm that this handover is accurate.</strong><small>All known incidents, technical issues and pending actions have been recorded or linked.</small></span></label>
         <div className="sh-signature"><span>{initials(me)}</span><span><strong>{me}</strong><small>Closing staff · {titleBranch(branch)}</small></span><small>Digitally signed on submission</small></div>
         <button type="button" className="sh-primary" disabled={!canSubmit || submitting || isLocked} onClick={submit}>{submitting ? <><Loader2 className="spin" size={16} /> Submitting…</> : <>Submit shift handover <ChevronRight size={17} /></>}</button>
@@ -741,7 +749,7 @@ function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestions }: a
   );
 }
 
-function ShiftBeginning({ branch, refreshKey, onAccepted }: any) {
+export function ShiftBeginning({ branch, refreshKey, onAccepted, trimmed }: any) {
   const me = window.FETS?._meName || window.FETS?.user?.name || "Staff";
   const [items, setItems] = React.useState<any[]>([]);
   const [selected, setSelected] = React.useState<any>(null);
@@ -804,11 +812,13 @@ function ShiftBeginning({ branch, refreshKey, onAccepted }: any) {
         <div className="sh-closing-note"><span>Closing note</span><p>{selected.candidate_notes || "No additional closing note."}</p></div>
       </Section>
 
+      {!trimmed && (
       <Section number={2} eyebrow="Today" title="Today’s exam schedule" description="Sessions passed to the opening shift.">
         {sessions.length ? <div className="sh-sessions">{sessions.map((session: any, index: number) => <div key={session.id || index}><span className="sh-session-time">{session.start}</span><span className="sh-session-logo">{String(session.client || "E").slice(0, 1).toUpperCase()}</span><span><strong>{session.client} · {session.exam}</strong><small>Scheduled examination</small></span><span className="sh-session-count"><strong>{session.candidates}</strong><small>candidates</small></span></div>)}</div> : <EmptyState icon={CalendarDays} title="No schedule stored in this handover" text="Check FETS Calendar for today’s live schedule." />}
       </Section>
+      )}
 
-      <Section number={3} eyebrow="Opening check" title="Verify before operations" description="Complete these checks after reaching the centre.">
+      <Section number={trimmed ? 2 : 3} eyebrow="Opening check" title="Verify before operations" description="Complete these checks after reaching the centre.">
         <div className="sh-opening-checks">{[
           "I reviewed the previous handover",
           "I reviewed today’s sessions",
@@ -818,11 +828,13 @@ function ShiftBeginning({ branch, refreshKey, onAccepted }: any) {
         <div className="sh-progress"><span><i style={{ width: `${completeCount * 25}%` }} /></span><strong>{completeCount} of 4 completed</strong></div>
       </Section>
 
+      {!trimmed && (
       <Section number={4} eyebrow="Pending actions" title="Items passed to your shift" description="Review what remains and take ownership.">
         {tasks.length ? <div className="sh-incoming-tasks">{tasks.map((task: any, index: number) => <div key={task.id || index}><span className="sh-priority">{String(task.priority || "routine").replaceAll("_", " ")}</span><h3>{task.title}</h3>{task.notes && <p>{task.notes}</p>}<div><span>Assigned to <strong>{task.owner || "Opening staff"}</strong></span><span>Due <strong>{task.deadline ? new Date(task.deadline).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "Not set"}</strong></span></div></div>)}</div> : <EmptyState icon={CheckCircle2} title="No pending actions" text="The closing staff did not pass any unfinished tasks to this shift." />}
       </Section>
+      )}
 
-      <Section number={5} eyebrow="Final step" title="Accept the handover" description="Choose the status matching what you verified at the centre.">
+      <Section number={trimmed ? 3 : 5} eyebrow="Final step" title="Accept the handover" description="Choose the status matching what you verified at the centre.">
         <div className="sh-accept-options">{[
           ["ready", "Accepted — centre ready", "I can begin today’s operations", CheckCircle2],
           ["exceptions", "Accepted with exceptions", "I found an issue and recorded it", AlertTriangle],
@@ -838,7 +850,7 @@ function ShiftBeginning({ branch, refreshKey, onAccepted }: any) {
   );
 }
 
-function HandoverHistory({ branch }: any) {
+export function HandoverHistory({ branch }: any) {
   const [rows, setRows] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
   React.useEffect(() => { DB.dbFetchHandovers(branch).then((data) => setRows(data || [])).finally(() => setLoading(false)); }, [branch]);
