@@ -1,20 +1,19 @@
 /**
- * FETS AI - Premium Intelligence Dashboard
- * Stunning, dynamic dark mode with glassmorphism
+ * FETS AI — "Aurora" redesign.
+ * Light, high-contrast, modern UI: animated aurora header, pill tab bar,
+ * redesigned chat with markdown rendering, and a command-bar composer.
  */
-
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Newspaper, Send, Sparkles, Activity,
-  FileText, Search, Settings as SettingsIcon,
-  AlertCircle, Users, Calendar, BrainCircuit
+  Newspaper, Send, Sparkles, Activity, FileText,
+  Settings as SettingsIcon, AlertCircle, Users, Calendar,
+  Bot, ArrowUp, Zap
 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { toast } from 'react-hot-toast'
 import { askFetsAgent, type AgentAction } from '../lib/fetsAgent'
-
-// Feature Components
+import { Markdown } from './fetsai/Markdown'
 import { NewsManager } from './NewsManager'
 import { TelemetryPanel } from './fetsai/TelemetryPanel'
 import { DataVaultPanel } from './fetsai/DataVaultPanel'
@@ -29,16 +28,22 @@ interface ChatMessage {
 }
 
 interface FetsAIProps {
-  initialTab?: string;
-  initialQuery?: string;
+  initialTab?: string
+  initialQuery?: string
 }
+
+const QUICK_PROMPTS = [
+  { text: 'How many candidates are registered?', icon: Users },
+  { text: 'Show the upcoming exam schedule', icon: Calendar },
+  { text: 'Summarise recent incidents', icon: AlertCircle },
+  { text: 'Which staff are online right now?', icon: Zap },
+]
 
 export function FetsIntelligence({ initialTab = 'chat', initialQuery }: FetsAIProps) {
   const { profile } = useAuth()
   const isAdmin = profile?.role === 'super_admin' || profile?.role === 'admin'
   const [activeTab, setActiveTab] = useState<string>(initialTab)
 
-  // Chat State
   const [query, setQuery] = useState('')
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [loading, setLoading] = useState(false)
@@ -46,347 +51,242 @@ export function FetsIntelligence({ initialTab = 'chat', initialQuery }: FetsAIPr
   const hasProcessedInitialQuery = useRef(false)
   const conversationId = useRef<string | null>(null)
 
-  useEffect(() => {
-    if (initialTab) setActiveTab(initialTab)
-  }, [initialTab]);
+  useEffect(() => { if (initialTab) setActiveTab(initialTab) }, [initialTab])
 
-  // Auto-submit query when initialQuery is provided
   useEffect(() => {
     if (initialQuery && !hasProcessedInitialQuery.current && profile) {
       hasProcessedInitialQuery.current = true
       setActiveTab('chat')
-      setTimeout(() => {
-        submitQuery(initialQuery)
-      }, 500)
+      setTimeout(() => submitQuery(initialQuery), 400)
     }
   }, [initialQuery, profile])
 
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, loading])
 
   const submitQuery = async (queryText: string) => {
     if (!queryText.trim()) return
-
-    const userMsg: ChatMessage = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: queryText,
-      timestamp: new Date()
-    }
-
-    setMessages(prev => [...prev, userMsg])
+    const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', content: queryText, timestamp: new Date() }
+    setMessages((p) => [...p, userMsg])
     setLoading(true)
-    setQuery('') // clear input early
-
+    setQuery('')
     try {
-      // The agent brain (Edge Function) handles context, memory, tools and
-      // autonomous actions server-side. Conversation continuity is preserved
-      // by passing back the conversationId it returns.
-      const result = await askFetsAgent(userMsg.content, {
-        conversationId: conversationId.current,
-      })
+      const result = await askFetsAgent(userMsg.content, { conversationId: conversationId.current })
       conversationId.current = result.conversationId
-
-      const aiMsg: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: result.response,
-        timestamp: new Date(),
-        actions: result.actions?.filter(a => a.ok) ?? []
-      }
-      setMessages(prev => [...prev, aiMsg])
-
-      const writes = (result.actions ?? []).filter(a => a.ok && a.name !== 'read_table' && a.name !== 'aggregate' && a.name !== 'search_memory')
-      if (writes.length > 0) {
-        toast.success(`FETS AI performed ${writes.length} action${writes.length > 1 ? 's' : ''}`)
-      }
+      setMessages((p) => [...p, {
+        id: (Date.now() + 1).toString(), role: 'assistant', content: result.response,
+        timestamp: new Date(), actions: result.actions?.filter((a) => a.ok) ?? [],
+      }])
+      const writes = (result.actions ?? []).filter((a) => a.ok && !['read_table', 'aggregate', 'search_memory'].includes(a.name))
+      if (writes.length) toast.success(`FETS AI performed ${writes.length} action${writes.length > 1 ? 's' : ''}`)
     } catch (error: any) {
-      toast.error(error?.message || 'AI Connection Failed')
-      const errorMsg: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: `Sorry, I hit an error: ${error?.message || 'connection failed'}. Please try again.`,
-        timestamp: new Date()
-      }
-      setMessages(prev => [...prev, errorMsg])
-    } finally {
-      setLoading(false)
-    }
+      toast.error(error?.message || 'AI connection failed')
+      setMessages((p) => [...p, {
+        id: (Date.now() + 1).toString(), role: 'assistant',
+        content: `Sorry, I hit an error: ${error?.message || 'connection failed'}. Please try again.`, timestamp: new Date(),
+      }])
+    } finally { setLoading(false) }
   }
 
-  const handleSend = async (e?: React.FormEvent) => {
-    e?.preventDefault()
-    if (!query.trim()) return
-    await submitQuery(query)
-  }
+  const handleSend = (e?: React.FormEvent) => { e?.preventDefault(); if (query.trim()) submitQuery(query) }
 
-  // Navigation tabs - Enhanced for FETS AI
-  const navTabs = [
-    { id: 'chat', label: 'AI Nexus', icon: BrainCircuit },
+  const tabs = [
+    { id: 'chat', label: 'Assistant', icon: Sparkles },
     { id: 'news', label: 'Broadcasts', icon: Newspaper },
     { id: 'exam-stats', label: 'Telemetry', icon: Activity },
-    { id: 'knowledge', label: 'Data Vault', icon: FileText },
+    { id: 'knowledge', label: 'Knowledge', icon: FileText },
     { id: 'settings', label: 'Control', icon: SettingsIcon },
-  ];
-
-  // Quick Prompts
-  const quickPrompts = [
-    { text: "Show all exams conducted", icon: Calendar },
-    { text: "How many candidates registered?", icon: Users },
-    { text: "Future exam schedule", icon: Calendar },
-    { text: "Past incidents summary", icon: AlertCircle },
   ]
 
   return (
-    <div className="min-h-screen bg-[#0A0D14] text-slate-200 lg:p-4 md:p-8 p-4 relative overflow-y-auto flex flex-col items-center">
-      {/* Ambient background glows */}
-      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-emerald-500/10 blur-[120px] rounded-full pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-cyan-500/10 blur-[120px] rounded-full pointer-events-none" />
+    <div className="min-h-screen w-full relative overflow-y-auto"
+      style={{ background: 'radial-gradient(1200px 600px at 15% -10%, #EEF0FF 0%, transparent 60%), radial-gradient(1000px 500px at 110% 10%, #FFF3E0 0%, transparent 55%), linear-gradient(180deg, #F6F7FB 0%, #EEF1F8 100%)' }}>
+      {/* aurora blobs */}
+      <motion.div aria-hidden className="pointer-events-none absolute -top-24 -left-20 w-[38rem] h-[38rem] rounded-full blur-[120px]"
+        style={{ background: 'conic-gradient(from 90deg, #818CF8, #C4B5FD, #F0ABFC, #FDE68A, #818CF8)', opacity: 0.25 }}
+        animate={{ rotate: 360 }} transition={{ duration: 60, repeat: Infinity, ease: 'linear' }} />
+      <div aria-hidden className="pointer-events-none absolute top-40 right-0 w-[28rem] h-[28rem] rounded-full blur-[120px]" style={{ background: '#A5B4FC', opacity: 0.18 }} />
 
-      <div className="max-w-[1400px] w-full z-10 flex flex-col h-full flex-1 md:mt-0 mt-14">
+      <div className="relative z-10 max-w-[1200px] mx-auto px-4 md:px-8 py-6 md:py-8 flex flex-col min-h-screen">
 
-        {/* --- HEADER --- */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex flex-col md:flex-row justify-between items-center mb-6 gap-6"
-        >
-          {/* AI Branding */}
-          <div className="flex items-center gap-4">
-            <div className="relative group">
-              <div className="absolute inset-0 bg-emerald-400 blur-xl opacity-20 group-hover:opacity-40 transition-opacity duration-500 rounded-full" />
-              <div className="w-16 h-16 bg-[#111621] border border-white/10 rounded-2xl flex items-center justify-center relative z-10 shadow-xl overflow-hidden">
-                <BrainCircuit size={32} className="text-emerald-400 transform group-hover:scale-110 transition-transform duration-500" />
-                <div className="absolute inset-0 bg-gradient-to-tr from-emerald-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+        {/* ---------- HEADER ---------- */}
+        <div className="relative rounded-[28px] overflow-hidden mb-5 shadow-[0_20px_60px_-20px_rgba(79,70,229,0.5)]">
+          <div className="absolute inset-0" style={{ background: 'linear-gradient(120deg, #4F46E5 0%, #7C3AED 45%, #C026D3 100%)' }} />
+          <motion.div aria-hidden className="absolute inset-0 opacity-40"
+            style={{ background: 'radial-gradient(600px 200px at 20% 0%, rgba(255,255,255,0.5), transparent), radial-gradient(500px 220px at 90% 120%, rgba(253,224,138,0.5), transparent)' }}
+            animate={{ opacity: [0.3, 0.55, 0.3] }} transition={{ duration: 6, repeat: Infinity }} />
+          <div className="relative px-5 md:px-8 py-6 md:py-7 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-white/15 backdrop-blur-md border border-white/25 grid place-items-center shadow-inner">
+                  <Bot size={30} className="text-white" />
+                </div>
+                <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-400 border-2 border-white shadow" />
+              </div>
+              <div>
+                <h1 className="text-white text-3xl md:text-4xl font-black tracking-tight leading-none">
+                  FETS <span className="text-transparent bg-clip-text" style={{ backgroundImage: 'linear-gradient(90deg,#FDE68A,#FCA5A5)' }}>AI</span>
+                </h1>
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" />
+                  <span className="text-white/80 text-[11px] font-semibold uppercase tracking-[0.18em]">Operations Copilot · Online</span>
+                </div>
               </div>
             </div>
-
-            <div>
-              <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-white m-0 leading-none">
-                FETS <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.3)] italic">AI</span>
-              </h1>
-              <div className="flex items-center gap-2 mt-2">
-                <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full shadow-[0_0_8px_#34d399] animate-pulse" />
-                <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-emerald-400/80">Intelligence Nexus</span>
-              </div>
+            <div className="hidden sm:flex items-center gap-2 bg-white/15 backdrop-blur-md border border-white/20 rounded-full px-4 py-2">
+              <Sparkles size={15} className="text-amber-200" />
+              <span className="text-white text-xs font-semibold">{profile?.full_name?.split(' ')[0] || 'Operator'}</span>
             </div>
           </div>
+        </div>
 
-          {/* Navigation Tabs */}
-          <div className="flex flex-wrap items-center justify-center gap-2 bg-[#111621]/80 backdrop-blur-md p-1.5 rounded-2xl border border-white/5 shadow-lg w-full md:w-auto overflow-x-auto">
-            {navTabs.map((tab) => {
-              const Icon = tab.icon
-              const isActive = activeTab === tab.id
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-[11px] uppercase tracking-wider transition-all duration-300 whitespace-nowrap ${isActive
-                      ? 'bg-slate-800 text-emerald-400 shadow-[0_4px_15px_rgba(0,0,0,0.3)] border border-emerald-500/20'
-                      : 'text-slate-500 hover:text-slate-300 hover:bg-white/5 border border-transparent'
-                    }`}
-                >
-                  <Icon size={16} className={isActive ? "drop-shadow-[0_0_8px_rgba(52,211,153,0.5)]" : ""} />
-                  <span>{tab.label}</span>
-                </button>
-              )
-            })}
-          </div>
-        </motion.div>
+        {/* ---------- TAB BAR ---------- */}
+        <div className="flex items-center gap-1 p-1.5 bg-white/70 backdrop-blur-xl border border-white/80 rounded-2xl shadow-sm mb-5 overflow-x-auto">
+          {tabs.map((tab) => {
+            const Icon = tab.icon
+            const active = activeTab === tab.id
+            return (
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                className="relative flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition-colors"
+                style={{ color: active ? '#fff' : '#475569' }}>
+                {active && (
+                  <motion.span layoutId="fetsai-tab" className="absolute inset-0 rounded-xl"
+                    style={{ background: 'linear-gradient(120deg,#4F46E5,#7C3AED)' }} transition={{ type: 'spring', stiffness: 400, damping: 32 }} />
+                )}
+                <Icon size={16} className="relative z-10" />
+                <span className="relative z-10">{tab.label}</span>
+              </button>
+            )
+          })}
+        </div>
 
-        {/* --- MAIN AREA --- */}
-        <AnimatePresence mode="wait">
-          {activeTab === 'chat' && (
-            <motion.div
-              key="chat"
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.98 }}
-              className="flex-1 flex flex-col bg-[#111621]/60 backdrop-blur-3xl border border-white/10 rounded-3xl shadow-2xl overflow-hidden relative mb-4"
-            >
-              {/* Top Accent Line */}
-              <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />
+        {/* ---------- CONTENT ---------- */}
+        <div className="flex-1 flex flex-col pb-6">
+          <AnimatePresence mode="wait">
+            {activeTab === 'chat' && (
+              <motion.div key="chat" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+                className="flex-1 flex flex-col bg-white/80 backdrop-blur-xl border border-white rounded-[24px] shadow-[0_20px_50px_-30px_rgba(30,41,59,0.5)] overflow-hidden">
 
-              {/* Messages Container */}
-              <div className="flex-1 overflow-y-auto p-4 md:p-8 flex flex-col gap-6" style={{ minHeight: '400px' }}>
-                {messages.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-center px-4 mt-8 md:mt-0">
-                    <div className="w-24 h-24 bg-[#1A2234] border border-white/5 rounded-[2rem] flex items-center justify-center mb-6 shadow-2xl relative group cursor-default">
-                      <div className="absolute inset-0 bg-emerald-500 blur-2xl opacity-10 group-hover:opacity-30 transition-opacity duration-700 rounded-full" />
-                      <BrainCircuit size={48} className="text-emerald-400/80 group-hover:scale-110 group-hover:text-emerald-300 transition-all duration-500" />
-                    </div>
-
-                    <h3 className="text-2xl font-black text-white mb-2 tracking-tight">System Online</h3>
-                    <p className="text-slate-400 text-sm max-w-md mx-auto mb-10 font-medium tracking-wide leading-relaxed">
-                      FETS AI processes all operational telemetry, candidates, and historical incident logs. Enter a query below.
-                    </p>
-
-                    {/* Prompts Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-2xl w-full">
-                      {quickPrompts.map((prompt, idx) => {
-                        const Icon = prompt.icon
-                        return (
-                          <button
-                            key={idx}
-                            onClick={() => { setQuery(prompt.text); submitQuery(prompt.text); }}
-                            className="flex items-center gap-4 p-4 bg-[#1A2234]/50 border border-white/5 hover:border-emerald-500/30 hover:bg-[#1A2234] rounded-2xl text-left transition-all duration-300 group"
-                          >
-                            <div className="p-2.5 bg-[#0A0D14] rounded-xl border border-white/5 group-hover:border-emerald-500/30 transition-colors">
-                              <Icon size={18} className="text-emerald-500" />
-                            </div>
-                            <span className="text-sm font-bold text-slate-300 group-hover:text-emerald-100 transition-colors">
-                              {prompt.text}
-                            </span>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                ) : (
-                  messages.map((msg) => (
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      key={msg.id}
-                      className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                    >
-                      <div className={`max-w-[95%] md:max-w-[75%] p-5 rounded-3xl ${msg.role === 'user'
-                          ? 'bg-gradient-to-br from-emerald-600/90 to-emerald-800/90 text-white shadow-[0_10px_30px_rgba(4,120,87,0.2)] rounded-tr-sm backdrop-blur-md border border-emerald-400/20'
-                          : 'bg-[#1A2234]/80 text-slate-200 border border-white/10 rounded-tl-sm shadow-xl backdrop-blur-md'
-                        }`}>
-                        {msg.role === 'assistant' && (
-                          <div className="flex items-center gap-2 mb-3 pb-3 border-b border-white/5">
-                            <Sparkles size={14} className="text-emerald-400" />
-                            <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest drop-shadow-[0_0_5px_rgba(52,211,153,0.5)]">
-                              FETS AI
-                            </span>
-                          </div>
-                        )}
-                        <p className="text-[14px] md:text-[15px] leading-relaxed whitespace-pre-wrap font-medium">
-                          {msg.content}
-                        </p>
-                        {msg.role === 'assistant' && msg.actions && msg.actions.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5 mt-4">
-                            {msg.actions.map((a, i) => (
-                              <span
-                                key={i}
-                                className="text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-300 border border-emerald-500/20"
-                              >
-                                {a.name.replace(/_/g, ' ')}
+                <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-5" style={{ minHeight: 420 }}>
+                  {messages.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-center py-10">
+                      <div className="w-20 h-20 rounded-3xl grid place-items-center mb-5 shadow-lg"
+                        style={{ background: 'linear-gradient(135deg,#4F46E5,#C026D3)' }}>
+                        <Sparkles size={36} className="text-white" />
+                      </div>
+                      <h3 className="text-2xl font-black text-slate-900 mb-1.5">How can I help you run FETS today?</h3>
+                      <p className="text-slate-500 text-sm max-w-md mb-8">
+                        Ask about candidates, sessions, staff and incidents — or tell me to take an action. I read live data and remember what matters.
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-2xl">
+                        {QUICK_PROMPTS.map((p, i) => {
+                          const Icon = p.icon
+                          return (
+                            <button key={i} onClick={() => submitQuery(p.text)}
+                              className="group flex items-center gap-3 p-4 bg-white border border-slate-200 hover:border-indigo-300 hover:shadow-md rounded-2xl text-left transition-all">
+                              <span className="w-9 h-9 rounded-xl grid place-items-center bg-indigo-50 group-hover:bg-indigo-100 transition-colors">
+                                <Icon size={17} className="text-indigo-600" />
                               </span>
-                            ))}
+                              <span className="text-sm font-semibold text-slate-700 group-hover:text-slate-900">{p.text}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    messages.map((msg) => (
+                      <motion.div key={msg.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                        className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        {msg.role === 'assistant' && (
+                          <div className="w-9 h-9 rounded-xl grid place-items-center shrink-0 shadow" style={{ background: 'linear-gradient(135deg,#4F46E5,#C026D3)' }}>
+                            <Bot size={18} className="text-white" />
                           </div>
                         )}
-                        <div className={`text-[10px] mt-4 font-bold uppercase flex items-center gap-2 ${msg.role === 'user' ? 'text-emerald-200/70 justify-end' : 'text-slate-500'
-                          }`}>
-                          {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        <div className={`max-w-[85%] md:max-w-[76%] ${msg.role === 'user' ? 'order-1' : ''}`}>
+                          <div className={msg.role === 'user'
+                            ? 'px-4 py-3 rounded-2xl rounded-tr-md text-white shadow-md'
+                            : 'px-4 py-3 rounded-2xl rounded-tl-md bg-white border border-slate-200 shadow-sm'}
+                            style={msg.role === 'user' ? { background: 'linear-gradient(135deg,#4F46E5,#7C3AED)' } : undefined}>
+                            {msg.role === 'user'
+                              ? <p className="text-[15px] leading-relaxed whitespace-pre-wrap font-medium">{msg.content}</p>
+                              : <div className="text-[15px]"><Markdown content={msg.content} /></div>}
+                          </div>
+                          {msg.role === 'assistant' && msg.actions && msg.actions.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mt-2">
+                              {msg.actions.map((a, i) => (
+                                <span key={i} className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-100">
+                                  {a.name.replace(/_/g, ' ')}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          <div className={`text-[10px] mt-1.5 font-semibold ${msg.role === 'user' ? 'text-right text-slate-400' : 'text-slate-400'}`}>
+                            {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </div>
                         </div>
+                      </motion.div>
+                    ))
+                  )}
+
+                  {loading && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex gap-3">
+                      <div className="w-9 h-9 rounded-xl grid place-items-center shrink-0 shadow" style={{ background: 'linear-gradient(135deg,#4F46E5,#C026D3)' }}>
+                        <Bot size={18} className="text-white" />
+                      </div>
+                      <div className="px-5 py-4 rounded-2xl rounded-tl-md bg-white border border-slate-200 shadow-sm flex items-center gap-1.5">
+                        {[0, 0.15, 0.3].map((d) => (
+                          <span key={d} className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: `${d}s` }} />
+                        ))}
                       </div>
                     </motion.div>
-                  ))
-                )}
+                  )}
+                  <div ref={chatEndRef} />
+                </div>
 
-                {loading && (
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start">
-                    <div className="bg-[#1A2234]/80 border border-white/10 px-6 py-5 rounded-3xl rounded-tl-sm shadow-xl backdrop-blur-md flex items-center gap-4">
-                      <div className="flex gap-1.5">
-                        <div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce shadow-[0_0_8px_#34d399]" style={{ animationDelay: '0s' }} />
-                        <div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce shadow-[0_0_8px_#34d399]" style={{ animationDelay: '0.15s' }} />
-                        <div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce shadow-[0_0_8px_#34d399]" style={{ animationDelay: '0.3s' }} />
-                      </div>
-                      <span className="text-[10px] text-emerald-400/80 font-bold uppercase tracking-widest">Processing</span>
-                    </div>
-                  </motion.div>
-                )}
-                <div ref={chatEndRef} />
-              </div>
+                {/* composer */}
+                <div className="p-3 md:p-4 border-t border-slate-100 bg-white/60">
+                  <form onSubmit={handleSend} className="flex items-end gap-2 bg-white border border-slate-200 focus-within:border-indigo-400 focus-within:ring-4 focus-within:ring-indigo-100 rounded-2xl p-2 shadow-sm transition-all">
+                    <input value={query} onChange={(e) => setQuery(e.target.value)} disabled={loading}
+                      placeholder="Message FETS AI…  (e.g. 'log an incident for the Cochin AC outage')"
+                      className="flex-1 bg-transparent px-3 py-2.5 text-[15px] text-slate-800 placeholder-slate-400 focus:outline-none" />
+                    <button type="submit" disabled={!query.trim() || loading}
+                      className="w-11 h-11 rounded-xl grid place-items-center text-white shadow-md transition-all disabled:opacity-30 hover:brightness-110"
+                      style={{ background: 'linear-gradient(135deg,#4F46E5,#7C3AED)' }}>
+                      {loading ? <Activity size={19} className="animate-spin" /> : <ArrowUp size={19} />}
+                    </button>
+                  </form>
+                </div>
+              </motion.div>
+            )}
 
-              {/* Input Area */}
-              <div className="p-4 md:p-6 bg-[#0A0D14]/80 border-t border-white/5 backdrop-blur-xl">
-                <form onSubmit={handleSend} className="relative flex items-center">
-                  <div className="absolute left-6 text-slate-500">
-                    <Search size={20} />
-                  </div>
-                  <input
-                    type="text"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Provide query parameters..."
-                    disabled={loading}
-                    className="w-full bg-[#1A2234]/50 border border-white/10 text-white placeholder-slate-500 rounded-2xl pl-14 pr-20 py-5 font-medium focus:outline-none focus:border-emerald-500/50 focus:bg-[#1A2234] transition-all shadow-inner"
-                  />
-                  <button
-                    type="submit"
-                    disabled={!query.trim() || loading}
-                    className="absolute right-3 bg-emerald-500 hover:bg-emerald-400 text-[#0A0D14] p-3 rounded-xl transition-all disabled:opacity-30 disabled:hover:bg-emerald-500 flex items-center justify-center shadow-[0_0_20px_rgba(52,211,153,0.2)] disabled:shadow-none"
-                  >
-                    {loading ? <Activity size={20} className="animate-spin" /> : <Send size={20} className="ml-1" />}
-                  </button>
-                </form>
-              </div>
-            </motion.div>
-          )}
-
-          {/* Broadcasts Tab */}
-          {activeTab === 'news' && (
-            <motion.div
-              key="news"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="flex-1 bg-[#111621]/60 backdrop-blur-3xl border border-white/10 rounded-3xl overflow-hidden relative shadow-2xl mb-4"
-            >
-              <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" />
-              <div className="p-4 md:p-8 h-full overflow-y-auto">
+            {activeTab === 'news' && (
+              <motion.div key="news" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+                className="flex-1 bg-white/85 backdrop-blur-xl border border-white rounded-[24px] shadow-sm overflow-hidden p-4 md:p-6">
                 <NewsManager />
-              </div>
-            </motion.div>
-          )}
+              </motion.div>
+            )}
 
-          {/* Stats Tab */}
-          {activeTab === 'exam-stats' && (
-            <motion.div
-              key="exam-stats"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="flex-1 bg-[#111621]/60 backdrop-blur-3xl border border-white/10 rounded-3xl overflow-hidden relative shadow-2xl p-4 md:p-8 mb-4 overflow-y-auto"
-            >
-              <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-purple-500/50 to-transparent" />
-              <TelemetryPanel />
-            </motion.div>
-          )}
+            {activeTab === 'exam-stats' && (
+              <motion.div key="stats" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+                className="flex-1 bg-white/85 backdrop-blur-xl border border-white rounded-[24px] shadow-sm p-4 md:p-6">
+                <TelemetryPanel />
+              </motion.div>
+            )}
 
-          {/* Knowledge Tab */}
-          {activeTab === 'knowledge' && (
-            <motion.div
-              key="knowledge"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="flex-1 bg-[#111621]/60 backdrop-blur-3xl border border-white/10 rounded-3xl overflow-hidden relative shadow-2xl p-4 md:p-8 mb-4 overflow-y-auto"
-            >
-              <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-amber-500/50 to-transparent" />
-              <DataVaultPanel />
-            </motion.div>
-          )}
+            {activeTab === 'knowledge' && (
+              <motion.div key="vault" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+                className="flex-1 bg-white/85 backdrop-blur-xl border border-white rounded-[24px] shadow-sm p-4 md:p-6">
+                <DataVaultPanel />
+              </motion.div>
+            )}
 
-          {/* Control / Settings Tab */}
-          {activeTab === 'settings' && (
-            <motion.div
-              key="settings"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="flex-1 bg-[#111621]/60 backdrop-blur-3xl border border-white/10 rounded-3xl overflow-hidden relative shadow-2xl p-4 md:p-8 mb-4 overflow-y-auto"
-            >
-              <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-indigo-500/50 to-transparent" />
-              <SettingsPanel isAdmin={!!isAdmin} />
-            </motion.div>
-          )}
-
-        </AnimatePresence>
+            {activeTab === 'settings' && (
+              <motion.div key="settings" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+                className="flex-1 bg-white/85 backdrop-blur-xl border border-white rounded-[24px] shadow-sm p-4 md:p-6">
+                <SettingsPanel isAdmin={!!isAdmin} />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
     </div>
   )

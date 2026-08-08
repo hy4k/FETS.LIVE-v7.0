@@ -186,7 +186,11 @@ function AppContent() {
       if (activeTab === 'fets-calendar-demo') return isMithun ? <FetsCalendar /> : <MobileHome setActiveTab={setActiveTab} profile={profile} />;
       if (activeTab === 'client-portal') return isMithun ? <ClientPortal /> : <MobileHome setActiveTab={setActiveTab} profile={profile} />;
       if (activeTab === 'candidate-tracker') return <MobileRegister />;
-      if (activeTab === 'fets-intelligence') return <MobileAiChat />;
+      if (activeTab === 'fets-intelligence') return (
+        <Suspense fallback={<PageLoadingFallback pageName="FETS AI" />}>
+          <FetsIntelligence initialQuery={aiQuery} />
+        </Suspense>
+      );
       if (activeTab === 'incident-log') return <MobileIncidentManager />;
       if (activeTab === 'access-hub') return <AccessHubPage />;
       if (activeTab === 'user-management') return <UserManagement onNavigate={setActiveTab} />;
