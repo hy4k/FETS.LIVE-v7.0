@@ -73,7 +73,22 @@ its reply and are logged in `ai_agent_actions`.
 | `max_tool_iterations` | reasoning-loop cap (default 8) |
 | `allowed_tools` | JSON map of role → allowed tool names (`"*"` = all) |
 
-**Emergency stop:** `update ai_settings set kill_switch = true where id = 1;`
+**In-app control (admins):** open **FETS AI → Control tab** to toggle autonomous
+writes (kill-switch) and switch the model provider — no SQL needed.
+
+**Emergency stop (SQL):** `update ai_settings set kill_switch = true where id = 1;`
+
+## FETS AI in the UI
+
+- **Prominent entry:** a **FETS AI** button sits in the top navigation bar on
+  every page (desktop + mobile), so it's always one click away from the landing.
+- **Tabs inside FETS AI:**
+  - **AI Nexus** — chat with the agent (reads data, takes actions, remembers).
+  - **Broadcasts** — news/announcements.
+  - **Telemetry** — live usage stats (queries, actions, writes, memories learned).
+  - **Data Vault** — browse what the agent has **learned** (memory) and **teach it**
+    new external knowledge (SOPs, policies) that it loads into context.
+  - **Control** (admins) — provider toggle + autonomous-writes kill-switch.
 
 ## Safety notes
 

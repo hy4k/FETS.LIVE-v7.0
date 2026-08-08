@@ -49,7 +49,6 @@ const AccessHubPage = lazy(() => import('./components/AccessHub').then(module =>
 const CommandCentre = lazy(() => import('./components/CommandCentreFinal'))
 const RedesignShell = lazy(() => import('./redesign/RedesignShell'))
 const CandidateTracker = lazy(() => import('./components/CandidateTrackerPremium').then(module => ({ default: module.CandidateTrackerPremium })))
-const MithunWorkbench = lazy(() => import('./components/MithunWorkbench').then(module => ({ default: module.MithunWorkbench })))
 const StaffManagement = lazy(() => import('./components/StaffManagement').then(module => ({ default: module.StaffManagement })))
 const FetsVault = lazy(() => import('./components/FetsVault').then(module => ({ default: module.FetsVault })))
 const FetsIntelligence = lazy(() => import('./components/FetsIntelligence').then(module => ({ default: module.FetsIntelligence })))

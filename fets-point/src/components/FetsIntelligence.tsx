@@ -7,7 +7,7 @@ import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Newspaper, Send, Sparkles, Activity,
-  FileText, TrendingUp, Search,
+  FileText, Search, Settings as SettingsIcon,
   AlertCircle, Users, Calendar, BrainCircuit
 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
@@ -16,6 +16,9 @@ import { askFetsAgent, type AgentAction } from '../lib/fetsAgent'
 
 // Feature Components
 import { NewsManager } from './NewsManager'
+import { TelemetryPanel } from './fetsai/TelemetryPanel'
+import { DataVaultPanel } from './fetsai/DataVaultPanel'
+import { SettingsPanel } from './fetsai/SettingsPanel'
 
 interface ChatMessage {
   id: string
@@ -32,6 +35,7 @@ interface FetsAIProps {
 
 export function FetsIntelligence({ initialTab = 'chat', initialQuery }: FetsAIProps) {
   const { profile } = useAuth()
+  const isAdmin = profile?.role === 'super_admin' || profile?.role === 'admin'
   const [activeTab, setActiveTab] = useState<string>(initialTab)
 
   // Chat State
@@ -123,6 +127,7 @@ export function FetsIntelligence({ initialTab = 'chat', initialQuery }: FetsAIPr
     { id: 'news', label: 'Broadcasts', icon: Newspaper },
     { id: 'exam-stats', label: 'Telemetry', icon: Activity },
     { id: 'knowledge', label: 'Data Vault', icon: FileText },
+    { id: 'settings', label: 'Control', icon: SettingsIcon },
   ];
 
   // Quick Prompts
@@ -346,19 +351,10 @@ export function FetsIntelligence({ initialTab = 'chat', initialQuery }: FetsAIPr
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="flex-1 bg-[#111621]/60 backdrop-blur-3xl border border-white/10 rounded-3xl overflow-hidden relative shadow-2xl flex items-center justify-center p-8 mb-4"
+              className="flex-1 bg-[#111621]/60 backdrop-blur-3xl border border-white/10 rounded-3xl overflow-hidden relative shadow-2xl p-4 md:p-8 mb-4 overflow-y-auto"
             >
               <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-purple-500/50 to-transparent" />
-              <div className="text-center max-w-md">
-                <div className="w-24 h-24 bg-[#1A2234] border border-white/5 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-xl relative">
-                  <div className="absolute inset-0 bg-purple-500 blur-2xl opacity-10 rounded-3xl" />
-                  <Activity size={40} className="text-purple-400 relative z-10" />
-                </div>
-                <h2 className="text-3xl font-black text-white mb-4 tracking-tight">Telemetry Offline</h2>
-                <p className="text-slate-400 font-medium leading-relaxed">
-                  Direct dashboard telemetry is currently offline. Please use the AI Nexus terminal to query exam statistics, candidate counts, and analytical summaries.
-                </p>
-              </div>
+              <TelemetryPanel />
             </motion.div>
           )}
 
@@ -369,19 +365,24 @@ export function FetsIntelligence({ initialTab = 'chat', initialQuery }: FetsAIPr
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="flex-1 bg-[#111621]/60 backdrop-blur-3xl border border-white/10 rounded-3xl overflow-hidden relative shadow-2xl flex items-center justify-center p-8 mb-4"
+              className="flex-1 bg-[#111621]/60 backdrop-blur-3xl border border-white/10 rounded-3xl overflow-hidden relative shadow-2xl p-4 md:p-8 mb-4 overflow-y-auto"
             >
               <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-amber-500/50 to-transparent" />
-              <div className="text-center max-w-md">
-                <div className="w-24 h-24 bg-[#1A2234] border border-white/5 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-xl relative">
-                  <div className="absolute inset-0 bg-amber-500 blur-2xl opacity-10 rounded-3xl" />
-                  <FileText size={40} className="text-amber-400 relative z-10" />
-                </div>
-                <h2 className="text-3xl font-black text-white mb-4 tracking-tight">Vault Secured</h2>
-                <p className="text-slate-400 font-medium leading-relaxed">
-                  Access to raw records is restricted. To cross-reference documentation or historical incidents, initiate a query through the FETS AI terminal.
-                </p>
-              </div>
+              <DataVaultPanel />
+            </motion.div>
+          )}
+
+          {/* Control / Settings Tab */}
+          {activeTab === 'settings' && (
+            <motion.div
+              key="settings"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="flex-1 bg-[#111621]/60 backdrop-blur-3xl border border-white/10 rounded-3xl overflow-hidden relative shadow-2xl p-4 md:p-8 mb-4 overflow-y-auto"
+            >
+              <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-indigo-500/50 to-transparent" />
+              <SettingsPanel isAdmin={!!isAdmin} />
             </motion.div>
           )}
 
