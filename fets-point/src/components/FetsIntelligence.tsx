@@ -12,8 +12,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { toast } from 'react-hot-toast'
-import { askClaude } from '../lib/anthropic'
-import { conversationService, contextBuilder } from '../lib/conversationService'
+import { askFetsAgent, type AgentAction } from '../lib/fetsAgent'
 
 // Feature Components
 import { NewsManager } from './NewsManager'
@@ -23,6 +22,7 @@ interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   timestamp: Date
+  actions?: AgentAction[]
 }
 
 interface FetsAIProps {
@@ -40,6 +40,7 @@ export function FetsIntelligence({ initialTab = 'chat', initialQuery }: FetsAIPr
   const [loading, setLoading] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const hasProcessedInitialQuery = useRef(false)
+  const conversationId = useRef<string | null>(null)
 
   useEffect(() => {
     if (initialTab) setActiveTab(initialTab)
@@ -74,41 +75,34 @@ export function FetsIntelligence({ initialTab = 'chat', initialQuery }: FetsAIPr
     setLoading(true)
     setQuery('') // clear input early
 
-    const startTime = Date.now()
-
     try {
-      // Build context with conversation history and knowledge
-      await contextBuilder.buildContext(queryText)
-
-      const response = await askClaude(userMsg.content, profile)
+      // The agent brain (Edge Function) handles context, memory, tools and
+      // autonomous actions server-side. Conversation continuity is preserved
+      // by passing back the conversationId it returns.
+      const result = await askFetsAgent(userMsg.content, {
+        conversationId: conversationId.current,
+      })
+      conversationId.current = result.conversationId
 
       const aiMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: response,
-        timestamp: new Date()
+        content: result.response,
+        timestamp: new Date(),
+        actions: result.actions?.filter(a => a.ok) ?? []
       }
       setMessages(prev => [...prev, aiMsg])
 
-      // Store in database for persistent memory
-      const executionTime = Date.now() - startTime
-      await conversationService.logQuery(
-        queryText,
-        response.substring(0, 200),
-        ['candidates', 'sessions', 'incidents'],
-        executionTime,
-        0
-      )
-
-      // Extract and store insights
-      await contextBuilder.extractAndStoreInsights(queryText, response, [])
-
-    } catch (error) {
-      toast.error('AI Connection Failed')
+      const writes = (result.actions ?? []).filter(a => a.ok && a.name !== 'read_table' && a.name !== 'aggregate' && a.name !== 'search_memory')
+      if (writes.length > 0) {
+        toast.success(`FETS AI performed ${writes.length} action${writes.length > 1 ? 's' : ''}`)
+      }
+    } catch (error: any) {
+      toast.error(error?.message || 'AI Connection Failed')
       const errorMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: "Sorry, I'm having trouble connecting right now. Please try again.",
+        content: `Sorry, I hit an error: ${error?.message || 'connection failed'}. Please try again.`,
         timestamp: new Date()
       }
       setMessages(prev => [...prev, errorMsg])
@@ -267,6 +261,18 @@ export function FetsIntelligence({ initialTab = 'chat', initialQuery }: FetsAIPr
                         <p className="text-[14px] md:text-[15px] leading-relaxed whitespace-pre-wrap font-medium">
                           {msg.content}
                         </p>
+                        {msg.role === 'assistant' && msg.actions && msg.actions.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 mt-4">
+                            {msg.actions.map((a, i) => (
+                              <span
+                                key={i}
+                                className="text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-300 border border-emerald-500/20"
+                              >
+                                {a.name.replace(/_/g, ' ')}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                         <div className={`text-[10px] mt-4 font-bold uppercase flex items-center gap-2 ${msg.role === 'user' ? 'text-emerald-200/70 justify-end' : 'text-slate-500'
                           }`}>
                           {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

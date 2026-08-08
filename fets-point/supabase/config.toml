@@ -51,3 +51,8 @@ additional_redirect_urls = ["https://fets.live/gbp", "http://localhost:5173/gbp"
 
 [functions.gbp-proxy]
 verify_jwt = false
+
+# FETS AI agent brain — requires an authenticated caller so the agent can
+# resolve the operator's role and enforce the per-role tool allowlist.
+[functions.fets-ai]
+verify_jwt = true

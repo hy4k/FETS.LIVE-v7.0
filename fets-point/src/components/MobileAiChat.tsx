@@ -10,6 +10,7 @@ import { useAuth } from '../hooks/useAuth';
 import { toast } from 'react-hot-toast';
 import { format } from 'date-fns';
 import { supabase } from '../lib/supabase';
+import { askFetsAgent } from '../lib/fetsAgent';
 
 interface Message {
    id: string;
@@ -30,6 +31,7 @@ export function MobileAiChat() {
    const [isPairing, setIsPairing] = useState(false);
 
    const scrollRef = useRef<HTMLDivElement>(null);
+   const conversationId = useRef<string | null>(null);
 
    useEffect(() => {
       if (scrollRef.current) {
@@ -48,20 +50,34 @@ export function MobileAiChat() {
       };
 
       setMessages(prev => [...prev, userMsg]);
+      const outgoing = input;
       setInput('');
       setIsTyping(true);
 
-      // Simulate AI response for now
-      setTimeout(() => {
+      try {
+         const result = await askFetsAgent(outgoing, { conversationId: conversationId.current });
+         conversationId.current = result.conversationId;
          const aiMsg: Message = {
             id: (Date.now() + 1).toString(),
-            text: "I've analyzed your request. I am currently operating in high-performance mode and ready to help you manage the FETS operational grid.",
+            text: result.response,
             sender: 'ai',
             timestamp: new Date()
          };
          setMessages(prev => [...prev, aiMsg]);
+
+         const writes = (result.actions ?? []).filter(a => a.ok && !['read_table', 'aggregate', 'search_memory'].includes(a.name));
+         if (writes.length > 0) toast.success(`Performed ${writes.length} action${writes.length > 1 ? 's' : ''}`);
+      } catch (error: any) {
+         toast.error(error?.message || 'AI connection failed');
+         setMessages(prev => [...prev, {
+            id: (Date.now() + 1).toString(),
+            text: `Sorry, I hit an error: ${error?.message || 'connection failed'}.`,
+            sender: 'ai',
+            timestamp: new Date()
+         }]);
+      } finally {
          setIsTyping(false);
-      }, 1500);
+      }
    };
 
    const generatePairingCode = () => {
