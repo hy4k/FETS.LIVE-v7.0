@@ -4,9 +4,14 @@ name: Deploy to VPS (fets.live)
 # (build + rsync into the nginx web root). The host nginx serves fets.live
 # from a static root, so this — not Coolify — is what publishes the site.
 #
+# If the server has been rebuilt from scratch, run
+# scripts/vps/restore-fets-live.sh on it once first — that installs nginx,
+# creates the web root and issues the TLS certificate. This workflow only
+# handles subsequent code updates.
+#
 # One-time setup — add these repo secrets (Settings → Secrets → Actions):
-#   VPS_HOST     e.g. 72.61.171.192   (or coolify.fets.in)
-#   VPS_USER     e.g. root
+#   VPS_HOST     the server's IP or hostname
+#   VPS_USER     a deploy user (avoid root)
 #   VPS_SSH_KEY  a private SSH key whose public key is in the server's
 #                ~/.ssh/authorized_keys
 #
@@ -35,9 +40,17 @@ jobs:
           command_timeout: 15m
           script: |
             set -e
-            cd ~/FETS.LIVE-v6.0 || git clone https://github.com/hy4k/FETS.LIVE-v6.0.git ~/FETS.LIVE-v6.0
-            cd ~/FETS.LIVE-v6.0
-            git pull
+            # Checkout lives at /opt/fets.live — the same path the bare-metal
+            # restore script (scripts/vps/restore-fets-live.sh) uses, so a
+            # rebuilt server and this workflow stay on one copy of the source.
+            SRC=/opt/fets.live
+            if [ ! -d "$SRC/.git" ]; then
+              git clone https://github.com/hy4k/FETS.LIVE-v7.0.git "$SRC"
+            fi
+            cd "$SRC"
+            git remote set-url origin https://github.com/hy4k/FETS.LIVE-v7.0.git
+            git fetch origin main --prune
+            git checkout -B main origin/main
             bash deploy.sh
 
       - name: Note when skipped
