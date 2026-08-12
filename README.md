@@ -24,6 +24,10 @@ bash scripts/vps/restore-fets-live.sh
 bash deploy.sh
 ```
 
+`scripts/vps/` also holds restore scripts for the other sites on the same
+server (e.g. `restore-costudy.sh`) and the shared `lib/common.sh` they build
+on.
+
 ## Documentation
 
 Key documentation files can be found in the `docs/` directory:

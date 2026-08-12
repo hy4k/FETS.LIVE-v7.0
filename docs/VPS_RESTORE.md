@@ -177,19 +177,117 @@ chmod 440 /etc/sudoers.d/deploy
 
 ---
 
+## costudy
+
+Second site restored. Unlike fets.live it has **two** pieces and it **needs
+secrets**:
+
+| Domain | What | Source |
+| --- | --- | --- |
+| `costudy.in`, `www.costudy.in` | static SPA (Vite/React) | `hy4k/costudy` |
+| `api.costudy.in` | Express API on port 8080 | `hy4k/costudy-api` |
+
+All three names already resolve to the VPS, so DNS needs no changes.
+
+```bash
+bash scripts/vps/restore-costudy.sh          # add --take-ports if Coolify holds :80
+```
+
+### It will stop on the first run — that's intended
+
+The frontend bakes its keys into the public bundle at build time, and the API
+reads its own at boot. None of them are in the git repos (correctly). The first
+run writes a template to **`/etc/costudy/costudy.env`** and exits so you can
+fill it in:
+
+| Key | Where to get it | Goes where |
+| --- | --- | --- |
+| `VITE_SUPABASE_ANON_KEY` | Supabase → Project Settings → API → `anon` | browser bundle |
+| `GEMINI_API_KEY` | Google AI Studio | browser bundle |
+| `VITE_RAZORPAY_KEY_ID` | Razorpay dashboard (only if payments are live) | browser bundle |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → same page → `service_role` | server only |
+| `ANTHROPIC_API_KEY` | console.anthropic.com | server only |
+| `OPENAI_API_KEY` | platform.openai.com | server only |
+
+The Supabase project is `avtjxcdcjbwmggdimkgh` — a different project from
+fets.live's, so its keys are separate.
+
+The file is `chmod 600`, root-only, and stays on the server. systemd reads it as
+root before dropping to the `costudy` service account, so the service user never
+needs access to it. Anything in the top group is compiled into public JavaScript
+— **never put the service-role key or a Razorpay secret there.**
+
+Re-run the script once the file is filled in. It lists every missing key at
+once rather than one per run.
+
+### How it runs
+
+The API runs as a systemd unit, `costudy-api.service`, as an unprivileged
+`costudy` user with `Restart=always`:
+
+```bash
+systemctl status costudy-api
+journalctl -u costudy-api -f
+systemctl restart costudy-api
+curl https://api.costudy.in/health     # {"ok":true,...}
+```
+
+nginx reverse-proxies `api.costudy.in` → `127.0.0.1:8080` with 300s read/send
+timeouts and buffering off, because the AI endpoints stream for a while and the
+60s default would cut long completions off mid-response.
+
+The API's CORS allow-list is hardcoded in `server.js` (`costudy.in`,
+`www.costudy.in`, `localhost:5173`). If you add a domain, edit it there.
+
+### Things worth knowing about this codebase
+
+Found while restoring; none block the restore:
+
+- **`package-lock.json` is out of sync with `package.json`** in `hy4k/costudy`
+  (missing `d3-path`), so `npm ci` fails outright. The script falls back to
+  `npm install` and warns. The repo also carries a `bun.lock`, which is
+  probably the lockfile that is actually maintained. Worth regenerating one and
+  deleting the other.
+- **`NODE_ENV=production` breaks the frontend build** if it leaks into the
+  build environment — npm then skips devDependencies, where `vite` lives, and
+  the build dies with `vite: not found`. The script passes `--include=dev` to
+  defend against this.
+- **`VITE_RAZORPAY_KEY_SECRET` is read in `services/paymentService.ts`** but
+  never used. Nothing leaks today, but the line is a landmine: setting that
+  variable would compile a payment secret into public JavaScript. Delete it.
+- **The payment path is currently dead code.** `create-order`, `Razorpay` and
+  `purchaseSubscription` are all tree-shaken out of the production bundle, so
+  `SubscriptionModal` is not reachable from the app today. Setting
+  `VITE_COSTUDY_API_URL` is still correct — it just has no effect yet.
+- **`index.html` links `/index.css`, which does not exist in the repo.** Styling
+  comes from the Tailwind CDN, so the page renders, but that request is a
+  permanent miss. Either add the file or drop the `<link>`.
+- **The page depends on `cdn.tailwindcss.com` at runtime**, so the site is not
+  self-contained and will not render correctly if that CDN is blocked.
+- `COSTUDY_CONFIG.apiBase` points at `https://api.costudy.cloud/v1`, a domain
+  that no longer resolves. It is tree-shaken out of the bundle and unused —
+  auth goes to Supabase directly — but it is misleading to leave in the source.
+
+---
+
 ## Restoring the other sites
 
-The same shape works for any other static site that was on this VPS: point the
-script at its repo and domain, or copy the vhost pattern from
-`scripts/vps/restore-fets-live.sh`. Restore them one at a time and confirm each
-is live before starting the next.
+The same shape works for any other site that was on this VPS. `scripts/vps/`
+now has a small library, `lib/common.sh`, holding the parts every site needs —
+package and Node install, the port-80 conflict check, static and reverse-proxy
+vhost writers, certificate issuance, and verification. A new site is usually a
+short script on top of it; `restore-costudy.sh` is the fuller example, since it
+covers both a static frontend and a backend service.
 
-Things to check per site before you begin:
+Restore them one at a time and confirm each is live before starting the next.
+
+Check per site before you begin:
 
 - Does DNS still point at this server? (`getent hosts <domain>`)
-- Is it static, or does it need a runtime/database that also has to be rebuilt?
-- Was it deployed through Coolify? If so, decide whether to rebuild it in
-  Coolify or move it to nginx alongside fets.live.
+- Is it static, or does it need a runtime, a database, or secrets?
+- Which secrets, and where will they come from? They are not in the repos.
+- Was it deployed through Coolify? If so, decide whether to rebuild it there or
+  move it to nginx alongside the rest.
 
 ---
 
