@@ -80,9 +80,19 @@ conn.on('ready', () => {
           console.error(`Encountered ${errors.length} errors:`, errors);
           process.exit(1);
         } else {
-          console.log('✅ Deployment successful!');
-          conn.end();
-          process.exit(0);
+          console.log('Static web root updated. Now rebuilding Docker container in /opt/apps/fets-live ...');
+          conn.exec('cd /opt/apps/fets-live && git pull origin main && docker compose build --no-cache app && docker compose up -d app', (err, stream) => {
+            if (err) {
+              console.error('Docker rebuild error:', err);
+              conn.end();
+              process.exit(1);
+            }
+            stream.on('close', (code) => {
+              console.log(`✅ Docker container rebuilt and restarted (exit ${code})!`);
+              conn.end();
+              process.exit(code);
+            }).on('data', (d) => process.stdout.write(d)).stderr.on('data', (d) => process.stderr.write(d));
+          });
         }
         return;
       }
