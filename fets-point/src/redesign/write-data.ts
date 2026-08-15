@@ -1198,7 +1198,7 @@ export async function dbCountPendingHandovers(staffName: string) {
       .from("shift_handovers")
       .select("id", { count: "exact", head: true })
       .eq("status", "pending")
-      .contains("incoming_staff", [staffName])
+      .filter("incoming_staff", "cs", JSON.stringify([staffName]))
       .gt("expires_at", new Date().toISOString());
     if (error) throw error;
     return count || 0;
