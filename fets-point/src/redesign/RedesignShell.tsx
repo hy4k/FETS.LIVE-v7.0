@@ -10,7 +10,7 @@
 */
 import React from "react";
 import "./liquid-glass.css";
-import { loadLiveData, ensureMonth, loadLeaveRequests, loadOtClaims } from "./live-data";
+import { loadLiveData, ensureMonth, loadLeaveRequests, loadOtClaims, loadApplications } from "./live-data";
 import { supabase } from "../lib/supabase";
 import * as DB from "./write-data";
 import * as ACT from "./actionables-data";
@@ -1356,9 +1356,86 @@ function VaultCard({ it, onEdit, onDelete }) {
   );
 }
 
+/* ---------- vault export modal (password-gated) ---------- */
+function VaultExportModal({ items, onClose }) {
+  const [pw, setPw] = React.useState("");
+  const [error, setError] = React.useState(false);
+  const [loading, setLoading] = React.useState(false);
+  const inputRef = React.useRef(null);
+  React.useEffect(() => { setTimeout(() => inputRef.current?.focus(), 120); }, []);
+  React.useEffect(() => {
+    const k = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", k);
+    return () => window.removeEventListener("keydown", k);
+  }, []);
+
+  const doExport = async () => {
+    setError(false);
+    setLoading(true);
+    // Option A: hardcoded password only
+    const correctPw = "FETS2026";
+    setLoading(false);
+    if (pw !== correctPw) {
+      setError(true);
+      toast("Incorrect password — export denied", "alert");
+      return;
+    }
+    // Build export payload (sanitised)
+    const payload = items.map((it) => ({
+      vendor: it.vendor || "",
+      label: it.label || "",
+      url: it.url || "",
+      username: it.username || "",
+      password: it.password || "",
+      notes: it.notes || "",
+    }));
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `fets-vault-export-${new Date().toISOString().split("T")[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast("Vault exported successfully", "check");
+    onClose();
+  };
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(8px)", display: "grid", placeItems: "center" }}>
+      <div onClick={(e) => e.stopPropagation()} className="glass" style={{ padding: "28px 26px", borderRadius: 22, minWidth: 340, maxWidth: 420, display: "flex", flexDirection: "column", gap: 18, boxShadow: "0 12px 48px rgba(0,0,0,0.45)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ width: 40, height: 40, borderRadius: 12, display: "grid", placeItems: "center", background: "color-mix(in oklch, var(--warn) 20%, transparent)", color: "var(--warn)" }}>
+            <Icon name="lock" size={20} />
+          </span>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 750, color: "var(--ink)" }}>Export vault credentials</div>
+            <div style={{ fontSize: 12, color: "var(--ink-4)" }}>Enter password to download {items.length} credential{items.length !== 1 ? "s" : ""}</div>
+          </div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <label className="eyebrow" style={{ fontSize: 9, color: "var(--ink-4)" }}>Export password</label>
+          <input ref={inputRef} type="password" value={pw} onChange={(e) => { setPw(e.target.value); setError(false); }} placeholder="Enter password…"
+            onKeyDown={(e) => { if (e.key === "Enter" && pw.length > 0) doExport(); }}
+            style={{ padding: "11px 14px", borderRadius: 10, border: error ? "2px solid var(--bad)" : "1px solid var(--hairline)", background: "var(--panel-3)", color: "var(--ink)", fontSize: 14, fontFamily: "var(--font)", outline: "none" }} />
+          {error && <span style={{ fontSize: 11, color: "var(--bad)", fontWeight: 600 }}>Wrong password. Try again.</span>}
+        </div>
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+          <button onClick={onClose} className="tap" style={{ padding: "10px 18px", borderRadius: 10, border: "1px solid var(--hairline)", background: "var(--panel-3)", color: "var(--ink-2)", fontSize: 13, fontWeight: 650, fontFamily: "var(--font)", cursor: "pointer" }}>Cancel</button>
+          <button onClick={doExport} disabled={pw.length === 0 || loading} className="tap" style={{ padding: "10px 22px", borderRadius: 10, border: "none", background: pw.length > 0 ? "var(--accent)" : "var(--panel-3)", color: pw.length > 0 ? "var(--accent-ink)" : "var(--ink-4)", fontSize: 13, fontWeight: 750, fontFamily: "var(--font)", cursor: pw.length > 0 ? "pointer" : "default", opacity: loading ? 0.6 : 1 }}>
+            <Icon name="download" size={14} /> {loading ? "Verifying…" : "Export"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function VaultPanel() {
   const [items, setItems] = React.useState(() => (window.FETS._vault ? [...window.FETS._vault] : []));
   const [editing, setEditing] = React.useState(null); // id | "__new" | null
+  const [showExport, setShowExport] = React.useState(false);
   const save = (entry) => {
     if (editing === "__new") {
       const tmp = { ...entry, id: "tmp" + Date.now() };
@@ -1373,12 +1450,22 @@ function VaultPanel() {
   const del = (it) => { if (!window.confirm("Delete this credential?")) return; if (it.id != null && String(it.id).indexOf("tmp") !== 0) DB.dbDeleteVault(it.id); setItems((xs) => xs.filter((x) => x !== it)); };
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {editing !== "__new" && <button onClick={() => setEditing("__new")} className="tap" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px", borderRadius: 12, cursor: "pointer", border: "none", color: "var(--accent-ink)", background: "var(--accent)", fontFamily: "var(--font)", fontSize: 13, fontWeight: 750 }}><Icon name="plus" size={16} /> Add credential</button>}
+      {editing !== "__new" && (
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <button onClick={() => setEditing("__new")} className="tap" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px", borderRadius: 12, cursor: "pointer", border: "none", color: "var(--accent-ink)", background: "var(--accent)", fontFamily: "var(--font)", fontSize: 13, fontWeight: 750, flex: 1 }}><Icon name="plus" size={16} /> Add credential</button>
+          {items.length > 0 && (
+            <button onClick={() => setShowExport(true)} className="tap" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px 18px", borderRadius: 12, cursor: "pointer", border: "1.5px solid var(--warn)", color: "var(--warn)", background: "color-mix(in oklch, var(--warn) 8%, transparent)", fontFamily: "var(--font)", fontSize: 13, fontWeight: 700 }}>
+              <Icon name="download" size={15} /> Export
+            </button>
+          )}
+        </div>
+      )}
       {editing === "__new" && <VaultEditForm initial={{}} onSave={save} onCancel={() => setEditing(null)} />}
       {items.length === 0 && editing !== "__new" && <div className="inset" style={{ padding: 22, borderRadius: 14, textAlign: "center", color: "var(--ink-4)", fontSize: 13 }}>No credentials saved yet. Add your portals & logins here.</div>}
       {items.map((it) => editing === it.id
         ? <VaultEditForm key={it.id} initial={it} onSave={save} onCancel={() => setEditing(null)} />
         : <VaultCard key={it.id} it={it} onEdit={() => setEditing(it.id)} onDelete={() => del(it)} />)}
+      {showExport && <VaultExportModal items={items} onClose={() => setShowExport(false)} />}
     </div>
   );
 }
@@ -4062,6 +4149,17 @@ function RosterGrid({ offsets, branch }) {
       !localStorage.getItem(`fets-seen-req-${r.id}`)
     );
   };
+  /* detect if a roster cell was part of an approved shift swap */
+  const isSwappedCellOf = (name, off) => {
+    if (!F()._staffRequests) return null;
+    const dstr = ymdFormat(F().ISO(off));
+    return F()._staffRequests.find(r =>
+      r.kind === "swap" && r.status === "Approved" && (
+        (r.who === name && r.date === dstr) ||
+        (r.with === name && (r.swapDate || r.date) === dstr)
+      )
+    ) || null;
+  };
 
   return (
     <React.Fragment>
@@ -4190,6 +4288,7 @@ function RosterGrid({ offsets, branch }) {
               const pending = reqMarkOf(n, o);
               const unseenRes = unseenResolutionOf(n, o);
               const isSelf = n === F().user.name;
+              const swapMatch = isSwappedCellOf(n, o);
 
               // Check if lead staff
               const dstr = ymdFormat(d);
@@ -4201,6 +4300,7 @@ function RosterGrid({ offsets, branch }) {
               );
 
               // Premium styles matching the code tint
+              const SWAP_COLOR = "#F2994A";
               const baseColor = m.ink;
               let bg = "var(--panel-3)";
               let border = "1px solid var(--glass-edge-lo)";
@@ -4231,6 +4331,12 @@ function RosterGrid({ offsets, branch }) {
               if (isLead) {
                 border = `2px solid #d3ad12`;
               }
+
+              /* ---- shift-swap visual override ---- */
+              if (swapMatch) {
+                border = `2px dashed ${SWAP_COLOR}`;
+                shadow = `0 0 12px color-mix(in oklch, ${SWAP_COLOR} 28%, transparent)${shadow !== "none" ? `, ${shadow}` : ""}`;
+              }
  
               const cellStyle = {
                 position: "relative",
@@ -4250,6 +4356,11 @@ function RosterGrid({ offsets, branch }) {
                 fontWeight: 800,
                 letterSpacing: "0.02em",
               };
+
+              /* swap partner label for tooltip */
+              const swapTitle = swapMatch
+                ? `Shift swapped · ${swapMatch.who === n ? swapMatch.with : swapMatch.who}`
+                : "";
  
               return (
                 <button key={o} onClick={() => {
@@ -4275,8 +4386,19 @@ function RosterGrid({ offsets, branch }) {
                   } else if (window.FETS.isAdmin) {
                     setDialog({ name: n, off: o, date: d, cell, defaultCode: cell.dflt || "RD" });
                   }
-                }} className="tap roster-cell-btn" title={(window.FETS.isAdmin || isSelf) ? `${m.label}${ot > 0 ? ` + OT ${ot}h` : ""} — tap to change` : m.label}
+                }} className="tap roster-cell-btn" title={(window.FETS.isAdmin || isSelf) ? `${m.label}${ot > 0 ? ` + OT ${ot}h` : ""}${swapTitle ? ` · ${swapTitle}` : ""} — tap to change` : (swapTitle || m.label)}
                   style={cellStyle}>
+                  {/* Swap indicator badge */}
+                  {swapMatch && (
+                    <span title={swapTitle} style={{
+                      position: "absolute", top: 2, left: 2,
+                      fontSize: 8, fontWeight: 900, lineHeight: 1,
+                      color: "#fff", background: SWAP_COLOR,
+                      padding: "2px 3px", borderRadius: 4,
+                      boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
+                      letterSpacing: 0,
+                    }}>↔</span>
+                  )}
                   <span style={{ fontSize: code.length > 2 ? 9 : 13.5, fontWeight: 900, lineHeight: 1 }}>{code}</span>
                   {ot > 0 && (
                     <span className="mono" style={{
@@ -4316,81 +4438,7 @@ function RosterGrid({ offsets, branch }) {
   );
 }
 
-/* leave + swap approvals drawer body (super-admin) */
-const SREQ_STATUS = { Submitted: "var(--warn)", Approved: "var(--ok)", Rejected: "var(--bad)" };
-function StaffReqCard({ r, onResolve }) {
-  const isSwap = r.kind === "swap";
-  const isToil = r.kind === "toil";
-  const kindMeta = isSwap ? { label: "Shift swap", color: "var(--v-prometric)" }
-    : isToil ? { label: "TOIL", color: "var(--v-cma)" }
-    : { label: "Leave", color: "var(--v-ielts)" };
-  return (
-    <div className="glass-2" style={{ padding: 16, borderRadius: 14, display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
-        <Avatar name={r.who} size={38} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)" }}>{r.who}</div>
-          <div style={{ fontSize: 11.5, color: "var(--ink-3)", fontWeight: 500, textTransform: "capitalize" }}>{r.branch} centre · {r.date}</div>
-        </div>
-        <span style={{ fontSize: 9.5, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.07em", padding: "4px 9px", borderRadius: 99,
-          color: kindMeta.color, background: `color-mix(in oklch, ${kindMeta.color} 16%, transparent)` }}>
-          {kindMeta.label}
-        </span>
-      </div>
-      <div style={{ fontSize: 12.5, color: "var(--ink-2)", fontWeight: 600 }}>
-        {isSwap ? <span>Swap with <b style={{ color: "var(--ink)" }}>{r.with}</b></span>
-          : isToil ? <span>Use <b style={{ color: "var(--ink)" }}>{r.days || 1} TOIL day{(r.days || 1) > 1 ? "s" : ""}</b></span>
-          : <span>{r.leaveType}</span>}
-      </div>
-      {r.reason && <p style={{ margin: 0, fontSize: 12.5, color: "var(--ink-3)", lineHeight: 1.5, fontStyle: "italic", fontFamily: "var(--font-serif)" }}>“{r.reason}”</p>}
-      {r.status === "Submitted" ? (
-        <div style={{ display: "flex", gap: 9 }}>
-          <button onClick={() => onResolve(r.id, "Approved")} className="tap" style={{ flex: 1, padding: "10px", borderRadius: 10, border: "none", cursor: "pointer", fontFamily: "var(--font)", fontSize: 13, fontWeight: 700, color: "var(--accent-ink)", background: "var(--accent)", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-            <Icon name="check" size={15} stroke={2.6} /> Approve
-          </button>
-          <button onClick={() => onResolve(r.id, "Rejected")} className="tap glass-2" style={{ flex: 1, padding: "10px", borderRadius: 10, cursor: "pointer", fontFamily: "var(--font)", fontSize: 13, fontWeight: 700, color: "var(--ink-2)", border: "1px solid var(--hairline)", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-            <Icon name="x" size={15} stroke={2.6} /> Reject
-          </button>
-        </div>
-      ) : (
-        <div style={{ fontSize: 12, fontWeight: 700, color: SREQ_STATUS[r.status], display: "flex", alignItems: "center", gap: 6 }}>
-          <Icon name={r.status === "Approved" ? "check" : "x"} size={14} stroke={2.6} /> {r.status}
-        </div>
-      )}
-    </div>
-  );
-}
-function LeaveApprovalsPanel({ branch }) {
-  const [reqs, setReqs] = React.useState(() => F().staffReqList());
-  React.useEffect(() => {
-    const h = () => setReqs(F().staffReqList());
-    window.addEventListener("fets-roster-changed", h);
-    return () => window.removeEventListener("fets-roster-changed", h);
-  }, []);
-  const inBranch = reqs.filter((r) => branch === "global" || r.branch === branch);
-  const resolve = (id, status) => {
-    const next = F().staffReqResolve(id, status);
-    setReqs(next);
-    if (status === "Approved") { const r = next.find((x) => x.id === id); reflectOnRoster(r); }
-    toast(status === "Approved" ? "Approved — roster updated" : "Request rejected", status === "Approved" ? "check" : "x");
-  };
-  const pending = inBranch.filter((r) => r.status === "Submitted").length;
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <StatPill value={pending} label="Awaiting you" tone={pending ? "var(--warn)" : "var(--ok)"} />
-        <StatPill value={inBranch.filter((r) => r.kind === "leave").length} label="Leave requests" />
-        <StatPill value={inBranch.filter((r) => r.kind === "swap").length} label="Swap requests" tone="var(--v-prometric)" />
-        <StatPill value={inBranch.filter((r) => r.kind === "toil").length} label="TOIL requests" tone="var(--v-cma)" />
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {inBranch.length === 0
-          ? <div className="inset" style={{ padding: 22, borderRadius: 14, textAlign: "center", color: "var(--ink-4)", fontSize: 13 }}>No requests for this centre.</div>
-          : inBranch.map((r) => <StaffReqCard key={r.id} r={r} onResolve={resolve} />)}
-      </div>
-    </div>
-  );
-}
+/* ---- StaffReqCard, LeaveApprovalsPanel — REMOVED: all request UI is now exclusively in My Desk → ApplicationsHub ---- */
 
 /* ---------- roster analysis ---------- */
 function RosterAnalysis({ offsets, branch }) {
@@ -4654,425 +4702,9 @@ function PersonalizedRosterOverview({ branch }) {
   );
 }
 
-/* ---------- roster request tabbed form ---------- */
-function RosterRequestForm({ branch, allowedKinds = ["leave", "swap", "toil"] }) {
-  const [kind, setKind] = React.useState(allowedKinds[0]);
-  const [leaveType, setLeaveType] = React.useState("Full-day leave");
-  const [reqDate, setReqDate] = React.useState("");
-  const [swapDate, setSwapDate] = React.useState("");
-  const [withWho, setWithWho] = React.useState("");
-  const [reason, setReason] = React.useState("");
-  const [submitting, setSubmitting] = React.useState(false);
+/* ---- RosterRequestForm — REMOVED: submission is now exclusively in My Desk → ApplicationsHub ---- */
 
-  const F = window.FETS;
-  const meName = F.user.name;
-
-  const isSuperAdmin = !!window.FETS?.isAdmin;
-  const userProfileBranch = window.FETS?._meBranch || 'cochin';
-  const isLocked = !isSuperAdmin && branch !== userProfileBranch;
-
-  React.useEffect(() => {
-    if (allowedKinds.length > 0 && !allowedKinds.includes(kind)) {
-      setKind(allowedKinds[0]);
-    }
-  }, [allowedKinds]);
-
-  if (isLocked) {
-    return (
-      <div className="glass" style={{ borderRadius: "var(--radius)", padding: 24, display: "flex", flexDirection: "column", gap: 14, alignItems: "center", justifyContent: "center", textAlign: "center" }}>
-        <div style={{ width: 44, height: 44, borderRadius: 12, background: "color-mix(in oklch, var(--bad) 12%, transparent)", display: "grid", placeItems: "center", color: "var(--bad)" }}>
-          <Icon name="lock" size={20} />
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <div style={{ fontSize: 15, fontWeight: 750, color: "var(--ink)" }}>Request Form Locked</div>
-          <div style={{ fontSize: 12.5, color: "var(--ink-3)", maxWidth: 300, lineHeight: 1.4 }}>
-            You are viewing the <strong>{branch.toUpperCase()}</strong> branch. To submit a leave, swap, or TOIL request, please switch back to your home branch: <strong>{userProfileBranch.toUpperCase()}</strong>.
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const pool = branch === "global"
-    ? [...F.STAFF.calicut, ...F.STAFF.cochin]
-    : F.STAFF[branch] || [];
-  const colleagues = pool.filter((n) => n !== meName);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!reqDate) {
-      toast("Please select a date", "alert");
-      return;
-    }
-    if (kind === "swap" && !withWho) {
-      toast("Please select a staff member to swap with", "alert");
-      return;
-    }
-    if (kind === "swap" && !swapDate) {
-      toast("Please select the target swap date", "alert");
-      return;
-    }
-
-    setSubmitting(true);
-    const req = {
-      who: meName,
-      branch: branch === "global" ? (F._meBranch || "calicut") : branch,
-      kind,
-      date: reqDate,
-      reason,
-      ...(kind === "leave" && { leaveType }),
-      ...(kind === "swap" && { with: withWho, swapDate }),
-      ...(kind === "toil" && { days: 1 })
-    };
-
-    const res = await DB.dbAddStaffRequest(req);
-    setSubmitting(false);
-
-    if (res) {
-      setReqDate("");
-      setSwapDate("");
-      setWithWho("");
-      setReason("");
-    }
-  };
-
-  const inpStyle = {
-    background: "var(--inset)",
-    border: "1px solid var(--hairline)",
-    borderRadius: 10,
-    color: "var(--ink)",
-    fontFamily: "var(--font)",
-    fontSize: 13.5,
-    padding: "10px 12px",
-    width: "100%",
-    outline: "none",
-    boxSizing: "border-box" as const
-  };
-
-  const KIND_META = {
-    leave: { icon: "calendar", label: "Leave", desc: "Apply for a scheduled day off", color: "var(--bad)" },
-    swap:  { icon: "refresh",  label: "Shift Swap", desc: "Exchange shifts with a colleague", color: "var(--v-prometric)" },
-    toil:  { icon: "clock",    label: "Redeem TOIL", desc: "Use accrued time-off-in-lieu balance", color: "var(--v-cma)" },
-  };
-
-  const activeKinds = Object.entries(KIND_META).filter(([k]) => allowedKinds.includes(k));
-  const showSelector = activeKinds.length > 1;
-
-  return (
-    <div className="glass rise" style={{ borderRadius: "var(--radius)", padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid var(--hairline)", paddingBottom: 14 }}>
-        <div style={{ width: 38, height: 38, borderRadius: 11, background: "rgba(255, 255, 255, 0.05)", display: "grid", placeItems: "center", border: "1px solid var(--hairline)" }}>
-          <Icon name="edit" size={18} style={{ color: "var(--accent)" }} />
-        </div>
-        <div>
-          <div style={{ fontSize: 15, fontWeight: 750, color: "var(--ink)", letterSpacing: "-0.01em" }}>Staff Request Portal</div>
-          <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 1 }}>Submit requests directly to Super Admins. Real-time status shows below.</div>
-        </div>
-      </div>
-
-      {/* Main dual-pane layout */}
-      <div style={{ display: "grid", gridTemplateColumns: showSelector ? "1fr 1.5fr" : "1fr", gap: 24 }} className="request-portal-grid">
-        {/* Left selector pane */}
-        {showSelector && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {activeKinds.map(([k, m]) => {
-              const on = kind === k;
-              return (
-                <button 
-                  type="button" 
-                  key={k} 
-                  onClick={() => setKind(k)} 
-                  className="tap hover-lift" 
-                  style={{
-                    display: "flex", 
-                    alignItems: "center", 
-                    gap: 12,
-                    padding: "16px 18px", 
-                    borderRadius: 14,
-                    border: `1px solid ${on ? m.color : "var(--hairline)"}`,
-                    background: on ? `color-mix(in oklch, ${m.color} 8%, var(--inset))` : "var(--inset)",
-                    cursor: "pointer",
-                    textAlign: "left",
-                    width: "100%",
-                    transition: "all 0.2s"
-                  }}
-                >
-                  <div style={{ 
-                    width: 32, 
-                    height: 32, 
-                    borderRadius: 8, 
-                    background: on ? `color-mix(in oklch, ${m.color} 20%, transparent)` : "rgba(255,255,255,0.04)", 
-                    display: "grid", 
-                    placeItems: "center",
-                    color: on ? m.color : "var(--ink-3)",
-                    border: `1px solid ${on ? m.color : "var(--hairline)"}`
-                  }}>
-                    <Icon name={m.icon} size={15} />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 750, color: on ? m.color : "var(--ink)" }}>{m.label}</div>
-                    <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2 }}>{m.desc}</div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Right input pane */}
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {kind === "leave" && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }} className="case-2col">
-              <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
-                Leave Date
-                <input type="date" value={reqDate} onChange={(e) => setReqDate(e.target.value)} style={inpStyle} />
-              </label>
-              <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
-                Leave Type
-                <select value={leaveType} onChange={(e) => setLeaveType(e.target.value)} style={inpStyle}>
-                  <option value="Full-day leave">Full-day leave</option>
-                  <option value="Half day">Half day</option>
-                </select>
-              </label>
-            </div>
-          )}
-
-          {kind === "swap" && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }} className="case-cols">
-              <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 650, color: "var(--ink-2)", gridColumn: "1 / -1" }}>
-                Swap With
-                <select value={withWho} onChange={(e) => setWithWho(e.target.value)} style={inpStyle}>
-                  <option value="">Select colleague…</option>
-                  {colleagues.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </label>
-              <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
-                Your Shift Date
-                <input type="date" value={reqDate} onChange={(e) => setReqDate(e.target.value)} style={inpStyle} />
-              </label>
-              <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
-                Their Shift Date
-                <input type="date" value={swapDate} onChange={(e) => setSwapDate(e.target.value)} style={inpStyle} />
-              </label>
-            </div>
-          )}
-
-          {kind === "toil" && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr", gap: 14 }}>
-              <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
-                Date to Redeem TOIL
-                <input type="date" value={reqDate} onChange={(e) => setReqDate(e.target.value)} style={inpStyle} />
-              </label>
-              <div className="inset" style={{ borderRadius: 10, padding: "10px 14px", display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ width: 28, height: 28, borderRadius: 999, background: "rgba(0, 184, 148, 0.1)", display: "grid", placeItems: "center", color: "var(--ok)" }}>
-                  <Icon name="clock" size={14} />
-                </div>
-                <div>
-                  <div style={{ fontSize: 10, fontWeight: 650, color: "var(--ink-4)", textTransform: "uppercase" }}>TOIL Balance</div>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: "var(--v-cma)", marginTop: 2 }}>
-                    {(window.FETS._meToilBalance || 0)} <span style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)" }}>days left</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
-            Reason / Comments
-            <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2}
-              placeholder="Briefly explain your request (optional)…"
-              style={{ ...inpStyle, resize: "vertical", lineHeight: 1.55 }} />
-          </label>
-
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <button type="submit" disabled={submitting} className="tap" style={{
-              height: 42, borderRadius: 11, border: "none", cursor: submitting ? "not-allowed" : "pointer",
-              fontFamily: "var(--font)", fontSize: 13, fontWeight: 780,
-              color: "var(--accent-ink)", background: submitting ? "var(--ink-4)" : "var(--accent)",
-              padding: "0 28px", display: "inline-flex", alignItems: "center", gap: 9,
-              transition: "background .2s", opacity: submitting ? 0.7 : 1
-            }}>
-              <Icon name={submitting ? "loader" : "check"} size={14} stroke={2.5} />
-              {submitting ? "Submitting…" : "Submit Request"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-/* ---------- admin: everyone's attendance for a day (Mithun only) ---------- */
-function AttendanceAdminPage({ branch }) {
-  const [date, setDate] = React.useState(ATT.attDateStr());
-  const [rows, setRows] = React.useState(null);
-  React.useEffect(() => { setRows(null); ATT.attAllForDate(date).then(setRows); }, [date]);
-  const totalWorked = (rows || []).reduce((a, r) => a + (r.worked || 0), 0);
-  const SCOL = { present: "var(--ok)", late: "var(--warn)", half_day: "var(--v-ielts)", absent: "var(--bad)" };
-  return (
-    <div style={{ maxWidth: 1000, margin: "0 auto", display: "flex", flexDirection: "column", gap: "calc(24px * var(--density))" }}>
-      <PageHeader eyebrow="Admin // attendance" title="Daily Attendance" />
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ background: "var(--inset)", border: "1px solid var(--hairline)", borderRadius: 10, color: "var(--ink)", fontFamily: "var(--font)", fontSize: 14, padding: "10px 12px" }} />
-        <div style={{ flex: 1 }} />
-        <StatPill value={(rows || []).length} label="Records" />
-        <StatPill value={ATT.attFmtMins(totalWorked)} label="Total worked" tone="var(--accent)" />
-      </div>
-      <div className="glass" style={{ borderRadius: "var(--radius)", padding: "8px 4px", overflow: "auto" }}>
-        <div style={{ minWidth: 640 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr 0.9fr 0.9fr 0.8fr 1fr", gap: 8, padding: "8px 14px" }}>
-            {["Staff", "Branch", "In", "Out", "Break", "Worked"].map((h) => <div key={h} className="eyebrow" style={{ fontSize: 9, color: "var(--ink-4)" }}>{h}</div>)}
-          </div>
-          {!rows ? <div style={{ padding: 20, color: "var(--ink-4)" }}>Loading…</div>
-            : rows.length === 0 ? <div style={{ padding: 20, color: "var(--ink-4)" }}>No attendance recorded for this day.</div>
-            : rows.map((r, i) => (
-              <div key={i} style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr 0.9fr 0.9fr 0.8fr 1fr", gap: 8, padding: "11px 14px", borderTop: "1px solid var(--hairline)", alignItems: "center" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 9 }}><Avatar name={r.name} size={26} /><span style={{ fontSize: 13, fontWeight: 650, color: "var(--ink)" }}>{r.name}</span></div>
-                <div style={{ fontSize: 12, color: "var(--ink-3)", textTransform: "capitalize" }}>{r.branch || "—"}</div>
-                <div className="mono" style={{ fontSize: 12.5 }}>{r.check_in || "—"}</div>
-                <div className="mono" style={{ fontSize: 12.5 }}>{r.check_out || "—"}</div>
-                <div className="mono" style={{ fontSize: 12, color: "var(--ink-3)" }}>{r.breakMins ? r.breakMins + "m" : "—"}</div>
-                <div className="mono" style={{ fontSize: 12.5, color: "var(--accent)", fontWeight: 700 }}>{r.worked ? ATT.attFmtMins(r.worked) : "—"}</div>
-              </div>
-            ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ---------- Roster Approvals Hub page (recreation of staff management) ---------- */
-function RosterApprovalsHub({ branch }) {
-  const [reqs, setReqs] = React.useState([]);
-  const [loading, setLoading] = React.useState(true);
-  const [tab, setTab] = React.useState("pending");
-
-  const F = window.FETS;
-
-  const load = () => {
-    setLoading(true);
-    loadLiveData(F).then(() => {
-      setReqs(F.staffReqList() || []);
-      setLoading(false);
-    });
-  };
-
-  React.useEffect(() => {
-    load();
-    window.addEventListener("fets-roster-changed", load);
-    return () => window.removeEventListener("fets-roster-changed", load);
-  }, []);
-
-  const resolve = async (id, status) => {
-    const adminId = F._meId || "00000000-0000-0000-0000-000000000000";
-    await DB.dbResolveStaffRequest(id, status, adminId);
-    load();
-  };
-
-  const filtered = reqs.filter((r) => {
-    const matchesBranch = branch === "global" || r.branch === branch;
-    if (tab === "pending") return matchesBranch && r.status === "Submitted";
-    return matchesBranch && r.status !== "Submitted";
-  });
-
-  const SCOL = { Submitted: "var(--warn)", Approved: "var(--ok)", Rejected: "var(--bad)" };
-
-  return (
-    <div style={{ maxWidth: 1000, margin: "0 auto", display: "flex", flexDirection: "column", gap: 20 }}>
-      <PageHeader eyebrow="Modules // Admin" title="Roster Approvals Hub" />
-
-      <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-        <Segmented value={tab} onChange={setTab} size="sm" options={[
-          { value: "pending", label: "Pending Requests" },
-          { value: "history", label: "History" },
-          { value: "discussions", label: "Staff Discussions" }
-        ]} />
-        <div style={{ flex: 1 }} />
-        <button onClick={load} className="tap glass-2" style={{ width: 36, height: 36, borderRadius: 10, display: "grid", placeItems: "center", border: "1px solid var(--hairline)", cursor: "pointer", color: "var(--ink-2)" }}>
-          <Icon name="refresh" size={15} />
-        </button>
-      </div>
-
-      {loading ? (
-        <div className="glass" style={{ padding: 40, borderRadius: "var(--radius)", textAlign: "center", color: "var(--ink-4)" }}>
-          Loading requests…
-        </div>
-      ) : tab === "discussions" ? (
-        <RosterDiscussionsAdmin />
-      ) : filtered.length === 0 ? (
-        <div className="glass" style={{ padding: 40, borderRadius: "var(--radius)", textAlign: "center", color: "var(--ink-4)" }}>
-          No {tab === "pending" ? "pending" : "resolved"} requests found.
-        </div>
-      ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
-          {filtered.map((r) => {
-            const isSwap = r.kind === "swap";
-            const isToil = r.kind === "toil";
-            const kindMeta = isSwap ? { label: "Shift Swap", color: "var(--v-prometric)" }
-              : isToil ? { label: "TOIL", color: "var(--v-cma)" }
-              : { label: "Leave", color: "var(--v-ielts)" };
-              
-            return (
-              <div key={r.id} className="glass rise" style={{ padding: 20, borderRadius: "var(--radius)", display: "flex", flexDirection: "column", gap: 14 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <Avatar name={r.who} size={36} />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 14.5, fontWeight: 700, color: "var(--ink)" }}>{r.who}</div>
-                    <div style={{ fontSize: 11.5, color: "var(--ink-4)", marginTop: 1 }}>
-                      {r.branch} center
-                    </div>
-                  </div>
-                  <span style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", padding: "4px 10px", borderRadius: 99,
-                    color: kindMeta.color, background: `color-mix(in oklch, ${kindMeta.color} 15%, transparent)` }}>
-                    {kindMeta.label}
-                  </span>
-                </div>
-
-                <div style={{ fontSize: 13.5, color: "var(--ink-2)", fontWeight: 600 }}>
-                  {isSwap ? (
-                    <span>
-                      Swap shift on <b style={{ color: "var(--ink)" }}>{r.date}</b> with <b style={{ color: "var(--ink)" }}>{r.with}</b> (their shift on <b style={{ color: "var(--ink)" }}>{r.swapDate || r.date}</b>)
-                    </span>
-                  ) : isToil ? (
-                    <span>
-                      Redeem TOIL day on <b style={{ color: "var(--ink)" }}>{r.date}</b>
-                    </span>
-                  ) : (
-                    <span>
-                      Take leave on <b style={{ color: "var(--ink)" }}>{r.date}</b> ({r.leaveType})
-                    </span>
-                  )}
-                </div>
-
-                {r.reason && (
-                  <p style={{ margin: 0, padding: "10px 12px", borderRadius: 8, background: "var(--inset)", fontSize: 12.5, color: "var(--ink-3)", fontStyle: "italic", fontFamily: "var(--font-serif)", lineHeight: 1.4 }}>
-                    “{r.reason}”
-                  </p>
-                )}
-
-                {r.status === "Submitted" ? (
-                  <div style={{ display: "flex", gap: 9, alignSelf: "flex-end", marginTop: 4 }}>
-                    <button onClick={() => resolve(r.id, "Approved")} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 34, padding: "0 16px", borderRadius: 8, border: "none", cursor: "pointer", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 750, color: "var(--accent-ink)", background: "var(--accent)" }}>
-                      <Icon name="check" size={14} stroke={2.6} /> Approve
-                    </button>
-                    <button onClick={() => resolve(r.id, "Rejected")} className="tap glass-2" style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 34, padding: "0 16px", borderRadius: 8, border: "1px solid var(--hairline)", cursor: "pointer", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 650, color: "var(--ink-2)" }}>
-                      <Icon name="x" size={14} stroke={2.6} /> Reject
-                    </button>
-                  </div>
-                ) : (
-                  <div style={{ alignSelf: "flex-end", fontSize: 12.5, fontWeight: 700, color: SCOL[r.status], display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
-                    <Icon name={r.status === "Approved" ? "check" : "x"} size={14} stroke={2.6} /> {r.status}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
+/* ---- RosterApprovalsHub — REMOVED: admin inbox is now exclusively in My Desk → ApplicationsHub ---- */
 
 /* ---------- OT & TOIL Claims Manager Hub Page ---------- */
 function OtToilClaimsHub({ branch }) {
@@ -7497,124 +7129,6 @@ function RosterPage({ branch }) {
     );
   };
 
-  // User requests list for Shift Desk
-  const UserRequestsList = ({ forceKind }: { forceKind?: string }) => {
-    const mine = (F()._staffRequests?.filter(r => r.who === meName) || [])
-      .filter(r => !forceKind || r.kind === forceKind);
-    const statusMeta = {
-      Submitted: { color: "var(--warn)", label: "Awaiting Admin Review", icon: "clock" },
-      Approved: { color: "var(--ok)", label: "Approved & Synced", icon: "check" },
-      Rejected: { color: "var(--bad)", label: "Rejected", icon: "x" }
-    };
-
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 24 }}>
-        <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>{mine.length} requests</span>}>
-          {forceKind === "swap" ? "Your Shift Swap Requests" : "Your Shift & Leave Requests"}
-        </SectionLabel>
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {mine.length === 0 ? (
-            <div className="glass" style={{ borderRadius: "var(--radius)", padding: "24px", textAlign: "center", color: "var(--ink-4)", fontSize: 13.5 }}>
-              No requests submitted yet.
-            </div>
-          ) : (
-            mine.map((r, i) => {
-              const meta = statusMeta[r.status] || { color: "var(--ink-3)", label: r.status, icon: "info" };
-              const isSwap = r.kind === "swap";
-              const isToil = r.kind === "toil";
-              
-              return (
-                <div key={r.id || i} className="glass rise hover-lift" style={{ 
-                  borderRadius: "var(--radius)", 
-                  padding: "16px 20px", 
-                  borderLeft: `4px solid ${meta.color}`,
-                  display: "flex", 
-                  justifyContent: "space-between", 
-                  alignItems: "center", 
-                  flexWrap: "wrap", 
-                  gap: 16,
-                  transition: "all 0.2s"
-                }}>
-                  <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
-                    <div style={{ 
-                      width: 36, 
-                      height: 36, 
-                      borderRadius: 10, 
-                      background: "rgba(255,255,255,0.04)", 
-                      display: "grid", 
-                      placeItems: "center",
-                      color: meta.color,
-                      border: "1px solid var(--hairline)",
-                      flexShrink: 0
-                    }}>
-                      <Icon name={r.kind === "swap" ? "refresh" : (r.kind === "toil" ? "clock" : "calendar")} size={16} />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 14, fontWeight: 750, color: "var(--ink)", display: "flex", alignItems: "center", gap: 8 }}>
-                        <span>{r.kind.toUpperCase()}</span>
-                        {r.leaveType && (
-                          <span style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", background: "var(--glass-2)", padding: "1px 6px", borderRadius: 4 }}>
-                            {r.leaveType}
-                          </span>
-                        )}
-                      </div>
-                      
-                      <div style={{ fontSize: 12.5, color: "var(--ink-2)", marginTop: 6, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
-                        <span>Target:</span>
-                        <strong style={{ color: "var(--ink)" }}>{r.date}</strong>
-                        {isSwap && r.with && (
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                            <span style={{ color: "var(--ink-4)" }}>⇄</span>
-                            <span>colleague</span>
-                            <strong style={{ color: "var(--ink)" }}>{r.with}</strong>
-                            <span>(shift: {r.swapDate || r.date})</span>
-                          </span>
-                        )}
-                      </div>
-
-                      {r.reason && (
-                        <div style={{ fontSize: 12, color: "var(--ink-3)", fontStyle: "italic", marginTop: 6, display: "flex", alignItems: "flex-start", gap: 4 }}>
-                          <span style={{ opacity: 0.5 }}>“</span>
-                          <span>{r.reason}</span>
-                          <span style={{ opacity: 0.5 }}>”</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
-                    <span style={{ 
-                      fontSize: 10.5, 
-                      fontWeight: 800, 
-                      textTransform: "uppercase", 
-                      letterSpacing: "0.06em",
-                      padding: "4px 10px", 
-                      borderRadius: 99, 
-                      color: meta.color, 
-                      background: `color-mix(in oklch, ${meta.color} 12%, transparent)`, 
-                      border: `1px solid color-mix(in oklch, ${meta.color} 20%, transparent)`,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 6
-                    }}>
-                      {r.status === "Submitted" && <span style={{ width: 6, height: 6, borderRadius: 999, background: "var(--warn)", display: "inline-block" }} className="pulse" />}
-                      {meta.label}
-                    </span>
-                    {r.status !== "Submitted" && (
-                      <span style={{ fontSize: 10, color: "var(--ink-4)" }}>
-                        Processed in Real-time
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div style={{
       maxWidth: 1600,
@@ -7646,69 +7160,8 @@ function RosterPage({ branch }) {
         </div>
       </div>
 
-      {(() => {
-        const myUnseenResolutions = F()._staffRequests?.filter(r => 
-          r.who === meName && 
-          (r.status === "Approved" || r.status === "Rejected") && 
-          !localStorage.getItem(`fets-seen-req-${r.id}`)
-        ) || [];
-        if (myUnseenResolutions.length === 0) return null;
-        return (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {myUnseenResolutions.map((r) => (
-              <div 
-                key={r.id} 
-                className="glass rise" 
-                style={{ 
-                  padding: "12px 16px", 
-                  borderRadius: 12, 
-                  borderLeft: `4px solid ${r.status === "Approved" ? "var(--ok)" : "var(--bad)"}`,
-                  display: "flex", 
-                  alignItems: "center", 
-                  justifyContent: "space-between",
-                  gap: 12
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={{ 
-                    width: 24, 
-                    height: 24, 
-                    borderRadius: 6, 
-                    display: "grid", 
-                    placeItems: "center", 
-                    color: r.status === "Approved" ? "var(--ok)" : "var(--bad)",
-                    background: r.status === "Approved" ? "color-mix(in oklch, var(--ok) 15%, transparent)" : "color-mix(in oklch, var(--bad) 15%, transparent)"
-                  }}>
-                    <Icon name={r.status === "Approved" ? "check" : "x"} size={14} />
-                  </span>
-                  <span style={{ fontSize: 13, color: "var(--ink)", fontWeight: 550 }}>
-                    Your request for <strong>{r.leaveType || r.kind.toUpperCase()}</strong> on <strong>{r.date}</strong> has been <strong>{r.status.toLowerCase()}</strong>.
-                  </span>
-                </div>
-                <button 
-                  onClick={() => {
-                    localStorage.setItem(`fets-seen-req-${r.id}`, "true");
-                    window.dispatchEvent(new Event("fets-roster-changed"));
-                  }}
-                  className="tap glass-2" 
-                  style={{ 
-                    padding: "5px 10px", 
-                    borderRadius: 6, 
-                    border: "1px solid var(--hairline)", 
-                    fontSize: 11, 
-                    fontWeight: 700, 
-                    color: "var(--ink-2)", 
-                    cursor: "pointer" 
-                  }}
-                >
-                  Dismiss
-                </button>
-              </div>
-            ))}
-          </div>
-        );
-      })()}
-
+      {/* Resolution alerts removed — staff see application status in My Desk → ApplicationsHub */
+      null}
       {/* Desk tabs & tools — calendar-style toolbar card */}
       <div style={{
         display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12,
@@ -7816,19 +7269,7 @@ function RosterPage({ branch }) {
         </section>
       )}
 
-      {activeRosterTab === "shift" && (
-        <section style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <RosterRequestForm branch={branch} allowedKinds={["leave", "toil"]} />
-          <UserRequestsList forceKind={undefined} />
-        </section>
-      )}
-
-      {activeRosterTab === "swap" && (
-        <section style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <RosterRequestForm branch={branch} allowedKinds={["swap"]} />
-          <UserRequestsList forceKind="swap" />
-        </section>
-      )}
+      {/* shift & swap tabs removed — all applications exclusively in My Desk → ApplicationsHub */}
 
       {activeRosterTab === "review" && (
         <section style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -10952,6 +10393,439 @@ function PresetCard({ m, idx, on, onClick, badge }) {
   );
 }
 
+/* ============================================================
+   APPLICATIONS HUB  — My Desk embedded portal
+   Four types: leave | swap | emergency_duty | reimbursement
+   ============================================================ */
+const APP_KINDS = [
+  { k: "leave",          icon: "calendar", label: "Leave",                 color: "var(--bad)",         desc: "Apply for a scheduled day off" },
+  { k: "swap",           icon: "refresh",  label: "Shift Swap",            color: "var(--v-prometric)", desc: "Propose a swap with a colleague" },
+  { k: "emergency_duty", icon: "zap",      label: "Emergency Duty Change", color: "var(--warn)",        desc: "Request an urgent shift change" },
+  { k: "reimbursement",  icon: "dollar",   label: "Reimbursement",         color: "var(--good)",        desc: "Claim work expenses" },
+];
+const APP_STATUS_STYLE = {
+  pending:  { label: "Pending",  color: "var(--warn)" },
+  approved: { label: "Approved", color: "var(--good)" },
+  rejected: { label: "Rejected", color: "var(--bad)" },
+};
+const SHIFT_CODE_OPTIONS = ["D","E","N","HD","RD","TOIL","TR","SW"];
+const EXPENSE_TYPES = ["Travel","Meal","Material","Communication","Other"];
+const LEAVE_TYPES   = ["Full-day","Half-day","Emergency"];
+
+function AppStatusBadge({ status }) {
+  const s = APP_STATUS_STYLE[status] || APP_STATUS_STYLE.pending;
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10, fontWeight: 700,
+      letterSpacing: "0.05em", textTransform: "uppercase", padding: "3px 9px", borderRadius: 999,
+      color: s.color, background: `color-mix(in oklch, ${s.color} 14%, var(--panel-3))`,
+      border: `1px solid color-mix(in oklch, ${s.color} 35%, transparent)` }}>
+      <span style={{ width: 5, height: 5, borderRadius: 999, background: s.color }} />
+      {s.label}
+    </span>
+  );
+}
+
+function AppKindSelector({ selected, onChange, adminMode }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))", gap: 10 }}>
+      {APP_KINDS.map(({ k, icon, label, color, desc }) => {
+        const on = selected === k;
+        return (
+          <button key={k} type="button" onClick={() => onChange(k)} className="tap"
+            style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", borderRadius: 14, textAlign: "left", width: "100%", cursor: "pointer",
+              border: `1.5px solid ${on ? color : "var(--hairline)"}`,
+              background: on ? `color-mix(in oklch, ${color} 10%, var(--inset))` : "var(--inset)",
+              transition: "all 0.18s" }}>
+            <div style={{ width: 32, height: 32, borderRadius: 9, display: "grid", placeItems: "center", flexShrink: 0,
+              background: on ? `color-mix(in oklch, ${color} 20%, transparent)` : "rgba(255,255,255,0.04)",
+              color: on ? color : "var(--ink-3)", border: `1px solid ${on ? color : "var(--hairline)"}` }}>
+              <Icon name={icon} size={15} />
+            </div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 750, color: on ? color : "var(--ink)", lineHeight: 1.2 }}>{label}</div>
+              <div style={{ fontSize: 10.5, color: "var(--ink-4)", marginTop: 2 }}>{desc}</div>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function AppForm({ onSubmitted }) {
+  const F = () => window.FETS;
+  const [kind, setKind] = React.useState("leave");
+  const [submitting, setSubmitting] = React.useState(false);
+
+  // Leave fields
+  const [date, setDate] = React.useState("");
+  const [leaveType, setLeaveType] = React.useState("Full-day");
+  const [reason, setReason] = React.useState("");
+
+  // Swap fields
+  const [swapDate, setSwapDate] = React.useState("");
+  const [swapWith, setSwapWith] = React.useState("");
+  const [swapPartnerDate, setSwapPartnerDate] = React.useState("");
+
+  // Emergency duty fields
+  const [emergDate, setEmergDate] = React.useState("");
+  const [newShift, setNewShift] = React.useState("D");
+
+  // Reimbursement fields
+  const [amount, setAmount] = React.useState("");
+  const [expenseType, setExpenseType] = React.useState("Travel");
+  const [receiptNote, setReceiptNote] = React.useState("");
+
+  const staffList = (F().PEOPLE || []);
+
+  const inpStyle = {
+    padding: "10px 12px", borderRadius: 10, border: "1px solid var(--hairline)",
+    background: "var(--panel-3)", color: "var(--ink)", fontSize: 13.5,
+    fontFamily: "var(--font)", outline: "none", width: "100%", boxSizing: "border-box"
+  };
+  const labelStyle = { display: "flex", flexDirection: "column", gap: 6, fontSize: 11.5, fontWeight: 650, color: "var(--ink-2)" };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+    let payload = { kind, reason };
+    if (kind === "leave")          payload = { ...payload, request_date: date, leave_type: leaveType };
+    if (kind === "swap")           payload = { ...payload, request_date: swapDate, swap_with_name: swapWith, swap_date: swapPartnerDate };
+    if (kind === "emergency_duty") payload = { ...payload, request_date: emergDate, new_shift_code: newShift, leave_type: "Emergency" };
+    if (kind === "reimbursement")  payload = { ...payload, amount: parseFloat(amount) || 0, expense_type: expenseType, receipt_note: receiptNote };
+    const res = await DB.dbSubmitApplication(payload);
+    setSubmitting(false);
+    if (res) {
+      setDate(""); setLeaveType("Full-day"); setReason(""); setSwapDate(""); setSwapWith(""); setSwapPartnerDate(""); setEmergDate(""); setNewShift("D"); setAmount(""); setExpenseType("Travel"); setReceiptNote("");
+      onSubmitted?.();
+    }
+  };
+
+  const kindMeta = APP_KINDS.find(a => a.k === kind);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <AppKindSelector selected={kind} onChange={setKind} />
+      <div className="glass" style={{ borderRadius: 16, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 18 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, borderBottom: "1px solid var(--hairline)", paddingBottom: 14 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 10, display: "grid", placeItems: "center",
+            background: `color-mix(in oklch, ${kindMeta?.color} 14%, var(--inset))`, color: kindMeta?.color }}>
+            <Icon name={kindMeta?.icon} size={16} />
+          </div>
+          <div>
+            <div style={{ fontSize: 14.5, fontWeight: 750, color: "var(--ink)" }}>New {kindMeta?.label} Application</div>
+            <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 1 }}>Fill in the details and submit — Super Admin will be notified immediately.</div>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {/* Leave */}
+          {kind === "leave" && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              <label style={labelStyle}>Date<input type="date" value={date} onChange={e => setDate(e.target.value)} required style={inpStyle} /></label>
+              <label style={labelStyle}>Leave Type
+                <select value={leaveType} onChange={e => setLeaveType(e.target.value)} style={inpStyle}>
+                  {LEAVE_TYPES.map(lt => <option key={lt} value={lt}>{lt}</option>)}
+                </select>
+              </label>
+            </div>
+          )}
+
+          {/* Swap */}
+          {kind === "swap" && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              <label style={labelStyle}>Your Date<input type="date" value={swapDate} onChange={e => setSwapDate(e.target.value)} required style={inpStyle} /></label>
+              <label style={{...labelStyle, gridColumn: "1 / -1"}}>Swap With
+                <select value={swapWith} onChange={e => setSwapWith(e.target.value)} required style={inpStyle}>
+                  <option value="">— select staff —</option>
+                  {staffList.filter(n => n !== (window.FETS._meName || window.FETS.user.name)).map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </label>
+              <label style={labelStyle}>Their Date (that you'll take)<input type="date" value={swapPartnerDate} onChange={e => setSwapPartnerDate(e.target.value)} required style={inpStyle} /></label>
+            </div>
+          )}
+
+          {/* Emergency Duty */}
+          {kind === "emergency_duty" && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              <label style={labelStyle}>Date<input type="date" value={emergDate} onChange={e => setEmergDate(e.target.value)} required style={inpStyle} /></label>
+              <label style={labelStyle}>New Shift Code
+                <select value={newShift} onChange={e => setNewShift(e.target.value)} style={inpStyle}>
+                  {SHIFT_CODE_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </label>
+            </div>
+          )}
+
+          {/* Reimbursement */}
+          {kind === "reimbursement" && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              <label style={labelStyle}>Amount (₹)<input type="number" min="0" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} required placeholder="0.00" style={inpStyle} /></label>
+              <label style={labelStyle}>Expense Type
+                <select value={expenseType} onChange={e => setExpenseType(e.target.value)} style={inpStyle}>
+                  {EXPENSE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </label>
+              <label style={{...labelStyle, gridColumn: "1 / -1"}}>Receipt / Description
+                <input type="text" value={receiptNote} onChange={e => setReceiptNote(e.target.value)} placeholder="Receipt number or brief description…" style={inpStyle} />
+              </label>
+            </div>
+          )}
+
+          <label style={labelStyle}>Reason / Notes
+            <textarea value={reason} onChange={e => setReason(e.target.value)} rows={2} placeholder="Optional — add any context for the admin…"
+              style={{ ...inpStyle, resize: "vertical", lineHeight: 1.5 }} />
+          </label>
+
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <button type="submit" disabled={submitting} className="tap"
+              style={{ padding: "11px 26px", borderRadius: 11, border: "none", fontFamily: "var(--font)", fontSize: 13, fontWeight: 750,
+                cursor: submitting ? "default" : "pointer", opacity: submitting ? 0.6 : 1,
+                background: kindMeta?.color || "var(--accent)", color: "#fff",
+                display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <Icon name="send" size={14} /> {submitting ? "Submitting…" : "Submit Application"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function MyApplicationsList() {
+  const [apps, setApps] = React.useState(() => window.FETS._myApplications || []);
+  React.useEffect(() => {
+    const refresh = () => setApps([...(window.FETS._myApplications || [])]);
+    window.addEventListener("fets-applications-changed", refresh);
+    return () => window.removeEventListener("fets-applications-changed", refresh);
+  }, []);
+
+  if (apps.length === 0) {
+    return <div className="inset" style={{ padding: 30, borderRadius: 14, textAlign: "center", color: "var(--ink-4)", fontSize: 13 }}>No applications submitted yet. Use the form above to apply.</div>;
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {apps.map(app => {
+        const km = APP_KINDS.find(a => a.k === app.kind);
+        let detail = "";
+        if (app.kind === "leave")          detail = `${app.leave_type || "Full-day"} · ${app.request_date || ""}`;
+        if (app.kind === "swap")           detail = `${app.request_date} ↔ ${app.swap_with_name} (${app.swap_date || ""})`;
+        if (app.kind === "emergency_duty") detail = `${app.request_date} → ${app.new_shift_code} shift`;
+        if (app.kind === "reimbursement")  detail = `₹${app.amount || 0} · ${app.expense_type || ""}`;
+        return (
+          <div key={app.id} className="glass" style={{ borderRadius: 14, padding: "14px 16px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+            <div style={{ width: 32, height: 32, borderRadius: 9, display: "grid", placeItems: "center", flexShrink: 0,
+              background: `color-mix(in oklch, ${km?.color || "var(--accent)"} 14%, var(--inset))`, color: km?.color || "var(--accent)" }}>
+              <Icon name={km?.icon || "file"} size={15} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>{km?.label || app.kind}</div>
+              <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2 }}>{detail}</div>
+              {app.reason && <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 3, fontStyle: "italic" }}>"{app.reason}"</div>}
+              {app.admin_reply && app.status !== "pending" && (
+                <div style={{ fontSize: 11, color: app.status === "approved" ? "var(--good)" : "var(--bad)", marginTop: 4, fontWeight: 600 }}>
+                  Admin: "{app.admin_reply}"
+                </div>
+              )}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+              <AppStatusBadge status={app.status} />
+              <span style={{ fontSize: 10, color: "var(--ink-4)" }}>{app.created_at ? new Date(app.created_at).toLocaleDateString() : ""}</span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function AdminApplicationsInbox() {
+  const [apps, setApps] = React.useState(() => window.FETS._applications || []);
+  const [filter, setFilter] = React.useState("pending");
+  const [replyModal, setReplyModal] = React.useState(null); // { app, action }
+  const [replyText, setReplyText] = React.useState("");
+  const [resolving, setResolving] = React.useState(false);
+
+  React.useEffect(() => {
+    const refresh = () => setApps([...(window.FETS._applications || [])]);
+    window.addEventListener("fets-applications-changed", refresh);
+    return () => window.removeEventListener("fets-applications-changed", refresh);
+  }, []);
+
+  const filtered = apps.filter(a => filter === "all" ? true : a.status === filter);
+  const pendingCount = apps.filter(a => a.status === "pending").length;
+
+  const doResolve = async () => {
+    if (!replyModal) return;
+    setResolving(true);
+    await DB.dbResolveApplication(replyModal.app.id, replyModal.action === "approve" ? "approved" : "rejected", replyText);
+    setResolving(false);
+    setReplyModal(null);
+    setReplyText("");
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Tab bar */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {[
+          { k: "pending", label: `Pending${pendingCount > 0 ? ` (${pendingCount})` : ""}` },
+          { k: "approved", label: "Approved" },
+          { k: "rejected", label: "Rejected" },
+          { k: "all", label: "All" },
+        ].map(({ k, label }) => (
+          <button key={k} onClick={() => setFilter(k)} className="tap"
+            style={{ padding: "8px 16px", borderRadius: 20, fontSize: 12, fontWeight: 700, fontFamily: "var(--font)", cursor: "pointer",
+              border: `1.5px solid ${filter === k ? (k === "pending" ? "var(--warn)" : k === "approved" ? "var(--good)" : k === "rejected" ? "var(--bad)" : "var(--accent)") : "var(--hairline)"}`,
+              background: filter === k ? `color-mix(in oklch, ${k === "pending" ? "var(--warn)" : k === "approved" ? "var(--good)" : k === "rejected" ? "var(--bad)" : "var(--accent)"} 12%, var(--inset))` : "var(--inset)",
+              color: filter === k ? (k === "pending" ? "var(--warn)" : k === "approved" ? "var(--good)" : k === "rejected" ? "var(--bad)" : "var(--accent)") : "var(--ink-3)" }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Application cards */}
+      {filtered.length === 0 ? (
+        <div className="inset" style={{ padding: 30, borderRadius: 14, textAlign: "center", color: "var(--ink-4)", fontSize: 13 }}>
+          No {filter === "all" ? "" : filter} applications.
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {filtered.map(app => {
+            const km = APP_KINDS.find(a => a.k === app.kind);
+            let detail = "";
+            if (app.kind === "leave")          detail = `${app.leave_type || "Full-day"} · ${app.request_date || ""}`;
+            if (app.kind === "swap")           detail = `${app.request_date} ↔ ${app.swap_with_name} (${app.swap_date || ""})`;
+            if (app.kind === "emergency_duty") detail = `${app.request_date} → ${app.new_shift_code} shift`;
+            if (app.kind === "reimbursement")  detail = `₹${app.amount || 0} · ${app.expense_type || ""}`;
+            return (
+              <div key={app.id} className="glass" style={{ borderRadius: 14, padding: "16px 18px", display: "flex", gap: 14, alignItems: "flex-start", flexWrap: "wrap" }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, display: "grid", placeItems: "center", flexShrink: 0,
+                  background: `color-mix(in oklch, ${km?.color || "var(--accent)"} 14%, var(--inset))`, color: km?.color || "var(--accent)" }}>
+                  <Icon name={km?.icon || "file"} size={16} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
+                    <span style={{ fontSize: 13.5, fontWeight: 750, color: "var(--ink)" }}>{app.applicant_name}</span>
+                    <AppStatusBadge status={app.status} />
+                    <span style={{ fontSize: 10.5, color: "var(--ink-4)" }}>{km?.label}</span>
+                    <span style={{ fontSize: 10, color: "var(--ink-4)", marginLeft: "auto" }}>{app.created_at ? new Date(app.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : ""}</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--ink-2)", fontWeight: 600 }}>{detail}</div>
+                  {app.reason && <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 3, fontStyle: "italic" }}>"{app.reason}"</div>}
+                  {app.admin_reply && <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 3 }}>Reply: "{app.admin_reply}"</div>}
+                </div>
+                {app.status === "pending" && (
+                  <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                    <button onClick={() => { setReplyModal({ app, action: "approve" }); setReplyText(""); }} className="tap"
+                      style={{ padding: "8px 16px", borderRadius: 9, border: "1px solid var(--good)", background: "color-mix(in oklch, var(--good) 10%, var(--inset))", color: "var(--good)", fontSize: 12, fontWeight: 700, fontFamily: "var(--font)", cursor: "pointer" }}>
+                      <Icon name="check" size={13} /> Approve
+                    </button>
+                    <button onClick={() => { setReplyModal({ app, action: "reject" }); setReplyText(""); }} className="tap"
+                      style={{ padding: "8px 16px", borderRadius: 9, border: "1px solid var(--bad)", background: "color-mix(in oklch, var(--bad) 10%, var(--inset))", color: "var(--bad)", fontSize: 12, fontWeight: 700, fontFamily: "var(--font)", cursor: "pointer" }}>
+                      <Icon name="x" size={13} /> Reject
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Reply modal */}
+      {replyModal && (
+        <div onClick={() => setReplyModal(null)}
+          style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(8px)", display: "grid", placeItems: "center" }}>
+          <div onClick={e => e.stopPropagation()} className="glass"
+            style={{ padding: "26px 24px", borderRadius: 20, minWidth: 360, maxWidth: 440, display: "flex", flexDirection: "column", gap: 16, boxShadow: "0 12px 48px rgba(0,0,0,0.45)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ width: 38, height: 38, borderRadius: 11, display: "grid", placeItems: "center",
+                background: `color-mix(in oklch, ${replyModal.action === "approve" ? "var(--good)" : "var(--bad)"} 16%, transparent)`,
+                color: replyModal.action === "approve" ? "var(--good)" : "var(--bad)" }}>
+                <Icon name={replyModal.action === "approve" ? "check" : "x"} size={18} />
+              </span>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 750, color: "var(--ink)" }}>
+                  {replyModal.action === "approve" ? "Approve" : "Reject"} Application
+                </div>
+                <div style={{ fontSize: 11.5, color: "var(--ink-4)" }}>{replyModal.app.applicant_name} · {APP_KINDS.find(a => a.k === replyModal.app.kind)?.label}</div>
+              </div>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <label style={{ fontSize: 10, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Reply Note (optional)</label>
+              <textarea value={replyText} onChange={e => setReplyText(e.target.value)} rows={3} placeholder={replyModal.action === "approve" ? "e.g. Approved, have a good rest." : "e.g. Coverage issue that week."}
+                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--hairline)", background: "var(--panel-3)", color: "var(--ink)", fontSize: 13.5, fontFamily: "var(--font)", outline: "none", resize: "vertical" }} />
+            </div>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button onClick={() => setReplyModal(null)} className="tap"
+                style={{ padding: "9px 18px", borderRadius: 10, border: "1px solid var(--hairline)", background: "var(--panel-3)", color: "var(--ink-2)", fontSize: 13, fontWeight: 650, fontFamily: "var(--font)", cursor: "pointer" }}>Cancel</button>
+              <button onClick={doResolve} disabled={resolving} className="tap"
+                style={{ padding: "9px 22px", borderRadius: 10, border: "none", fontFamily: "var(--font)", fontSize: 13, fontWeight: 750, cursor: resolving ? "default" : "pointer", opacity: resolving ? 0.6 : 1,
+                  background: replyModal.action === "approve" ? "var(--good)" : "var(--bad)", color: "#fff" }}>
+                {resolving ? "Processing…" : (replyModal.action === "approve" ? "Approve" : "Reject")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ApplicationsHub({ isSuperAdmin }) {
+  const [tab, setTab] = React.useState(isSuperAdmin ? "inbox" : "apply");
+  const pendingCount = (window.FETS._applications || []).filter(a => a.status === "pending").length;
+
+  const TABS = isSuperAdmin
+    ? [
+        { k: "inbox",  icon: "inbox",  label: "Applications Inbox", badge: pendingCount },
+        { k: "apply",  icon: "edit",   label: "Submit on Behalf" },
+      ]
+    : [
+        { k: "apply",  icon: "edit",   label: "New Application" },
+        { k: "mine",   icon: "list",   label: "My Requests" },
+      ];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* Section header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <div style={{ width: 40, height: 40, borderRadius: 12, display: "grid", placeItems: "center", background: "color-mix(in oklch, var(--accent) 16%, var(--inset))", color: "var(--accent)" }}>
+          <Icon name="file-text" size={20} />
+        </div>
+        <div>
+          <div style={{ fontSize: 17, fontWeight: 800, color: "var(--ink)", letterSpacing: "-0.01em" }}>Applications</div>
+          <div style={{ fontSize: 12, color: "var(--ink-4)" }}>
+            {isSuperAdmin ? `${pendingCount} pending review` : "Manage your leave, swaps & claims"}
+          </div>
+        </div>
+        {/* Tab pills */}
+        <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+          {TABS.map(t => (
+            <button key={t.k} onClick={() => setTab(t.k)} className="tap"
+              style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 16px", borderRadius: 20, fontSize: 12.5, fontWeight: 700, fontFamily: "var(--font)", cursor: "pointer",
+                border: `1.5px solid ${tab === t.k ? "var(--accent)" : "var(--hairline)"}`,
+                background: tab === t.k ? "color-mix(in oklch, var(--accent) 12%, var(--inset))" : "var(--inset)",
+                color: tab === t.k ? "var(--accent)" : "var(--ink-3)" }}>
+              <Icon name={t.icon} size={13} />{t.label}
+              {t.badge > 0 && (
+                <span style={{ position: "absolute", top: -5, right: -5, minWidth: 17, height: 17, borderRadius: 999, background: "var(--bad)", color: "#fff", fontSize: 9.5, fontWeight: 900, display: "grid", placeItems: "center", padding: "0 4px" }}>{t.badge}</span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Content */}
+      {tab === "apply" && <AppForm onSubmitted={() => setTab(isSuperAdmin ? "inbox" : "mine")} />}
+      {tab === "mine" && <MyApplicationsList />}
+      {tab === "inbox" && <AdminApplicationsInbox />}
+    </div>
+  );
+}
+
 function DeskMenu({ tab, setTab, pendingHandovers }) {
   return (
     <nav className="desk-menu" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(206px, 1fr))", gap: 12 }}>
@@ -10959,6 +10833,7 @@ function DeskMenu({ tab, setTab, pendingHandovers }) {
     </nav>
   );
 }
+
 
 function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
   const u = window.FETS.user;
@@ -11238,52 +11113,16 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
           </div>
         </div>
       ) : (
-        /* Nice premium watch this space banner for non-superadmin staff */
-        <div className="rise" style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          textAlign: "center",
-          padding: "80px 40px",
-          background: "linear-gradient(135deg, #90CCF4, #5DA2D5)",
-          border: "none",
-          borderRadius: 24,
-          boxShadow: "0 8px 30px rgba(93,162,213,0.25)",
-          maxWidth: 600,
-          margin: "40px auto 0",
-        }}>
-          <div style={{
-            width: 80,
-            height: 80,
-            borderRadius: "50%",
-            background: "#F3D250",
-            display: "grid",
-            placeItems: "center",
-            marginBottom: 24,
-            boxShadow: "0 10px 25px rgba(243,210,80,0.35)",
-          }}>
-            <Icon name="spark" size={36} style={{ color: "#2c3e50" }} />
-          </div>
-          <h2 style={{
-            margin: "0 0 10px",
-            fontFamily: '"Archivo Expanded", var(--font)',
-            fontWeight: 800,
-            fontSize: 24,
-            letterSpacing: "-0.02em",
-            color: "#ffffff",
-          }}>
-            Watch This Space
-          </h2>
-          <p style={{
-            margin: 0,
-            fontSize: 14,
-            lineHeight: 1.5,
-            color: "rgba(255,255,255,0.85)",
-            maxWidth: 380,
-          }}>
-            We are upgrading your cockpit with powerful new productivity tools. Stay tuned!
-          </p>
+        /* Staff view: full Applications portal replacing Watch This Space */
+        <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+          <ApplicationsHub isSuperAdmin={false} />
+        </div>
+      )}
+
+      {/* Applications hub always visible below for super admins too */}
+      {isSuperAdmin && (
+        <div style={{ borderTop: "1px solid var(--hairline)", paddingTop: 28 }}>
+          <ApplicationsHub isSuperAdmin={true} />
         </div>
       )}
     </div>
@@ -11362,7 +11201,7 @@ const TOOLS = [
   { id: "business", icon: "star", label: "Google Business", sub: "Reviews, ratings & reach", page: true },
   { id: "candidate-tracker", icon: "users", label: "Candidate Tracker", sub: "Registrations & sessions", legacy: true },
   { id: "access-hub", icon: "key", label: "F-Vault / Access Hub", sub: "Credentials & access", legacy: true },
-  { id: "staff-requests", icon: "user", label: "Roster Approvals Hub", sub: "Manage staff requests, leaves & swaps" },
+  /* staff-requests entry removed — admin inbox is exclusively in My Desk → ApplicationsHub */
   { id: "staff-ot", icon: "clock", label: "OT & TOIL Manager", sub: "Overtime logging & TOIL cash payouts" },
   { id: "dashboard", icon: "grid", label: "Dashboard", sub: "iCloud overview", legacy: true },
   { id: "news-manager", icon: "message", label: "News Manager", sub: "Announcements", legacy: true },
@@ -12609,6 +12448,14 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
           window.dispatchEvent(new Event("fets-discussion-changed"));
         }
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "staff_applications" },
+        async (payload) => {
+          console.log("Realtime: staff_applications changed", payload);
+          await loadApplications(window.FETS);
+        }
+      )
       .subscribe();
 
     return () => {
@@ -12655,7 +12502,7 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
         {active === "business" && <BusinessPage branch={branch} />}
         {(active === "news" || active === "actionables") && <ActionablesView branch={branch} />}
         {active === "attn-admin" && <AttendanceAdminPage branch={branch} />}
-        {active === "staff-requests" && <RosterApprovalsHub branch={branch} />}
+        {/* staff-requests route removed — exclusively handled in My Desk → ApplicationsHub */}
         {active === "staff-ot" && <OtToilClaimsHub branch={branch} />}
         {active === "candidate-tracker" && <CandidateTracker />}
         {active === "access-hub" && <AccessHubPage />}
@@ -12720,7 +12567,11 @@ function RedesignShell({ bridge, userName, userEmail, isAdmin, onLogout, activeB
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     let mounted = true;
-    Promise.resolve(loadLiveData(window.FETS)).catch(() => {}).finally(() => { if (mounted) setReady(true); });
+    Promise.resolve(loadLiveData(window.FETS)).catch(() => {}).finally(() => {
+      if (mounted) setReady(true);
+      // Load applications in background (non-blocking)
+      loadApplications(window.FETS).catch(() => {});
+    });
     return () => { mounted = false; document.body.style.overflow = prev; };
   }, []);
   return (

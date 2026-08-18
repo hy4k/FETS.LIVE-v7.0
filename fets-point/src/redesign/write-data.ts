@@ -1264,3 +1264,214 @@ export function markHandoverSeen(id: string) {
     localStorage.setItem("fets_seen_handovers", JSON.stringify(seen.slice(-200)));
   } catch {}
 }
+
+/* ====================================================================
+   STAFF APPLICATIONS PORTAL
+   New table: staff_applications (leave | swap | emergency_duty | reimbursement)
+   ==================================================================== */
+
+const APP_KIND_LABEL: Record<string, string> = {
+  leave:          "Leave",
+  swap:           "Shift Swap",
+  emergency_duty: "Emergency Duty Change",
+  reimbursement:  "Reimbursement",
+};
+
+async function notifyAdminsOfApplication(app: any) {
+  try {
+    const { data: admins } = await supabase
+      .from("staff_profiles")
+      .select("id, branch_assigned")
+      .or("role.eq.super_admin,role.eq.admin,role.eq.Super Admin,role.eq.Admin");
+
+    if (!admins || admins.length === 0) return;
+
+    const kindLabel = APP_KIND_LABEL[app.kind] || app.kind;
+    let title = `[${kindLabel}] ${app.applicant_name}`;
+    let message = "";
+
+    if (app.kind === "leave") {
+      message = `${app.applicant_name} applied for ${app.leave_type || "leave"} on ${app.request_date}. Reason: ${app.reason || "—"}`;
+    } else if (app.kind === "swap") {
+      message = `${app.applicant_name} wants to swap ${app.request_date} with ${app.swap_with_name} (${app.swap_date || "same date"}). Reason: ${app.reason || "—"}`;
+    } else if (app.kind === "emergency_duty") {
+      message = `${app.applicant_name} requests emergency duty change on ${app.request_date} → shift ${app.new_shift_code || "?"}. Reason: ${app.reason || "—"}`;
+    } else if (app.kind === "reimbursement") {
+      message = `${app.applicant_name} claims ₹${app.amount || 0} for ${app.expense_type || "expenses"}. Note: ${app.receipt_note || "—"}`;
+    }
+
+    const notifications = admins.map((admin: any) => ({
+      recipient_id: admin.id,
+      type: "critical_incident",
+      title,
+      message,
+      priority: app.kind === "emergency_duty" ? "critical" : "high",
+      branch_location: app.branch || admin.branch_assigned || "global",
+      is_read: false,
+      created_at: new Date().toISOString(),
+    }));
+
+    await supabase.from("notifications").insert(notifications);
+  } catch (err) {
+    console.error("notifyAdminsOfApplication error:", err);
+  }
+}
+
+async function notifyApplicantOfResolution(app: any, status: string, adminReply: string) {
+  try {
+    if (!app.applicant_id) return;
+    const kindLabel = APP_KIND_LABEL[app.kind] || app.kind;
+    const approved = status === "approved";
+    const title = approved
+      ? `✅ ${kindLabel} Approved`
+      : `❌ ${kindLabel} Rejected`;
+    const message = adminReply
+      ? `Your ${kindLabel.toLowerCase()} request was ${status}. Admin says: "${adminReply}"`
+      : `Your ${kindLabel.toLowerCase()} request was ${status}.`;
+
+    await supabase.from("notifications").insert([{
+      recipient_id: app.applicant_id,
+      type: approved ? "success" : "critical_incident",
+      title,
+      message,
+      priority: "high",
+      branch_location: app.branch || "global",
+      is_read: false,
+      created_at: new Date().toISOString(),
+    }]);
+  } catch (err) {
+    console.error("notifyApplicantOfResolution error:", err);
+  }
+}
+
+export async function dbSubmitApplication(app: {
+  kind: string;
+  request_date?: string;
+  leave_type?: string;
+  swap_with_name?: string;
+  swap_with_id?: string;
+  swap_date?: string;
+  new_shift_code?: string;
+  amount?: number;
+  expense_type?: string;
+  receipt_note?: string;
+  reason?: string;
+}) {
+  const f = F();
+  const applicantId = f._meId || null;
+  const applicantName = f._meName || f.user?.name || "Unknown";
+  const branch = f._meBranch || "calicut";
+
+  const row: any = {
+    kind: app.kind,
+    status: "pending",
+    applicant_id: applicantId,
+    applicant_name: applicantName,
+    branch,
+    reason: app.reason || null,
+  };
+
+  if (app.kind === "leave" || app.kind === "emergency_duty") {
+    row.request_date = app.request_date || null;
+    row.leave_type = app.leave_type || null;
+  }
+  if (app.kind === "emergency_duty") {
+    row.new_shift_code = app.new_shift_code || null;
+  }
+  if (app.kind === "swap") {
+    row.request_date = app.request_date || null;
+    row.swap_with_name = app.swap_with_name || null;
+    row.swap_with_id = app.swap_with_id || (f._staffIdByName?.[app.swap_with_name || ""] || null);
+    row.swap_date = app.swap_date || app.request_date || null;
+  }
+  if (app.kind === "reimbursement") {
+    row.amount = app.amount || null;
+    row.expense_type = app.expense_type || null;
+    row.receipt_note = app.receipt_note || null;
+  }
+
+  try {
+    const { data, error } = await supabase.from("staff_applications").insert([row]).select().single();
+    if (error) throw error;
+
+    // Patch local cache
+    if (!f._applications) f._applications = [];
+    f._applications = [data, ...f._applications];
+    window.dispatchEvent(new Event("fets-applications-changed"));
+
+    rtoast("Application submitted");
+    notifyAdminsOfApplication({ ...row, ...data });
+    return data;
+  } catch (e) {
+    console.error("dbSubmitApplication error:", e);
+    rtoast("Failed to submit — please try again", "alert");
+    return null;
+  }
+}
+
+export async function dbResolveApplication(appId: string, status: "approved" | "rejected", adminReply: string) {
+  const f = F();
+  const adminId = f._meId || null;
+
+  try {
+    const { data, error } = await supabase
+      .from("staff_applications")
+      .update({
+        status,
+        admin_reply: adminReply || null,
+        resolved_by: adminId,
+        resolved_at: new Date().toISOString(),
+      })
+      .eq("id", appId)
+      .select("*")
+      .single();
+
+    if (error) throw error;
+
+    // Roster updates on approval
+    if (status === "approved" && data) {
+      if (data.kind === "leave" && data.applicant_id && data.request_date) {
+        await dbSetRosterById(data.applicant_id, data.request_date, "L");
+      } else if (data.kind === "emergency_duty" && data.applicant_id && data.request_date && data.new_shift_code) {
+        await dbSetRosterById(data.applicant_id, data.request_date, data.new_shift_code);
+      } else if (data.kind === "swap" && data.applicant_id && data.swap_with_id) {
+        const pidA = data.applicant_id;
+        const pidB = data.swap_with_id;
+        const dateA = data.request_date;
+        const dateB = data.swap_date || data.request_date;
+
+        const { data: currentShifts } = await supabase
+          .from("roster_schedules")
+          .select("*")
+          .in("profile_id", [pidA, pidB])
+          .in("date", [dateA, dateB]);
+
+        const shiftA = currentShifts?.find((s: any) => s.profile_id === pidA && s.date === dateA);
+        const shiftB = currentShifts?.find((s: any) => s.profile_id === pidB && s.date === dateB);
+        const codeA = shiftA?.shift_code || "D";
+        const codeB = shiftB?.shift_code || "D";
+        const branchA = shiftA?.branch_location || f._profileBranch?.[pidA] || "calicut";
+        const branchB = shiftB?.branch_location || f._profileBranch?.[pidB] || "calicut";
+
+        await dbSetRosterById(pidA, dateA, codeB, branchB);
+        await dbSetRosterById(pidB, dateB, codeA, branchA);
+      }
+    }
+
+    // Patch local cache
+    if (f._applications) {
+      f._applications = f._applications.map((a: any) => a.id === appId ? { ...a, ...data } : a);
+    }
+    window.dispatchEvent(new Event("fets-applications-changed"));
+    window.dispatchEvent(new Event("fets-roster-changed"));
+
+    notifyApplicantOfResolution(data, status, adminReply);
+    rtoast(status === "approved" ? "Application approved ✓" : "Application rejected");
+    return data;
+  } catch (e) {
+    console.error("dbResolveApplication error:", e);
+    rtoast("Failed to resolve application", "alert");
+    return null;
+  }
+}
+

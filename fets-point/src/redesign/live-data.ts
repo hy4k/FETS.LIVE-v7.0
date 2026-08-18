@@ -639,3 +639,22 @@ export async function loadLeaveRequests(F: any) {
 }
 
 
+export async function loadApplications(F: any) {
+  if (!F) return;
+  try {
+    const { data, error } = await supabase
+      .from("staff_applications")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (!error && data) {
+      F._applications = data;
+      F._myApplications = data.filter(
+        (a: any) => a.applicant_id === F._meId || a.applicant_name === F.user?.name
+      );
+      window.dispatchEvent(new Event("fets-applications-changed"));
+    }
+  } catch (e) {
+    console.error("loadApplications error:", e);
+  }
+}

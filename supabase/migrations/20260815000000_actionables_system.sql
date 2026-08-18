@@ -220,7 +220,8 @@ for each row execute function public.notify_gchat();
 
 -- ---------- SEED APP SETTINGS ----------
 insert into public.app_settings (key, value) values
-  ('rollout_unlock_target', '10')
+  ('rollout_unlock_target', '10'),
+  ('vault_export_password', 'FETS2026')
 on conflict (key) do nothing;
 
 -- ---------- SEED CENTRES ----------
