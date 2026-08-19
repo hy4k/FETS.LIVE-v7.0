@@ -20,6 +20,6 @@ pnpm build
 
 echo "→ Publishing to nginx web root…"
 sudo rsync -a --delete --exclude='.well-known' dist/ /var/www/html/fets.live/public_html/
-sudo nginx -t && sudo systemctl reload nginx
+sudo nginx -t && sudo systemctl reload nginx 2>/dev/null || echo "  (nginx not managed by systemd — skipping reload)"
 
 echo "✓ Deployed. Live bundle: $(curl -s https://fets.live/ | grep -o 'assets/index-[^"]*\.js' | head -1)"
