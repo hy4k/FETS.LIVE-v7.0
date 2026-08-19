@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # One-command deploy for fets.live
-# (the domain is served by the host nginx from a static root, not by Coolify)
+# Site is served via Traefik → Docker container (fets-live-app).
+# This script: pull → rebuild container → verify.
 #
 #   bash deploy.sh
 #
@@ -12,14 +13,11 @@ git fetch origin
 git checkout main
 git pull --ff-only
 
-echo "→ Building…"
-cd fets-point
-corepack enable >/dev/null 2>&1 || true
-pnpm install --no-frozen-lockfile
-pnpm build
+echo "→ Rebuilding Docker container…"
+docker compose build --no-cache app
+docker compose up -d app
 
-echo "→ Publishing to nginx web root…"
-sudo rsync -a --delete --exclude='.well-known' dist/ /var/www/html/fets.live/public_html/
-sudo nginx -t && sudo systemctl reload nginx 2>/dev/null || echo "  (nginx not managed by systemd — skipping reload)"
+echo "→ Waiting for container to be healthy…"
+sleep 3
 
 echo "✓ Deployed. Live bundle: $(curl -s https://fets.live/ | grep -o 'assets/index-[^"]*\.js' | head -1)"
