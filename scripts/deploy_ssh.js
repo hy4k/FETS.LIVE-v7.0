@@ -1,12 +1,16 @@
 import { Client } from 'ssh2';
-import { readdirSync, statSync } from 'fs';
+import { readdirSync, readFileSync, statSync } from 'fs';
 import { join, relative } from 'path';
+import { homedir } from 'os';
+
+const sshKeyPath = (process.env.VPS_SSH_KEY_PATH || '~/.ssh/id_rsa')
+  .replace(/^~/, homedir());
 
 const config = {
-  host: '72.61.171.192',
+  host: process.env.VPS_HOST || '72.61.171.192',
   port: 22,
-  username: 'root',
-  password: 'Suspended00@'
+  username: process.env.VPS_USER || 'root',
+  privateKey: readFileSync(sshKeyPath),
 };
 
 const REMOTE_DIR = '/var/www/html/fets.live/public_html';
