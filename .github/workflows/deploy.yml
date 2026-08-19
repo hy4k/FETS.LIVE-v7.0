@@ -1,11 +1,10 @@
 name: Deploy to VPS (fets.live)
 
-# Permanent deploy: on every push to main, SSH into the VPS and run deploy.sh
-# (build + rsync into the nginx web root). The host nginx serves fets.live
-# from a static root, so this — not Coolify — is what publishes the site.
+# Deploy: SSH into VPS, pull latest in /opt/apps/fets-live, rebuild Docker.
+# Site is served via Traefik → fets-live-app container.
 #
 # One-time setup — add these repo secrets (Settings → Secrets → Actions):
-#   VPS_HOST     e.g. 72.61.171.192   (or coolify.fets.in)
+#   VPS_HOST     e.g. 72.61.171.192
 #   VPS_USER     e.g. root
 #   VPS_SSH_KEY  a private SSH key whose public key is in the server's
 #                ~/.ssh/authorized_keys
@@ -35,10 +34,12 @@ jobs:
           command_timeout: 15m
           script: |
             set -e
-            cd ~/FETS.LIVE-v7.0 || git clone https://github.com/hy4k/FETS.LIVE-v7.0.git ~/FETS.LIVE-v7.0
-            cd ~/FETS.LIVE-v7.0
-            git pull
-            bash deploy.sh
+            cd /opt/apps/fets-live
+            git fetch origin
+            git checkout main
+            git pull --ff-only
+            docker compose build --no-cache app
+            docker compose up -d app
 
       - name: Note when skipped
         if: steps.cfg.outputs.ready != 'true'
