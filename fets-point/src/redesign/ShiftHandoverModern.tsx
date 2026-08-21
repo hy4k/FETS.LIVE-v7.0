@@ -762,17 +762,24 @@ export function ShiftBeginning({ branch, refreshKey, onAccepted, trimmed }: any)
 
   const load = React.useCallback(async () => {
     setLoading(true);
-    const rows = await DB.dbFetchPendingHandovers(me, window.FETS?._meUserId);
+    const rows = await DB.dbFetchPendingHandovers(undefined, undefined, branch);
     const relevant = (rows || []).filter((row: any) => branch === "global" || row.branch === branch || row.branch === "all");
     setItems(relevant);
     setSelected((current: any) => relevant.find((row: any) => row.id === current?.id) || relevant[0] || null);
     setLoading(false);
-  }, [me, branch]);
+  }, [branch]);
 
   React.useEffect(() => { load(); }, [load, refreshKey]);
 
   if (loading) return <div className="sh-loading"><Loader2 className="spin" /> Loading handover…</div>;
   if (!selected) return <EmptyState icon={ClipboardCheck} title="No handover awaiting you" text="New handovers assigned to you will appear here before your next shift." />;
+
+  const incomingStaffList = (selected.incoming_staff && selected.incoming_staff.length > 0)
+    ? selected.incoming_staff
+    : [me];
+  const incomingName = incomingStaffList.join(", ");
+  const incomingFirstName = incomingStaffList.map((s: string) => s.split(" ")[0]).join(" & ");
+  const outgoingName = selected.sig_out?.name || (selected.outgoing_staff && selected.outgoing_staff.length > 0 ? selected.outgoing_staff.join(", ") : "Outgoing staff");
 
   const summary = {
     total: selected.total_sessions ?? "—",
@@ -788,7 +795,13 @@ export function ShiftBeginning({ branch, refreshKey, onAccepted, trimmed }: any)
   async function accept() {
     if (!acceptEnabled || signing) return;
     setSigning(true);
-    const sig = { name: me, user_id: window.FETS?._meUserId || null, time: new Date().toISOString(), acceptance_status: status };
+    const sig = {
+      name: incomingName,
+      user_id: window.FETS?._meUserId || null,
+      time: new Date().toISOString(),
+      acceptance_status: status,
+      ...(me && me !== incomingName ? { entered_by: me } : {})
+    };
     const result = await DB.dbCompleteHandover(selected.id, sig, comment);
     setSigning(false);
     if (result) {
@@ -800,13 +813,24 @@ export function ShiftBeginning({ branch, refreshKey, onAccepted, trimmed }: any)
   return (
     <div className="sh-stack">
       <div className="sh-page-intro">
-        <div><span className="sh-page-kicker">SHIFT BEGINNING · {titleBranch(branch).toUpperCase()}</span><h1>Good morning, {me.split(" ")[0]}.</h1><p>Review the previous handover, verify the centre and take charge of today’s shift.</p></div>
-        <div className="sh-from"><span>{initials(selected.sig_out?.name || selected.outgoing_staff?.[0])}</span><span><small>Handover from</small><strong>{selected.sig_out?.name || selected.outgoing_staff?.join(", ")}</strong><small>{displayDate(selected.date)} · {selected.handover_time}</small></span></div>
+        <div>
+          <span className="sh-page-kicker">SHIFT BEGINNING · {titleBranch(branch).toUpperCase()}</span>
+          <h1>Good morning, {incomingFirstName}.</h1>
+          <p>Review the previous handover, verify the centre and take charge of today’s shift.</p>
+        </div>
+        <div className="sh-from">
+          <span>{initials(outgoingName)}</span>
+          <span>
+            <small>Handover from</small>
+            <strong>{outgoingName}</strong>
+            <small>{displayDate(selected.date)} · {selected.handover_time}</small>
+          </span>
+        </div>
       </div>
 
       {(selected.overall_status === "attention" || selected.overall_status === "not_ready" || tasks.length > 0) && <div className="sh-opening-alert"><AlertTriangle size={20} /><span><strong>{tasks.length || 1} item{tasks.length === 1 ? "" : "s"} needs attention</strong><small>Review the pending action before beginning operations.</small></span></div>}
 
-      <Section number={1} eyebrow="Previous shift" title="Handover summary" description={`Submitted by ${(selected.outgoing_staff || []).join(", ")} on ${displayDate(selected.date)}.`}>
+      <Section number={1} eyebrow="Previous shift" title="Handover summary" description={`Submitted by ${outgoingName} on ${displayDate(selected.date)}.`}>
         <div className={`sh-summary-status ${selected.overall_status || "ready"}`}><i /><span><strong>{selected.overall_status === "minor" ? "Ready with minor issues" : selected.overall_status === "attention" ? "Attention required" : selected.overall_status === "not_ready" ? "Not ready" : "Ready for the day"}</strong><small>Read the notes and actions before accepting responsibility.</small></span><em><Check size={13} /> Submitted</em></div>
         <div className="sh-summary-metrics"><div><strong>{summary.total}</strong><span>Sessions</span></div><div><strong>{summary.attended}</strong><span>Attended</span></div><div><strong>{summary.noShow}</strong><span>No-show</span></div><div><strong>{summary.incidents}</strong><span>Incidents</span></div></div>
         <div className="sh-closing-note"><span>Closing note</span><p>{selected.candidate_notes || "No additional closing note."}</p></div>
@@ -842,7 +866,7 @@ export function ShiftBeginning({ branch, refreshKey, onAccepted, trimmed }: any)
         ].map(([id, label, detail, Icon]: any) => <button type="button" key={id} className={status === id ? "active" : ""} onClick={() => setStatus(id)}><Icon size={18} /><span><strong>{label}</strong><small>{detail}</small></span>{status === id && <Check size={14} />}</button>)}</div>
         {status !== "ready" && <Field label="Describe the exception or new issue" wide><textarea rows={3} value={comment} onChange={(e) => setComment(e.target.value)} placeholder="State what you found, the immediate action taken, and who was informed…" /></Field>}
         <label className="sh-declaration"><input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} /><span><strong>I have reviewed and accept responsibility for this shift.</strong><small>Any difference or new issue has been recorded above.</small></span></label>
-        <div className="sh-signature"><span>{initials(me)}</span><span><strong>{me}</strong><small>Opening staff · {titleBranch(branch)}</small></span><small>Digitally signed on acceptance</small></div>
+        <div className="sh-signature"><span>{initials(incomingName)}</span><span><strong>{incomingName}</strong><small>Taking over shift · {titleBranch(branch)}</small></span><small>Digitally signed on acceptance</small></div>
         <button type="button" className="sh-primary" disabled={!acceptEnabled || signing} onClick={accept}>{signing ? <><Loader2 className="spin" size={16} /> Signing…</> : <>Accept & begin shift <ChevronRight size={17} /></>}</button>
         {!acceptEnabled && <p className="sh-submit-help">Complete all four opening checks, record any exception and confirm acceptance.</p>}
       </Section>

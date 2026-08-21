@@ -1085,28 +1085,37 @@ export async function dbCreateHandover(h: any) {
   }
 }
 
-export async function dbFetchPendingHandovers(staffName: string, userId?: string) {
+export async function dbFetchPendingHandovers(staffName?: string, userId?: string, branch?: string) {
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from("shift_handovers")
       .select("*")
       .eq("status", "pending")
       .order("created_at", { ascending: false });
+
+    if (branch && branch !== "global") {
+      query = query.in("branch", [branch, "all"]);
+    }
+
+    const { data, error } = await query;
     if (error) throw error;
     
-    const nameLower = staffName.toLowerCase().trim();
-    const results = (data || []).filter((h: any) => {
-      const hasName = (h.incoming_staff || []).some((n: string) => n.toLowerCase().trim() === nameLower);
-      const hasId = userId && (h.incoming_user_ids || []).includes(userId);
-      return hasName || hasId;
-    }).map((h: any) => {
+    let results = data || [];
+    if (staffName) {
+      const nameLower = staffName.toLowerCase().trim();
+      results = results.filter((h: any) => {
+        const hasName = (h.incoming_staff || []).some((n: string) => n.toLowerCase().trim() === nameLower);
+        const hasId = userId && (h.incoming_user_ids || []).includes(userId);
+        return hasName || hasId;
+      });
+    }
+    return results.map((h: any) => {
       const now = new Date();
       if (h.expires_at && new Date(h.expires_at) < now) {
         return { ...h, status: "expired" };
       }
       return h;
     });
-    return results;
   } catch (e) {
     console.error("dbFetchPendingHandovers error:", e);
     return [];

@@ -10398,15 +10398,15 @@ function PresetCard({ m, idx, on, onClick, badge }) {
    Four types: leave | swap | emergency_duty | reimbursement
    ============================================================ */
 const APP_KINDS = [
-  { k: "leave",          icon: "calendar", label: "Leave",                 color: "var(--bad)",         desc: "Apply for a scheduled day off" },
-  { k: "swap",           icon: "refresh",  label: "Shift Swap",            color: "var(--v-prometric)", desc: "Propose a swap with a colleague" },
-  { k: "emergency_duty", icon: "zap",      label: "Emergency Duty Change", color: "var(--warn)",        desc: "Request an urgent shift change" },
-  { k: "reimbursement",  icon: "dollar",   label: "Reimbursement",         color: "var(--good)",        desc: "Claim work expenses" },
+  { k: "leave",          icon: "calendar", label: "Leave",                 color: "#B23850",  desc: "Apply for a scheduled day off" },
+  { k: "swap",           icon: "refresh",  label: "Shift Swap",            color: "#3B8BEB",  desc: "Propose a swap with a colleague" },
+  { k: "emergency_duty", icon: "zap",      label: "Emergency Duty Change", color: "#B23850",  desc: "Request an urgent shift change" },
+  { k: "reimbursement",  icon: "dollar",   label: "Reimbursement",         color: "#3B8BEB",  desc: "Claim work expenses" },
 ];
 const APP_STATUS_STYLE = {
-  pending:  { label: "Pending",  color: "var(--warn)" },
-  approved: { label: "Approved", color: "var(--good)" },
-  rejected: { label: "Rejected", color: "var(--bad)" },
+  pending:  { label: "Pending",  color: "#8590AA" },
+  approved: { label: "Approved", color: "#3B8BEB" },
+  rejected: { label: "Rejected", color: "#B23850" },
 };
 const SHIFT_CODE_OPTIONS = ["D","E","N","HD","RD","TOIL","TR","SW"];
 const EXPENSE_TYPES = ["Travel","Meal","Material","Communication","Other"];
@@ -10417,8 +10417,8 @@ function AppStatusBadge({ status }) {
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10, fontWeight: 700,
       letterSpacing: "0.05em", textTransform: "uppercase", padding: "3px 9px", borderRadius: 999,
-      color: s.color, background: `color-mix(in oklch, ${s.color} 14%, var(--panel-3))`,
-      border: `1px solid color-mix(in oklch, ${s.color} 35%, transparent)` }}>
+      color: s.color, background: `color-mix(in srgb, ${s.color} 14%, #E7E3D4)`,
+      border: `1px solid color-mix(in srgb, ${s.color} 35%, transparent)` }}>
       <span style={{ width: 5, height: 5, borderRadius: 999, background: s.color }} />
       {s.label}
     </span>
@@ -10433,17 +10433,17 @@ function AppKindSelector({ selected, onChange, adminMode }) {
         return (
           <button key={k} type="button" onClick={() => onChange(k)} className="tap"
             style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", borderRadius: 14, textAlign: "left", width: "100%", cursor: "pointer",
-              border: `1.5px solid ${on ? color : "var(--hairline)"}`,
-              background: on ? `color-mix(in oklch, ${color} 10%, var(--inset))` : "var(--inset)",
+              border: `1.5px solid ${on ? color : "#C4DBF6"}`,
+              background: on ? "#C4DBF6" : "#E7E3D4",
               transition: "all 0.18s" }}>
             <div style={{ width: 32, height: 32, borderRadius: 9, display: "grid", placeItems: "center", flexShrink: 0,
-              background: on ? `color-mix(in oklch, ${color} 20%, transparent)` : "rgba(255,255,255,0.04)",
-              color: on ? color : "var(--ink-3)", border: `1px solid ${on ? color : "var(--hairline)"}` }}>
+              background: `color-mix(in srgb, ${color} 18%, #E7E3D4)`,
+              color, border: "none" }}>
               <Icon name={icon} size={15} />
             </div>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 750, color: on ? color : "var(--ink)", lineHeight: 1.2 }}>{label}</div>
-              <div style={{ fontSize: 10.5, color: "var(--ink-4)", marginTop: 2 }}>{desc}</div>
+              <div style={{ fontSize: 13, fontWeight: 750, color: on ? color : "#2c3e50", lineHeight: 1.2 }}>{label}</div>
+              <div style={{ fontSize: 10.5, color: "#8590AA", marginTop: 2 }}>{desc}</div>
             </div>
           </button>
         );
@@ -10479,11 +10479,11 @@ function AppForm({ onSubmitted }) {
   const staffList = (F().PEOPLE || []);
 
   const inpStyle = {
-    padding: "10px 12px", borderRadius: 10, border: "1px solid var(--hairline)",
-    background: "var(--panel-3)", color: "var(--ink)", fontSize: 13.5,
+    padding: "10px 12px", borderRadius: 10, border: "1.5px solid #C4DBF6",
+    background: "#fff", color: "#2c3e50", fontSize: 13.5,
     fontFamily: "var(--font)", outline: "none", width: "100%", boxSizing: "border-box"
   };
-  const labelStyle = { display: "flex", flexDirection: "column", gap: 6, fontSize: 11.5, fontWeight: 650, color: "var(--ink-2)" };
+  const labelStyle = { display: "flex", flexDirection: "column", gap: 6, fontSize: 11.5, fontWeight: 650, color: "#8590AA" };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -10506,15 +10506,15 @@ function AppForm({ onSubmitted }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <AppKindSelector selected={kind} onChange={setKind} />
-      <div className="glass" style={{ borderRadius: 16, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 18 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, borderBottom: "1px solid var(--hairline)", paddingBottom: 14 }}>
+      <div style={{ borderRadius: 16, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 18, background: "#E7E3D4", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, borderBottom: "1px solid #C4DBF6", paddingBottom: 14 }}>
           <div style={{ width: 34, height: 34, borderRadius: 10, display: "grid", placeItems: "center",
-            background: `color-mix(in oklch, ${kindMeta?.color} 14%, var(--inset))`, color: kindMeta?.color }}>
+            background: `color-mix(in srgb, ${kindMeta?.color} 18%, #E7E3D4)`, color: kindMeta?.color }}>
             <Icon name={kindMeta?.icon} size={16} />
           </div>
           <div>
-            <div style={{ fontSize: 14.5, fontWeight: 750, color: "var(--ink)" }}>New {kindMeta?.label} Application</div>
-            <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 1 }}>Fill in the details and submit — Super Admin will be notified immediately.</div>
+            <div style={{ fontSize: 14.5, fontWeight: 750, color: "#2c3e50" }}>New {kindMeta?.label} Application</div>
+            <div style={{ fontSize: 11, color: "#8590AA", marginTop: 1 }}>Fill in the details and submit — Super Admin will be notified immediately.</div>
           </div>
         </div>
 
@@ -10581,7 +10581,7 @@ function AppForm({ onSubmitted }) {
             <button type="submit" disabled={submitting} className="tap"
               style={{ padding: "11px 26px", borderRadius: 11, border: "none", fontFamily: "var(--font)", fontSize: 13, fontWeight: 750,
                 cursor: submitting ? "default" : "pointer", opacity: submitting ? 0.6 : 1,
-                background: kindMeta?.color || "var(--accent)", color: "#fff",
+                background: "#B23850", color: "#fff",
                 display: "inline-flex", alignItems: "center", gap: 8 }}>
               <Icon name="send" size={14} /> {submitting ? "Submitting…" : "Submit Application"}
             </button>
@@ -10601,7 +10601,7 @@ function MyApplicationsList() {
   }, []);
 
   if (apps.length === 0) {
-    return <div className="inset" style={{ padding: 30, borderRadius: 14, textAlign: "center", color: "var(--ink-4)", fontSize: 13 }}>No applications submitted yet. Use the form above to apply.</div>;
+    return <div style={{ padding: 30, borderRadius: 14, textAlign: "center", color: "#8590AA", fontSize: 13, background: "#E7E3D4" }}>No applications submitted yet. Use the form above to apply.</div>;
   }
 
   return (
@@ -10614,24 +10614,24 @@ function MyApplicationsList() {
         if (app.kind === "emergency_duty") detail = `${app.request_date} → ${app.new_shift_code} shift`;
         if (app.kind === "reimbursement")  detail = `₹${app.amount || 0} · ${app.expense_type || ""}`;
         return (
-          <div key={app.id} className="glass" style={{ borderRadius: 14, padding: "14px 16px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+          <div key={app.id} style={{ borderRadius: 14, padding: "14px 16px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", background: "#E7E3D4", border: "1px solid #C4DBF6" }}>
             <div style={{ width: 32, height: 32, borderRadius: 9, display: "grid", placeItems: "center", flexShrink: 0,
-              background: `color-mix(in oklch, ${km?.color || "var(--accent)"} 14%, var(--inset))`, color: km?.color || "var(--accent)" }}>
+              background: `color-mix(in srgb, ${km?.color || "#3B8BEB"} 14%, #E7E3D4)`, color: km?.color || "#3B8BEB" }}>
               <Icon name={km?.icon || "file"} size={15} />
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>{km?.label || app.kind}</div>
-              <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2 }}>{detail}</div>
-              {app.reason && <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 3, fontStyle: "italic" }}>"{app.reason}"</div>}
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#2c3e50" }}>{km?.label || app.kind}</div>
+              <div style={{ fontSize: 11, color: "#8590AA", marginTop: 2 }}>{detail}</div>
+              {app.reason && <div style={{ fontSize: 11, color: "#8590AA", marginTop: 3, fontStyle: "italic" }}>"{app.reason}"</div>}
               {app.admin_reply && app.status !== "pending" && (
-                <div style={{ fontSize: 11, color: app.status === "approved" ? "var(--good)" : "var(--bad)", marginTop: 4, fontWeight: 600 }}>
+                <div style={{ fontSize: 11, color: app.status === "approved" ? "#3B8BEB" : "#B23850", marginTop: 4, fontWeight: 600 }}>
                   Admin: "{app.admin_reply}"
                 </div>
               )}
             </div>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
               <AppStatusBadge status={app.status} />
-              <span style={{ fontSize: 10, color: "var(--ink-4)" }}>{app.created_at ? new Date(app.created_at).toLocaleDateString() : ""}</span>
+              <span style={{ fontSize: 10, color: "#8590AA" }}>{app.created_at ? new Date(app.created_at).toLocaleDateString() : ""}</span>
             </div>
           </div>
         );
@@ -10670,16 +10670,16 @@ function AdminApplicationsInbox() {
       {/* Tab bar */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         {[
-          { k: "pending", label: `Pending${pendingCount > 0 ? ` (${pendingCount})` : ""}` },
-          { k: "approved", label: "Approved" },
-          { k: "rejected", label: "Rejected" },
-          { k: "all", label: "All" },
-        ].map(({ k, label }) => (
+          { k: "pending", label: `Pending${pendingCount > 0 ? ` (${pendingCount})` : ""}`, activeColor: "#8590AA" },
+          { k: "approved", label: "Approved", activeColor: "#3B8BEB" },
+          { k: "rejected", label: "Rejected", activeColor: "#B23850" },
+          { k: "all", label: "All", activeColor: "#3B8BEB" },
+        ].map(({ k, label, activeColor }) => (
           <button key={k} onClick={() => setFilter(k)} className="tap"
             style={{ padding: "8px 16px", borderRadius: 20, fontSize: 12, fontWeight: 700, fontFamily: "var(--font)", cursor: "pointer",
-              border: `1.5px solid ${filter === k ? (k === "pending" ? "var(--warn)" : k === "approved" ? "var(--good)" : k === "rejected" ? "var(--bad)" : "var(--accent)") : "var(--hairline)"}`,
-              background: filter === k ? `color-mix(in oklch, ${k === "pending" ? "var(--warn)" : k === "approved" ? "var(--good)" : k === "rejected" ? "var(--bad)" : "var(--accent)"} 12%, var(--inset))` : "var(--inset)",
-              color: filter === k ? (k === "pending" ? "var(--warn)" : k === "approved" ? "var(--good)" : k === "rejected" ? "var(--bad)" : "var(--accent)") : "var(--ink-3)" }}>
+              border: `1.5px solid ${filter === k ? activeColor : "#C4DBF6"}`,
+              background: filter === k ? activeColor : "#E7E3D4",
+              color: filter === k ? "#fff" : "#8590AA" }}>
             {label}
           </button>
         ))}
@@ -10687,7 +10687,7 @@ function AdminApplicationsInbox() {
 
       {/* Application cards */}
       {filtered.length === 0 ? (
-        <div className="inset" style={{ padding: 30, borderRadius: 14, textAlign: "center", color: "var(--ink-4)", fontSize: 13 }}>
+        <div style={{ padding: 30, borderRadius: 14, textAlign: "center", color: "#8590AA", fontSize: 13, background: "#E7E3D4" }}>
           No {filter === "all" ? "" : filter} applications.
         </div>
       ) : (
@@ -10700,30 +10700,30 @@ function AdminApplicationsInbox() {
             if (app.kind === "emergency_duty") detail = `${app.request_date} → ${app.new_shift_code} shift`;
             if (app.kind === "reimbursement")  detail = `₹${app.amount || 0} · ${app.expense_type || ""}`;
             return (
-              <div key={app.id} className="glass" style={{ borderRadius: 14, padding: "16px 18px", display: "flex", gap: 14, alignItems: "flex-start", flexWrap: "wrap" }}>
+              <div key={app.id} style={{ borderRadius: 14, padding: "16px 18px", display: "flex", gap: 14, alignItems: "flex-start", flexWrap: "wrap", background: "#E7E3D4", border: "1px solid #C4DBF6" }}>
                 <div style={{ width: 36, height: 36, borderRadius: 10, display: "grid", placeItems: "center", flexShrink: 0,
-                  background: `color-mix(in oklch, ${km?.color || "var(--accent)"} 14%, var(--inset))`, color: km?.color || "var(--accent)" }}>
+                  background: `color-mix(in srgb, ${km?.color || "#3B8BEB"} 14%, #E7E3D4)`, color: km?.color || "#3B8BEB" }}>
                   <Icon name={km?.icon || "file"} size={16} />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
-                    <span style={{ fontSize: 13.5, fontWeight: 750, color: "var(--ink)" }}>{app.applicant_name}</span>
+                    <span style={{ fontSize: 13.5, fontWeight: 750, color: "#2c3e50" }}>{app.applicant_name}</span>
                     <AppStatusBadge status={app.status} />
-                    <span style={{ fontSize: 10.5, color: "var(--ink-4)" }}>{km?.label}</span>
-                    <span style={{ fontSize: 10, color: "var(--ink-4)", marginLeft: "auto" }}>{app.created_at ? new Date(app.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : ""}</span>
+                    <span style={{ fontSize: 10.5, color: "#8590AA" }}>{km?.label}</span>
+                    <span style={{ fontSize: 10, color: "#8590AA", marginLeft: "auto" }}>{app.created_at ? new Date(app.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : ""}</span>
                   </div>
-                  <div style={{ fontSize: 12, color: "var(--ink-2)", fontWeight: 600 }}>{detail}</div>
-                  {app.reason && <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 3, fontStyle: "italic" }}>"{app.reason}"</div>}
-                  {app.admin_reply && <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 3 }}>Reply: "{app.admin_reply}"</div>}
+                  <div style={{ fontSize: 12, color: "#2c3e50", fontWeight: 600 }}>{detail}</div>
+                  {app.reason && <div style={{ fontSize: 11, color: "#8590AA", marginTop: 3, fontStyle: "italic" }}>"{app.reason}"</div>}
+                  {app.admin_reply && <div style={{ fontSize: 11, color: "#8590AA", marginTop: 3 }}>Reply: "{app.admin_reply}"</div>}
                 </div>
                 {app.status === "pending" && (
                   <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
                     <button onClick={() => { setReplyModal({ app, action: "approve" }); setReplyText(""); }} className="tap"
-                      style={{ padding: "8px 16px", borderRadius: 9, border: "1px solid var(--good)", background: "color-mix(in oklch, var(--good) 10%, var(--inset))", color: "var(--good)", fontSize: 12, fontWeight: 700, fontFamily: "var(--font)", cursor: "pointer" }}>
+                      style={{ padding: "8px 16px", borderRadius: 9, border: "none", background: "#3B8BEB", color: "#fff", fontSize: 12, fontWeight: 700, fontFamily: "var(--font)", cursor: "pointer" }}>
                       <Icon name="check" size={13} /> Approve
                     </button>
                     <button onClick={() => { setReplyModal({ app, action: "reject" }); setReplyText(""); }} className="tap"
-                      style={{ padding: "8px 16px", borderRadius: 9, border: "1px solid var(--bad)", background: "color-mix(in oklch, var(--bad) 10%, var(--inset))", color: "var(--bad)", fontSize: 12, fontWeight: 700, fontFamily: "var(--font)", cursor: "pointer" }}>
+                      style={{ padding: "8px 16px", borderRadius: 9, border: "1.5px solid #B23850", background: "transparent", color: "#B23850", fontSize: 12, fontWeight: 700, fontFamily: "var(--font)", cursor: "pointer" }}>
                       <Icon name="x" size={13} /> Reject
                     </button>
                   </div>
@@ -10738,32 +10738,32 @@ function AdminApplicationsInbox() {
       {replyModal && (
         <div onClick={() => setReplyModal(null)}
           style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(8px)", display: "grid", placeItems: "center" }}>
-          <div onClick={e => e.stopPropagation()} className="glass"
-            style={{ padding: "26px 24px", borderRadius: 20, minWidth: 360, maxWidth: 440, display: "flex", flexDirection: "column", gap: 16, boxShadow: "0 12px 48px rgba(0,0,0,0.45)" }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ padding: "26px 24px", borderRadius: 20, minWidth: 360, maxWidth: 440, display: "flex", flexDirection: "column", gap: 16, boxShadow: "0 12px 48px rgba(0,0,0,0.45)", background: "#E7E3D4" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <span style={{ width: 38, height: 38, borderRadius: 11, display: "grid", placeItems: "center",
-                background: `color-mix(in oklch, ${replyModal.action === "approve" ? "var(--good)" : "var(--bad)"} 16%, transparent)`,
-                color: replyModal.action === "approve" ? "var(--good)" : "var(--bad)" }}>
+                background: `color-mix(in srgb, ${replyModal.action === "approve" ? "#3B8BEB" : "#B23850"} 16%, #E7E3D4)`,
+                color: replyModal.action === "approve" ? "#3B8BEB" : "#B23850" }}>
                 <Icon name={replyModal.action === "approve" ? "check" : "x"} size={18} />
               </span>
               <div>
-                <div style={{ fontSize: 15, fontWeight: 750, color: "var(--ink)" }}>
+                <div style={{ fontSize: 15, fontWeight: 750, color: "#2c3e50" }}>
                   {replyModal.action === "approve" ? "Approve" : "Reject"} Application
                 </div>
-                <div style={{ fontSize: 11.5, color: "var(--ink-4)" }}>{replyModal.app.applicant_name} · {APP_KINDS.find(a => a.k === replyModal.app.kind)?.label}</div>
+                <div style={{ fontSize: 11.5, color: "#8590AA" }}>{replyModal.app.applicant_name} · {APP_KINDS.find(a => a.k === replyModal.app.kind)?.label}</div>
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <label style={{ fontSize: 10, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Reply Note (optional)</label>
+              <label style={{ fontSize: 10, fontWeight: 700, color: "#8590AA", textTransform: "uppercase", letterSpacing: "0.08em" }}>Reply Note (optional)</label>
               <textarea value={replyText} onChange={e => setReplyText(e.target.value)} rows={3} placeholder={replyModal.action === "approve" ? "e.g. Approved, have a good rest." : "e.g. Coverage issue that week."}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--hairline)", background: "var(--panel-3)", color: "var(--ink)", fontSize: 13.5, fontFamily: "var(--font)", outline: "none", resize: "vertical" }} />
+                style={{ padding: "10px 12px", borderRadius: 10, border: "1.5px solid #C4DBF6", background: "#fff", color: "#2c3e50", fontSize: 13.5, fontFamily: "var(--font)", outline: "none", resize: "vertical" }} />
             </div>
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
               <button onClick={() => setReplyModal(null)} className="tap"
-                style={{ padding: "9px 18px", borderRadius: 10, border: "1px solid var(--hairline)", background: "var(--panel-3)", color: "var(--ink-2)", fontSize: 13, fontWeight: 650, fontFamily: "var(--font)", cursor: "pointer" }}>Cancel</button>
+                style={{ padding: "9px 18px", borderRadius: 10, border: "1.5px solid #C4DBF6", background: "#fff", color: "#8590AA", fontSize: 13, fontWeight: 650, fontFamily: "var(--font)", cursor: "pointer" }}>Cancel</button>
               <button onClick={doResolve} disabled={resolving} className="tap"
                 style={{ padding: "9px 22px", borderRadius: 10, border: "none", fontFamily: "var(--font)", fontSize: 13, fontWeight: 750, cursor: resolving ? "default" : "pointer", opacity: resolving ? 0.6 : 1,
-                  background: replyModal.action === "approve" ? "var(--good)" : "var(--bad)", color: "#fff" }}>
+                  background: replyModal.action === "approve" ? "#3B8BEB" : "#B23850", color: "#fff" }}>
                 {resolving ? "Processing…" : (replyModal.action === "approve" ? "Approve" : "Reject")}
               </button>
             </div>
@@ -10792,12 +10792,12 @@ function ApplicationsHub({ isSuperAdmin }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Section header */}
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        <div style={{ width: 40, height: 40, borderRadius: 12, display: "grid", placeItems: "center", background: "color-mix(in oklch, var(--accent) 16%, var(--inset))", color: "var(--accent)" }}>
+        <div style={{ width: 40, height: 40, borderRadius: 12, display: "grid", placeItems: "center", background: "#C4DBF6", color: "#3B8BEB" }}>
           <Icon name="file-text" size={20} />
         </div>
         <div>
-          <div style={{ fontSize: 17, fontWeight: 800, color: "var(--ink)", letterSpacing: "-0.01em" }}>Applications</div>
-          <div style={{ fontSize: 12, color: "var(--ink-4)" }}>
+          <div style={{ fontSize: 17, fontWeight: 800, color: "#2c3e50", letterSpacing: "-0.01em" }}>Applications</div>
+          <div style={{ fontSize: 12, color: "#8590AA" }}>
             {isSuperAdmin ? `${pendingCount} pending review` : "Manage your leave, swaps & claims"}
           </div>
         </div>
@@ -10806,12 +10806,12 @@ function ApplicationsHub({ isSuperAdmin }) {
           {TABS.map(t => (
             <button key={t.k} onClick={() => setTab(t.k)} className="tap"
               style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 16px", borderRadius: 20, fontSize: 12.5, fontWeight: 700, fontFamily: "var(--font)", cursor: "pointer",
-                border: `1.5px solid ${tab === t.k ? "var(--accent)" : "var(--hairline)"}`,
-                background: tab === t.k ? "color-mix(in oklch, var(--accent) 12%, var(--inset))" : "var(--inset)",
-                color: tab === t.k ? "var(--accent)" : "var(--ink-3)" }}>
+                border: "none",
+                background: tab === t.k ? "#3B8BEB" : "#E7E3D4",
+                color: tab === t.k ? "#fff" : "#8590AA" }}>
               <Icon name={t.icon} size={13} />{t.label}
               {t.badge > 0 && (
-                <span style={{ position: "absolute", top: -5, right: -5, minWidth: 17, height: 17, borderRadius: 999, background: "var(--bad)", color: "#fff", fontSize: 9.5, fontWeight: 900, display: "grid", placeItems: "center", padding: "0 4px" }}>{t.badge}</span>
+                <span style={{ position: "absolute", top: -5, right: -5, minWidth: 17, height: 17, borderRadius: 999, background: "#B23850", color: "#fff", fontSize: 9.5, fontWeight: 900, display: "grid", placeItems: "center", padding: "0 4px" }}>{t.badge}</span>
               )}
             </button>
           ))}
@@ -11121,7 +11121,7 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
 
       {/* Applications hub always visible below for super admins too */}
       {isSuperAdmin && (
-        <div style={{ borderTop: "1px solid var(--hairline)", paddingTop: 28 }}>
+        <div style={{ borderTop: "1px solid #C4DBF6", paddingTop: 28 }}>
           <ApplicationsHub isSuperAdmin={true} />
         </div>
       )}
