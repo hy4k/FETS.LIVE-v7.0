@@ -3,8 +3,21 @@ import { readdirSync, readFileSync, statSync } from 'fs';
 import { join, relative } from 'path';
 import { homedir } from 'os';
 
-const sshKeyPath = (process.env.VPS_SSH_KEY_PATH || '~/.ssh/id_rsa')
-  .replace(/^~/, homedir());
+import { existsSync } from 'fs';
+
+let sshKeyPath = process.env.VPS_SSH_KEY_PATH;
+if (!sshKeyPath) {
+  const possibleKeys = ['~/.ssh/fets_vps', '~/.ssh/id_rsa', '~/.ssh/id_ed25519'];
+  for (const k of possibleKeys) {
+    const full = k.replace(/^~/, homedir());
+    if (existsSync(full)) {
+      sshKeyPath = full;
+      break;
+    }
+  }
+} else {
+  sshKeyPath = sshKeyPath.replace(/^~/, homedir());
+}
 
 const config = {
   host: process.env.VPS_HOST || '72.61.171.192',
