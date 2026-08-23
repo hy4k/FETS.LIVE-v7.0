@@ -17,6 +17,7 @@ import * as ACT from "./actionables-data";
 import { ActionablesView } from "./ActionablesView";
 import * as ATT from "./attendance-data";
 import { isStaffRosterVisible } from "../utils/rosterVisibility";
+import * as DD from "./dutyData";
 import html2canvas from "html2canvas";
 import { FetsChatPopup } from "../components/FetsChatPopup";
 import { FetsIncidentPremium } from "../components/FetsIncidentPremium";
@@ -4081,8 +4082,7 @@ function RosterGrid({ offsets, branch }) {
   }, [branch, offsets[0]]);
   const [dialog, setDialog] = React.useState(null);   // { name, off, date, cell, defaultCode }
   const [otDialog, setOtDialog] = React.useState(null); // { name, off, date, cell }
-
-  const [leads, setLeads] = React.useState<any[]>([]);
+  const [leadsMap, setLeadsMap] = React.useState<Record<string, string>>({}); // "YYYY-MM-DD_branch" -> leadName
 
   const loadLeads = React.useCallback(async () => {
     try {
@@ -4091,12 +4091,53 @@ function RosterGrid({ offsets, branch }) {
       const startD = ymdFormat(F().ISO(startOff));
       const endD = ymdFormat(F().ISO(endOff));
       
-      const { data: res } = await supabase
-        .from("handover_assignments")
-        .select("*")
-        .gte("date", startD)
-        .lte("date", endD);
-      setLeads(res || []);
+      // 1. Check DB overrides in handover_assignments
+      let dbLeads: any[] = [];
+      try {
+        const { data: res } = await supabase
+          .from("handover_assignments")
+          .select("*")
+          .gte("date", startD)
+          .lte("date", endD);
+        dbLeads = res || [];
+      } catch (e) {}
+
+      const dbMap: Record<string, string> = {};
+      dbLeads.forEach((l: any) => {
+        if (l.date && l.staff_names && l.staff_names[0]) {
+          const br = (l.branch || "").toLowerCase();
+          dbMap[`${l.date}_${br}`] = l.staff_names[0];
+          dbMap[l.date] = l.staff_names[0];
+        }
+      });
+
+      // 2. Fetch roster schedules to resolve stretch leads
+      let roster: any[] = [];
+      try {
+        const { data } = await supabase
+          .from("roster_schedules")
+          .select("date, shift_code, branch_location, staff_profiles(full_name, branch_assigned)")
+          .gte("date", startD)
+          .lte("date", endD);
+        roster = data || [];
+      } catch (e) {}
+
+      const finalMap: Record<string, string> = {};
+      for (const off of offsets) {
+        const dstr = ymdFormat(F().ISO(off));
+        for (const b of ["calicut", "cochin"]) {
+          const key = `${dstr}_${b}`;
+          if (dbMap[key]) {
+            finalMap[key] = dbMap[key];
+          } else {
+            const stretch = await DD.getStretchAssignmentsForDate(dstr, b, roster);
+            if (stretch.lead) {
+              finalMap[key] = stretch.lead;
+            }
+          }
+        }
+      }
+      setLeadsMap(finalMap);
     } catch (err) {
       console.error("loadLeads error:", err);
     }
@@ -4111,7 +4152,11 @@ function RosterGrid({ offsets, branch }) {
       loadLeads();
     };
     window.addEventListener("fets-roster-changed", h);
-    return () => window.removeEventListener("fets-roster-changed", h);
+    window.addEventListener("fets-handover-updated", h);
+    return () => {
+      window.removeEventListener("fets-roster-changed", h);
+      window.removeEventListener("fets-handover-updated", h);
+    };
   }, [loadLeads]);
 
   const apply = (name, off, cell) => {
@@ -4192,44 +4237,42 @@ function RosterGrid({ offsets, branch }) {
                   fontSize: 14,
                   fontWeight: 900,
                   color: isToday ? "var(--accent)" : "var(--ink)",
-                  lineHeight: 1.1,
-                  margin: "1px 0"
+                  lineHeight: 1,
+                  margin: "1px 0",
                 }}>
                   {d.getDate()}
                 </div>
-                
-                {/* Candidate & Vendor indicators */}
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%", marginTop: "auto" }}>
-                  {totalCandidates > 0 ? (
-                    <span className="mono" style={{
-                      fontSize: 8,
-                      fontWeight: 800,
-                      color: isToday ? "var(--accent)" : "var(--ink-2)",
-                      background: isToday ? "rgba(255,255,255,0.08)" : "var(--panel-2)",
-                      padding: "1px 3px",
-                      borderRadius: 4,
-                      lineHeight: 1,
-                      border: "1px solid var(--hairline)"
-                    }}>
-                      {totalCandidates}c
-                    </span>
-                  ) : (
-                    <span style={{ fontSize: 8, color: "var(--ink-4)" }}>—</span>
-                  )}
-                  
+                {/* Micro candidates & clients badge */}
+                <div style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 1.5,
+                  width: "100%",
+                  padding: "0 2px",
+                }}>
+                  <span className="mono" style={{
+                    fontSize: 8.5,
+                    fontWeight: 800,
+                    color: totalCandidates > 0 ? "var(--accent-ink)" : "var(--ink-4)",
+                    background: totalCandidates > 0 ? "var(--accent-soft)" : "transparent",
+                    padding: totalCandidates > 0 ? "1px 4px" : "0",
+                    borderRadius: 4,
+                    lineHeight: 1.1,
+                  }}>
+                    {totalCandidates > 0 ? `${totalCandidates}c` : "—"}
+                  </span>
                   {activeVendors.length > 0 && (
-                    <div style={{ display: "flex", gap: 2, justifyContent: "center", marginTop: 2 }}>
-                      {activeVendors.map(vSlug => {
-                        const vMeta = F().VENDORS.find(v => v.slug === vSlug);
-                        const vColor = vMeta ? vMeta.color : "var(--ink-4)";
+                    <div style={{ display: "flex", gap: 2, justifyContent: "center" }}>
+                      {activeVendors.slice(0, 3).map(v => {
+                        const vObj = window.VENDORS.find(x => x.slug === v);
+                        const vColor = vObj ? vObj.color : "var(--ink-4)";
                         return (
-                          <span key={vSlug} title={vMeta ? vMeta.name : vSlug} style={{
-                            width: 5,
-                            height: 5,
-                            borderRadius: "50%",
+                          <span key={v} style={{
+                            width: 4, height: 4, borderRadius: "50%",
                             background: vColor,
-                            display: "inline-block"
-                          }} />
+                            display: "inline-block",
+                          }} title={vObj ? vObj.name : v} />
                         );
                       })}
                     </div>
@@ -4244,31 +4287,26 @@ function RosterGrid({ offsets, branch }) {
             display: "grid",
             gridTemplateColumns: cols,
             gap: 6,
-            padding: "10px 10px",
-            margin: "8px 0",
-            background: "var(--panel-2, rgba(255, 253, 245, 0.04))",
-            border: "1px solid var(--hairline)",
-            borderRadius: 16,
-            boxShadow: "0 2px 10px rgba(0,0,0,0.12)"
+            padding: "3px 10px",
+            background: ri % 2 === 0 ? "transparent" : "var(--panel-2)",
+            alignItems: "center",
+            borderRadius: 8,
           }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0, justifyContent: "center" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
-                <Avatar name={n} size={28} />
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 650, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{n}</div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap", marginTop: 1 }}>
-                    {branch === "global" ? (
-                      <span className="eyebrow" style={{ fontSize: 8.5, color: "var(--ink-4)" }}>{b}</span>
-                    ) : (
-                      n === F().user.name && <span className="eyebrow" style={{ fontSize: 8.5, color: "var(--accent)" }}>you</span>
-                    )}
-                    {((branch === "global") || (n === F().user.name)) && (
-                      <span style={{ fontSize: 8.5, color: "var(--ink-4)", opacity: 0.6 }}>·</span>
-                    )}
-                    <span className="mono" style={{ fontSize: 8.5, color: "var(--ink-4)", fontWeight: 500 }}>
-                      Day {F()._staffDays?.[n] || 1}
-                    </span>
-                  </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, overflow: "hidden", paddingRight: 6 }}>
+              <Avatar name={n} size={28} />
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{
+                  fontSize: 12.5,
+                  fontWeight: 750,
+                  color: n === F().user.name ? "var(--accent)" : "var(--ink)",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}>
+                  {n}
+                </div>
+                <div className="eyebrow" style={{ fontSize: 9, color: "var(--ink-4)", textTransform: "capitalize" }}>
+                  {b}
                 </div>
               </div>
               {/* Personal check-in console — visible only on the logged-in staff member's own row */}
@@ -4284,13 +4322,10 @@ function RosterGrid({ offsets, branch }) {
               const isSelf = n === F().user.name;
               const swapMatch = isSwappedCellOf(n, o);
 
-              // Check if lead staff
+              // Check if lead staff dynamically
               const dstr = ymdFormat(d);
-              const isLead = leads.some(lead => 
-                lead.date === dstr && 
-                lead.staff_names && 
-                lead.staff_names.some((name: string) => name.toLowerCase().trim() === n.toLowerCase().trim())
-              );
+              const targetLead = leadsMap[`${dstr}_${b.toLowerCase()}`] || leadsMap[dstr];
+              const isLead = targetLead ? targetLead.toLowerCase().trim() === n.toLowerCase().trim() : false;
 
               // Premium styles matching the code tint
               const SWAP_COLOR = "#F2994A";
@@ -4323,8 +4358,8 @@ function RosterGrid({ offsets, branch }) {
 
               if (isLead) {
                 border = `2.5px solid #f59e0b`;
-                shadow = `0 0 18px rgba(245, 158, 11, 0.6)${shadow !== "none" ? `, ${shadow}` : ""}`;
-                bg = `linear-gradient(135deg, rgba(245, 158, 11, 0.24) 0%, rgba(217, 119, 6, 0.14) 100%)`;
+                shadow = `0 0 20px rgba(245, 158, 11, 0.75)${shadow !== "none" ? `, ${shadow}` : ""}`;
+                bg = `linear-gradient(135deg, rgba(245, 158, 11, 0.32) 0%, rgba(217, 119, 6, 0.18) 100%)`;
               }
 
               /* ---- shift-swap visual override ---- */
@@ -4386,10 +4421,10 @@ function RosterGrid({ offsets, branch }) {
                   {/* Lead Crown badge */}
                   {isLead && (
                     <span title="Designated Shift Lead for this week" style={{
-                      position: "absolute", top: -5, right: -4,
-                      fontSize: 10, lineHeight: 1,
-                      zIndex: 3,
-                      filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.4))",
+                      position: "absolute", top: -7, right: -5,
+                      fontSize: 12, lineHeight: 1,
+                      zIndex: 4,
+                      filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.6))",
                     }}>👑</span>
                   )}
                   {/* Swap indicator badge */}
@@ -4436,6 +4471,16 @@ function RosterGrid({ offsets, branch }) {
         ))}
       </div>
     </div>
+
+    {/* ── CONSECUTIVE 7-DAY DUTY & LEAD SCHEDULE MATRIX (Directly under Roster Grid) ── */}
+    <RosterDutiesScheduleMatrix
+      offsets={offsets}
+      branch={branch}
+      leadsMap={leadsMap}
+      onReloadLeads={loadLeads}
+      cols={cols}
+    />
+
     {dialog && <RosterCellDialog ctx={dialog} onClose={() => setDialog(null)} onApply={(cell) => apply(dialog.name, dialog.off, cell)} />}
     {otDialog && <OtToilClaimDialog ctx={otDialog} onClose={() => setOtDialog(null)} />}
     </React.Fragment>

@@ -1023,3 +1023,47 @@ export async function loadLogRange(start: string, end: string, branch: string): 
   } catch {}
   return [];
 }
+
+/* ── Daily Category Reassignment from Matrix ────────────────────────────── */
+export async function reassignCategoryDaily(
+  date: string,
+  branch: string,
+  categoryId: string,
+  newStaff: string,
+  actor: string
+) {
+  const duties = await loadDuties(branch);
+  const catDuties = duties.filter((d) => d.category === categoryId);
+  for (const d of catDuties) {
+    try {
+      const { data: log } = await supabase
+        .from("duty_daily_log")
+        .select("id, staff_name")
+        .eq("date", date)
+        .eq("branch", branch)
+        .eq("duty_id", d.id)
+        .maybeSingle();
+
+      if (log) {
+        await supabase
+          .from("duty_daily_log")
+          .update({ staff_name: newStaff, original_staff_name: log.staff_name })
+          .eq("id", log.id);
+      } else {
+        await supabase
+          .from("duty_daily_log")
+          .insert({
+            id: `${date}_${d.id}`,
+            date,
+            branch,
+            duty_id: d.id,
+            staff_name: newStaff,
+            status: "pending",
+          });
+      }
+    } catch (e) {
+      console.error("reassignCategoryDaily item error:", e);
+    }
+  }
+}
+
