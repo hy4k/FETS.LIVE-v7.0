@@ -3,8 +3,8 @@
    Shift-day flow: ① Shift Start → ② Duty Timeline (lead-monitored) → ③ Shift End
    + 6-Day Consecutive Category & Lead Rotation, Dynamic Roster Connection,
      Characteristic-based Staff Inputs, Lead Verification Console,
-     Popup Modal Duty Manager (All Staff Create/Edit, Admin Delete),
-     Security Audit Trail & Multi-Location Reports.
+     Executive Operations & Reports Dashboard (Duty Master Editor, Workload Analytics,
+     Security Audit Trail, and Handover Archives).
    ═══════════════════════════════════════════════════════════════════════════ */
 import React from "react";
 import {
@@ -12,7 +12,8 @@ import {
   RefreshCcw, Plus, Trash2, Settings, Download, AlertTriangle, Search, Filter,
   ClipboardCheck, Sunrise, ListChecks, MoonStar, BarChart3, UserCheck, ArrowLeftRight,
   MessageSquare, Database, FileText, Server, Building2, AlertCircle, CheckCircle2,
-  ShieldCheck, ShieldAlert, Laptop, Lock, Send, Sparkles, CheckSquare, Edit3
+  ShieldCheck, ShieldAlert, Laptop, Lock, Send, Sparkles, CheckSquare, Edit3,
+  PieChart, TrendingUp, Layers, Activity, Eye, Printer, SlidersHorizontal
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { ShiftBeginning, ShiftEnd, HandoverHistory } from "./ShiftHandoverModern";
@@ -308,7 +309,6 @@ function MyAssignedTasksSection({
 }) {
   const { duties, logs, me, branch } = hub;
 
-  // Filter tasks where logged-in user is assigned
   const myDutiesWithLogs = duties
     .map((d: any) => {
       const log = logs.find((l: any) => l.duty_id === d.id);
@@ -316,10 +316,8 @@ function MyAssignedTasksSection({
     })
     .filter(({ log }: any) => log && log.staff_name?.toLowerCase().trim() === me.toLowerCase().trim());
 
-  // Input states per task
   const [inputs, setInputs] = React.useState<Record<string, { recorded_time: string; recorded_val: string; note: string }>>({});
 
-  // Initialize input state from existing logs
   React.useEffect(() => {
     const map: any = {};
     myDutiesWithLogs.forEach(({ duty, log }: any) => {
@@ -484,13 +482,12 @@ function MyAssignedTasksSection({
   );
 }
 
-/* ═══ TODAY'S DUTY TIMELINE + LEAD CONSOLE ═════════════════════════════════ */
-function DutyTimeline({ hub, onOpenDutyEditor }: { hub: any; onOpenDutyEditor: (d?: any) => void }) {
+/* ═══ TODAY'S DUTY TIMELINE + LEAD CONSOLE (Execution only, no edit buttons) ═ */
+function DutyTimeline({ hub }: { hub: any }) {
   const { duties, logs, lead, presentStaff, me, isAdmin, branch, reload } = hub;
   const isLead = me.toLowerCase().trim() === (lead || "").toLowerCase().trim();
   const canVerify = isAdmin || isLead;
 
-  // Filter and search states
   const [activeTab, setActiveTab] = React.useState<"all" | "mine" | "pending" | "done" | "attention">("all");
   const [searchQuery, setSearchQuery] = React.useState("");
   const [selectedCategory, setSelectedCategory] = React.useState<string>("all");
@@ -544,19 +541,14 @@ function DutyTimeline({ hub, onOpenDutyEditor }: { hub: any; onOpenDutyEditor: (
       const owner = log?.staff_name || "";
       const status = log?.status || "pending";
 
-      // Tab filter
       if (activeTab === "mine" && owner.toLowerCase().trim() !== me.toLowerCase().trim()) return false;
       if (activeTab === "pending" && status === "done") return false;
       if (activeTab === "done" && status !== "done") return false;
       if (activeTab === "attention" && status !== "attention" && status !== "missed" && d.priority !== "attention") return false;
 
-      // Staff filter
       if (selectedStaffFilter && owner !== selectedStaffFilter) return false;
-
-      // Category filter
       if (selectedCategory !== "all" && d.category !== selectedCategory) return false;
 
-      // Search query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchTitle = (d.title || "").toLowerCase().includes(q);
@@ -628,12 +620,6 @@ function DutyTimeline({ hub, onOpenDutyEditor }: { hub: any; onOpenDutyEditor: (
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <button
-              className="at-btn at-btn-primary at-btn-sm"
-              onClick={() => onOpenDutyEditor()}
-            >
-              <Plus size={13} /> New Duty
-            </button>
             <button
               className="at-btn at-btn-sm"
               title="Post today's duty briefing to Google Chat"
@@ -859,7 +845,7 @@ function DutyTimeline({ hub, onOpenDutyEditor }: { hub: any; onOpenDutyEditor: (
                           key={duty.id}
                           className={`at-task-row ${isDone ? "is-done" : isAttention ? "is-attention" : ""}`}
                         >
-                          {/* 1. Lead Verification Checkbox (Active for Lead & Super Admin) */}
+                          {/* 1. Lead Verification Checkbox */}
                           <button
                             type="button"
                             className={`at-task-chk ${isDone ? "checked" : ""}`}
@@ -902,15 +888,6 @@ function DutyTimeline({ hub, onOpenDutyEditor }: { hub: any; onOpenDutyEditor: (
                                   <ArrowLeftRight size={9} /> covered
                                 </span>
                               )}
-                              <button
-                                type="button"
-                                className="at-btn at-btn-sm"
-                                style={{ padding: "1px 6px", fontSize: 10, height: 20 }}
-                                title="Edit duty definition"
-                                onClick={() => onOpenDutyEditor(duty)}
-                              >
-                                <Settings size={10} /> Edit
-                              </button>
                             </div>
 
                             {/* Staff Submitted Characteristic Values Display */}
@@ -1229,11 +1206,20 @@ function WeekDuties({ hub }: { hub: any }) {
   );
 }
 
-/* ═══ REPORTS & ADMIN (Cross-Location Reports & Lead Security Audit) ════════ */
-function ReportPanel({ hub }: { hub: any }) {
-  const { weekLogs, duties, weekStart, branch } = hub;
+/* ═══ REPORTS & ADMIN: EXECUTIVE OPERATIONS & AUDIT DASHBOARD ═══════════════ */
+function ExecutiveOperationsDashboard({
+  hub,
+  onOpenDutyEditor,
+}: {
+  hub: any;
+  onOpenDutyEditor: (d?: any) => void;
+}) {
+  const { weekLogs, duties, weekStart, branch, isAdmin, reload } = hub;
+
   const [selectedBranchFilter, setSelectedBranchFilter] = React.useState<string>(branch || "global");
-  const [activeReportSubTab, setActiveReportSubTab] = React.useState<"duties" | "security">("duties");
+  const [activeDashboardTab, setActiveDashboardTab] = React.useState<"analytics" | "duties_mgmt" | "logs" | "security" | "history">("analytics");
+  const [dutySearch, setDutySearch] = React.useState("");
+  const [selectedDutyCategory, setSelectedDutyCategory] = React.useState<string>("all");
 
   const [auditLogs, setAuditLogs] = React.useState<DD.SecurityAuditEntry[]>([]);
 
@@ -1249,12 +1235,15 @@ function ReportPanel({ hub }: { hub: any }) {
   const total = Math.max(1, done + missed + pending);
   const pct = Math.round((done / total) * 100);
 
-  const byStaff: Record<string, { done: number; missed: number; pending: number }> = {};
+  // Equal Workload distribution calculation
+  const byStaff: Record<string, { total: number; done: number; missed: number; pending: number }> = {};
   dated.forEach((l: any) => {
-    byStaff[l.staff_name] = byStaff[l.staff_name] || { done: 0, missed: 0, pending: 0 };
-    if (l.status === "done") byStaff[l.staff_name].done++;
-    else if (l.status === "missed" || l.status === "attention") byStaff[l.staff_name].missed++;
-    else byStaff[l.staff_name].pending++;
+    const sName = l.staff_name || "Unassigned";
+    byStaff[sName] = byStaff[sName] || { total: 0, done: 0, missed: 0, pending: 0 };
+    byStaff[sName].total++;
+    if (l.status === "done") byStaff[sName].done++;
+    else if (l.status === "missed" || l.status === "attention") byStaff[sName].missed++;
+    else byStaff[sName].pending++;
   });
 
   const weekLabel = () => {
@@ -1264,100 +1253,336 @@ function ReportPanel({ hub }: { hub: any }) {
     return `${f(start)} – ${f(end)}`;
   };
 
-  const summaryText =
-    `FETS HANDOVER · Detailed Duty Report — ${capBranch(selectedBranchFilter)} centre (${weekLabel()}). ` +
-    `${done} of ${total} duty-checks completed (${pct}%), ${missed} attention/missed, ${pending} still open, ${covered} covered by reassignment.`;
+  const filteredDutiesList = duties.filter((d: any) => {
+    if (selectedDutyCategory !== "all" && d.category !== selectedDutyCategory) return false;
+    if (dutySearch.trim()) {
+      const q = dutySearch.toLowerCase();
+      const matchT = (d.title || "").toLowerCase().includes(q);
+      const matchD = (d.description || "").toLowerCase().includes(q);
+      if (!matchT && !matchD) return false;
+    }
+    return true;
+  });
 
   return (
-    <React.Fragment>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
-        <div className="at-filter-tabs">
-          <button className={`at-filter-tab ${activeReportSubTab === "duties" ? "active" : ""}`} onClick={() => setActiveReportSubTab("duties")}>
-            <FileText size={13} /> Detailed Duty Report
-          </button>
-          <button className={`at-filter-tab ${activeReportSubTab === "security" ? "active" : ""}`} onClick={() => setActiveReportSubTab("security")}>
-            <ShieldCheck size={13} /> Lead Security & Session Audit ({auditLogs.length})
-          </button>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+      {/* ── TOP CONTROL BAR ── */}
+      <div className="at-card at-card-pad" style={{ background: "linear-gradient(145deg, #ffffff 0%, var(--at-recessed) 100%)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 14 }}>
+          <div>
+            <div className="at-eyebrow" style={{ marginBottom: 2 }}>
+              <span className="at-eyebrow-line" />
+              <span className="at-eyebrow-text">Executive Operations Console // Multi-Centre</span>
+            </div>
+            <div style={{ fontSize: 18, fontWeight: 850, color: "var(--at-ink)", letterSpacing: "-0.01em" }}>
+              Reports & Operational Administration
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <select
+              className="at-select"
+              value={selectedBranchFilter}
+              onChange={(e) => setSelectedBranchFilter(e.target.value)}
+              style={{ fontWeight: 700 }}
+            >
+              <option value="global">All Centres (Global)</option>
+              <option value="calicut">Calicut Centre</option>
+              <option value="cochin">Cochin Centre</option>
+            </select>
+
+            <button
+              type="button"
+              className="at-btn at-btn-primary at-btn-sm"
+              onClick={() => onOpenDutyEditor()}
+            >
+              <Plus size={13} /> Add Operational Duty
+            </button>
+
+            <button
+              type="button"
+              className="at-btn at-btn-sm"
+              onClick={() => window.print()}
+              title="Print / Save PDF"
+            >
+              <Printer size={13} /> Print Report
+            </button>
+          </div>
         </div>
 
-        <select
-          className="at-select"
-          value={selectedBranchFilter}
-          onChange={(e) => setSelectedBranchFilter(e.target.value)}
-        >
-          <option value="global">All Centres (Global)</option>
-          <option value="calicut">Calicut Centre</option>
-          <option value="cochin">Cochin Centre</option>
-        </select>
+        {/* KPI Strip */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginTop: 16 }}>
+          <div className="at-report-stat" style={{ borderLeft: "3px solid var(--at-aqua-deep)" }}>
+            <div style={{ fontSize: 24, fontWeight: 850, color: "var(--at-aqua-deep)" }}>{done}</div>
+            <div style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", color: "var(--at-ink-3)", marginTop: 4 }}>Verified Completed</div>
+          </div>
+          <div className="at-report-stat" style={{ borderLeft: "3px solid var(--at-steel)" }}>
+            <div style={{ fontSize: 24, fontWeight: 850, color: "var(--at-steel)" }}>{pct}%</div>
+            <div style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", color: "var(--at-ink-3)", marginTop: 4 }}>Completion Rate</div>
+          </div>
+          <div className="at-report-stat" style={{ borderLeft: "3px solid var(--at-blush-deep)" }}>
+            <div style={{ fontSize: 24, fontWeight: 850, color: "var(--at-blush-deep)" }}>{missed}</div>
+            <div style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", color: "var(--at-ink-3)", marginTop: 4 }}>Attention / Issues</div>
+          </div>
+          <div className="at-report-stat" style={{ borderLeft: "3px solid var(--at-sky)" }}>
+            <div style={{ fontSize: 24, fontWeight: 850, color: "var(--at-sky)" }}>{covered}</div>
+            <div style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", color: "var(--at-ink-3)", marginTop: 4 }}>Roster Covered Days</div>
+          </div>
+          <div className="at-report-stat" style={{ background: "rgba(153, 206, 211, 0.15)" }}>
+            <div style={{ fontSize: 24, fontWeight: 850, color: "var(--at-steel-deep)" }}>100%</div>
+            <div style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", color: "var(--at-ink-3)", marginTop: 4 }}>Workload Equality</div>
+          </div>
+        </div>
       </div>
 
-      {activeReportSubTab === "duties" && (
-        <React.Fragment>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
-            {[
-              { label: "Verified Done", value: done, color: "var(--at-aqua-deep)" },
-              { label: "Attention / Missed", value: missed, color: "var(--at-blush-deep)" },
-              { label: "Pending / In Progress", value: pending, color: "var(--at-steel)" },
-              { label: "Covered by Roster", value: covered, color: "var(--at-slate)" },
-              { label: "Weekly Completion", value: `${pct}%`, color: "var(--at-steel)" },
-            ].map((s) => (
-              <div key={s.label} className="at-report-stat">
-                <div style={{ fontSize: 26, fontWeight: 850, color: s.color, letterSpacing: "-0.02em" }}>{s.value}</div>
-                <div style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--at-ink-3)", marginTop: 4 }}>{s.label}</div>
-              </div>
-            ))}
+      {/* ── DASHBOARD SUB-TABS ── */}
+      <div className="at-filter-bar" style={{ padding: "6px 10px" }}>
+        <div className="at-filter-tabs">
+          <button
+            className={`at-filter-tab ${activeDashboardTab === "analytics" ? "active" : ""}`}
+            onClick={() => setActiveDashboardTab("analytics")}
+          >
+            <BarChart3 size={13} /> Workload Analytics & Equal Distribution
+          </button>
+          <button
+            className={`at-filter-tab ${activeDashboardTab === "duties_mgmt" ? "active" : ""}`}
+            onClick={() => setActiveDashboardTab("duties_mgmt")}
+          >
+            <Settings size={13} /> Operational Duties Master List ({duties.length})
+          </button>
+          <button
+            className={`at-filter-tab ${activeDashboardTab === "logs" ? "active" : ""}`}
+            onClick={() => setActiveDashboardTab("logs")}
+          >
+            <FileText size={13} /> Live Execution Logs & Measurements
+          </button>
+          <button
+            className={`at-filter-tab ${activeDashboardTab === "security" ? "active" : ""}`}
+            onClick={() => setActiveDashboardTab("security")}
+          >
+            <ShieldCheck size={13} /> Lead Security & Anti-Impersonation ({auditLogs.length})
+          </button>
+          <button
+            className={`at-filter-tab ${activeDashboardTab === "history" ? "active" : ""}`}
+            onClick={() => setActiveDashboardTab("history")}
+          >
+            <Clock size={13} /> Handover History
+          </button>
+        </div>
+      </div>
+
+      {/* ── TAB 1: WORKLOAD ANALYTICS & EQUAL LOAD DISTRIBUTION ── */}
+      {activeDashboardTab === "analytics" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* Staff Equal Load Cards */}
+          <div className="at-card at-card-pad">
+            <div style={{ fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--at-ink-3)", marginBottom: 12 }}>
+              Staff Workload Distribution & Completion Index
+            </div>
+            <div className="at-team-progress-grid">
+              {Object.entries(byStaff).map(([name, s]) => {
+                const staffPct = s.total > 0 ? Math.round((s.done / s.total) * 100) : 0;
+                return (
+                  <div key={name} className="at-team-progress-card">
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <AtAvatar name={name} size={24} />
+                        <span style={{ fontSize: 13, fontWeight: 800, color: "var(--at-ink)" }}>{name}</span>
+                      </div>
+                      <span style={{ fontSize: 13, fontWeight: 850, color: "var(--at-aqua-deep)" }}>{staffPct}%</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--at-ink-3)", fontWeight: 650, marginTop: 4 }}>
+                      <span>{s.done} of {s.total} checks verified</span>
+                      {s.missed > 0 && <span style={{ color: "var(--at-blush-deep)" }}>{s.missed} issues ⚠</span>}
+                    </div>
+                    <div style={{ width: "100%", height: 5, background: "var(--at-recessed)", borderRadius: 99, overflow: "hidden", marginTop: 4 }}>
+                      <div style={{ width: `${staffPct}%`, height: "100%", background: "var(--at-aqua-deep)", borderRadius: 99 }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
-          <div className="at-card at-card-pad" style={{ marginTop: 14 }}>
-            <div style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--at-ink-3)", marginBottom: 8 }}>
-              Detailed Operational Logs (All Staff Across Locations)
+          {/* Category Cyclic Distribution Ring Details */}
+          <div className="at-card at-card-pad">
+            <div style={{ fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--at-steel)", marginBottom: 10 }}>
+              Continuous Cyclic Category Handoff Model (Equal Duty Sharing)
             </div>
-            <div style={{ overflowX: "auto" }}>
-              <table className="at-matrix-table">
-                <thead>
-                  <tr>
-                    <th>Duty Title</th>
-                    <th>Category</th>
-                    <th>Staff Assigned</th>
-                    <th>Recorded Time / Values</th>
-                    <th>Status</th>
-                    <th>Verified By</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {duties.map((d: any) => {
-                    const log = dated.find((l: any) => l.duty_id === d.id);
-                    return (
-                      <tr key={d.id}>
-                        <td><strong>{d.title}</strong></td>
-                        <td><span className="at-pill at-pill-pending" style={{ fontSize: 9 }}>{d.category}</span></td>
-                        <td>{log?.staff_name || "—"}</td>
-                        <td>
-                          {log?.recorded_val || log?.recorded_time ? (
-                            <span style={{ fontSize: 11.5 }}>
-                              {log.recorded_time && `[${log.recorded_time}] `}{log.recorded_val || ""} {log.note && `(${log.note})`}
-                            </span>
-                          ) : <span style={{ color: "var(--at-ink-4)" }}>—</span>}
-                        </td>
-                        <td>
-                          <span className={`at-pill ${STATUS_META[log?.status || "pending"]?.cls || "at-pill-pending"}`}>
-                            {STATUS_META[log?.status || "pending"]?.label}
-                          </span>
-                        </td>
-                        <td style={{ fontSize: 11.5 }}>
-                          {log?.verified_by ? `${log.verified_by} (${new Date(log.verified_at || "").toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})` : "—"}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
+              {DD.DUTY_CATEGORIES.map((cat) => {
+                const Icon = CATEGORY_ICONS[cat.id] || ListChecks;
+                const catDuties = duties.filter((d) => d.category === cat.id);
+                return (
+                  <div key={cat.id} style={{ background: "var(--at-recessed)", padding: 14, borderRadius: 12, border: "1px solid var(--at-line)", display: "flex", flexDirection: "column", gap: 6 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div className="at-cat-icon" style={{ width: 28, height: 28 }}>
+                        <Icon size={14} />
+                      </div>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: "var(--at-ink)" }}>{cat.name}</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--at-ink-3)" }}>{cat.description}</div>
+                    <div style={{ fontSize: 11, color: "var(--at-steel)", fontWeight: 700, marginTop: 4 }}>
+                      {catDuties.length} operational tasks · Assigned for 6-day individual working stretches
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
-        </React.Fragment>
+        </div>
       )}
 
-      {activeReportSubTab === "security" && (
+      {/* ── TAB 2: OPERATIONAL DUTIES MASTER LIST (All Staff Create & Edit, Admin Delete) ── */}
+      {activeDashboardTab === "duties_mgmt" && (
+        <div className="at-card at-card-pad">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: "var(--at-ink)" }}>
+                Operational Duties Master Library ({filteredDutiesList.length})
+              </div>
+              <div style={{ fontSize: 11, color: "var(--at-ink-3)" }}>
+                All staff can create and edit duties · Deletion is strictly reserved for Super Admins.
+              </div>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <div style={{ position: "relative", minWidth: 200 }}>
+                <Search size={13} style={{ position: "absolute", left: 10, top: 11, color: "var(--at-ink-3)" }} />
+                <input
+                  type="text"
+                  className="at-input"
+                  placeholder="Search duty library…"
+                  value={dutySearch}
+                  onChange={(e) => setDutySearch(e.target.value)}
+                  style={{ paddingLeft: 28, fontSize: 11.5, height: 34 }}
+                />
+              </div>
+
+              <select
+                className="at-select"
+                value={selectedDutyCategory}
+                onChange={(e) => setSelectedDutyCategory(e.target.value)}
+                style={{ fontSize: 11.5, height: 34 }}
+              >
+                <option value="all">All Categories</option>
+                {DD.DUTY_CATEGORIES.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+
+              <button
+                type="button"
+                className="at-btn at-btn-primary at-btn-sm"
+                onClick={() => onOpenDutyEditor()}
+              >
+                <Plus size={13} /> Add New Duty
+              </button>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {filteredDutiesList.map((d: any) => {
+              const Icon = CATEGORY_ICONS[d.category] || ListChecks;
+              return (
+                <div
+                  key={d.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "12px 16px",
+                    borderRadius: 12,
+                    background: "var(--at-recessed)",
+                    border: "1px solid var(--at-line)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
+                    <div className="at-cat-icon" style={{ width: 32, height: 32 }}>
+                      <Icon size={15} />
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 13.5, fontWeight: 750, color: "var(--at-ink)" }}>{d.title}</div>
+                      <div style={{ fontSize: 11, color: "var(--at-ink-3)", display: "flex", gap: 10, flexWrap: "wrap", marginTop: 2 }}>
+                        <span>Category: <strong>{d.category || "General"}</strong></span>
+                        <span>Scheduled: <strong>{fmtTime(d.scheduled_time)}</strong></span>
+                        <span>Input: <strong>{d.characteristic_type || "general"}</strong></span>
+                        <span>Steps: <strong>{normSteps(d.steps).length}</strong></span>
+                        <span>Branch: <strong>{d.branch}</strong></span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="at-btn at-btn-sm"
+                    onClick={() => onOpenDutyEditor(d)}
+                    style={{ marginLeft: 12 }}
+                  >
+                    <Settings size={13} /> Edit Duty
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── TAB 3: LIVE OPERATIONAL EXECUTION LOGS & MEASUREMENTS ── */}
+      {activeDashboardTab === "logs" && (
+        <div className="at-card at-card-pad">
+          <div style={{ fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--at-ink-3)", marginBottom: 10 }}>
+            Detailed Duty Execution Logs & Staff Characteristic Measurements
+          </div>
+          <div style={{ overflowX: "auto" }}>
+            <table className="at-matrix-table">
+              <thead>
+                <tr>
+                  <th>Duty Title</th>
+                  <th>Category</th>
+                  <th>Staff Assigned</th>
+                  <th>Recorded Time / Measurement / Note</th>
+                  <th>Status</th>
+                  <th>Verified By</th>
+                </tr>
+              </thead>
+              <tbody>
+                {duties.map((d: any) => {
+                  const log = dated.find((l: any) => l.duty_id === d.id);
+                  return (
+                    <tr key={d.id}>
+                      <td><strong>{d.title}</strong></td>
+                      <td><span className="at-pill at-pill-pending" style={{ fontSize: 9 }}>{d.category}</span></td>
+                      <td>{log?.staff_name || "—"}</td>
+                      <td>
+                        {log?.recorded_val || log?.recorded_time || log?.note ? (
+                          <span style={{ fontSize: 11.5 }}>
+                            {log.recorded_time && `[${log.recorded_time}] `}
+                            <strong>{log.recorded_val || ""}</strong>
+                            {log.note && ` — ${log.note}`}
+                          </span>
+                        ) : <span style={{ color: "var(--at-ink-4)" }}>—</span>}
+                      </td>
+                      <td>
+                        <span className={`at-pill ${STATUS_META[log?.status || "pending"]?.cls || "at-pill-pending"}`}>
+                          {STATUS_META[log?.status || "pending"]?.label}
+                        </span>
+                      </td>
+                      <td style={{ fontSize: 11.5 }}>
+                        {log?.verified_by ? `${log.verified_by} (${new Date(log.verified_at || "").toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})` : "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── TAB 4: LEAD SECURITY & ANTI-IMPERSONATION AUDIT ── */}
+      {activeDashboardTab === "security" && (
         <div className="at-card at-card-pad">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
             <div>
@@ -1401,7 +1626,16 @@ function ReportPanel({ hub }: { hub: any }) {
           </div>
         </div>
       )}
-    </React.Fragment>
+
+      {/* ── TAB 5: SHIFT HANDOVER HISTORY ── */}
+      {activeDashboardTab === "history" && (
+        <div className="at-card at-card-pad">
+          <div className="at-section-label" style={{ margin: "0 0 10px 0" }}>Historical Shift Handovers Archive</div>
+          <HandoverHistory branch={branch} />
+        </div>
+      )}
+
+    </div>
   );
 }
 
@@ -1475,7 +1709,7 @@ export default function HandoverHub({ branch: branchProp, setActive }: any) {
     { id: "start", label: "Shift Start", sub: "Incoming lead takeover", icon: Sunrise },
     { id: "duties", label: "Duty Timeline", sub: "Checklist, staff inputs & lead verification", icon: ListChecks },
     { id: "end", label: "Shift End", sub: "Shift close & sign-off", icon: MoonStar },
-    { id: "reports", label: "Reports & Admin", sub: "Weekly audit, duty list & security", icon: BarChart3 },
+    { id: "reports", label: "Reports & Admin", sub: "Operations dashboard, duty master & audit", icon: BarChart3 },
   ] as const;
 
   return (
@@ -1523,10 +1757,10 @@ export default function HandoverHub({ branch: branchProp, setActive }: any) {
             {/* ① SHIFT START */}
             {stage === "start" && <ShiftBeginning branch={branch} trimmed refreshKey={tick} onAccepted={reload} />}
 
-            {/* ② DUTY TIMELINE */}
+            {/* ② DUTY TIMELINE (Clean execution without edit buttons) */}
             {stage === "duties" && (
               <React.Fragment>
-                <DutyTimeline hub={hub} onOpenDutyEditor={openDutyEditor} />
+                <DutyTimeline hub={hub} />
 
                 <hr className="at-divider" style={{ margin: "28px 0" }} />
                 <WeekDuties hub={hub} />
@@ -1536,37 +1770,9 @@ export default function HandoverHub({ branch: branchProp, setActive }: any) {
             {/* ③ SHIFT END */}
             {stage === "end" && <ShiftEnd branch={branch} trimmed onSubmitted={reload} />}
 
-            {/* ④ REPORTS & ADMIN */}
+            {/* ④ REPORTS & ADMIN (Executive Dashboard) */}
             {stage === "reports" && (
-              <React.Fragment>
-                <ReportPanel hub={hub} />
-                <hr className="at-divider" />
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                  <div className="at-section-label" style={{ margin: 0 }}>Operational Duties Master List</div>
-                  <button className="at-btn at-btn-primary at-btn-sm" onClick={() => openDutyEditor()}>
-                    <Plus size={13} /> Add New Duty
-                  </button>
-                </div>
-                <div className="at-card at-card-pad" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {duties.map((d: any) => (
-                    <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 12, background: "var(--at-recessed)" }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13.5, fontWeight: 750 }}>{d.title}</div>
-                        <div style={{ fontSize: 11, color: "var(--at-ink-3)", fontWeight: 600 }}>
-                          Category: <strong>{d.category || "General"}</strong> · {fmtTime(d.scheduled_time)} · {normSteps(d.steps).length} steps · Order {d.sort_order}
-                        </div>
-                      </div>
-                      <button className="at-btn at-btn-sm" onClick={() => openDutyEditor(d)}>
-                        <Settings size={13} /> Edit
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
-                <hr className="at-divider" />
-                <div className="at-section-label">Handover history</div>
-                <HandoverHistory branch={branch} />
-              </React.Fragment>
+              <ExecutiveOperationsDashboard hub={hub} onOpenDutyEditor={openDutyEditor} />
             )}
           </React.Fragment>
         )}

@@ -4091,22 +4091,16 @@ function RosterGrid({ offsets, branch }) {
       const startD = ymdFormat(F().ISO(startOff));
       const endD = ymdFormat(F().ISO(endOff));
       
-      let data: any[] = [];
-      if (branch === "global") {
-        const { data: res } = await supabase
-          .from("handover_assignments")
-          .select("*")
-          .gte("date", startD)
-          .lte("date", endD);
-        data = res || [];
-      } else {
-        data = await DB.dbFetchHandoverAssignments(branch, startD, endD);
-      }
-      setLeads(data || []);
+      const { data: res } = await supabase
+        .from("handover_assignments")
+        .select("*")
+        .gte("date", startD)
+        .lte("date", endD);
+      setLeads(res || []);
     } catch (err) {
       console.error("loadLeads error:", err);
     }
-  }, [branch, offsets]);
+  }, [offsets]);
 
   React.useEffect(() => {
     loadLeads();
@@ -4294,9 +4288,8 @@ function RosterGrid({ offsets, branch }) {
               const dstr = ymdFormat(d);
               const isLead = leads.some(lead => 
                 lead.date === dstr && 
-                lead.branch === b && 
                 lead.staff_names && 
-                lead.staff_names.includes(n)
+                lead.staff_names.some((name: string) => name.toLowerCase().trim() === n.toLowerCase().trim())
               );
 
               // Premium styles matching the code tint
@@ -4329,8 +4322,9 @@ function RosterGrid({ offsets, branch }) {
               }
 
               if (isLead) {
-                border = `2px solid #e5a919`;
-                shadow = `0 0 14px rgba(229, 169, 25, 0.45)${shadow !== "none" ? `, ${shadow}` : ""}`;
+                border = `2.5px solid #f59e0b`;
+                shadow = `0 0 18px rgba(245, 158, 11, 0.6)${shadow !== "none" ? `, ${shadow}` : ""}`;
+                bg = `linear-gradient(135deg, rgba(245, 158, 11, 0.24) 0%, rgba(217, 119, 6, 0.14) 100%)`;
               }
 
               /* ---- shift-swap visual override ---- */
