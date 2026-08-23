@@ -204,7 +204,12 @@ export function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestio
   const isAdmin = !!window.FETS?.isAdmin;
   const people = React.useMemo(() => {
     const centre = branch === "global" ? (window.FETS?._meBranch || "calicut") : branch;
-    return Array.from(new Set(window.FETS?.STAFF?.[centre] || window.FETS?.PEOPLE || [])).filter(Boolean).sort();
+    const defaultStaff = centre === "cochin" ? ["Naima MM", "NIMMY M", "Shimna"] : ["Anshitha K", "Aysha", "Bindu Rajan", "Lazeem", "Nilufer"];
+    return Array.from(new Set([
+      ...(window.FETS?.STAFF?.[centre] || []),
+      ...(window.FETS?.PEOPLE || []),
+      ...defaultStaff
+    ])).filter(Boolean).sort();
   }, [branch]);
   const draftKey = `fets_handover_v2_draft_${branch}`;
   const [date, setDate] = React.useState(nowDate());
@@ -527,14 +532,8 @@ export function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestio
     if (existingHandover) {
       return incoming;
     }
-    if (hasIncomingAssignment) {
-      return assignedIncoming;
-    }
-    if (rosteredIncoming.length > 0) {
-      return rosteredIncoming;
-    }
-    return people.filter((name: string) => name !== me);
-  }, [existingHandover, incoming, hasIncomingAssignment, assignedIncoming, rosteredIncoming, people, me]);
+    return people;
+  }, [existingHandover, incoming, people]);
 
   const toggleIncoming = (name: string) => setIncoming((list) => list.includes(name) ? list.filter((x) => x !== name) : [...list, name]);
   const updateSummary = (key: string, value: any) => setSummary((state) => ({ ...state, [key]: value }));
@@ -966,6 +965,9 @@ function HandoverAssignments({ branch }: any) {
             const dateStr = toYMD(d);
             const br = branch === "global" ? (window.FETS?._meBranch || "calicut") : branch;
             const rostered = window.FETS?.rosterOn?.(d, br) || [];
+            const defaultStaff = br === "cochin" ? ["Naima MM", "NIMMY M", "Shimna"] : ["Anshitha K", "Aysha", "Bindu Rajan", "Lazeem", "Nilufer"];
+            const branchStaff = Array.from(new Set([...(window.FETS?.STAFF?.[br] || []), ...(window.FETS?.PEOPLE || []), ...defaultStaff])).filter(Boolean).sort();
+            const staffListToOffer = rostered.length ? rostered : branchStaff;
             const assign = assignments.find(x => x.date === dateStr);
             const assignedNames = assign ? assign.staff_names : [];
 
@@ -973,28 +975,24 @@ function HandoverAssignments({ branch }: any) {
               <div key={dateStr} className="sh-assignment-card sh-card">
                 <div className="sh-assign-info">
                   <h3>{displayDate(dateStr)}</h3>
-                  <p>{rostered.length} staff rostered</p>
+                  <p>{rostered.length ? `${rostered.length} staff rostered` : `${staffListToOffer.length} staff available`}</p>
                 </div>
                 <div className="sh-assign-selectors">
-                  {rostered.length ? (
-                    rostered.map((name: string) => {
-                      const isAssigned = assignedNames.includes(name);
-                      return (
-                        <button
-                          type="button"
-                          key={name}
-                          className={`sh-assign-btn ${isAssigned ? "active" : ""}`}
-                          onClick={() => handleToggle(dateStr, name, assignedNames)}
-                        >
-                          <span>{initials(name)}</span>
-                          {name}
-                          {isAssigned && <Check size={13} />}
-                        </button>
-                      );
-                    })
-                  ) : (
-                    <span className="sh-no-staff">No staff rostered.</span>
-                  )}
+                  {staffListToOffer.map((name: string) => {
+                    const isAssigned = assignedNames.includes(name);
+                    return (
+                      <button
+                        type="button"
+                        key={name}
+                        className={`sh-assign-btn ${isAssigned ? "active" : ""}`}
+                        onClick={() => handleToggle(dateStr, name, assignedNames)}
+                      >
+                        <span>{initials(name)}</span>
+                        {name}
+                        {isAssigned && <Check size={13} />}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             );
@@ -1014,7 +1012,8 @@ function ScheduleNotes({ branch }: any) {
 
   const people = React.useMemo(() => {
     const centre = branch === "global" ? (window.FETS?._meBranch || "calicut") : branch;
-    return Array.from(new Set(window.FETS?.STAFF?.[centre] || window.FETS?.PEOPLE || [])).filter(Boolean).sort();
+    const defaultStaff = centre === "cochin" ? ["Naima MM", "NIMMY M", "Shimna"] : ["Anshitha K", "Aysha", "Bindu Rajan", "Lazeem", "Nilufer"];
+    return Array.from(new Set([...(window.FETS?.STAFF?.[centre] || []), ...(window.FETS?.PEOPLE || []), ...defaultStaff])).filter(Boolean).sort();
   }, [branch]);
 
   const [assignments, setAssignments] = React.useState<any[]>([]);

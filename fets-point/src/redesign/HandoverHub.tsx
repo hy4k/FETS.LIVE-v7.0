@@ -1,14 +1,16 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    FETS HANDOVER — flagship page (Atelier theme)
    Shift-day flow: ① Shift Start → ② Duty Timeline (lead-monitored) → ③ Shift End
-   + Weekly duty rotation, lead console, Super Admin duty manager & reports.
+   + Categorized Daily Operational Checklist, Consecutive 7-Day Lead & Duty Matrix,
+     Supervisor Console, Super Admin duty manager & reports.
    ═══════════════════════════════════════════════════════════════════════════ */
 import React from "react";
 import {
-  Calendar, Clock, Users, Crown, Check, X, ChevronRight, ChevronLeft,
-  RefreshCcw, Plus, Trash2, Settings, Download, AlertTriangle,
+  Calendar, Clock, Users, Crown, Check, X, ChevronRight, ChevronLeft, ChevronDown,
+  RefreshCcw, Plus, Trash2, Settings, Download, AlertTriangle, Search, Filter,
   ClipboardCheck, Sunrise, ListChecks, MoonStar, BarChart3, UserCheck, ArrowLeftRight,
-  MessageSquare,
+  MessageSquare, Database, FileText, Server, Building2, AlertCircle, CheckCircle2,
+  SlidersHorizontal, CheckSquare, Square, Eye, Sparkles
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { ShiftBeginning, ShiftEnd, HandoverHistory } from "./ShiftHandoverModern";
@@ -20,12 +22,14 @@ import "./handover-atelier.css";
 const capBranch = (b: string) => (b === "global" ? "Global" : b.charAt(0).toUpperCase() + b.slice(1));
 const initials = (name: string) =>
   (name || "?").split(" ").filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+
 const normSteps = (s: any): { title: string }[] => {
   try {
     const arr = typeof s === "string" ? JSON.parse(s) : s;
     return Array.isArray(arr) ? arr : [];
   } catch { return []; }
 };
+
 const fmtTime = (t: string | null) => {
   if (!t) return "Anytime";
   const [h, m] = t.split(":").map(Number);
@@ -33,236 +37,708 @@ const fmtTime = (t: string | null) => {
   const hh = h > 12 ? h - 12 : h === 0 ? 12 : h;
   return `${String(hh).padStart(2, "0")}:${String(m).padStart(2, "0")} ${ampm}`;
 };
-const STATUS_META: Record<string, { label: string; cls: string }> = {
-  pending: { label: "Pending", cls: "at-pill-pending" },
-  in_progress: { label: "In progress", cls: "at-pill-progress" },
-  done: { label: "Done", cls: "at-pill-done" },
-  missed: { label: "Missed", cls: "at-pill-missed" },
-  off: { label: "Off day", cls: "at-pill-off" },
+
+const STATUS_META: Record<string, { label: string; cls: string; color: string }> = {
+  pending: { label: "Pending", cls: "at-pill-pending", color: "var(--at-ink-3)" },
+  in_progress: { label: "In Progress", cls: "at-pill-progress", color: "var(--at-steel)" },
+  done: { label: "Completed", cls: "at-pill-done", color: "var(--at-aqua-deep)" },
+  attention: { label: "Attention Required ⚠", cls: "at-pill-missed", color: "var(--at-blush-deep)" },
+  missed: { label: "Missed", cls: "at-pill-missed", color: "var(--at-blush-deep)" },
+  off: { label: "Off Day", cls: "at-pill-off", color: "var(--at-slate)" },
+  na: { label: "N/A", cls: "at-pill-off", color: "var(--at-slate)" },
+};
+
+const CATEGORY_ICONS: Record<string, any> = {
+  admin_calendar: Calendar,
+  data_systems: Database,
+  cases_documentation: FileText,
+  it_infrastructure: Server,
+  office_facilities: Building2,
+  other_followup: AlertCircle,
 };
 
 function AtAvatar({ name, size = 26 }: { name: string; size?: number }) {
   return <span className="at-avatar" style={{ width: size, height: size, fontSize: size * 0.42 }}>{initials(name)}</span>;
 }
 
-/* ═══ TODAY'S DUTY TIMELINE + LEAD CONSOLE ═══════════════════════════════ */
+/* ═══ TODAY'S DUTY TIMELINE + CATEGORIZED CHECKLIST + LEAD CONSOLE ════════ */
 function DutyTimeline({ hub }: { hub: any }) {
   const { duties, logs, lead, presentStaff, me, isAdmin, branch, reload } = hub;
   const isLead = me === lead;
   const canVerify = isAdmin || isLead;
 
-  const sorted = [...duties].sort((a: any, b: any) =>
-    (a.scheduled_time || "99:99").localeCompare(b.scheduled_time || "99:99"));
+  // Filter and search states
+  const [activeTab, setActiveTab] = React.useState<"all" | "mine" | "pending" | "done" | "attention">("all");
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const [selectedCategory, setSelectedCategory] = React.useState<string>("all");
+  const [collapsedCats, setCollapsedCats] = React.useState<Record<string, boolean>>({});
+  const [openSteps, setOpenSteps] = React.useState<Record<string, boolean>>({});
+  const [selectedStaffFilter, setSelectedStaffFilter] = React.useState<string | null>(null);
 
   const act = async (fn: () => Promise<any>, ok: string) => {
     try { await fn(); toast.success(ok); reload(); }
     catch (e: any) { toast.error(e?.message || "Action failed"); }
   };
 
-  if (!duties.length) {
-    return (
-      <div className="at-card at-card-pad at-muted" style={{ textAlign: "center", padding: 40 }}>
-        No active duties for this centre yet. {isAdmin && "Add duties in the Reports & Admin section."}
-      </div>
-    );
-  }
+  const toggleCategoryCollapse = (catId: string) => {
+    setCollapsedCats((prev) => ({ ...prev, [catId]: !prev[catId] }));
+  };
+
+  const toggleSteps = (dutyId: string) => {
+    setOpenSteps((prev) => ({ ...prev, [dutyId]: !prev[dutyId] }));
+  };
+
+  // Compute metrics
+  const totalTasks = duties.length;
+  const completedLogs = logs.filter((l: any) => l.status === "done");
+  const completedCount = completedLogs.length;
+  const attentionLogs = logs.filter((l: any) => l.status === "attention" || l.status === "missed");
+  const attentionCount = attentionLogs.length;
+  const inProgressCount = logs.filter((l: any) => l.status === "in_progress").length;
+  const pendingCount = totalTasks - completedCount;
+  const completionPct = totalTasks > 0 ? Math.round((completedCount / totalTasks) * 100) : 0;
+
+  // Employee-wise breakdown for supervisor view
+  const staffBreakdown: Record<string, { total: number; completed: number; pending: number; attention: number }> = {};
+  duties.forEach((d: any) => {
+    const log = logs.find((l: any) => l.duty_id === d.id);
+    const owner = log?.staff_name || "Unassigned";
+    staffBreakdown[owner] = staffBreakdown[owner] || { total: 0, completed: 0, pending: 0, attention: 0 };
+    staffBreakdown[owner].total++;
+    if (log?.status === "done") staffBreakdown[owner].completed++;
+    else if (log?.status === "attention" || log?.status === "missed") staffBreakdown[owner].attention++;
+    else staffBreakdown[owner].pending++;
+  });
+
+  // Filter tasks
+  const filteredDuties = React.useMemo(() => {
+    return duties.filter((d: any) => {
+      const log = logs.find((l: any) => l.duty_id === d.id);
+      const owner = log?.staff_name || "";
+      const status = log?.status || "pending";
+
+      // Tab filter
+      if (activeTab === "mine" && owner.toLowerCase().trim() !== me.toLowerCase().trim()) return false;
+      if (activeTab === "pending" && status === "done") return false;
+      if (activeTab === "done" && status !== "done") return false;
+      if (activeTab === "attention" && status !== "attention" && status !== "missed" && d.priority !== "attention") return false;
+
+      // Staff filter
+      if (selectedStaffFilter && owner !== selectedStaffFilter) return false;
+
+      // Category filter
+      if (selectedCategory !== "all" && d.category !== selectedCategory) return false;
+
+      // Search query
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchTitle = (d.title || "").toLowerCase().includes(q);
+        const matchDesc = (d.description || "").toLowerCase().includes(q);
+        const matchOwner = owner.toLowerCase().includes(q);
+        const matchSteps = (d.steps || []).some((s: any) => (s.title || "").toLowerCase().includes(q));
+        if (!matchTitle && !matchDesc && !matchOwner && !matchSteps) return false;
+      }
+
+      return true;
+    });
+  }, [duties, logs, activeTab, selectedStaffFilter, selectedCategory, searchQuery, me]);
+
+  // Group by category
+  const categoriesWithDuties = React.useMemo(() => {
+    return DD.DUTY_CATEGORIES.map((cat) => {
+      const items = filteredDuties.filter((d) => d.category === cat.id);
+      const allCatDuties = duties.filter((d) => d.category === cat.id);
+      const catDone = allCatDuties.filter((d) => {
+        const log = logs.find((l: any) => l.duty_id === d.id);
+        return log?.status === "done";
+      }).length;
+      return {
+        ...cat,
+        items,
+        totalInCat: allCatDuties.length,
+        doneInCat: catDone,
+      };
+    }).filter((cat) => selectedCategory === "all" || cat.id === selectedCategory);
+  }, [filteredDuties, duties, logs, selectedCategory]);
 
   return (
-    <div className="at-timeline">
-      {sorted.map((duty: any) => {
-        const log = logs.find((l: any) => l.duty_id === duty.id);
-        const steps = normSteps(duty.steps);
-        const stepsState: boolean[] = log
-          ? steps.map((_: any, i: number) => !!(log.steps_state || [])[i])
-          : steps.map(() => false);
-        const status = log?.status || "pending";
-        const meta = STATUS_META[status] || STATUS_META.pending;
-        const owner = log?.staff_name || "Unassigned";
-        const reassigned = !!log?.original_staff_name;
-        const ownerOff = !presentStaff.includes(owner);
-        const canTick = canVerify || me === owner;
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
 
-        return (
-          <div key={duty.id} className={`at-duty ${status === "done" ? "is-done" : status === "missed" ? "is-missed" : ""}`}>
-            {/* time column */}
-            <div className="at-duty-time">
-              <strong>{fmtTime(duty.scheduled_time).split(" ")[0]}</strong>
-              <span>{fmtTime(duty.scheduled_time).split(" ")[1] || ""}</span>
+      {/* ── TOP SUMMARY CARD ── */}
+      <div className="at-card at-card-pad" style={{ background: "linear-gradient(145deg, #ffffff 0%, #f6f9fc 100%)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 11, fontWeight: 850, textTransform: "uppercase", letterSpacing: "0.12em", color: "var(--at-steel)" }}>
+                Daily Operational Checklist · {new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short", year: "numeric" })}
+              </span>
             </div>
-
-            {/* main column */}
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                <span className="at-duty-title">{duty.title}</span>
-                <span className={`at-pill ${meta.cls}`}>{meta.label}</span>
-                {reassigned && (
-                  <span className="at-pill at-pill-progress" title={`Originally ${log.original_staff_name}`}>
-                    <ArrowLeftRight size={10} /> covered
-                  </span>
-                )}
-              </div>
-              <div className="at-duty-owner">
-                <AtAvatar name={owner} size={22} />
-                <span>{owner}{me === owner && " · you"}</span>
-                {log?.verified_by && status === "done" && (
-                  <span className="at-muted" style={{ fontSize: 11 }}>· verified by {log.verified_by}</span>
-                )}
-              </div>
-              {duty.description && <p className="at-duty-desc">{duty.description}</p>}
-
-              {/* step checklist */}
-              {steps.length > 0 && (
-                <div className="at-steps">
-                  {steps.map((st: any, i: number) => (
-                    <button
-                      key={i}
-                      type="button"
-                      className={`at-step ${stepsState[i] ? "done" : ""}`}
-                      disabled={!canTick || status === "off"}
-                      onClick={() => {
-                        if (!log) return;
-                        const next = stepsState.map((v, j) => (j === i ? !v : v));
-                        act(() => DD.updateLogSteps(log.id, next, me), stepsState[i] ? "Step unchecked" : "Step done");
-                      }}
-                    >
-                      <span className="at-step-box">{stepsState[i] && <Check size={11} strokeWidth={3} />}</span>
-                      {st.title}
-                    </button>
-                  ))}
-                </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6, flexWrap: "wrap" }}>
+              {lead ? (
+                <span className="at-lead-badge" style={{ padding: "6px 14px", fontSize: 12 }}>
+                  <Crown size={14} /> Today's Lead: <strong>{lead}</strong>{isLead && " (You)"}
+                </span>
+              ) : (
+                <span className="at-pill at-pill-pending">Lead: Unassigned</span>
               )}
-            </div>
-
-            {/* action column */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 7, alignItems: "flex-end" }}>
-              {canVerify && status !== "done" && (
-                <button className="at-btn at-btn-aqua at-btn-sm" onClick={() => log && act(() => DD.setLogStatus(log.id, "done", me), "Marked done")}>
-                  <Check size={13} /> Verify done
-                </button>
-              )}
-              {canVerify && status !== "missed" && status !== "done" && (
-                <button
-                  className="at-btn at-btn-blush at-btn-sm"
-                  onClick={() => log && act(async () => {
-                    await DD.setLogStatus(log.id, "missed", me);
-                    sendChatAlert({ kind: "missed", branch, duty: duty.title, owner, by: me });
-                  }, "Marked missed")}
-                >
-                  <X size={13} /> Missed
-                </button>
-              )}
-              {canVerify && (
+              {isAdmin && (
                 <select
                   className="at-select"
-                  value=""
-                  title={ownerOff ? `${owner} is off today — reassign` : "Reassign for today"}
+                  style={{ padding: "4px 10px", fontSize: 11.5 }}
+                  value={lead || ""}
                   onChange={(e) => {
-                    if (!e.target.value || !log) return;
-                    const to = e.target.value;
-                    act(async () => {
-                      await DD.reassignLog(log.id, to, me);
-                      sendChatAlert({ kind: "reassigned", branch, duty: duty.title, from: owner, to, by: me });
-                    }, `Reassigned to ${to}`);
+                    if (!e.target.value) return;
+                    DD.setDayLead(DD.ymd(new Date()), branch, e.target.value)
+                      .then(() => { toast.success(`Lead set to ${e.target.value}`); reload(); })
+                      .catch((err) => toast.error(err?.message || "Failed"));
                   }}
                 >
-                  <option value="">Reassign…</option>
-                  {presentStaff.filter((n: string) => n !== owner).map((n: string) => (
-                    <option key={n} value={n}>{n}</option>
-                  ))}
+                  {!lead && <option value="">Change Lead…</option>}
+                  {presentStaff.map((n) => <option key={n} value={n}>{n}</option>)}
                 </select>
-              )}
-              {ownerOff && status !== "done" && !canVerify && (
-                <span className="at-pill at-pill-off">owner off today</span>
               )}
             </div>
           </div>
-        );
-      })}
+
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <button
+              className="at-btn at-btn-sm"
+              title="Post today's duty briefing to Google Chat"
+              onClick={async () => {
+                const lines = [...duties]
+                  .sort((a: any, b: any) => (a.scheduled_time || "99:99").localeCompare(b.scheduled_time || "99:99"))
+                  .map((d: any) => {
+                    const log = logs.find((l: any) => l.duty_id === d.id);
+                    return `${fmtTime(d.scheduled_time)} — ${d.title} → ${log?.staff_name || "Unassigned"}`;
+                  });
+                const ok = await sendChatAlert({
+                  kind: "briefing", branch,
+                  dateLabel: new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }),
+                  lead, lines,
+                });
+                if (ok) toast.success("Briefing posted to Google Chat");
+                else toast.error("Chat not configured yet — webhook missing");
+              }}
+            >
+              <MessageSquare size={13} /> Briefing → Chat
+            </button>
+            <button className="at-btn at-btn-sm" onClick={reload} title="Refresh Live Data"><RefreshCcw size={13} /></button>
+          </div>
+        </div>
+
+        {/* Metric Cards */}
+        <div className="at-dash-summary" style={{ marginTop: 14 }}>
+          <div className="at-summary-stat-card">
+            <div className="at-summary-stat-val" style={{ color: "var(--at-ink)" }}>{totalTasks}</div>
+            <div className="at-summary-stat-label">Total Tasks</div>
+          </div>
+          <div className="at-summary-stat-card" style={{ borderLeft: "3px solid var(--at-aqua-deep)" }}>
+            <div className="at-summary-stat-val" style={{ color: "var(--at-aqua-deep)" }}>{completedCount}</div>
+            <div className="at-summary-stat-label">Completed</div>
+          </div>
+          <div className="at-summary-stat-card" style={{ borderLeft: "3px solid var(--at-steel)" }}>
+            <div className="at-summary-stat-val" style={{ color: "var(--at-steel)" }}>{pendingCount}</div>
+            <div className="at-summary-stat-label">Pending / Open</div>
+          </div>
+          <div className="at-summary-stat-card" style={{ borderLeft: `3px solid ${attentionCount > 0 ? "var(--at-blush-deep)" : "var(--at-line)"}` }}>
+            <div className="at-summary-stat-val" style={{ color: attentionCount > 0 ? "var(--at-blush-deep)" : "var(--at-ink-3)" }}>
+              {attentionCount}
+            </div>
+            <div className="at-summary-stat-label">Attention Required</div>
+          </div>
+          <div className="at-summary-stat-card" style={{ background: "linear-gradient(135deg, rgba(153, 206, 211, 0.15) 0%, rgba(134, 179, 209, 0.15) 100%)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+              <div className="at-summary-stat-val" style={{ color: "var(--at-steel-deep)" }}>{completionPct}%</div>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--at-steel)" }}>{completedCount}/{totalTasks}</span>
+            </div>
+            <div className="at-summary-stat-label">Daily Completion</div>
+            <div style={{ width: "100%", height: 6, background: "rgba(0,0,0,0.08)", borderRadius: 99, marginTop: 6, overflow: "hidden" }}>
+              <div style={{ width: `${completionPct}%`, height: "100%", background: "linear-gradient(90deg, var(--at-aqua-deep), var(--at-steel))", borderRadius: 99, transition: "width 0.4s ease" }} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── SUPERVISOR TEAM PROGRESS VIEW ── */}
+      <div className="at-card at-card-pad" style={{ background: "#ffffff" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--at-ink-3)" }}>
+            Team Progress // Employee Breakdown
+          </div>
+          {selectedStaffFilter && (
+            <button className="at-btn at-btn-sm at-btn-blush" onClick={() => setSelectedStaffFilter(null)}>
+              Clear Staff Filter ({selectedStaffFilter})
+            </button>
+          )}
+        </div>
+        <div className="at-team-progress-grid">
+          {Object.entries(staffBreakdown).map(([name, s]) => {
+            const pct = s.total > 0 ? Math.round((s.completed / s.total) * 100) : 0;
+            const isSelected = selectedStaffFilter === name;
+            const isMe = name.toLowerCase().trim() === me.toLowerCase().trim();
+            const isCenterLead = name === lead;
+            return (
+              <div
+                key={name}
+                className="at-team-progress-card"
+                style={{
+                  cursor: "pointer",
+                  borderColor: isSelected ? "var(--at-steel)" : isMe ? "var(--at-aqua-deep)" : "var(--at-line)",
+                  background: isSelected ? "rgba(134, 179, 209, 0.12)" : "#fff",
+                }}
+                onClick={() => setSelectedStaffFilter(isSelected ? null : name)}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                    <AtAvatar name={name} size={22} />
+                    <span style={{ fontSize: 12.5, fontWeight: 750, color: "var(--at-ink)" }}>
+                      {name}{isMe && " (You)"}
+                    </span>
+                    {isCenterLead && <span title="Today's Lead"><Crown size={12} style={{ color: "var(--at-blush-deep)" }} /></span>}
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 850, color: pct === 100 ? "var(--at-aqua-deep)" : "var(--at-steel)" }}>{pct}%</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: "var(--at-ink-3)", fontWeight: 600 }}>
+                  <span>{s.completed}/{s.total} completed</span>
+                  {s.attention > 0 && <span style={{ color: "var(--at-blush-deep)", fontWeight: 800 }}>{s.attention} attention ⚠</span>}
+                </div>
+                <div style={{ width: "100%", height: 4, background: "var(--at-recessed)", borderRadius: 99, overflow: "hidden" }}>
+                  <div style={{ width: `${pct}%`, height: "100%", background: pct === 100 ? "var(--at-aqua-deep)" : "var(--at-steel)", borderRadius: 99 }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── FILTER & SEARCH BAR ── */}
+      <div className="at-filter-bar">
+        <div className="at-filter-tabs">
+          <button className={`at-filter-tab ${activeTab === "all" ? "active" : ""}`} onClick={() => setActiveTab("all")}>
+            All Tasks <span className="at-filter-tab-count">{totalTasks}</span>
+          </button>
+          <button className={`at-filter-tab ${activeTab === "mine" ? "active" : ""}`} onClick={() => setActiveTab("mine")}>
+            <AtAvatar name={me} size={15} /> My Tasks <span className="at-filter-tab-count">{staffBreakdown[me]?.total || 0}</span>
+          </button>
+          <button className={`at-filter-tab ${activeTab === "pending" ? "active" : ""}`} onClick={() => setActiveTab("pending")}>
+            ⏳ Pending <span className="at-filter-tab-count">{pendingCount}</span>
+          </button>
+          <button className={`at-filter-tab ${activeTab === "done" ? "active" : ""}`} onClick={() => setActiveTab("done")}>
+            ✓ Completed <span className="at-filter-tab-count">{completedCount}</span>
+          </button>
+          <button className={`at-filter-tab ${activeTab === "attention" ? "active" : ""}`} onClick={() => setActiveTab("attention")}>
+            ⚠ Attention Required <span className="at-filter-tab-count">{attentionCount}</span>
+          </button>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", flex: 1, justifyContent: "flex-end" }}>
+          <div style={{ position: "relative", minWidth: 200 }}>
+            <Search size={14} style={{ position: "absolute", left: 10, top: 11, color: "var(--at-ink-3)" }} />
+            <input
+              type="text"
+              className="at-input"
+              placeholder="Search duties, staff or steps…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{ paddingLeft: 30, fontSize: 12, height: 36 }}
+            />
+          </div>
+
+          <select
+            className="at-select"
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            style={{ fontSize: 12, height: 36 }}
+          >
+            <option value="all">All Categories</option>
+            {DD.DUTY_CATEGORIES.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* ── CATEGORIZED COMPACT TASK ACCORDIONS ── */}
+      <div className="at-categories-container">
+        {categoriesWithDuties.map((cat) => {
+          const Icon = CATEGORY_ICONS[cat.id] || ListChecks;
+          const isCollapsed = !!collapsedCats[cat.id];
+          const hasItems = cat.items.length > 0;
+
+          return (
+            <div key={cat.id} className="at-cat-card">
+              {/* Category Header */}
+              <div className="at-cat-head" onClick={() => toggleCategoryCollapse(cat.id)}>
+                <div className="at-cat-title-group">
+                  <div className="at-cat-icon">
+                    <Icon size={16} />
+                  </div>
+                  <div>
+                    <div className="at-cat-title">{cat.name}</div>
+                    <div className="at-cat-desc">{cat.description}</div>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span className="at-cat-badge">
+                    {cat.doneInCat} / {cat.totalInCat} completed · {cat.totalInCat > 0 ? Math.round((cat.doneInCat / cat.totalInCat) * 100) : 0}%
+                  </span>
+                  <ChevronDown
+                    size={16}
+                    style={{
+                      transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)",
+                      transition: "transform 0.2s ease",
+                      color: "var(--at-ink-3)",
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Category Task Rows */}
+              {!isCollapsed && (
+                <div className="at-task-rows">
+                  {!hasItems ? (
+                    <div style={{ padding: "16px 20px", fontSize: 12.5, color: "var(--at-ink-3)", fontStyle: "italic" }}>
+                      No tasks matching current filter in this category.
+                    </div>
+                  ) : (
+                    cat.items.map((duty: any) => {
+                      const log = logs.find((l: any) => l.duty_id === duty.id);
+                      const status = log?.status || "pending";
+                      const isDone = status === "done";
+                      const isAttention = status === "attention" || status === "missed" || duty.priority === "attention";
+                      const owner = log?.staff_name || "Unassigned";
+                      const isOwnerMe = owner.toLowerCase().trim() === me.toLowerCase().trim();
+                      const isOwnerLead = owner === lead;
+                      const ownerOff = !presentStaff.includes(owner);
+                      const steps = normSteps(duty.steps);
+                      const areStepsOpen = !!openSteps[duty.id];
+                      const stepsState: boolean[] = log
+                        ? steps.map((_: any, i: number) => !!(log.steps_state || [])[i])
+                        : steps.map(() => false);
+                      const stepsDoneCount = stepsState.filter(Boolean).length;
+                      const canTick = canVerify || isOwnerMe;
+
+                      return (
+                        <div
+                          key={duty.id}
+                          className={`at-task-row ${isDone ? "is-done" : isAttention ? "is-attention" : ""}`}
+                        >
+                          {/* 1. Instant Checkbox */}
+                          <button
+                            type="button"
+                            className={`at-task-chk ${isDone ? "checked" : ""}`}
+                            title={isDone ? "Mark pending" : "Mark completed"}
+                            disabled={!canTick}
+                            onClick={() => {
+                              if (!log) return;
+                              const newStatus = isDone ? "pending" : "done";
+                              act(() => DD.setLogStatus(log.id, newStatus, me), isDone ? "Marked pending" : "Marked done");
+                            }}
+                          >
+                            <Check size={14} strokeWidth={3.5} />
+                          </button>
+
+                          {/* 2. Scheduled Time */}
+                          <div className="at-task-time">
+                            <Clock size={11} style={{ verticalAlign: "-1px", marginRight: 3 }} />
+                            {fmtTime(duty.scheduled_time)}
+                          </div>
+
+                          {/* 3. Task Title & Details */}
+                          <div className="at-task-content">
+                            <div className="at-task-name">
+                              <span style={{ textDecoration: isDone ? "line-through" : "none", opacity: isDone ? 0.75 : 1 }}>
+                                {duty.title}
+                              </span>
+                              {isAttention && (
+                                <span className="at-attention-tag">
+                                  <AlertTriangle size={10} /> Attention Required
+                                </span>
+                              )}
+                              {log?.original_staff_name && (
+                                <span className="at-pill at-pill-progress" style={{ fontSize: 9 }} title={`Originally ${log.original_staff_name}`}>
+                                  <ArrowLeftRight size={9} /> covered
+                                </span>
+                              )}
+                            </div>
+
+                            {duty.description && (
+                              <div className="at-task-desc-sub" title={duty.description}>
+                                {duty.description}
+                              </div>
+                            )}
+
+                            {/* Micro-steps trigger & checklist */}
+                            {steps.length > 0 && (
+                              <div style={{ marginTop: 4 }}>
+                                <button
+                                  type="button"
+                                  className="at-btn at-btn-sm"
+                                  style={{ padding: "2px 7px", fontSize: 10.5, height: "auto" }}
+                                  onClick={() => toggleSteps(duty.id)}
+                                >
+                                  {areStepsOpen ? "▲ Hide steps" : `▼ Steps (${stepsDoneCount}/${steps.length})`}
+                                </button>
+
+                                {areStepsOpen && (
+                                  <div className="at-steps" style={{ marginTop: 6, paddingLeft: 4 }}>
+                                    {steps.map((st: any, i: number) => (
+                                      <button
+                                        key={i}
+                                        type="button"
+                                        className={`at-step ${stepsState[i] ? "done" : ""}`}
+                                        disabled={!canTick}
+                                        onClick={() => {
+                                          if (!log) return;
+                                          const next = stepsState.map((v, j) => (j === i ? !v : v));
+                                          act(() => DD.updateLogSteps(log.id, next, me), stepsState[i] ? "Step unchecked" : "Step done");
+                                        }}
+                                      >
+                                        <span className="at-step-box">
+                                          {stepsState[i] && <Check size={11} strokeWidth={3} />}
+                                        </span>
+                                        {st.title}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* 4. Assigned Staff */}
+                          <div className="at-task-staff">
+                            <AtAvatar name={owner} size={22} />
+                            <span>{owner}{isOwnerMe && " (You)"}</span>
+                            {isOwnerLead && <span title="Today's Lead"><Crown size={12} style={{ color: "var(--at-blush-deep)" }} /></span>}
+                            {ownerOff && <span className="at-pill at-pill-off" style={{ fontSize: 9 }}>Off</span>}
+                          </div>
+
+                          {/* 5. Status Badge & Quick Controls */}
+                          <div className="at-task-actions">
+                            <select
+                              className="at-select"
+                              style={{
+                                fontSize: 11, padding: "4px 8px",
+                                fontWeight: 750,
+                                borderColor: STATUS_META[status]?.color || "var(--at-line)",
+                              }}
+                              value={status}
+                              disabled={!canTick}
+                              onChange={(e) => {
+                                if (!log) return;
+                                const s = e.target.value as any;
+                                act(async () => {
+                                  await DD.setLogStatus(log.id, s, me);
+                                  if (s === "attention" || s === "missed") {
+                                    sendChatAlert({ kind: "missed", branch, duty: duty.title, owner, by: me });
+                                  }
+                                }, `Status updated to ${s}`);
+                              }}
+                            >
+                              <option value="pending">Pending</option>
+                              <option value="in_progress">In Progress</option>
+                              <option value="done">Completed</option>
+                              <option value="attention">Attention ⚠</option>
+                              <option value="missed">Missed</option>
+                              <option value="off">Off Day</option>
+                              <option value="na">N/A</option>
+                            </select>
+
+                            {/* Reassign dropdown for Admin / Lead */}
+                            {canVerify && (
+                              <select
+                                className="at-select"
+                                style={{ fontSize: 11, padding: "4px 8px" }}
+                                value=""
+                                title="Reassign duty to present staff"
+                                onChange={(e) => {
+                                  if (!e.target.value || !log) return;
+                                  const to = e.target.value;
+                                  act(async () => {
+                                    await DD.reassignLog(log.id, to, me);
+                                    sendChatAlert({ kind: "reassigned", branch, duty: duty.title, from: owner, to, by: me });
+                                  }, `Reassigned to ${to}`);
+                                }}
+                              >
+                                <option value="">Reassign…</option>
+                                {presentStaff.filter((n: string) => n !== owner).map((n: string) => (
+                                  <option key={n} value={n}>{n}</option>
+                                ))}
+                              </select>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
-/* ═══ THIS WEEK'S DUTIES — rotation grid ═══════════════════════════════════ */
+/* ═══ CONSECUTIVE 7-DAY DUTY & LEAD ROTATION MATRIX ═════════════════════════ */
 function WeekDuties({ hub }: { hub: any }) {
-  const { duties, assignments, staff, weekLogs, weekStart, isAdmin, reload } = hub;
+  const { duties, assignments, staff, weekLogs, weekStart, branch, isAdmin, reload } = hub;
+
   const act = async (fn: () => Promise<any>, ok: string) => {
     try { await fn(); toast.success(ok); reload(); }
     catch (e: any) { toast.error(e?.message || "Action failed"); }
   };
 
-  // 7-day dot strip per duty from the week's logs
-  const dotsFor = (dutyId: string) => {
+  // Generate the 7 consecutive days
+  const days = React.useMemo(() => {
     const start = new Date(weekStart + "T00:00:00");
     return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(start); d.setDate(start.getDate() + i);
-      const key = DD.ymd(d);
-      const log = weekLogs.find((l: any) => l.duty_id === dutyId && l.date === key);
-      const status = log?.status || (key > DD.ymd(new Date()) ? "future" : "pending");
-      const color = status === "done" ? "var(--at-aqua-deep)"
-        : status === "missed" ? "var(--at-blush-deep)"
-        : status === "future" ? "var(--at-line)"
-        : status === "off" ? "var(--at-slate)"
-        : "var(--at-sky)";
-      return { key, status, color, isToday: key === DD.ymd(new Date()) };
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      const dateKey = DD.ymd(d);
+      const dayName = d.toLocaleDateString("en-GB", { weekday: "short" });
+      const dayNum = d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+      const isToday = dateKey === DD.ymd(new Date());
+      return { date: d, dateKey, dayName, dayNum, isToday, dayIndex: i };
     });
-  };
+  }, [weekStart]);
 
-  const weekLabel = () => {
-    const start = new Date(weekStart + "T00:00:00");
-    const end = new Date(start); end.setDate(start.getDate() + 6);
-    const f = (d: Date) => d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-    return `${f(start)} – ${f(end)}`;
-  };
+  // Lead for each of the 7 days (round-robin + stored)
+  const dayLeads = React.useMemo(() => {
+    const leads: Record<string, string> = {};
+    days.forEach((day) => {
+      if (!staff.length) return;
+      const dayIdx = Math.floor(new Date(day.dateKey + "T00:00:00").getTime() / 86400000);
+      leads[day.dateKey] = staff[dayIdx % staff.length];
+    });
+    return leads;
+  }, [days, staff]);
 
   return (
     <React.Fragment>
-      <div className="at-section-label">This week's rotation · {weekLabel()}</div>
-      <div className="at-week-grid">
-        {[...duties].sort((a: any, b: any) => a.sort_order - b.sort_order).map((duty: any) => {
-          const a = assignments.find((x: any) => x.duty_id === duty.id);
-          return (
-            <div key={duty.id} className={`at-week-duty ${a?.is_override ? "is-override" : ""}`}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 750, color: "var(--at-ink)" }}>{duty.title}</div>
-                  <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--at-steel)", marginTop: 2 }}>
-                    <Clock size={10} style={{ verticalAlign: "-1px" }} /> {fmtTime(duty.scheduled_time)}
-                  </div>
-                </div>
-                {a?.is_override && <span className="at-pill at-pill-missed" title="Manually adjusted by Super Admin">adjusted</span>}
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
-                <AtAvatar name={a?.staff_name || "?"} size={24} />
-                {isAdmin ? (
-                  <select
-                    className="at-select"
-                    style={{ flex: 1 }}
-                    value={a?.staff_name || ""}
-                    onChange={(e) => act(() => DD.setAssignment(weekStart, hub.branch, duty.id, e.target.value), "Assignment updated")}
-                  >
-                    {!a && <option value="">Assign…</option>}
-                    {staff.map((n: string) => <option key={n} value={n}>{n}</option>)}
-                  </select>
-                ) : (
-                  <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--at-ink-2)" }}>{a?.staff_name || "Unassigned"}</span>
-                )}
-              </div>
-              <div style={{ display: "flex", gap: 4, marginTop: 11 }}>
-                {dotsFor(duty.id).map((d) => (
-                  <span
-                    key={d.key}
-                    title={`${d.key}: ${d.status}`}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <div className="at-section-label" style={{ margin: 0 }}>
+          Consecutive 7-Day Duty & Lead Schedule Matrix · {days[0]?.dayNum} – {days[6]?.dayNum}
+        </div>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--at-steel)" }}>
+          👑 Crown indicates Lead of the Day
+        </span>
+      </div>
+
+      <div className="at-matrix-wrap">
+        <table className="at-matrix-table">
+          <thead>
+            <tr>
+              <th style={{ minWidth: 200, position: "sticky", left: 0, zIndex: 2, background: "var(--at-recessed)" }}>
+                Operational Duty & Time
+              </th>
+              {days.map((day) => {
+                const dayLead = dayLeads[day.dateKey];
+                return (
+                  <th
+                    key={day.dateKey}
                     style={{
-                      width: 9, height: 9, borderRadius: "50%", background: d.color,
-                      outline: d.isToday ? "2px solid var(--at-steel)" : "none", outlineOffset: 1,
+                      minWidth: 140,
+                      background: day.isToday ? "rgba(134, 179, 209, 0.25)" : "var(--at-recessed)",
+                      borderLeft: "1px solid var(--at-line)",
                     }}
-                  />
-                ))}
-                <span style={{ fontSize: 9, color: "var(--at-ink-4)", marginLeft: 4, fontWeight: 700 }}>MON–SUN</span>
-              </div>
-            </div>
-          );
-        })}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontWeight: 850 }}>{day.dayName} {day.dayNum}</span>
+                      {day.isToday && (
+                        <span className="at-pill at-pill-progress" style={{ fontSize: 8.5, padding: "2px 5px" }}>Today</span>
+                      )}
+                    </div>
+                    {/* Day Lead row in header */}
+                    <div style={{ marginTop: 5, display: "flex", alignItems: "center", gap: 5, fontSize: 10.5, color: "var(--at-ink-2)" }}>
+                      <Crown size={11} style={{ color: "var(--at-blush-deep)" }} />
+                      <span style={{ fontWeight: 800 }}>{dayLead || "Lead"}</span>
+                    </div>
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {[...duties].sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0)).map((duty: any) => {
+              const a = assignments.find((x: any) => x.duty_id === duty.id);
+              const baseStaff = a?.staff_name || "Unassigned";
+
+              return (
+                <tr key={duty.id}>
+                  {/* Duty Name and Scheduled Time */}
+                  <td style={{ position: "sticky", left: 0, zIndex: 1, background: "#fff", fontWeight: 750, fontSize: 12.5 }}>
+                    <div style={{ color: "var(--at-ink)" }}>{duty.title}</div>
+                    <div style={{ fontSize: 10, color: "var(--at-steel)", fontWeight: 650, marginTop: 2 }}>
+                      <Clock size={9} style={{ verticalAlign: "-1px", marginRight: 3 }} /> {fmtTime(duty.scheduled_time)}
+                    </div>
+                  </td>
+
+                  {/* 7 Day Columns */}
+                  {days.map((day) => {
+                    // Calculate assigned staff for this day
+                    const dutyIdx = duties.findIndex((x: any) => x.id === duty.id);
+                    const offset = DD.weeksSinceEpoch(weekStart);
+                    const staffIdx = (((dutyIdx + offset + day.dayIndex) % staff.length) + staff.length) % staff.length;
+                    const assignedStaff = a?.is_override ? baseStaff : (staff[staffIdx] || baseStaff);
+                    const log = weekLogs.find((l: any) => l.duty_id === duty.id && l.date === day.dateKey);
+                    const status = log?.status || (day.dateKey > DD.ymd(new Date()) ? "future" : "pending");
+                    const isDayLead = assignedStaff === dayLeads[day.dateKey];
+
+                    return (
+                      <td
+                        key={day.dateKey}
+                        style={{
+                          borderLeft: "1px solid var(--at-line)",
+                          background: day.isToday ? "rgba(134, 179, 209, 0.04)" : "#fff",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <AtAvatar name={assignedStaff} size={20} />
+                            <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--at-ink)" }}>
+                              {assignedStaff}
+                            </span>
+                            {isDayLead && <span title="Day Lead"><Crown size={10} style={{ color: "var(--at-blush-deep)" }} /></span>}
+                          </div>
+
+                          {/* Status dot */}
+                          <span
+                            title={`Status: ${status}`}
+                            style={{
+                              width: 8, height: 8, borderRadius: "50%",
+                              background: status === "done" ? "var(--at-aqua-deep)"
+                                : status === "missed" || status === "attention" ? "var(--at-blush-deep)"
+                                : status === "future" ? "var(--at-line)"
+                                : "var(--at-sky)",
+                            }}
+                          />
+                        </div>
+
+                        {/* Admin Reassign for the week */}
+                        {isAdmin && (
+                          <div style={{ marginTop: 5 }}>
+                            <select
+                              className="at-select"
+                              style={{ width: "100%", fontSize: 10, padding: "2px 4px", height: 22 }}
+                              value={assignedStaff}
+                              onChange={(e) => act(() => DD.setAssignment(weekStart, branch, duty.id, e.target.value), "Assignment updated")}
+                            >
+                              {staff.map((n: string) => <option key={n} value={n}>{n}</option>)}
+                            </select>
+                          </div>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </React.Fragment>
   );
@@ -294,7 +770,7 @@ function DutyManager({ hub }: { hub: any }) {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13.5, fontWeight: 750 }}>{d.title}</div>
               <div style={{ fontSize: 11, color: "var(--at-ink-3)", fontWeight: 600 }}>
-                {fmtTime(d.scheduled_time)} · {normSteps(d.steps).length} steps · order {d.sort_order}
+                Category: <strong>{d.category || "General"}</strong> · {fmtTime(d.scheduled_time)} · {normSteps(d.steps).length} steps · order {d.sort_order}
               </div>
             </div>
             <button className="at-btn at-btn-sm" onClick={() => setEditing({ ...d, steps: normSteps(d.steps) })}><Settings size={13} /> Edit</button>
@@ -309,8 +785,12 @@ function DutyManager({ hub }: { hub: any }) {
             </button>
           </div>
         ))}
-        <button className="at-btn at-btn-primary" style={{ alignSelf: "flex-start" }} onClick={() => setEditing({ title: "", description: "", scheduled_time: "09:00", sort_order: duties.length + 1, steps: [], branch: "both", is_active: true })}>
-          <Plus size={14} /> New duty
+        <button
+          className="at-btn at-btn-primary"
+          style={{ alignSelf: "flex-start" }}
+          onClick={() => setEditing({ title: "", category: "admin_calendar", description: "", scheduled_time: "09:00", sort_order: duties.length + 1, steps: [], branch: "both", is_active: true })}
+        >
+          <Plus size={14} /> New Duty
         </button>
       </div>
 
@@ -318,8 +798,13 @@ function DutyManager({ hub }: { hub: any }) {
       {editing && (
         <div className="at-card at-card-pad" style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 12 }}>
           <div style={{ fontSize: 14, fontWeight: 800, color: "var(--at-steel)" }}>{editing.id ? "Edit duty" : "New duty"}</div>
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 12 }}>
             <Field label="Title"><input className="at-input" value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} /></Field>
+            <Field label="Category">
+              <select className="at-select" value={editing.category || "admin_calendar"} onChange={(e) => setEditing({ ...editing, category: e.target.value })}>
+                {DD.DUTY_CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </Field>
             <Field label="Scheduled time"><input className="at-input" type="time" value={editing.scheduled_time || ""} onChange={(e) => setEditing({ ...editing, scheduled_time: e.target.value })} /></Field>
             <Field label="Sort order"><input className="at-input" type="number" value={editing.sort_order} onChange={(e) => setEditing({ ...editing, sort_order: Number(e.target.value) })} /></Field>
           </div>
@@ -346,7 +831,7 @@ function ReportPanel({ hub }: { hub: any }) {
   const { weekLogs, duties, weekStart, branch, lead } = hub;
   const dated = weekLogs.filter((l: any) => l.date <= DD.ymd(new Date()));
   const done = dated.filter((l: any) => l.status === "done").length;
-  const missed = dated.filter((l: any) => l.status === "missed").length;
+  const missed = dated.filter((l: any) => l.status === "missed" || l.status === "attention").length;
   const pending = dated.filter((l: any) => l.status === "pending" || l.status === "in_progress").length;
   const covered = dated.filter((l: any) => l.original_staff_name).length;
   const total = Math.max(1, done + missed + pending);
@@ -356,7 +841,7 @@ function ReportPanel({ hub }: { hub: any }) {
   dated.forEach((l: any) => {
     byStaff[l.staff_name] = byStaff[l.staff_name] || { done: 0, missed: 0, pending: 0 };
     if (l.status === "done") byStaff[l.staff_name].done++;
-    else if (l.status === "missed") byStaff[l.staff_name].missed++;
+    else if (l.status === "missed" || l.status === "attention") byStaff[l.staff_name].missed++;
     else byStaff[l.staff_name].pending++;
   });
 
@@ -369,8 +854,8 @@ function ReportPanel({ hub }: { hub: any }) {
 
   const summaryText =
     `FETS HANDOVER · Weekly Duty Report — ${capBranch(branch)} centre (${weekLabel()}). ` +
-    `${done} of ${total} duty-checks completed (${pct}%), ${missed} missed, ${pending} still open, ${covered} covered by reassignment. ` +
-    (missed > 0 ? `Attention needed: ${missed} missed dut${missed === 1 ? "y" : "ies"} this week.` : `All tracked duties are on track.`);
+    `${done} of ${total} duty-checks completed (${pct}%), ${missed} attention/missed, ${pending} still open, ${covered} covered by reassignment. ` +
+    (missed > 0 ? `Attention needed: ${missed} task(s) flagged this week.` : `All tracked duties are on track.`);
 
   const download = () => {
     const rows = Object.entries(byStaff)
@@ -379,7 +864,7 @@ function ReportPanel({ hub }: { hub: any }) {
     const dutyRows = duties.map((d: any) => {
       const logs = dated.filter((l: any) => l.duty_id === d.id);
       const dDone = logs.filter((l: any) => l.status === "done").length;
-      const dMiss = logs.filter((l: any) => l.status === "missed").length;
+      const dMiss = logs.filter((l: any) => l.status === "missed" || l.status === "attention").length;
       return `<tr><td>${d.title}</td><td>${logs[0]?.staff_name || "—"}</td><td style="color:#5fa8af;font-weight:700">${dDone}</td><td style="color:#d4899a;font-weight:700">${dMiss}</td></tr>`;
     }).join("");
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>FETS Duty Report — ${capBranch(branch)} ${weekLabel()}</title>
@@ -391,8 +876,8 @@ td{padding:8px 12px;border-bottom:1px solid #e5e9ef;font-size:13px}</style></hea
 <div class="meta">FETS.LIVE · ${capBranch(branch)} centre · generated ${new Date().toLocaleString("en-GB")}</div>
 <h1>Weekly Duty Report</h1><div class="meta">${weekLabel()}</div>
 <div class="summary">${summaryText}</div>
-<h3>By staff</h3><table><tr><th>Staff</th><th>Done</th><th>Missed</th><th>Open</th></tr>${rows}</table>
-<h3>By duty</h3><table><tr><th>Duty</th><th>Latest owner</th><th>Done</th><th>Missed</th></tr>${dutyRows}</table>
+<h3>By staff</h3><table><tr><th>Staff</th><th>Done</th><th>Attention / Missed</th><th>Open</th></tr>${rows}</table>
+<h3>By duty</h3><table><tr><th>Duty</th><th>Latest owner</th><th>Done</th><th>Attention / Missed</th></tr>${dutyRows}</table>
 </body></html>`;
     const blob = new Blob([html], { type: "text/html" });
     const a = document.createElement("a");
@@ -409,7 +894,7 @@ td{padding:8px 12px;border-bottom:1px solid #e5e9ef;font-size:13px}</style></hea
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
         {[
           { label: "Completed", value: done, color: "var(--at-aqua-deep)" },
-          { label: "Missed", value: missed, color: "var(--at-blush-deep)" },
+          { label: "Attention / Missed", value: missed, color: "var(--at-blush-deep)" },
           { label: "Open", value: pending, color: "var(--at-steel)" },
           { label: "Covered", value: covered, color: "var(--at-slate)" },
           { label: "Completion", value: `${pct}%`, color: "var(--at-steel)" },
@@ -448,7 +933,7 @@ td{padding:8px 12px;border-bottom:1px solid #e5e9ef;font-size:13px}</style></hea
               <AtAvatar name={name} size={24} />
               <span style={{ flex: 1, fontSize: 13, fontWeight: 700 }}>{name}{name === lead && <Crown size={12} style={{ marginLeft: 6, color: "var(--at-blush-deep)", verticalAlign: "-1px" }} />}</span>
               <span style={{ fontSize: 12, fontWeight: 800, color: "var(--at-aqua-deep)" }}>{s.done} done</span>
-              <span style={{ fontSize: 12, fontWeight: 800, color: "var(--at-blush-deep)" }}>{s.missed} missed</span>
+              <span style={{ fontSize: 12, fontWeight: 800, color: "var(--at-blush-deep)" }}>{s.missed} attention</span>
               <span style={{ fontSize: 12, fontWeight: 700, color: "var(--at-ink-3)" }}>{s.pending} open</span>
             </div>
           ))}
@@ -461,8 +946,6 @@ td{padding:8px 12px;border-bottom:1px solid #e5e9ef;font-size:13px}</style></hea
 /* ═══ MAIN PAGE ════════════════════════════════════════════════════════════ */
 export default function HandoverHub({ branch: branchProp, setActive }: any) {
   const W: any = window as any;
-  // Never operate on a phantom "global" branch — super admins with branch_assigned
-  // "global" get _meBranch "global", which must resolve to a real centre.
   const rawBranch = branchProp === "global" ? (W.FETS?._meBranch || "calicut") : branchProp;
   const branch = rawBranch === "global" ? "calicut" : rawBranch;
   const me = W.FETS?._meName || W.FETS?.user?.name || "Staff";
@@ -518,10 +1001,10 @@ export default function HandoverHub({ branch: branchProp, setActive }: any) {
   const isLead = me === lead;
 
   const stages = [
-    { id: "start", label: "Shift Start", sub: "Accept the handover", icon: Sunrise },
-    { id: "duties", label: "Duty Timeline", sub: "Today's duties & lead console", icon: ListChecks },
-    { id: "end", label: "Shift End", sub: "Close & hand over", icon: MoonStar },
-    { id: "reports", label: "Reports & Admin", sub: "Summary, duties & history", icon: BarChart3 },
+    { id: "start", label: "Shift Start", sub: "Incoming handover takeover", icon: Sunrise },
+    { id: "duties", label: "Duty Timeline", sub: "Operational checklist & 7-day matrix", icon: ListChecks },
+    { id: "end", label: "Shift End", sub: "Close & hand over to next shift", icon: MoonStar },
+    { id: "reports", label: "Reports & Admin", sub: "Weekly summary & duty manager", icon: BarChart3 },
   ] as const;
 
   return (
@@ -539,10 +1022,10 @@ export default function HandoverHub({ branch: branchProp, setActive }: any) {
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", paddingBottom: 8 }}>
             <span className="at-chip"><Calendar size={13} /> {new Date().toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}</span>
-            <span className="at-chip"><Users size={13} /> {presentStaff.length} <span className="at-chip-label">present</span></span>
+            <span className="at-chip"><Users size={13} /> {presentStaff.length} <span className="at-chip-label">on duty</span></span>
             {lead && (
               <span className="at-lead-badge" style={{ padding: "8px 14px", fontSize: 11 }}>
-                <Crown size={13} /> Lead · {lead}{isLead && " (you)"}
+                <Crown size={13} /> Today's Lead · {lead}{isLead && " (You)"}
               </span>
             )}
           </div>
@@ -572,56 +1055,9 @@ export default function HandoverHub({ branch: branchProp, setActive }: any) {
             {/* ② DUTY TIMELINE */}
             {stage === "duties" && (
               <React.Fragment>
-                <div className="at-lead-banner" style={{ marginBottom: 18 }}>
-                  <span className="at-lead-badge"><Crown size={11} /> Today's lead</span>
-                  <span style={{ fontSize: 13.5, fontWeight: 750, color: "var(--at-ink)" }}>{lead || "Not assigned"}</span>
-                  <span style={{ fontSize: 11.5, color: "var(--at-ink-3)", fontWeight: 600 }}>
-                    verifies every duty before close
-                  </span>
-                  <div style={{ flex: 1 }} />
-                  {isAdmin && (
-                    <select
-                      className="at-select"
-                      value={lead || ""}
-                      onChange={(e) => {
-                        if (!e.target.value) return;
-                        DD.setDayLead(today, branch, e.target.value)
-                          .then(() => { toast.success(`Lead set to ${e.target.value}`); reload(); })
-                          .catch((err) => toast.error(err?.message || "Failed"));
-                      }}
-                    >
-                      {!lead && <option value="">Set lead…</option>}
-                      {presentStaff.map((n) => <option key={n} value={n}>{n}</option>)}
-                    </select>
-                  )}
-                  <button
-                    className="at-btn at-btn-sm"
-                    title="Post today's duty briefing to Google Chat"
-                    onClick={async () => {
-                      const lines = [...duties]
-                        .sort((a: any, b: any) => (a.scheduled_time || "99:99").localeCompare(b.scheduled_time || "99:99"))
-                        .map((d: any) => {
-                          const log = logs.find((l: any) => l.duty_id === d.id);
-                          return `${fmtTime(d.scheduled_time)} — ${d.title} → ${log?.staff_name || "Unassigned"}`;
-                        });
-                      const ok = await sendChatAlert({
-                        kind: "briefing", branch,
-                        dateLabel: new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }),
-                        lead, lines,
-                      });
-                      if (ok) toast.success("Briefing posted to Google Chat");
-                      else toast.error("Chat not configured yet — webhook missing");
-                    }}
-                  >
-                    <MessageSquare size={13} /> Briefing → Chat
-                  </button>
-                  <button className="at-btn at-btn-sm" onClick={reload} title="Refresh"><RefreshCcw size={13} /></button>
-                </div>
-
-                <div className="at-section-label">Today's duties · in scheduled order</div>
                 <DutyTimeline hub={hub} />
 
-                <hr className="at-divider" />
+                <hr className="at-divider" style={{ margin: "28px 0" }} />
                 <WeekDuties hub={hub} />
               </React.Fragment>
             )}

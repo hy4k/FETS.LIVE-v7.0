@@ -232,7 +232,178 @@
 /* embedded legacy handover views adapt to Atelier */
 .handover-atelier .sh-modern-root { background: transparent; }
 
-@media (max-width: 720px) {
-  .at-duty { grid-template-columns: 62px 1fr; }
-  .at-duty > :last-child { grid-column: 1 / -1; }
+/* ── Top Dashboard Summary Bar ── */
+.at-dash-summary {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px; margin-bottom: 18px;
 }
+.at-summary-stat-card {
+  background: var(--at-card); border: 1px solid var(--at-line);
+  border-radius: 14px; padding: 14px 16px; box-shadow: var(--at-shadow);
+  display: flex; flex-direction: column; gap: 4px;
+}
+.at-summary-stat-val {
+  font-size: 24px; font-weight: 850; letter-spacing: -0.02em; line-height: 1;
+}
+.at-summary-stat-label {
+  font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--at-ink-3); margin-top: 4px;
+}
+
+/* ── Filter & Search Bar ── */
+.at-filter-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 12px 16px; border-radius: 14px; background: var(--at-card);
+  border: 1px solid var(--at-line); box-shadow: var(--at-shadow); margin-bottom: 18px;
+}
+.at-filter-tabs {
+  display: flex; gap: 6px; flex-wrap: wrap;
+}
+.at-filter-tab {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px; border-radius: 99px; border: 1px solid transparent;
+  background: var(--at-recessed); color: var(--at-ink-2);
+  font-size: 11.5px; font-weight: 750; cursor: pointer; transition: all 0.15s;
+}
+.at-filter-tab:hover { background: rgba(77, 109, 154, 0.15); color: var(--at-steel); }
+.at-filter-tab.active {
+  background: var(--at-steel); color: #fff; border-color: var(--at-steel);
+}
+.at-filter-tab-count {
+  font-size: 10px; padding: 1px 6px; border-radius: 99px; background: rgba(0,0,0,0.1);
+}
+.at-filter-tab.active .at-filter-tab-count {
+  background: rgba(255,255,255,0.25); color: #fff;
+}
+
+/* ── Categorized Task Sections ── */
+.at-categories-container {
+  display: flex; flex-direction: column; gap: 16px;
+}
+.at-cat-card {
+  background: var(--at-card); border: 1px solid var(--at-line);
+  border-radius: 16px; box-shadow: var(--at-shadow); overflow: hidden;
+  transition: all 0.2s;
+}
+.at-cat-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px; background: linear-gradient(180deg, #ffffff 0%, var(--at-recessed) 100%);
+  border-bottom: 1px solid var(--at-line); cursor: pointer; user-select: none;
+}
+.at-cat-title-group {
+  display: flex; align-items: center; gap: 10px;
+}
+.at-cat-icon {
+  width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center;
+  background: var(--at-card); color: var(--at-steel); border: 1px solid var(--at-line);
+}
+.at-cat-title {
+  font-size: 13.5px; font-weight: 850; letter-spacing: 0.04em; color: var(--at-ink);
+  text-transform: uppercase;
+}
+.at-cat-desc {
+  font-size: 11px; color: var(--at-ink-3); font-weight: 500;
+}
+.at-cat-badge {
+  font-size: 10.5px; font-weight: 800; padding: 4px 9px; border-radius: 99px;
+  background: var(--at-card); border: 1px solid var(--at-line); color: var(--at-steel);
+}
+
+/* ── Compact Task Row ── */
+.at-task-rows {
+  display: flex; flex-direction: column;
+}
+.at-task-row {
+  display: grid; grid-template-columns: 36px 70px 1fr auto auto;
+  align-items: center; gap: 12px; padding: 11px 18px;
+  border-bottom: 1px solid var(--at-line);
+  transition: background 0.15s;
+}
+.at-task-row:last-child { border-bottom: none; }
+.at-task-row:hover { background: rgba(134, 179, 209, 0.06); }
+.at-task-row.is-done { background: rgba(153, 206, 211, 0.08); }
+.at-task-row.is-attention { background: rgba(237, 181, 191, 0.12); }
+
+/* Compact Checkbox */
+.at-task-chk {
+  width: 22px; height: 22px; border-radius: 7px; border: 2px solid var(--at-ink-4);
+  background: #fff; display: grid; place-items: center; cursor: pointer;
+  color: transparent; transition: all 0.15s; padding: 0;
+}
+.at-task-chk:hover { border-color: var(--at-aqua-deep); transform: scale(1.05); }
+.at-task-chk.checked {
+  background: var(--at-aqua-deep); border-color: var(--at-aqua-deep); color: #fff;
+}
+
+/* Time & Title */
+.at-task-time {
+  font-size: 11px; font-weight: 750; color: var(--at-steel);
+  font-variant-numeric: tabular-nums;
+}
+.at-task-content {
+  display: flex; flex-direction: column; gap: 2px; min-width: 0;
+}
+.at-task-name {
+  font-size: 13.5px; font-weight: 750; color: var(--at-ink);
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.at-task-desc-sub {
+  font-size: 11px; color: var(--at-ink-3); line-height: 1.4;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.at-attention-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: rgba(237, 181, 191, 0.4); color: #a13d52;
+  font-size: 9.5px; font-weight: 850; padding: 2px 7px; border-radius: 6px;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+
+/* Assigned Person & Controls */
+.at-task-staff {
+  display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700;
+  color: var(--at-ink-2); white-space: nowrap;
+}
+.at-task-actions {
+  display: flex; align-items: center; gap: 6px;
+}
+
+/* ── Supervisor / Team Progress Breakdown ── */
+.at-team-progress-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-top: 10px;
+}
+.at-team-progress-card {
+  background: var(--at-card); border: 1px solid var(--at-line); border-radius: 12px;
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 6px;
+  box-shadow: var(--at-shadow);
+}
+
+/* ── 7-Day Consecutive Duty Matrix Table ── */
+.at-matrix-wrap {
+  overflow-x: auto; background: var(--at-card); border: 1px solid var(--at-line);
+  border-radius: 16px; box-shadow: var(--at-shadow); padding: 14px;
+}
+.at-matrix-table {
+  width: 100%; border-collapse: collapse; min-width: 780px;
+}
+.at-matrix-table th, .at-matrix-table td {
+  padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--at-line);
+}
+.at-matrix-table th {
+  background: var(--at-recessed); font-size: 11px; font-weight: 800; text-transform: uppercase;
+  color: var(--at-steel); letter-spacing: 0.06em;
+}
+.at-matrix-lead-col {
+  background: rgba(237, 181, 191, 0.15) !important;
+}
+
+@media (max-width: 768px) {
+  .at-task-row {
+    grid-template-columns: 32px 1fr auto;
+    row-gap: 8px;
+  }
+  .at-task-time { grid-column: 2 / 3; }
+  .at-task-content { grid-column: 2 / 3; }
+  .at-task-staff { grid-column: 2 / 3; }
+  .at-task-actions { grid-column: 3 / 4; grid-row: 1 / 3; }
+}
+
