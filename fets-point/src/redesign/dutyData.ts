@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   Duty data layer — weekly rotation engine, daily log, lead resolution
-   Powers the FETS HANDOVER page (HandoverHub).
+   Duty data layer — 6-day consecutive rotation engine, dynamic roster connection,
+   characteristic inputs, lead verification, and security audit logs.
    ═══════════════════════════════════════════════════════════════════════════ */
 import { supabase } from "../lib/supabase";
 import { isStaffRosterVisible } from "../utils/rosterVisibility";
@@ -32,6 +32,18 @@ export type DutyCategoryId =
   | "office_facilities"
   | "other_followup";
 
+export type CharacteristicType =
+  | "rma_time"
+  | "temperature"
+  | "dvr_check"
+  | "workstation_count"
+  | "admin_system"
+  | "server_check"
+  | "network_conn"
+  | "ticket_refs"
+  | "supplies"
+  | "general";
+
 export interface DutyCategory {
   id: DutyCategoryId;
   name: string;
@@ -59,6 +71,9 @@ export interface Duty {
   sort_order: number;
   is_active: boolean;
   priority?: "normal" | "attention";
+  characteristic_type?: CharacteristicType;
+  characteristic_label?: string;
+  characteristic_placeholder?: string;
 }
 
 export interface DutyAssignment {
@@ -66,6 +81,7 @@ export interface DutyAssignment {
   week_start: string;
   branch: string;
   duty_id: string;
+  category_id?: DutyCategoryId;
   staff_name: string;
   is_override: boolean;
 }
@@ -77,11 +93,29 @@ export interface DutyLog {
   duty_id: string;
   staff_name: string;
   original_staff_name: string | null;
-  status: "pending" | "in_progress" | "done" | "missed" | "attention" | "off" | "na";
+  status: "pending" | "submitted" | "in_progress" | "done" | "missed" | "attention" | "off" | "na";
   steps_state: boolean[];
-  verified_by: string | null;
-  verified_at: string | null;
-  note: string | null;
+  recorded_time?: string | null;
+  recorded_val?: string | null;
+  note?: string | null;
+  submitted_by?: string | null;
+  submitted_at?: string | null;
+  verified_by?: string | null;
+  verified_at?: string | null;
+  lead_comments?: string | null;
+}
+
+export interface SecurityAuditEntry {
+  id: string;
+  timestamp: string;
+  actor_name: string;
+  action: string;
+  branch: string;
+  duty_title?: string;
+  session_id: string;
+  user_agent: string;
+  device_type: string;
+  ip_address?: string;
 }
 
 export const DEFAULT_DUTIES: Duty[] = [
@@ -96,6 +130,9 @@ export const DEFAULT_DUTIES: Duty[] = [
     steps: [{ title: "Check Pearson VUE / Prometric schedule" }, { title: "Confirm appointment slots & room assignments" }, { title: "Cross-check special candidate requirements" }],
     sort_order: 10,
     is_active: true,
+    characteristic_type: "general",
+    characteristic_label: "Total Candidates & Morning Slots",
+    characteristic_placeholder: "e.g. 24 candidates across 4 sessions",
   },
   {
     id: "d_sched_check",
@@ -107,6 +144,9 @@ export const DEFAULT_DUTIES: Duty[] = [
     steps: [{ title: "Verify roster attendance & check-ins" }, { title: "Review scheduled morning & afternoon batches" }],
     sort_order: 11,
     is_active: true,
+    characteristic_type: "general",
+    characteristic_label: "Roster Check & Shifts Verified",
+    characteristic_placeholder: "e.g. All 3 proctors checked in, morning batch on time",
   },
   {
     id: "d_admin_reminders",
@@ -118,6 +158,9 @@ export const DEFAULT_DUTIES: Duty[] = [
     steps: [{ title: "Check center notice board & emails" }, { title: "Log vendor communication or announcements" }],
     sort_order: 12,
     is_active: true,
+    characteristic_type: "general",
+    characteristic_label: "Admin Notices / Updates",
+    characteristic_placeholder: "e.g. Pearson advisory notice #104 acknowledged",
   },
 
   // 2. DATA & SYSTEMS
@@ -131,6 +174,9 @@ export const DEFAULT_DUTIES: Duty[] = [
     steps: [{ title: "Update candidate check-in and completion records" }, { title: "Record no-shows and cancellations" }],
     sort_order: 20,
     is_active: true,
+    characteristic_type: "general",
+    characteristic_label: "Sync Completion Time & Records Count",
+    characteristic_placeholder: "e.g. 24 candidate records synced, 1 no-show",
   },
   {
     id: "d_rma_running",
@@ -142,6 +188,9 @@ export const DEFAULT_DUTIES: Duty[] = [
     steps: [{ title: "Run RMA diagnostic tool on all proctor machines" }, { title: "Verify test delivery package status" }],
     sort_order: 21,
     is_active: true,
+    characteristic_type: "rma_time",
+    characteristic_label: "RMA Run Timestamp & Test Engine Status",
+    characteristic_placeholder: "e.g. 08:45 AM · All test packages updated successfully",
   },
   {
     id: "d_dvr_check",
@@ -154,6 +203,9 @@ export const DEFAULT_DUTIES: Duty[] = [
     sort_order: 22,
     is_active: true,
     priority: "attention",
+    characteristic_type: "dvr_check",
+    characteristic_label: "CCTV Feeds Status & Storage Retention",
+    characteristic_placeholder: "e.g. All 8 cameras active, 45 days retention space OK",
   },
   {
     id: "d_sys_verify",
@@ -165,6 +217,9 @@ export const DEFAULT_DUTIES: Duty[] = [
     steps: [{ title: "Confirm exam browser integrity" }, { title: "Verify secure socket connection to test servers" }],
     sort_order: 23,
     is_active: true,
+    characteristic_type: "general",
+    characteristic_label: "Lockdown Browser & Security Status",
+    characteristic_placeholder: "e.g. Secure browser v7.4 verified on all stations",
   },
 
   // 3. CASES & DOCUMENTATION
@@ -178,6 +233,9 @@ export const DEFAULT_DUTIES: Duty[] = [
     steps: [{ title: "Document technical disruptions with candidate IDs" }, { title: "Submit CPR via vendor portal and attach ticket ref" }],
     sort_order: 30,
     is_active: true,
+    characteristic_type: "ticket_refs",
+    characteristic_label: "CPR Reference Numbers & Candidate IDs",
+    characteristic_placeholder: "e.g. CPR-9921 (Cand #1084 - Display flicker resolved)",
   },
   {
     id: "d_serv_direct",
@@ -189,6 +247,9 @@ export const DEFAULT_DUTIES: Duty[] = [
     steps: [{ title: "Log open hardware/network tickets" }, { title: "Track pending case resolution numbers" }],
     sort_order: 31,
     is_active: true,
+    characteristic_type: "ticket_refs",
+    characteristic_label: "Service Direct Ticket Numbers",
+    characteristic_placeholder: "e.g. SD-884102 (Headset port replaced on Station 4)",
   },
   {
     id: "d_celpip_filing",
@@ -200,6 +261,9 @@ export const DEFAULT_DUTIES: Duty[] = [
     steps: [{ title: "Verify and upload CELPIP test room audio files" }, { title: "Submit daily exam summary sheets" }],
     sort_order: 32,
     is_active: true,
+    characteristic_type: "ticket_refs",
+    characteristic_label: "Upload Batch IDs & Summary Sheet",
+    characteristic_placeholder: "e.g. Batch CEL-0824 audio files uploaded and verified",
   },
   {
     id: "d_doc_updates",
@@ -211,6 +275,9 @@ export const DEFAULT_DUTIES: Duty[] = [
     steps: [{ title: "File physical sign-in sheets" }, { title: "Archive day logs in center vault" }],
     sort_order: 33,
     is_active: true,
+    characteristic_type: "general",
+    characteristic_label: "Sign-in Registers & Vault Filing",
+    characteristic_placeholder: "e.g. 24 ID forms filed and locked in center vault",
   },
 
   // 4. IT & INFRASTRUCTURE
@@ -224,6 +291,9 @@ export const DEFAULT_DUTIES: Duty[] = [
     steps: [{ title: "Reboot candidate machines" }, { title: "Sanitize and test headsets & volume controls" }, { title: "Check display resolution and keyboard responsiveness" }],
     sort_order: 40,
     is_active: true,
+    characteristic_type: "workstation_count",
+    characteristic_label: "Tested Terminals & Headset Count",
+    characteristic_placeholder: "e.g. All 18 terminals & headsets tested OK",
   },
   {
     id: "d_admin_system",
@@ -235,6 +305,9 @@ export const DEFAULT_DUTIES: Duty[] = [
     steps: [{ title: "Test digital camera and signature capture pad" }, { title: "Verify proctor administrative credentials" }],
     sort_order: 41,
     is_active: true,
+    characteristic_type: "admin_system",
+    characteristic_label: "Biometric Scanners & Camera Test",
+    characteristic_placeholder: "e.g. Signature pad, biometric scanner & camera OK",
   },
   {
     id: "d_server_check",
@@ -246,6 +319,9 @@ export const DEFAULT_DUTIES: Duty[] = [
     steps: [{ title: "Check local server sync service" }, { title: "Verify disk free space is > 50 GB" }],
     sort_order: 42,
     is_active: true,
+    characteristic_type: "server_check",
+    characteristic_label: "Server Health & Free Disk Space",
+    characteristic_placeholder: "e.g. Primary server active, 84 GB free space",
   },
   {
     id: "d_network_conn",
@@ -257,6 +333,9 @@ export const DEFAULT_DUTIES: Duty[] = [
     steps: [{ title: "Check primary fiber line latency (< 40ms)" }, { title: "Verify secondary broadband failover readiness" }],
     sort_order: 43,
     is_active: true,
+    characteristic_type: "network_conn",
+    characteristic_label: "Fiber Latency (ms) & Secondary Failover",
+    characteristic_placeholder: "e.g. 14ms latency, secondary failover active",
   },
   {
     id: "d_infra_check",
@@ -269,6 +348,9 @@ export const DEFAULT_DUTIES: Duty[] = [
     sort_order: 44,
     is_active: true,
     priority: "attention",
+    characteristic_type: "temperature",
+    characteristic_label: "Room Temperature (°C) & UPS Backup",
+    characteristic_placeholder: "e.g. 21.8°C room temp, UPS 100% charged, DG ready",
   },
 
   // 5. OFFICE & FACILITIES
@@ -282,6 +364,9 @@ export const DEFAULT_DUTIES: Duty[] = [
     steps: [{ title: "Wipe and restock scratch booklets" }, { title: "Test erasable marker pens" }],
     sort_order: 50,
     is_active: true,
+    characteristic_type: "supplies",
+    characteristic_label: "Scratch Booklets & Marker Inventory",
+    characteristic_placeholder: "e.g. 30 scratch booklets sanitized, 25 markers working",
   },
   {
     id: "d_office_equip",
@@ -293,6 +378,9 @@ export const DEFAULT_DUTIES: Duty[] = [
     steps: [{ title: "Test metal detector battery" }, { title: "Check locker key count and tags" }, { title: "Confirm printer has sufficient paper and toner" }],
     sort_order: 51,
     is_active: true,
+    characteristic_type: "general",
+    characteristic_label: "Metal Detector & Locker Keys Status",
+    characteristic_placeholder: "e.g. Wand battery 100%, 20 locker keys accounted for",
   },
   {
     id: "d_gen_facility",
@@ -304,6 +392,9 @@ export const DEFAULT_DUTIES: Duty[] = [
     steps: [{ title: "Inspect candidate waiting lounge" }, { title: "Ensure test center silence signs are posted" }],
     sort_order: 52,
     is_active: true,
+    characteristic_type: "general",
+    characteristic_label: "Lobby & Testing Hall Sanitization",
+    characteristic_placeholder: "e.g. Testing hall sanitized, silence signs verified",
   },
 
   // 6. OTHER / FOLLOW-UP
@@ -317,6 +408,9 @@ export const DEFAULT_DUTIES: Duty[] = [
     steps: [{ title: "Review accommodation approvals" }, { title: "Brief assigned proctor on accommodation terms" }],
     sort_order: 60,
     is_active: true,
+    characteristic_type: "general",
+    characteristic_label: "Special Accommodations / Candidate Notes",
+    characteristic_placeholder: "e.g. 1 candidate with extended time (Station 12)",
   },
   {
     id: "d_handover_followup",
@@ -328,10 +422,13 @@ export const DEFAULT_DUTIES: Duty[] = [
     steps: [{ title: "Inspect items flagged by closing shift" }, { title: "Confirm resolution or assign next owner" }],
     sort_order: 61,
     is_active: true,
+    characteristic_type: "general",
+    characteristic_label: "Follow-up Resolution Notes",
+    characteristic_placeholder: "e.g. Station 4 keyboard swapped and re-tested OK",
   },
 ];
 
-/* ── Duties ─────────────────────────────────────────────────────────────── */
+/* ── Duties CRUD (Create & Edit by everyone, Delete only by Super Admin) ─ */
 export async function loadDuties(branch: string): Promise<Duty[]> {
   try {
     const { data, error } = await supabase
@@ -342,7 +439,6 @@ export async function loadDuties(branch: string): Promise<Duty[]> {
     if (!error && data && data.length > 0) {
       const filtered = ((data || []) as Duty[]).filter((d) => d.branch === "both" || d.branch === branch);
       if (filtered.length > 0) {
-        // Ensure every duty has a recognized category
         return filtered.map((d, i) => {
           let cat = d.category;
           if (!cat) {
@@ -359,6 +455,7 @@ export async function loadDuties(branch: string): Promise<Duty[]> {
             category: cat,
             sort_order: d.sort_order || i + 1,
             steps: Array.isArray(d.steps) ? d.steps : [],
+            characteristic_type: d.characteristic_type || "general",
           };
         });
       }
@@ -367,7 +464,6 @@ export async function loadDuties(branch: string): Promise<Duty[]> {
     console.warn("loadDuties fallback to DEFAULT_DUTIES", e);
   }
 
-  // Fallback to rich built-in default duties
   return DEFAULT_DUTIES.filter((d) => d.branch === "both" || d.branch === branch);
 }
 
@@ -383,6 +479,7 @@ export async function saveDuty(duty: Partial<Duty> & { title: string }) {
       branch: duty.branch || "both",
       sort_order: duty.sort_order || 99,
       steps: duty.steps || [],
+      characteristic_type: duty.characteristic_type || "general",
     };
     const { error } = await supabase.from("duty_master").insert(payload as any);
     if (error) throw error;
@@ -394,7 +491,7 @@ export async function deleteDuty(id: string) {
   if (error) throw error;
 }
 
-/* ── Staff pools (Always include Naima MM, NIMMY M, Shimna in Cochin) ──── */
+/* ── Staff pools (Always includes Naima MM, NIMMY M, Shimna in Cochin) ─── */
 export async function loadBranchStaff(branch: string): Promise<string[]> {
   try {
     const { data, error } = await supabase
@@ -408,14 +505,13 @@ export async function loadBranchStaff(branch: string): Promise<string[]> {
         .filter((p: any) => p.full_name && isStaffRosterVisible(p) && String(p.branch_assigned || "").toLowerCase().includes(bLower))
         .map((p: any) => p.full_name as string);
       
-      // Explicitly ensure Cochin default staff are present
       if (bLower.includes("cochin")) {
-        ["Naima MM", "NIMMY M", "Shimna"].forEach(n => {
+        ["Naima MM", "NIMMY M", "Shimna"].forEach((n) => {
           if (!names.includes(n)) names.push(n);
         });
       }
       if (bLower.includes("calicut")) {
-        ["Aysha", "Lazeem", "Nilufer", "Anshitha K"].forEach(n => {
+        ["Aysha", "Lazeem", "Nilufer", "Anshitha K"].forEach((n) => {
           if (!names.includes(n)) names.push(n);
         });
       }
@@ -431,7 +527,7 @@ export async function loadBranchStaff(branch: string): Promise<string[]> {
     : ["Anshitha K", "Aysha", "Bindu Rajan", "Lazeem", "Nilufer"];
 }
 
-/** Staff actually working a given date at a branch (roster-based, falls back to full pool) */
+/** Staff actually working a given date at a branch (roster-based, excluding rest codes) */
 export async function loadPresentStaff(date: string, branch: string): Promise<string[]> {
   try {
     const { data } = await supabase
@@ -455,7 +551,13 @@ export async function loadPresentStaff(date: string, branch: string): Promise<st
   return loadBranchStaff(branch);
 }
 
-/* ── Weekly rotation ────────────────────────────────────────────────────── */
+/* ── 6-Day Consecutive Rotation Engine (Tied to Roster Rest Days) ────────── */
+/**
+ * Maps categories & duties to staff for a 6-day consecutive working stretch.
+ * Main categories: ADMIN & CALENDAR, DATA & SYSTEMS, CASES & DOCUMENTATION,
+ * IT & INFRASTRUCTURE, OFFICE & FACILITIES, OTHER / FOLLOW-UP.
+ * Multiple categories are assigned to staff if staff count < category count.
+ */
 export async function ensureWeekAssignments(weekStart: string, branch: string) {
   const [duties, staff] = await Promise.all([
     loadDuties(branch),
@@ -470,16 +572,32 @@ export async function ensureWeekAssignments(weekStart: string, branch: string) {
 
   if (!staff.length || !duties.length) return { duties, staff, assignments: existing };
 
-  const offset = weeksSinceEpoch(weekStart);
+  const weekOffset = weeksSinceEpoch(weekStart);
+  const categories = DUTY_CATEGORIES.map((c) => c.id);
+
+  // Determine category-to-staff mapping for this 6-day block
+  const catStaffMap: Record<DutyCategoryId, string> = {} as any;
+  categories.forEach((catId, idx) => {
+    const staffIdx = (((idx + weekOffset) % staff.length) + staff.length) % staff.length;
+    catStaffMap[catId] = staff[staffIdx];
+  });
+
   const missing = duties.filter((d) => !existing.some((a) => a.duty_id === d.id));
-  
+
   if (missing.length) {
     const rows = missing.map((d) => {
-      const dutyIdx = duties.findIndex((x) => x.id === d.id);
-      const idx = (((dutyIdx + offset) % staff.length) + staff.length) % staff.length;
-      return { week_start: weekStart, branch, duty_id: d.id, staff_name: staff[idx], is_override: false, id: `${weekStart}_${d.id}` };
+      const assignedPerson = catStaffMap[d.category] || staff[0];
+      return {
+        week_start: weekStart,
+        branch,
+        duty_id: d.id,
+        category_id: d.category,
+        staff_name: assignedPerson,
+        is_override: false,
+        id: `${weekStart}_${d.id}`,
+      };
     });
-    
+
     try {
       const { data } = await supabase.from("duty_assignments").insert(rows.map(({ id, ...r }) => r)).select();
       if (data) {
@@ -489,7 +607,7 @@ export async function ensureWeekAssignments(weekStart: string, branch: string) {
 
     return { duties, staff, assignments: [...existing, ...(rows as any as DutyAssignment[])] };
   }
-  
+
   return { duties, staff, assignments: existing };
 }
 
@@ -510,24 +628,39 @@ export async function setAssignment(weekStart: string, branch: string, dutyId: s
   }
 }
 
-/* ── Daily lead (reuses handover_assignments → roster gold border stays in sync) ── */
+/* ── 6-Day Consecutive Lead Resolver (Tied to Roster & Rest Days) ────────── */
 export async function getDayLead(date: string, branch: string): Promise<string | null> {
   try {
     const { data } = await supabase
       .from("handover_assignments").select("staff_names").eq("date", date).eq("branch", branch).maybeSingle();
     const names = (data?.staff_names || []) as string[];
-    return names[0] || null;
-  } catch {
-    return null;
-  }
+    if (names[0]) return names[0];
+  } catch {}
+  return null;
 }
 
+/**
+ * Ensures the 6-day stretch Lead is resolved based on the roster.
+ * If the primary assigned 6-day lead is on leave / rest day today,
+ * the lead role automatically falls back to the next available present staff member.
+ */
 export async function ensureDayLead(date: string, branch: string, presentStaff: string[]) {
   const existing = await getDayLead(date, branch);
-  if (existing) return { lead: existing, auto: false };
-  if (!presentStaff.length) return { lead: null as string | null, auto: false };
-  const dayIdx = Math.floor(new Date(date + "T00:00:00").getTime() / 86400000);
-  const lead = presentStaff[dayIdx % presentStaff.length];
+  if (existing && presentStaff.includes(existing)) {
+    return { lead: existing, auto: false };
+  }
+
+  if (!presentStaff.length) return { lead: null, auto: false };
+
+  // Calculate 6-day anchor lead
+  const allStaff = await loadBranchStaff(branch);
+  const weekStart = weekStartOf(new Date(date + "T00:00:00"));
+  const weekOffset = weeksSinceEpoch(weekStart);
+  const primaryLead = allStaff.length ? allStaff[weekOffset % allStaff.length] : presentStaff[0];
+
+  // If primary lead is present today, use them; otherwise fallback to next present staff
+  const lead = presentStaff.includes(primaryLead) ? primaryLead : presentStaff[0];
+
   try {
     const { data: row } = await supabase
       .from("handover_assignments").select("id").eq("date", date).eq("branch", branch).maybeSingle();
@@ -537,6 +670,7 @@ export async function ensureDayLead(date: string, branch: string, presentStaff: 
       await supabase.from("handover_assignments").insert({ date, branch, staff_names: [lead] });
     }
   } catch {}
+
   return { lead, auto: true };
 }
 
@@ -554,9 +688,13 @@ export async function setDayLead(date: string, branch: string, staffName: string
   }
 }
 
-/* ── Daily log ──────────────────────────────────────────────────────────── */
+/* ── Daily Log with Roster Connection & Reassignment Fallback ────────────── */
 export async function ensureDailyLog(date: string, branch: string, weekStart: string): Promise<DutyLog[]> {
-  const { duties, assignments } = await ensureWeekAssignments(weekStart, branch);
+  const [{ duties, assignments }, presentStaff] = await Promise.all([
+    ensureWeekAssignments(weekStart, branch),
+    loadPresentStaff(date, branch),
+  ]);
+
   let existing: DutyLog[] = [];
   try {
     const { data } = await supabase.from("duty_daily_log").select("*").eq("date", date).eq("branch", branch);
@@ -564,31 +702,105 @@ export async function ensureDailyLog(date: string, branch: string, weekStart: st
   } catch (e) {}
 
   const missing = duties.filter((d) => !existing.some((l) => l.duty_id === d.id));
+
   if (missing.length) {
     const rows = missing.map((d) => {
       const a = assignments.find((x) => x.duty_id === d.id);
+      const assignedPerson = a?.staff_name || "Unassigned";
+      
+      // Dynamic Roster Check: If assigned staff is on leave / RD today, reassign to next available working staff
+      let actualOwner = assignedPerson;
+      let originalOwner: string | null = null;
+
+      if (!presentStaff.includes(assignedPerson) && presentStaff.length > 0) {
+        // Fallback round-robin from present staff
+        const dutyIdx = duties.findIndex((x) => x.id === d.id);
+        actualOwner = presentStaff[dutyIdx % presentStaff.length];
+        originalOwner = assignedPerson;
+      }
+
       const stepCount = Array.isArray(d.steps) ? d.steps.length : 0;
       return {
         id: `${date}_${d.id}`,
-        date, branch, duty_id: d.id,
-        staff_name: a?.staff_name || "Unassigned",
-        original_staff_name: null,
+        date,
+        branch,
+        duty_id: d.id,
+        staff_name: actualOwner,
+        original_staff_name: originalOwner,
         status: "pending" as const,
         steps_state: Array(stepCount).fill(false),
+        recorded_time: null,
+        recorded_val: null,
+        note: null,
+        submitted_by: null,
+        submitted_at: null,
         verified_by: null,
         verified_at: null,
-        note: null,
+        lead_comments: null,
       };
     });
+
     try {
       const { data } = await supabase.from("duty_daily_log").insert(rows.map(({ id, ...r }) => r)).select();
       if (data) {
         return [...existing, ...((data || []) as DutyLog[])];
       }
     } catch {}
+
     return [...existing, ...(rows as any as DutyLog[])];
   }
+
   return existing;
+}
+
+/* ── Staff Task Data Submission ─────────────────────────────────────────── */
+export async function submitStaffDutyData(
+  logId: string,
+  payload: {
+    recorded_time?: string | null;
+    recorded_val?: string | null;
+    note?: string | null;
+    steps_state?: boolean[];
+  },
+  actorName: string
+) {
+  const patch: any = {
+    ...payload,
+    submitted_by: actorName,
+    submitted_at: new Date().toISOString(),
+    status: "submitted",
+    updated_at: new Date().toISOString(),
+  };
+
+  try {
+    await supabase.from("duty_daily_log").update(patch).eq("id", logId);
+  } catch (e) {
+    console.warn("submitStaffDutyData DB sync note:", e);
+  }
+}
+
+/* ── Lead Verification & Checklist Ticking ──────────────────────────────── */
+export async function verifyDutyByLead(
+  logId: string,
+  actorName: string,
+  status: "done" | "attention" | "missed" | "pending" = "done",
+  leadComments?: string
+) {
+  const patch: any = {
+    status,
+    verified_by: actorName,
+    verified_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+  if (leadComments !== undefined) {
+    patch.lead_comments = leadComments;
+  }
+
+  try {
+    await supabase.from("duty_daily_log").update(patch).eq("id", logId);
+  } catch (e) {
+    console.warn("verifyDutyByLead DB sync note:", e);
+  }
 }
 
 export async function updateLogSteps(logId: string, stepsState: boolean[], actorName: string) {
@@ -596,9 +808,12 @@ export async function updateLogSteps(logId: string, stepsState: boolean[], actor
   const patch: any = {
     steps_state: stepsState,
     updated_at: new Date().toISOString(),
-    status: allDone ? "done" : "in_progress",
   };
-  if (allDone) { patch.verified_by = actorName; patch.verified_at = new Date().toISOString(); }
+  if (allDone) {
+    patch.status = "submitted";
+    patch.submitted_by = actorName;
+    patch.submitted_at = new Date().toISOString();
+  }
   try {
     await supabase.from("duty_daily_log").update(patch).eq("id", logId);
   } catch (e) {
@@ -625,7 +840,8 @@ export async function reassignLog(logId: string, newStaff: string, actorName: st
       original_staff_name: log?.original_staff_name || log?.staff_name || null,
       status: "pending",
       steps_state: [],
-      verified_by: actorName,
+      verified_by: null,
+      verified_at: null,
       updated_at: new Date().toISOString(),
     };
     await supabase.from("duty_daily_log").update(patch).eq("id", logId);
@@ -634,13 +850,68 @@ export async function reassignLog(logId: string, newStaff: string, actorName: st
   }
 }
 
-/* ── Report data ────────────────────────────────────────────────────────── */
+/* ── Security Audit Trail (Detect Lead Account Sharing / Misuse) ─────────── */
+const AUDIT_STORAGE_KEY = "fets_duty_security_audits";
+
+function getBrowserFingerprint(): string {
+  const screen = `${window.screen.width}x${window.screen.height}`;
+  const lang = navigator.language || "en";
+  const platform = navigator.platform || "unknown";
+  return `${platform}_${screen}_${lang}`;
+}
+
+export async function logSecurityAudit(
+  action: string,
+  branch: string,
+  actorName: string,
+  dutyTitle?: string
+): Promise<SecurityAuditEntry> {
+  const entry: SecurityAuditEntry = {
+    id: crypto.randomUUID(),
+    timestamp: new Date().toISOString(),
+    actor_name: actorName,
+    action,
+    branch,
+    duty_title: dutyTitle,
+    session_id: sessionStorage.getItem("fets_session_id") || (sessionStorage.setItem("fets_session_id", Math.random().toString(36).slice(2)), sessionStorage.getItem("fets_session_id")!),
+    user_agent: navigator.userAgent.slice(0, 120),
+    device_type: getBrowserFingerprint(),
+  };
+
+  try {
+    const raw = localStorage.getItem(AUDIT_STORAGE_KEY);
+    const list: SecurityAuditEntry[] = raw ? JSON.parse(raw) : [];
+    list.unshift(entry);
+    localStorage.setItem(AUDIT_STORAGE_KEY, JSON.stringify(list.slice(0, 100)));
+  } catch {}
+
+  return entry;
+}
+
+export function getSecurityAuditLogs(branch?: string): SecurityAuditEntry[] {
+  try {
+    const raw = localStorage.getItem(AUDIT_STORAGE_KEY);
+    const list: SecurityAuditEntry[] = raw ? JSON.parse(raw) : [];
+    if (branch && branch !== "global") {
+      return list.filter((e) => e.branch === branch);
+    }
+    return list;
+  } catch {
+    return [];
+  }
+}
+
+/* ── Cross-Center Report Data ────────────────────────────────────────────── */
 export async function loadLogRange(start: string, end: string, branch: string): Promise<DutyLog[]> {
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from("duty_daily_log").select("*")
-      .eq("branch", branch).gte("date", start).lte("date", end)
+      .gte("date", start).lte("date", end)
       .order("date").order("duty_id");
+    if (branch && branch !== "global") {
+      query = query.eq("branch", branch);
+    }
+    const { data, error } = await query;
     if (!error && data) return data as DutyLog[];
   } catch {}
   return [];

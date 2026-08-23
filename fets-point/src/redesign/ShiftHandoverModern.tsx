@@ -528,12 +528,22 @@ export function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestio
     return false;
   }, [existingHandover, todayAssignment, hasTodayAssignment, assignedIncoming, hasIncomingAssignment, me, date, branch]);
 
+  const [showAllIncoming, setShowAllIncoming] = React.useState(false);
+  const primaryIncomingLead = React.useMemo(() => {
+    if (assignedIncoming.length > 0) return assignedIncoming[0];
+    if (rosteredIncoming.length > 0) return rosteredIncoming[0];
+    return people.find((n: string) => n !== me) || people[0] || me;
+  }, [assignedIncoming, rosteredIncoming, people, me]);
+
   const allowedIncomingOptions = React.useMemo(() => {
     if (existingHandover) {
       return incoming;
     }
-    return people;
-  }, [existingHandover, incoming, people]);
+    if (showAllIncoming) {
+      return people;
+    }
+    return [primaryIncomingLead];
+  }, [existingHandover, incoming, showAllIncoming, primaryIncomingLead, people]);
 
   const toggleIncoming = (name: string) => setIncoming((list) => list.includes(name) ? list.filter((x) => x !== name) : [...list, name]);
   const updateSummary = (key: string, value: any) => setSummary((state) => ({ ...state, [key]: value }));
@@ -618,7 +628,19 @@ export function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestio
           <Field label="Closing staff"><input value={me} disabled /></Field>
           <Field label="Closing time"><input type="time" value={time} onChange={(e) => setTime(e.target.value)} disabled={isLocked} /></Field>
         </div>
-        <div className="sh-sub-label">Next opening staff</div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12, marginBottom: 4 }}>
+          <div className="sh-sub-label" style={{ margin: 0 }}>Designated Opening Lead (Next Shift)</div>
+          {!isLocked && !existingHandover && (
+            <button
+              type="button"
+              className="at-btn at-btn-sm"
+              style={{ fontSize: 10.5, padding: "2px 8px" }}
+              onClick={() => setShowAllIncoming((prev) => !prev)}
+            >
+              {showAllIncoming ? "Show Only Designated Lead" : "Change / Select Other Staff"}
+            </button>
+          )}
+        </div>
         <div className="sh-people">
           {allowedIncomingOptions.map((name: string) => (
             <button

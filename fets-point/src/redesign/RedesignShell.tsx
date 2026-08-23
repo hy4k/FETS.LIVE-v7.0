@@ -4329,7 +4329,8 @@ function RosterGrid({ offsets, branch }) {
               }
 
               if (isLead) {
-                border = `2px solid #d3ad12`;
+                border = `2px solid #e5a919`;
+                shadow = `0 0 14px rgba(229, 169, 25, 0.45)${shadow !== "none" ? `, ${shadow}` : ""}`;
               }
 
               /* ---- shift-swap visual override ---- */
@@ -4386,8 +4387,17 @@ function RosterGrid({ offsets, branch }) {
                   } else if (window.FETS.isAdmin) {
                     setDialog({ name: n, off: o, date: d, cell, defaultCode: cell.dflt || "RD" });
                   }
-                }} className="tap roster-cell-btn" title={(window.FETS.isAdmin || isSelf) ? `${m.label}${ot > 0 ? ` + OT ${ot}h` : ""}${swapTitle ? ` · ${swapTitle}` : ""} — tap to change` : (swapTitle || m.label)}
+                }} className="tap roster-cell-btn" title={(window.FETS.isAdmin || isSelf) ? `${m.label}${isLead ? " · 👑 Weekly Shift Lead" : ""}${ot > 0 ? ` + OT ${ot}h` : ""}${swapTitle ? ` · ${swapTitle}` : ""} — tap to change` : (swapTitle || `${m.label}${isLead ? " · 👑 Weekly Shift Lead" : ""}`)}
                   style={cellStyle}>
+                  {/* Lead Crown badge */}
+                  {isLead && (
+                    <span title="Designated Shift Lead for this week" style={{
+                      position: "absolute", top: -5, right: -4,
+                      fontSize: 10, lineHeight: 1,
+                      zIndex: 3,
+                      filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.4))",
+                    }}>👑</span>
+                  )}
                   {/* Swap indicator badge */}
                   {swapMatch && (
                     <span title={swapTitle} style={{
