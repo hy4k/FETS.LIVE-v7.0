@@ -1,6 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   Duty data layer — 6-day consecutive rotation engine, dynamic roster connection,
-   characteristic inputs, lead verification, and security audit logs.
+   Duty data layer — 6-day consecutive rotation engine tied to individual staff roster
+   stretches (between Rest Days), characteristic inputs, lead verification,
+   and security audit logs.
    ═══════════════════════════════════════════════════════════════════════════ */
 import { supabase } from "../lib/supabase";
 import { isStaffRosterVisible } from "../utils/rosterVisibility";
@@ -551,13 +552,135 @@ export async function loadPresentStaff(date: string, branch: string): Promise<st
   return loadBranchStaff(branch);
 }
 
-/* ── 6-Day Consecutive Rotation Engine (Tied to Roster Rest Days) ────────── */
+/* ── Individual Staff Roster Working-Stretch Resolver ───────────────────── */
 /**
- * Maps categories & duties to staff for a 6-day consecutive working stretch.
- * Main categories: ADMIN & CALENDAR, DATA & SYSTEMS, CASES & DOCUMENTATION,
- * IT & INFRASTRUCTURE, OFFICE & FACILITIES, OTHER / FOLLOW-UP.
- * Multiple categories are assigned to staff if staff count < category count.
+ * Resolves each staff member's working stretch (from their first day after Rest Day
+ * to their last day before next Rest Day).
+ * Assigns categories and Lead roles for the ENTIRE duration of their working stretch:
+ * - Calicut:
+ *   - Aysha (22-27 Aug, etc.): ADMIN & CALENDAR (all tasks) + IT & INFRASTRUCTURE
+ *   - Nilufer (24-29 Aug, etc.): DATA & SYSTEMS (all tasks) + OFFICE & FACILITIES
+ *   - Lazeem (25-30 Aug, etc.): CASES & DOCUMENTATION (all tasks) + OTHER / FOLLOW-UP
+ * - Cochin:
+ *   - Naima MM (24-29 Aug, etc.): Lead Role + ADMIN & CALENDAR + DATA & SYSTEMS
+ *   - Shimna (22-27 Aug, etc.): CASES & DOCUMENTATION + IT & INFRASTRUCTURE
+ *   - NIMMY M (20-25 Aug / 27-31 Aug): OFFICE & FACILITIES + OTHER / FOLLOW-UP
  */
+export async function getStretchAssignmentsForDate(
+  date: string,
+  branch: string,
+  rosterCache?: any[]
+): Promise<{
+  lead: string | null;
+  catMap: Partial<Record<DutyCategoryId, string>>;
+  staffStretches: Record<string, { start: string; end: string; days: string[] }[]>;
+}> {
+  const bLower = branch.toLowerCase();
+  const isCochin = bLower.includes("cochin");
+
+  let roster = rosterCache;
+  if (!roster) {
+    try {
+      const d = new Date(date + "T00:00:00");
+      const dStart = new Date(d); dStart.setDate(dStart.getDate() - 15);
+      const dEnd = new Date(d); dEnd.setDate(dEnd.getDate() + 15);
+      const { data } = await supabase
+        .from("roster_schedules")
+        .select("date, shift_code, branch_location, staff_profiles(full_name, branch_assigned)")
+        .gte("date", ymd(dStart))
+        .lte("date", ymd(dEnd))
+        .order("date");
+      roster = data || [];
+    } catch {
+      roster = [];
+    }
+  }
+
+  const branchRoster = (roster || []).filter((r: any) => {
+    const br = (r.branch_location || r.staff_profiles?.branch_assigned || "").toLowerCase();
+    return isCochin ? br.includes("cochin") : (!br.includes("cochin"));
+  });
+
+  const staffDates: Record<string, Record<string, string>> = {};
+  branchRoster.forEach((r: any) => {
+    const name = r.staff_profiles?.full_name;
+    if (!name) return;
+    staffDates[name] = staffDates[name] || {};
+    staffDates[name][r.date] = r.shift_code;
+  });
+
+  const staffStretches: Record<string, { start: string; end: string; days: string[] }[]> = {};
+  for (const [name, dates] of Object.entries(staffDates)) {
+    const sortedDates = Object.keys(dates).sort();
+    let stretches: { start: string; end: string; days: string[] }[] = [];
+    let cur: string[] = [];
+    sortedDates.forEach((d) => {
+      const code = (dates[d] || "").toLowerCase();
+      if (!REST_CODES.has(code) && code) {
+        cur.push(d);
+      } else {
+        if (cur.length) {
+          stretches.push({ start: cur[0], end: cur[cur.length - 1], days: cur });
+          cur = [];
+        }
+      }
+    });
+    if (cur.length) stretches.push({ start: cur[0], end: cur[cur.length - 1], days: cur });
+    staffStretches[name] = stretches;
+  }
+
+  const catMap: Partial<Record<DutyCategoryId, string>> = {};
+  let lead: string | null = null;
+
+  if (isCochin) {
+    const naimaStretch = (staffStretches["Naima MM"] || []).find((s) => s.days.includes(date));
+    const shimnaStretch = (staffStretches["Shimna"] || []).find((s) => s.days.includes(date));
+    const nimmyStretch = (staffStretches["NIMMY M"] || []).find((s) => s.days.includes(date));
+
+    if (naimaStretch) {
+      lead = "Naima MM";
+      catMap["admin_calendar"] = "Naima MM";
+      catMap["data_systems"] = "Naima MM";
+    } else if (shimnaStretch) {
+      lead = "Shimna";
+    } else if (nimmyStretch) {
+      lead = "NIMMY M";
+    }
+
+    if (shimnaStretch) {
+      catMap["cases_documentation"] = "Shimna";
+      catMap["it_infrastructure"] = "Shimna";
+    }
+    if (nimmyStretch) {
+      catMap["office_facilities"] = "NIMMY M";
+      catMap["other_followup"] = "NIMMY M";
+    }
+  } else {
+    const ayshaStretch = (staffStretches["Aysha"] || []).find((s) => s.days.includes(date));
+    const niluferStretch = (staffStretches["Nilufer"] || []).find((s) => s.days.includes(date));
+    const lazeemStretch = (staffStretches["Lazeem"] || []).find((s) => s.days.includes(date));
+
+    if (ayshaStretch) {
+      catMap["admin_calendar"] = "Aysha";
+      catMap["it_infrastructure"] = "Aysha";
+      lead = "Aysha";
+    }
+    if (niluferStretch) {
+      catMap["data_systems"] = "Nilufer";
+      catMap["office_facilities"] = "Nilufer";
+      if (!lead) lead = "Nilufer";
+    }
+    if (lazeemStretch) {
+      catMap["cases_documentation"] = "Lazeem";
+      catMap["other_followup"] = "Lazeem";
+      if (!lead) lead = "Lazeem";
+    }
+  }
+
+  return { lead, catMap, staffStretches };
+}
+
+/* ── Week Assignments ───────────────────────────────────────────────────── */
 export async function ensureWeekAssignments(weekStart: string, branch: string) {
   const [duties, staff] = await Promise.all([
     loadDuties(branch),
@@ -572,21 +695,13 @@ export async function ensureWeekAssignments(weekStart: string, branch: string) {
 
   if (!staff.length || !duties.length) return { duties, staff, assignments: existing };
 
-  const weekOffset = weeksSinceEpoch(weekStart);
-  const categories = DUTY_CATEGORIES.map((c) => c.id);
-
-  // Determine category-to-staff mapping for this 6-day block
-  const catStaffMap: Record<DutyCategoryId, string> = {} as any;
-  categories.forEach((catId, idx) => {
-    const staffIdx = (((idx + weekOffset) % staff.length) + staff.length) % staff.length;
-    catStaffMap[catId] = staff[staffIdx];
-  });
+  const { catMap } = await getStretchAssignmentsForDate(weekStart, branch);
 
   const missing = duties.filter((d) => !existing.some((a) => a.duty_id === d.id));
 
   if (missing.length) {
     const rows = missing.map((d) => {
-      const assignedPerson = catStaffMap[d.category] || staff[0];
+      const assignedPerson = catMap[d.category] || staff[0];
       return {
         week_start: weekStart,
         branch,
@@ -639,11 +754,6 @@ export async function getDayLead(date: string, branch: string): Promise<string |
   return null;
 }
 
-/**
- * Ensures the 6-day stretch Lead is resolved based on the roster.
- * If the primary assigned 6-day lead is on leave / rest day today,
- * the lead role automatically falls back to the next available present staff member.
- */
 export async function ensureDayLead(date: string, branch: string, presentStaff: string[]) {
   const existing = await getDayLead(date, branch);
   if (existing && presentStaff.includes(existing)) {
@@ -652,14 +762,8 @@ export async function ensureDayLead(date: string, branch: string, presentStaff: 
 
   if (!presentStaff.length) return { lead: null, auto: false };
 
-  // Calculate 6-day anchor lead
-  const allStaff = await loadBranchStaff(branch);
-  const weekStart = weekStartOf(new Date(date + "T00:00:00"));
-  const weekOffset = weeksSinceEpoch(weekStart);
-  const primaryLead = allStaff.length ? allStaff[weekOffset % allStaff.length] : presentStaff[0];
-
-  // If primary lead is present today, use them; otherwise fallback to next present staff
-  const lead = presentStaff.includes(primaryLead) ? primaryLead : presentStaff[0];
+  const { lead: stretchLead } = await getStretchAssignmentsForDate(date, branch);
+  const lead = (stretchLead && presentStaff.includes(stretchLead)) ? stretchLead : presentStaff[0];
 
   try {
     const { data: row } = await supabase
@@ -690,9 +794,10 @@ export async function setDayLead(date: string, branch: string, staffName: string
 
 /* ── Daily Log with Roster Connection & Reassignment Fallback ────────────── */
 export async function ensureDailyLog(date: string, branch: string, weekStart: string): Promise<DutyLog[]> {
-  const [{ duties, assignments }, presentStaff] = await Promise.all([
+  const [{ duties, assignments }, presentStaff, { catMap }] = await Promise.all([
     ensureWeekAssignments(weekStart, branch),
     loadPresentStaff(date, branch),
+    getStretchAssignmentsForDate(date, branch),
   ]);
 
   let existing: DutyLog[] = [];
@@ -705,10 +810,12 @@ export async function ensureDailyLog(date: string, branch: string, weekStart: st
 
   if (missing.length) {
     const rows = missing.map((d) => {
+      // 1. Primary owner from stretch category assignment
+      const stretchOwner = catMap[d.category];
       const a = assignments.find((x) => x.duty_id === d.id);
-      const assignedPerson = a?.staff_name || "Unassigned";
-      
-      // Dynamic Roster Check: If assigned staff is on leave / RD today, reassign to next available working staff
+      const assignedPerson = stretchOwner || a?.staff_name || "Unassigned";
+
+      // 2. Dynamic Roster Check: If assigned staff is on leave / RD today, reassign to next available working staff
       let actualOwner = assignedPerson;
       let originalOwner: string | null = null;
 

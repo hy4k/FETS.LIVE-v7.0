@@ -1090,15 +1090,20 @@ function WeekDuties({ hub }: { hub: any }) {
     });
   }, [weekStart]);
 
-  const dayLeads = React.useMemo(() => {
-    const leads: Record<string, string> = {};
-    days.forEach((day) => {
-      if (!staff.length) return;
-      const dayIdx = Math.floor(new Date(day.dateKey + "T00:00:00").getTime() / 86400000);
-      leads[day.dateKey] = staff[dayIdx % staff.length];
-    });
-    return leads;
-  }, [days, staff]);
+  const [stretchDayMap, setStretchDayMap] = React.useState<Record<string, { lead: string | null; catMap: any }>>({});
+
+  React.useEffect(() => {
+    let alive = true;
+    (async () => {
+      const map: Record<string, { lead: string | null; catMap: any }> = {};
+      for (const day of days) {
+        const res = await DD.getStretchAssignmentsForDate(day.dateKey, branch);
+        map[day.dateKey] = res;
+      }
+      if (alive) setStretchDayMap(map);
+    })();
+    return () => { alive = false; };
+  }, [days, branch]);
 
   return (
     <React.Fragment>
@@ -1119,7 +1124,7 @@ function WeekDuties({ hub }: { hub: any }) {
                 Operational Duty & Time
               </th>
               {days.map((day) => {
-                const dayLead = dayLeads[day.dateKey];
+                const dayLead = stretchDayMap[day.dateKey]?.lead || staff[0];
                 return (
                   <th
                     key={day.dateKey}
@@ -1162,13 +1167,11 @@ function WeekDuties({ hub }: { hub: any }) {
 
                   {/* 7 Day Columns */}
                   {days.map((day) => {
-                    const dutyIdx = duties.findIndex((x: any) => x.id === duty.id);
-                    const offset = DD.weeksSinceEpoch(weekStart);
-                    const staffIdx = (((dutyIdx + offset + day.dayIndex) % staff.length) + staff.length) % staff.length;
-                    const assignedStaff = a?.is_override ? baseStaff : (staff[staffIdx] || baseStaff);
+                    const stretchStaff = stretchDayMap[day.dateKey]?.catMap?.[duty.category];
+                    const assignedStaff = a?.is_override ? baseStaff : (stretchStaff || baseStaff);
                     const log = weekLogs.find((l: any) => l.duty_id === duty.id && l.date === day.dateKey);
                     const status = log?.status || (day.dateKey > DD.ymd(new Date()) ? "future" : "pending");
-                    const isDayLead = assignedStaff === dayLeads[day.dateKey];
+                    const isDayLead = assignedStaff === stretchDayMap[day.dateKey]?.lead;
 
                     return (
                       <td
