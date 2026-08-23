@@ -98,7 +98,7 @@ conn.on('ready', () => {
           process.exit(1);
         } else {
           console.log('Static web root updated. Now rebuilding Docker container in /opt/apps/fets-live ...');
-          conn.exec('cd /opt/apps/fets-live && git pull origin main && docker rm -f fets-live-app-1 || true && docker compose down --remove-orphans && docker compose build --no-cache app && docker compose up -d --force-recreate app', (err, stream) => {
+          conn.exec('cd /opt/apps/fets-live && git pull origin main && docker compose build app && docker compose down --remove-orphans && (docker rm -f fets-live-app-1 || true) && docker compose up -d app', (err, stream) => {
             if (err) {
               console.error('Docker rebuild error:', err);
               conn.end();
