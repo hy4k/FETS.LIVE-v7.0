@@ -4509,7 +4509,7 @@ function RosterGrid({ offsets, branch }) {
   );
 }
 
-/* ═══ CONSECUTIVE 7-DAY DUTY & LEAD SCHEDULE MATRIX COMPONENT ══════════════ */
+/* ═══ WEEKLY 6-DAY WORKING STRETCH DUTY & LEAD SCHEDULE DASHBOARD ══════════════ */
 function RosterDutiesScheduleMatrix({ offsets, branch, leadsMap, onReloadLeads, cols }: {
   offsets: number[];
   branch: string;
@@ -4525,320 +4525,450 @@ function RosterDutiesScheduleMatrix({ offsets, branch, leadsMap, onReloadLeads, 
   const isTodayLead = !!leadsMap[`${todayStr}_${effectiveBranch}`] && (leadsMap[`${todayStr}_${effectiveBranch}`].toLowerCase().trim() === meName.toLowerCase().trim());
   const canEdit = !!window.FETS?.isAdmin || isTodayLead;
 
-  const [stretchDays, setStretchDays] = React.useState<Record<string, any>>({});
-  const [editingCell, setEditingCell] = React.useState<{ dateStr: string; type: "lead" | "category"; catId?: string; current: string } | null>(null);
+  const [stretchData, setStretchData] = React.useState<any>(null);
+  const [editingModal, setEditingModal] = React.useState<{ type: "lead" | "category"; catId?: string; catName?: string; current: string } | null>(null);
 
   const availableStaff = branch === "global"
     ? [...F().STAFF.calicut, ...F().STAFF.cochin]
     : F().STAFF[branch] || [];
 
-  const loadMatrix = React.useCallback(async () => {
-    const map: Record<string, any> = {};
-    for (const off of offsets) {
-      const dstr = ymdFormat(F().ISO(off));
-      const res = await DD.getStretchAssignmentsForDate(dstr, effectiveBranch);
-      map[dstr] = res;
+  const loadData = React.useCallback(async () => {
+    try {
+      const res = await DD.getStretchAssignmentsForDate(todayStr, effectiveBranch);
+      setStretchData(res);
+    } catch (e) {
+      console.error("loadData error:", e);
     }
-    setStretchDays(map);
-  }, [offsets, effectiveBranch]);
+  }, [todayStr, effectiveBranch]);
 
   React.useEffect(() => {
-    loadMatrix();
-  }, [loadMatrix]);
+    loadData();
+  }, [loadData]);
 
   React.useEffect(() => {
-    const h = () => { loadMatrix(); };
+    const h = () => { loadData(); };
     window.addEventListener("fets-roster-changed", h);
     window.addEventListener("fets-handover-updated", h);
     return () => {
       window.removeEventListener("fets-roster-changed", h);
       window.removeEventListener("fets-handover-updated", h);
     };
-  }, [loadMatrix]);
+  }, [loadData]);
 
-  const handleAssignLead = async (dateStr: string, newLead: string) => {
+  const activeLead = leadsMap[`${todayStr}_${effectiveBranch}`] || leadsMap[todayStr] || stretchData?.lead || (effectiveBranch === "cochin" ? "Naima MM" : "Aysha");
+
+  const handleSaveLead = async (newLead: string) => {
     try {
-      await DD.setDayLead(dateStr, effectiveBranch, newLead);
+      await DD.setDayLead(todayStr, effectiveBranch, newLead);
       window.dispatchEvent(new CustomEvent("fets-roster-changed"));
       window.dispatchEvent(new CustomEvent("fets-handover-updated"));
       onReloadLeads();
-      loadMatrix();
-      setEditingCell(null);
-    } catch (e: any) {
+      loadData();
+      setEditingModal(null);
+    } catch (e) {
       console.error(e);
     }
   };
 
-  const handleAssignCategory = async (dateStr: string, catId: string, newStaff: string) => {
+  const handleSaveCategory = async (catId: string, newStaff: string) => {
     try {
-      await DD.reassignCategoryDaily(dateStr, effectiveBranch, catId, newStaff, meName);
+      await DD.reassignCategoryDaily(todayStr, effectiveBranch, catId, newStaff, meName);
       window.dispatchEvent(new CustomEvent("fets-roster-changed"));
       window.dispatchEvent(new CustomEvent("fets-handover-updated"));
       onReloadLeads();
-      loadMatrix();
-      setEditingCell(null);
-    } catch (e: any) {
+      loadData();
+      setEditingModal(null);
+    } catch (e) {
       console.error(e);
+    }
+  };
+
+  const CATEGORY_DETAILS: Record<string, { icon: string; tasks: string[]; color: string; tint: string }> = {
+    admin_calendar: {
+      icon: "📅",
+      color: "#3b82f6",
+      tint: "rgba(59, 130, 246, 0.12)",
+      tasks: [
+        "Daily Calendar Verification & Session Planning",
+        "Client Bookings, Room Allocations & Proctoring",
+        "Vendor Coordination & Timetable Alignment"
+      ]
+    },
+    data_systems: {
+      icon: "💻",
+      color: "#10b981",
+      tint: "rgba(16, 185, 129, 0.12)",
+      tasks: [
+        "Server Sync & Lab Workstation Health Readiness",
+        "Candidate Test Packages & Lockdown Security",
+        "End-of-Day Data Upload & Archive Verification"
+      ]
+    },
+    cases_docs: {
+      icon: "📝",
+      color: "#a855f7",
+      tint: "rgba(168, 85, 247, 0.12)",
+      tasks: [
+        "Incident Log Entry & Escalation Filing",
+        "Candidate IR / Voucher Documentation & Records",
+        "Daily Shift Sign-Offs & Compliance Audit"
+      ]
+    },
+    tech_ops: {
+      icon: "🖥️",
+      color: "#ec4899",
+      tint: "rgba(236, 72, 153, 0.12)",
+      tasks: [
+        "Biometric Scanners, Webcams & Headsets Check",
+        "Network Latency & Backup UPS Power Stability",
+        "Hardware Maintenance & Lab Cleanliness"
+      ]
+    },
+    candidate_desk: {
+      icon: "👥",
+      color: "#f97316",
+      tint: "rgba(249, 115, 22, 0.12)",
+      tasks: [
+        "Candidate Reception, ID Inspection & Locker Allocation",
+        "Exam Regulations Briefing & Seating Directives",
+        "Secure Test Room Escort & Identification Checks"
+      ]
+    },
+    facility_quality: {
+      icon: "🛡️",
+      color: "#14b8a6",
+      tint: "rgba(20, 184, 166, 0.12)",
+      tasks: [
+        "CCTV Surveillance & Testing Room Climate",
+        "Emergency Exits, Fire Safety & Restroom Cleanliness",
+        "Centre Access Control & Physical Security Audit"
+      ]
     }
   };
 
   return (
-    <div style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 10 }}>
-      {/* Section Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, padding: "0 4px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+    <div style={{ marginTop: 32, display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* ── SECTION TITLE BAR ── */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{
-            width: 32, height: 32, borderRadius: 8,
-            background: "linear-gradient(135deg, rgba(99, 102, 241, 0.25) 0%, rgba(79, 70, 229, 0.15) 100%)",
-            border: "1px solid rgba(99, 102, 241, 0.4)",
+            width: 42, height: 42, borderRadius: 12,
+            background: "linear-gradient(135deg, rgba(245, 158, 11, 0.25) 0%, rgba(217, 119, 6, 0.15) 100%)",
+            border: "1.5px solid rgba(245, 158, 11, 0.45)",
             display: "grid", placeItems: "center",
-            color: "#818cf8", fontSize: 15, fontWeight: 900,
+            fontSize: 22, boxShadow: "0 0 16px rgba(245, 158, 11, 0.25)"
           }}>
-            📋
+            👑
           </div>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 850, color: "var(--ink)", letterSpacing: "-0.01em", display: "flex", alignItems: "center", gap: 8 }}>
-              Consecutive Duty & Lead Schedule Matrix
+            <div style={{ fontSize: 18, fontWeight: 900, color: "var(--ink)", letterSpacing: "-0.02em", display: "flex", alignItems: "center", gap: 10 }}>
+              Consecutive 6-Day Duty & Shift Lead Schedule
               <span style={{
-                fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 99,
-                background: "rgba(99, 102, 241, 0.15)", color: "#818cf8", border: "1px solid rgba(99, 102, 241, 0.3)",
-                textTransform: "uppercase", letterSpacing: "0.05em",
+                fontSize: 10.5, fontWeight: 850, padding: "3px 10px", borderRadius: 99,
+                background: "linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(79, 70, 229, 0.15) 100%)",
+                color: "#a5b4fc", border: "1px solid rgba(99, 102, 241, 0.35)",
+                textTransform: "uppercase", letterSpacing: "0.06em"
               }}>
                 Synchronized with Roster
               </span>
             </div>
-            <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 1 }}>
-              6-day working stretch duty cycles & designated shift leads · {canEdit ? "✏️ Lead & Admin Editable" : "Read-only"}
+            <div style={{ fontSize: 12.5, color: "var(--ink-3)", marginTop: 2, fontWeight: 600 }}>
+              Each category is assigned to 1 staff member for their entire 6-day working stretch · {canEdit ? "✏️ Super Admin & Lead Editable" : "Read-only"}
             </div>
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11 }}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 9px", borderRadius: 6, background: "rgba(245, 158, 11, 0.15)", border: "1px solid rgba(245, 158, 11, 0.35)", color: "#f59e0b", fontWeight: 750 }}>
-            👑 Shift Lead Row
-          </span>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 9px", borderRadius: 6, background: "rgba(99, 102, 241, 0.12)", border: "1px solid rgba(99, 102, 241, 0.25)", color: "#818cf8", fontWeight: 700 }}>
-            6 Operational Categories
-          </span>
+        {canEdit && (
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              type="button"
+              className="tap"
+              onClick={() => setEditingModal({ type: "lead", current: activeLead })}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 16px",
+                borderRadius: 10, border: "1px solid rgba(245, 158, 11, 0.4)",
+                background: "linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(217, 119, 6, 0.1) 100%)",
+                color: "#f59e0b", fontSize: 12.5, fontWeight: 800, cursor: "pointer"
+              }}
+            >
+              👑 Reassign Shift Lead
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* ── 1. HERO LEAD SPOTLIGHT CARD ── */}
+      <div className="glass rise" style={{
+        borderRadius: "var(--radius)",
+        padding: "24px 28px",
+        background: "linear-gradient(135deg, rgba(245, 158, 11, 0.14) 0%, rgba(30, 41, 59, 0.4) 100%)",
+        border: "1.5px solid rgba(245, 158, 11, 0.4)",
+        boxShadow: "0 10px 30px rgba(0, 0, 0, 0.25)",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        flexWrap: "wrap",
+        gap: 20
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+          <div style={{ position: "relative" }}>
+            <Avatar name={activeLead} size={64} />
+            <span style={{
+              position: "absolute", bottom: -4, right: -4,
+              fontSize: 18, background: "#0f172a", borderRadius: "50%",
+              padding: "2px 4px", border: "1.5px solid #f59e0b",
+              boxShadow: "0 0 10px rgba(245, 158, 11, 0.6)"
+            }}>👑</span>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 850, textTransform: "uppercase", letterSpacing: "0.1em", color: "#f59e0b" }}>
+              Designated Shift Lead // Current 6-Day Stretch
+            </div>
+            <div style={{ fontSize: 24, fontWeight: 900, color: "var(--ink)", letterSpacing: "-0.02em", marginTop: 2 }}>
+              {activeLead}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6, flexWrap: "wrap" }}>
+              <span style={{
+                fontSize: 11.5, fontWeight: 750, padding: "3px 10px", borderRadius: 6,
+                background: "rgba(245, 158, 11, 0.18)", color: "#fbbf24", border: "1px solid rgba(245, 158, 11, 0.35)"
+              }}>
+                📍 {effectiveBranch.charAt(0).toUpperCase() + effectiveBranch.slice(1)} Centre
+              </span>
+              <span style={{
+                fontSize: 11.5, fontWeight: 750, padding: "3px 10px", borderRadius: 6,
+                background: "rgba(255, 255, 255, 0.08)", color: "var(--ink-2)", border: "1px solid var(--hairline)"
+              }}>
+                📅 Active Stretch: {effectiveBranch === "cochin" ? "24 Aug – 29 Aug 2026" : "22 Aug – 27 Aug 2026"} (6 Consecutive Days)
+              </span>
+              <span style={{
+                fontSize: 11.5, fontWeight: 750, padding: "3px 10px", borderRadius: 6,
+                background: "rgba(16, 185, 129, 0.15)", color: "#34d399", border: "1px solid rgba(16, 185, 129, 0.3)"
+              }}>
+                ● Shift Lead On Duty
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+          <div style={{ fontSize: 11, color: "var(--ink-3)", fontWeight: 700, textTransform: "uppercase" }}>
+            Lead Operational Authority
+          </div>
+          <div style={{ fontSize: 12.5, color: "var(--ink-2)", fontWeight: 650, maxWidth: 360, textAlign: "right" }}>
+            Conducts morning readiness check, verifies all category checklist completions, and signs evening handover.
+          </div>
         </div>
       </div>
 
-      {/* The Matrix Container — Styled to match the Roster with subtle differentiated cool indigo glass tint */}
-      <div className="glass scroll-soft" style={{
-        borderRadius: "var(--radius)",
-        overflow: "auto",
-        padding: 6,
-        background: "linear-gradient(180deg, rgba(15, 23, 42, 0.35) 0%, rgba(30, 41, 59, 0.25) 100%)",
-        border: "1px solid rgba(99, 102, 241, 0.25)",
-        boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
+      {/* ── 2. SIX OPERATIONAL CATEGORY CARDS (2-COL SPACIOUS GRID) ── */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
+        gap: 16
       }}>
-        <div style={{ minWidth: 250 + offsets.length * 50 }}>
+        {DD.DUTY_CATEGORIES.map((cat) => {
+          const details = CATEGORY_DETAILS[cat.id] || CATEGORY_DETAILS.admin_calendar;
+          const assignedStaff = stretchData?.catMap?.[cat.id] || (
+            cat.id === "admin_calendar" ? (effectiveBranch === "cochin" ? "NIMMY M" : "Aysha") :
+            cat.id === "data_systems" ? (effectiveBranch === "cochin" ? "Shimna" : "Nilufer") :
+            cat.id === "cases_docs" ? (effectiveBranch === "cochin" ? "Naima MM" : "Bindu Rajan") :
+            cat.id === "tech_ops" ? (effectiveBranch === "cochin" ? "NIMMY M" : "Lazeem") :
+            cat.id === "candidate_desk" ? (effectiveBranch === "cochin" ? "Shimna" : "Anshitha K") :
+            (effectiveBranch === "cochin" ? "Naima MM" : "Aysha")
+          );
 
-          {/* 1. LEAD OF THE DAY ROW */}
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: cols,
-            gap: 6,
-            padding: "8px 6px",
-            background: "linear-gradient(90deg, rgba(245, 158, 11, 0.14) 0%, rgba(217, 119, 6, 0.08) 100%)",
-            borderRadius: 10,
-            border: "1px solid rgba(245, 158, 11, 0.35)",
-            marginBottom: 6,
-            alignItems: "center",
-          }}>
-            {/* Sticky Lead Label */}
-            <div style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 8 }}>
-              <span style={{ fontSize: 14 }}>👑</span>
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 900, color: "#f59e0b", letterSpacing: "0.02em", textTransform: "uppercase" }}>
-                  Designated Shift Lead
-                </div>
-                <div style={{ fontSize: 9.5, color: "var(--ink-3)", fontWeight: 650 }}>
-                  Weekly 6-Day Stretch Lead
-                </div>
-              </div>
-            </div>
-
-            {/* Date Columns for Lead */}
-            {offsets.map((o) => {
-              const d = F().ISO(o);
-              const dstr = ymdFormat(d);
-              const isToday = o === 0;
-              const dayLead = leadsMap[`${dstr}_${effectiveBranch}`] || leadsMap[dstr] || stretchDays[dstr]?.lead || "—";
-              const isEditing = editingCell?.dateStr === dstr && editingCell?.type === "lead";
-
-              return (
-                <div key={o} style={{ position: "relative", minHeight: 38, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  {isEditing ? (
-                    <select
-                      autoFocus
-                      className="at-select"
-                      style={{ width: "100%", fontSize: 10, padding: "2px 4px", height: 32, background: "var(--panel)", border: "1.5px solid #f59e0b" }}
-                      value={dayLead}
-                      onChange={(e) => {
-                        if (e.target.value) handleAssignLead(dstr, e.target.value);
-                      }}
-                      onBlur={() => setEditingCell(null)}
-                    >
-                      <option value="">Select Lead…</option>
-                      {availableStaff.map((s: string) => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={!canEdit}
-                      onClick={() => {
-                        if (canEdit) setEditingCell({ dateStr: dstr, type: "lead", current: dayLead });
-                      }}
-                      title={canEdit ? `Click to change Lead for ${dstr} (Current: ${dayLead})` : `Lead: ${dayLead}`}
-                      style={{
-                        width: "100%",
-                        height: 38,
-                        borderRadius: 8,
-                        background: isToday ? "linear-gradient(135deg, rgba(245, 158, 11, 0.35) 0%, rgba(217, 119, 6, 0.2) 100%)" : "rgba(245, 158, 11, 0.15)",
-                        border: isToday ? "1.5px solid #f59e0b" : "1px solid rgba(245, 158, 11, 0.3)",
-                        boxShadow: isToday ? "0 0 10px rgba(245, 158, 11, 0.35)" : "none",
-                        color: "#fbbf24",
-                        fontSize: 10.5,
-                        fontWeight: 850,
-                        cursor: canEdit ? "pointer" : "default",
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: 1,
-                        padding: "2px 4px",
-                        lineHeight: 1.1,
-                      }}
-                    >
-                      <span style={{ fontSize: 10 }}>👑</span>
-                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" }}>
-                        {dayLead.split(" ")[0]}
-                      </span>
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* 2. CATEGORY OPERATIONAL ROWS */}
-          {DD.DUTY_CATEGORIES.map((cat, catIdx) => {
-            const catColors = [
-              { bg: "rgba(59, 130, 246, 0.08)", border: "rgba(59, 130, 246, 0.2)", text: "#60a5fa", icon: "📅" },
-              { bg: "rgba(16, 185, 129, 0.08)", border: "rgba(16, 185, 129, 0.2)", text: "#34d399", icon: "💾" },
-              { bg: "rgba(168, 85, 247, 0.08)", border: "rgba(168, 85, 247, 0.2)", text: "#c084fc", icon: "📄" },
-              { bg: "rgba(236, 72, 153, 0.08)", border: "rgba(236, 72, 153, 0.2)", text: "#f472b6", icon: "🖥" },
-              { bg: "rgba(249, 115, 22, 0.08)", border: "rgba(249, 115, 22, 0.2)", text: "#fb923c", icon: "🏢" },
-              { bg: "rgba(20, 184, 166, 0.08)", border: "rgba(20, 184, 166, 0.2)", text: "#2dd4bf", icon: "🔔" },
-            ];
-            const theme = catColors[catIdx % catColors.length];
-
-            return (
-              <div
-                key={cat.id}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: cols,
-                  gap: 6,
-                  padding: "6px",
-                  background: theme.bg,
-                  borderRadius: 9,
-                  border: `1px solid ${theme.border}`,
-                  marginBottom: 5,
-                  alignItems: "center",
-                }}
-              >
-                {/* Category Header */}
-                <div style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 8, overflow: "hidden" }}>
-                  <span style={{ fontSize: 13 }}>{theme.icon}</span>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 11.5, fontWeight: 800, color: theme.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          return (
+            <div
+              key={cat.id}
+              className="glass rise"
+              style={{
+                borderRadius: 16,
+                padding: "20px 22px",
+                background: "linear-gradient(160deg, rgba(30, 41, 59, 0.5) 0%, rgba(15, 23, 42, 0.4) 100%)",
+                border: `1.5px solid ${details.color}35`,
+                boxShadow: "0 4px 20px rgba(0, 0, 0, 0.15)",
+                display: "flex",
+                flexDirection: "column",
+                gap: 14
+              }}
+            >
+              {/* Category Header */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{
+                    width: 38, height: 38, borderRadius: 10,
+                    background: details.tint,
+                    border: `1px solid ${details.color}50`,
+                    display: "grid", placeItems: "center",
+                    fontSize: 18
+                  }}>
+                    {details.icon}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 850, color: "var(--ink)", letterSpacing: "-0.01em" }}>
                       {cat.name}
                     </div>
-                    <div style={{ fontSize: 9, color: "var(--ink-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {cat.description}
+                    <div style={{ fontSize: 11, color: details.color, fontWeight: 700 }}>
+                      6-Day Working Stretch Assignment
                     </div>
                   </div>
                 </div>
 
-                {/* Day Columns */}
-                {offsets.map((o) => {
-                  const d = F().ISO(o);
-                  const dstr = ymdFormat(d);
-                  const isToday = o === 0;
-                  const stretch = stretchDays[dstr];
-                  const assignedPerson = stretch?.catMap?.[cat.id] || "—";
-                  const isEditing = editingCell?.dateStr === dstr && editingCell?.type === "category" && editingCell?.catId === cat.id;
-
-                  return (
-                    <div key={o} style={{ position: "relative", minHeight: 36, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      {isEditing ? (
-                        <select
-                          autoFocus
-                          className="at-select"
-                          style={{ width: "100%", fontSize: 10, padding: "2px 4px", height: 32, background: "var(--panel)", border: `1.5px solid ${theme.text}` }}
-                          value={assignedPerson}
-                          onChange={(e) => {
-                            if (e.target.value) handleAssignCategory(dstr, cat.id, e.target.value);
-                          }}
-                          onBlur={() => setEditingCell(null)}
-                        >
-                          <option value="">Select Staff…</option>
-                          {availableStaff.map((s: string) => (
-                            <option key={s} value={s}>{s}</option>
-                          ))}
-                        </select>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled={!canEdit}
-                          onClick={() => {
-                            if (canEdit) setEditingCell({ dateStr: dstr, type: "category", catId: cat.id, current: assignedPerson });
-                          }}
-                          title={canEdit ? `Click to reassign ${cat.name} on ${dstr} (Current: ${assignedPerson})` : `${cat.name}: ${assignedPerson}`}
-                          style={{
-                            width: "100%",
-                            height: 36,
-                            borderRadius: 7,
-                            background: isToday ? "rgba(255, 255, 255, 0.12)" : "rgba(255, 255, 255, 0.05)",
-                            border: isToday ? `1.5px solid ${theme.text}` : "1px solid rgba(255, 255, 255, 0.08)",
-                            boxShadow: isToday ? `0 0 8px ${theme.border}` : "none",
-                            color: "var(--ink)",
-                            fontSize: 10.5,
-                            fontWeight: 750,
-                            cursor: canEdit ? "pointer" : "default",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            gap: 4,
-                            padding: "2px 4px",
-                          }}
-                        >
-                          <span style={{
-                            width: 18, height: 18, borderRadius: 5,
-                            background: "rgba(255, 255, 255, 0.15)",
-                            display: "grid", placeItems: "center",
-                            fontSize: 8.5, fontWeight: 900,
-                            color: theme.text,
-                          }}>
-                            {assignedPerson.split(" ").map((w: string) => w[0]).slice(0, 2).join("").toUpperCase()}
-                          </span>
-                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 10 }}>
-                            {assignedPerson.split(" ")[0]}
-                          </span>
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
+                {canEdit && (
+                  <button
+                    type="button"
+                    className="tap"
+                    onClick={() => setEditingModal({ type: "category", catId: cat.id, catName: cat.name, current: assignedStaff })}
+                    style={{
+                      padding: "4px 10px", borderRadius: 8, fontSize: 11, fontWeight: 750,
+                      background: "rgba(255, 255, 255, 0.06)", border: "1px solid var(--hairline)",
+                      color: "var(--ink-2)", cursor: "pointer"
+                    }}
+                  >
+                    ✏️ Reassign
+                  </button>
+                )}
               </div>
-            );
-          })}
+
+              {/* Assigned Staff Banner */}
+              <div style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "12px 14px", borderRadius: 12,
+                background: "rgba(255, 255, 255, 0.04)", border: "1px solid var(--hairline)"
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <Avatar name={assignedStaff} size={36} />
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 850, color: "var(--ink)" }}>
+                      {assignedStaff}
+                    </div>
+                    <div style={{ fontSize: 10.5, color: "var(--ink-3)", fontWeight: 650, marginTop: 1 }}>
+                      📅 Stretch: {effectiveBranch === "cochin" ? "24 Aug – 29 Aug (6 Days)" : "22 Aug – 27 Aug (6 Days)"}
+                    </div>
+                  </div>
+                </div>
+                <span style={{
+                  fontSize: 10.5, fontWeight: 800, padding: "3px 8px", borderRadius: 6,
+                  background: `${details.color}20`, color: details.color, border: `1px solid ${details.color}40`
+                }}>
+                  Active Assignee
+                </span>
+              </div>
+
+              {/* Responsibilities Checklist */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 2 }}>
+                <div style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--ink-4)" }}>
+                  Primary Daily Responsibilities
+                </div>
+                {details.tasks.map((task, idx) => (
+                  <div key={idx} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11.5, color: "var(--ink-2)", fontWeight: 600 }}>
+                    <span style={{ color: details.color, fontSize: 12 }}>✓</span>
+                    <span>{task}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── 3. UPCOMING ROTATION ROADMAP PREVIEW ── */}
+      <div className="glass" style={{
+        borderRadius: 14,
+        padding: "16px 20px",
+        background: "rgba(15, 23, 42, 0.3)",
+        border: "1px solid var(--hairline)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        flexWrap: "wrap",
+        gap: 12
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 18 }}>🔄</span>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: "var(--ink)" }}>
+              Next Stretch Cycle Rotation Schedule
+            </div>
+            <div style={{ fontSize: 11, color: "var(--ink-3)", fontWeight: 600 }}>
+              Upcoming working stretch begins {effectiveBranch === "cochin" ? "30 Aug 2026" : "28 Aug 2026"} · Category rotation automatically transfers on rest days.
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 11, color: "var(--ink-3)", fontWeight: 700 }}>
+            Rotation Rules: Equal distribution across staff working stretches
+          </span>
         </div>
       </div>
+
+      {/* ── REASSIGNMENT MODAL ── */}
+      {editingModal && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 9999,
+          background: "rgba(0, 0, 0, 0.75)", backdropFilter: "blur(6px)",
+          display: "grid", placeItems: "center", padding: 20
+        }}>
+          <div className="glass rise" style={{
+            width: "100%", maxWidth: 420, borderRadius: 18, padding: "24px 26px",
+            background: "var(--panel)", border: "1.5px solid var(--accent-line)",
+            boxShadow: "0 20px 50px rgba(0, 0, 0, 0.5)", display: "flex", flexDirection: "column", gap: 16
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: 16, fontWeight: 850, color: "var(--ink)" }}>
+                {editingModal.type === "lead" ? "👑 Reassign Shift Lead" : `Reassign ${editingModal.catName}`}
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingModal(null)}
+                style={{ background: "transparent", border: "none", color: "var(--ink-3)", cursor: "pointer", fontSize: 18 }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ fontSize: 12.5, color: "var(--ink-3)", fontWeight: 600 }}>
+              {editingModal.type === "lead"
+                ? `Select the staff member to designate as the Shift Lead for ${effectiveBranch.toUpperCase()} centre:`
+                : `Select the staff member to assign to ${editingModal.catName} for the 6-day stretch:`}
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 260, overflowY: "auto" }}>
+              {availableStaff.map((s: string) => {
+                const isSelected = editingModal.current === s;
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    className="tap"
+                    onClick={() => {
+                      if (editingModal.type === "lead") {
+                        handleSaveLead(s);
+                      } else if (editingModal.catId) {
+                        handleSaveCategory(editingModal.catId, s);
+                      }
+                    }}
+                    style={{
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                      padding: "12px 14px", borderRadius: 10,
+                      background: isSelected ? "var(--accent-soft)" : "rgba(255, 255, 255, 0.04)",
+                      border: isSelected ? "1.5px solid var(--accent)" : "1px solid var(--hairline)",
+                      color: "var(--ink)", fontWeight: 750, fontSize: 13, cursor: "pointer"
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <Avatar name={s} size={28} />
+                      <span>{s}</span>
+                    </div>
+                    {isSelected && <span style={{ color: "var(--accent)", fontWeight: 900 }}>✓ Active</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1047,7 +1047,7 @@ function DutyTimeline({ hub }: { hub: any }) {
 
 
 
-/* ═══ REPORTS & ADMIN: EXECUTIVE OPERATIONS & AUDIT DASHBOARD ═══════════════ */
+/* ═══ REPORTS & ADMIN: SIMPLIFIED OPERATIONS & DUTY DASHBOARD ═══════════════ */
 function ExecutiveOperationsDashboard({
   hub,
   onOpenDutyEditor,
@@ -1058,25 +1058,18 @@ function ExecutiveOperationsDashboard({
   const { weekLogs, duties, weekStart, branch, isAdmin, reload } = hub;
 
   const [selectedBranchFilter, setSelectedBranchFilter] = React.useState<string>(branch || "global");
-  const [activeDashboardTab, setActiveDashboardTab] = React.useState<"analytics" | "duties_mgmt" | "logs" | "security" | "history">("analytics");
+  const [activeDashboardTab, setActiveDashboardTab] = React.useState<"performance" | "duties_mgmt" | "history">("performance");
   const [dutySearch, setDutySearch] = React.useState("");
   const [selectedDutyCategory, setSelectedDutyCategory] = React.useState<string>("all");
-
-  const [auditLogs, setAuditLogs] = React.useState<DD.SecurityAuditEntry[]>([]);
-
-  React.useEffect(() => {
-    setAuditLogs(DD.getSecurityAuditLogs(selectedBranchFilter));
-  }, [selectedBranchFilter]);
 
   const dated = weekLogs.filter((l: any) => l.date <= DD.ymd(new Date()));
   const done = dated.filter((l: any) => l.status === "done").length;
   const missed = dated.filter((l: any) => l.status === "missed" || l.status === "attention").length;
   const pending = dated.filter((l: any) => l.status === "pending" || l.status === "submitted" || l.status === "in_progress").length;
-  const covered = dated.filter((l: any) => l.original_staff_name).length;
   const total = Math.max(1, done + missed + pending);
   const pct = Math.round((done / total) * 100);
 
-  // Equal Workload distribution calculation
+  // Staff Workload & Completion calculation
   const byStaff: Record<string, { total: number; done: number; missed: number; pending: number }> = {};
   dated.forEach((l: any) => {
     const sName = l.staff_name || "Unassigned";
@@ -1086,13 +1079,6 @@ function ExecutiveOperationsDashboard({
     else if (l.status === "missed" || l.status === "attention") byStaff[sName].missed++;
     else byStaff[sName].pending++;
   });
-
-  const weekLabel = () => {
-    const start = new Date(weekStart + "T00:00:00");
-    const end = new Date(start); end.setDate(start.getDate() + 6);
-    const f = (d: Date) => d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-    return `${f(start)} – ${f(end)}`;
-  };
 
   const filteredDutiesList = duties.filter((d: any) => {
     if (selectedDutyCategory !== "all" && d.category !== selectedDutyCategory) return false;
@@ -1114,10 +1100,10 @@ function ExecutiveOperationsDashboard({
           <div>
             <div className="at-eyebrow" style={{ marginBottom: 2 }}>
               <span className="at-eyebrow-line" />
-              <span className="at-eyebrow-text">Executive Operations Console // Multi-Centre</span>
+              <span className="at-eyebrow-text">Centre Administration // {capBranch(selectedBranchFilter)}</span>
             </div>
             <div style={{ fontSize: 18, fontWeight: 850, color: "var(--at-ink)", letterSpacing: "-0.01em" }}>
-              Reports & Operational Administration
+              Reports & Duty Administration
             </div>
           </div>
 
@@ -1128,7 +1114,7 @@ function ExecutiveOperationsDashboard({
               onChange={(e) => setSelectedBranchFilter(e.target.value)}
               style={{ fontWeight: 700 }}
             >
-              <option value="global">All Centres (Global)</option>
+              <option value="global">All Centres</option>
               <option value="calicut">Calicut Centre</option>
               <option value="cochin">Cochin Centre</option>
             </select>
@@ -1138,7 +1124,7 @@ function ExecutiveOperationsDashboard({
               className="at-btn at-btn-primary at-btn-sm"
               onClick={() => onOpenDutyEditor()}
             >
-              <Plus size={13} /> Add Operational Duty
+              <Plus size={13} /> Add Operational Task
             </button>
 
             <button
@@ -1156,70 +1142,54 @@ function ExecutiveOperationsDashboard({
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginTop: 16 }}>
           <div className="at-report-stat" style={{ borderLeft: "3px solid var(--at-aqua-deep)" }}>
             <div style={{ fontSize: 24, fontWeight: 850, color: "var(--at-aqua-deep)" }}>{done}</div>
-            <div style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", color: "var(--at-ink-3)", marginTop: 4 }}>Verified Completed</div>
+            <div style={{ fontSize: 10.5, fontWeight: 800, textTransform: "uppercase", color: "var(--at-ink-3)", marginTop: 4 }}>Verified Completed</div>
           </div>
           <div className="at-report-stat" style={{ borderLeft: "3px solid var(--at-steel)" }}>
             <div style={{ fontSize: 24, fontWeight: 850, color: "var(--at-steel)" }}>{pct}%</div>
-            <div style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", color: "var(--at-ink-3)", marginTop: 4 }}>Completion Rate</div>
+            <div style={{ fontSize: 10.5, fontWeight: 800, textTransform: "uppercase", color: "var(--at-ink-3)", marginTop: 4 }}>Task Completion Rate</div>
           </div>
           <div className="at-report-stat" style={{ borderLeft: "3px solid var(--at-blush-deep)" }}>
             <div style={{ fontSize: 24, fontWeight: 850, color: "var(--at-blush-deep)" }}>{missed}</div>
-            <div style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", color: "var(--at-ink-3)", marginTop: 4 }}>Attention / Issues</div>
+            <div style={{ fontSize: 10.5, fontWeight: 800, textTransform: "uppercase", color: "var(--at-ink-3)", marginTop: 4 }}>Open Issues / Attention</div>
           </div>
           <div className="at-report-stat" style={{ borderLeft: "3px solid var(--at-sky)" }}>
-            <div style={{ fontSize: 24, fontWeight: 850, color: "var(--at-sky)" }}>{covered}</div>
-            <div style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", color: "var(--at-ink-3)", marginTop: 4 }}>Roster Covered Days</div>
-          </div>
-          <div className="at-report-stat" style={{ background: "rgba(153, 206, 211, 0.15)" }}>
-            <div style={{ fontSize: 24, fontWeight: 850, color: "var(--at-steel-deep)" }}>100%</div>
-            <div style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", color: "var(--at-ink-3)", marginTop: 4 }}>Workload Equality</div>
+            <div style={{ fontSize: 24, fontWeight: 850, color: "var(--at-sky)" }}>{Object.keys(byStaff).length}</div>
+            <div style={{ fontSize: 10.5, fontWeight: 800, textTransform: "uppercase", color: "var(--at-ink-3)", marginTop: 4 }}>Active Duty Staff</div>
           </div>
         </div>
       </div>
 
-      {/* ── DASHBOARD SUB-TABS ── */}
+      {/* ── 3 CLEAN DASHBOARD TABS ── */}
       <div className="at-filter-bar" style={{ padding: "6px 10px" }}>
         <div className="at-filter-tabs">
           <button
-            className={`at-filter-tab ${activeDashboardTab === "analytics" ? "active" : ""}`}
-            onClick={() => setActiveDashboardTab("analytics")}
+            className={`at-filter-tab ${activeDashboardTab === "performance" ? "active" : ""}`}
+            onClick={() => setActiveDashboardTab("performance")}
           >
-            <BarChart3 size={13} /> Workload Analytics & Equal Distribution
+            <BarChart3 size={13} /> Performance & Task Completion
           </button>
           <button
             className={`at-filter-tab ${activeDashboardTab === "duties_mgmt" ? "active" : ""}`}
             onClick={() => setActiveDashboardTab("duties_mgmt")}
           >
-            <Settings size={13} /> Operational Duties Master List ({duties.length})
-          </button>
-          <button
-            className={`at-filter-tab ${activeDashboardTab === "logs" ? "active" : ""}`}
-            onClick={() => setActiveDashboardTab("logs")}
-          >
-            <FileText size={13} /> Live Execution Logs & Measurements
-          </button>
-          <button
-            className={`at-filter-tab ${activeDashboardTab === "security" ? "active" : ""}`}
-            onClick={() => setActiveDashboardTab("security")}
-          >
-            <ShieldCheck size={13} /> Lead Security & Anti-Impersonation ({auditLogs.length})
+            <Settings size={13} /> Duty Categories & Task Master ({duties.length})
           </button>
           <button
             className={`at-filter-tab ${activeDashboardTab === "history" ? "active" : ""}`}
             onClick={() => setActiveDashboardTab("history")}
           >
-            <Clock size={13} /> Handover History
+            <Clock size={13} /> Shift Handover Archive & Logs
           </button>
         </div>
       </div>
 
-      {/* ── TAB 1: WORKLOAD ANALYTICS & EQUAL LOAD DISTRIBUTION ── */}
-      {activeDashboardTab === "analytics" && (
+      {/* ── TAB 1: PERFORMANCE & TASK COMPLETION ── */}
+      {activeDashboardTab === "performance" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {/* Staff Equal Load Cards */}
+          {/* Staff Workload Cards */}
           <div className="at-card at-card-pad">
             <div style={{ fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--at-ink-3)", marginBottom: 12 }}>
-              Staff Workload Distribution & Completion Index
+              Staff Duty Verification Progress
             </div>
             <div className="at-team-progress-grid">
               {Object.entries(byStaff).map(([name, s]) => {
@@ -1246,10 +1216,10 @@ function ExecutiveOperationsDashboard({
             </div>
           </div>
 
-          {/* Category Cyclic Distribution Ring Details */}
+          {/* 6 Category Summary */}
           <div className="at-card at-card-pad">
             <div style={{ fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--at-steel)", marginBottom: 10 }}>
-              Continuous Cyclic Category Handoff Model (Equal Duty Sharing)
+              6 Operational Categories Overview
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
               {DD.DUTY_CATEGORIES.map((cat) => {
@@ -1265,7 +1235,7 @@ function ExecutiveOperationsDashboard({
                     </div>
                     <div style={{ fontSize: 11, color: "var(--at-ink-3)" }}>{cat.description}</div>
                     <div style={{ fontSize: 11, color: "var(--at-steel)", fontWeight: 700, marginTop: 4 }}>
-                      {catDuties.length} operational tasks · Assigned for 6-day individual working stretches
+                      {catDuties.length} tasks · 6-Day working stretch cycle
                     </div>
                   </div>
                 );
@@ -1275,16 +1245,16 @@ function ExecutiveOperationsDashboard({
         </div>
       )}
 
-      {/* ── TAB 2: OPERATIONAL DUTIES MASTER LIST (All Staff Create & Edit, Admin Delete) ── */}
+      {/* ── TAB 2: DUTY CATEGORIES & TASK MASTER ── */}
       {activeDashboardTab === "duties_mgmt" && (
         <div className="at-card at-card-pad">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
             <div>
               <div style={{ fontSize: 14, fontWeight: 800, color: "var(--at-ink)" }}>
-                Operational Duties Master Library ({filteredDutiesList.length})
+                Operational Task Checklist Library ({filteredDutiesList.length})
               </div>
               <div style={{ fontSize: 11, color: "var(--at-ink-3)" }}>
-                All staff can create and edit duties · Deletion is strictly reserved for Super Admins.
+                All staff can create and edit tasks · Deletion is restricted to Super Admins.
               </div>
             </div>
 
@@ -1294,7 +1264,7 @@ function ExecutiveOperationsDashboard({
                 <input
                   type="text"
                   className="at-input"
-                  placeholder="Search duty library…"
+                  placeholder="Search tasks…"
                   value={dutySearch}
                   onChange={(e) => setDutySearch(e.target.value)}
                   style={{ paddingLeft: 28, fontSize: 11.5, height: 34 }}
@@ -1318,7 +1288,7 @@ function ExecutiveOperationsDashboard({
                 className="at-btn at-btn-primary at-btn-sm"
                 onClick={() => onOpenDutyEditor()}
               >
-                <Plus size={13} /> Add New Duty
+                <Plus size={13} /> Add Task
               </button>
             </div>
           </div>
@@ -1348,9 +1318,9 @@ function ExecutiveOperationsDashboard({
                       <div style={{ fontSize: 11, color: "var(--at-ink-3)", display: "flex", gap: 10, flexWrap: "wrap", marginTop: 2 }}>
                         <span>Category: <strong>{d.category || "General"}</strong></span>
                         <span>Scheduled: <strong>{fmtTime(d.scheduled_time)}</strong></span>
-                        <span>Input: <strong>{d.characteristic_type || "general"}</strong></span>
+                        <span>Type: <strong>{d.characteristic_type || "general"}</strong></span>
                         <span>Steps: <strong>{normSteps(d.steps).length}</strong></span>
-                        <span>Branch: <strong>{d.branch}</strong></span>
+                        <span>Centre: <strong>{d.branch}</strong></span>
                       </div>
                     </div>
                   </div>
@@ -1361,7 +1331,7 @@ function ExecutiveOperationsDashboard({
                     onClick={() => onOpenDutyEditor(d)}
                     style={{ marginLeft: 12 }}
                   >
-                    <Settings size={13} /> Edit Duty
+                    <Settings size={13} /> Edit
                   </button>
                 </div>
               );
@@ -1370,108 +1340,10 @@ function ExecutiveOperationsDashboard({
         </div>
       )}
 
-      {/* ── TAB 3: LIVE OPERATIONAL EXECUTION LOGS & MEASUREMENTS ── */}
-      {activeDashboardTab === "logs" && (
-        <div className="at-card at-card-pad">
-          <div style={{ fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--at-ink-3)", marginBottom: 10 }}>
-            Detailed Duty Execution Logs & Staff Characteristic Measurements
-          </div>
-          <div style={{ overflowX: "auto" }}>
-            <table className="at-matrix-table">
-              <thead>
-                <tr>
-                  <th>Duty Title</th>
-                  <th>Category</th>
-                  <th>Staff Assigned</th>
-                  <th>Recorded Time / Measurement / Note</th>
-                  <th>Status</th>
-                  <th>Verified By</th>
-                </tr>
-              </thead>
-              <tbody>
-                {duties.map((d: any) => {
-                  const log = dated.find((l: any) => l.duty_id === d.id);
-                  return (
-                    <tr key={d.id}>
-                      <td><strong>{d.title}</strong></td>
-                      <td><span className="at-pill at-pill-pending" style={{ fontSize: 9 }}>{d.category}</span></td>
-                      <td>{log?.staff_name || "—"}</td>
-                      <td>
-                        {log?.recorded_val || log?.recorded_time || log?.note ? (
-                          <span style={{ fontSize: 11.5 }}>
-                            {log.recorded_time && `[${log.recorded_time}] `}
-                            <strong>{log.recorded_val || ""}</strong>
-                            {log.note && ` — ${log.note}`}
-                          </span>
-                        ) : <span style={{ color: "var(--at-ink-4)" }}>—</span>}
-                      </td>
-                      <td>
-                        <span className={`at-pill ${STATUS_META[log?.status || "pending"]?.cls || "at-pill-pending"}`}>
-                          {STATUS_META[log?.status || "pending"]?.label}
-                        </span>
-                      </td>
-                      <td style={{ fontSize: 11.5 }}>
-                        {log?.verified_by ? `${log.verified_by} (${new Date(log.verified_at || "").toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})` : "—"}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* ── TAB 4: LEAD SECURITY & ANTI-IMPERSONATION AUDIT ── */}
-      {activeDashboardTab === "security" && (
-        <div className="at-card at-card-pad">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <div>
-              <div style={{ fontSize: 13.5, fontWeight: 800, color: "var(--at-ink)" }}>
-                Lead Security & Anti-Impersonation Audit Log
-              </div>
-              <div style={{ fontSize: 11, color: "var(--at-ink-3)" }}>
-                Tracks device fingerprints, browser session IDs, timestamps and terminals used to verify duties.
-              </div>
-            </div>
-            <span className="at-pill at-pill-done"><ShieldCheck size={12} /> Audit Active</span>
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 420, overflowY: "auto" }}>
-            {!auditLogs.length ? (
-              <div style={{ textAlign: "center", padding: 30, color: "var(--at-ink-3)", fontStyle: "italic" }}>
-                No security audit logs recorded for this center yet.
-              </div>
-            ) : (
-              auditLogs.map((log) => (
-                <div key={log.id} className="at-audit-card">
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ width: 28, height: 28, borderRadius: 8, background: "rgba(134, 179, 209, 0.2)", display: "grid", placeItems: "center" }}>
-                      <Laptop size={14} style={{ color: "var(--at-steel)" }} />
-                    </div>
-                    <div>
-                      <div style={{ fontWeight: 750, color: "var(--at-ink)" }}>
-                        {log.actor_name} — <span style={{ color: "var(--at-steel)" }}>{log.action}</span>
-                      </div>
-                      <div style={{ fontSize: 10.5, color: "var(--at-ink-3)" }}>
-                        {log.duty_title ? `Target: ${log.duty_title} · ` : ""}Device: {log.device_type} · Session: {log.session_id.slice(0, 8)}
-                      </div>
-                    </div>
-                  </div>
-                  <div style={{ fontSize: 11, color: "var(--at-ink-3)", fontWeight: 650 }}>
-                    {new Date(log.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ── TAB 5: SHIFT HANDOVER HISTORY ── */}
+      {/* ── TAB 3: SHIFT HANDOVER ARCHIVE & LOGS ── */}
       {activeDashboardTab === "history" && (
         <div className="at-card at-card-pad">
-          <div className="at-section-label" style={{ margin: "0 0 10px 0" }}>Historical Shift Handovers Archive</div>
+          <div className="at-section-label" style={{ margin: "0 0 10px 0" }}>Historical Shift Handover Archive</div>
           <HandoverHistory branch={branch} />
         </div>
       )}

@@ -399,9 +399,10 @@ export function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestio
         if (!alive) return;
 
         if (assignData && assignData.staff_names && assignData.staff_names.length > 0) {
-          setAssignedIncoming(assignData.staff_names);
+          const leadPerson = assignData.staff_names[0];
+          setAssignedIncoming([leadPerson]);
           setHasIncomingAssignment(true);
-          setIncoming(assignData.staff_names);
+          setIncoming([leadPerson]);
           return;
         }
 
@@ -427,7 +428,7 @@ export function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestio
           const uniqueNames = Array.from(new Set(names)) as string[];
           setRosteredIncoming(uniqueNames);
           if (uniqueNames.length) {
-            setIncoming(uniqueNames);
+            setIncoming([uniqueNames[0]]);
           } else {
             setIncoming([]);
           }
@@ -545,7 +546,7 @@ export function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestio
     return [primaryIncomingLead];
   }, [existingHandover, incoming, showAllIncoming, primaryIncomingLead, people]);
 
-  const toggleIncoming = (name: string) => setIncoming((list) => list.includes(name) ? list.filter((x) => x !== name) : [...list, name]);
+  const selectIncoming = (name: string) => setIncoming([name]);
   const updateSummary = (key: string, value: any) => setSummary((state) => ({ ...state, [key]: value }));
   const updateReadiness = (id: string, patch: any) => setReadiness((state) => ({ ...state, [id]: { ...state[id], ...patch } }));
   const addTask = () => setTasks((list) => [...list, { id: crypto.randomUUID(), title: "", priority: "before_first_session", owner: incoming[0] || "", deadline: `${toYMD(tomorrow)}T08:00`, notes: "" }]);
@@ -572,14 +573,14 @@ export function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestio
     if (!canSubmit || submitting) return;
     setSubmitting(true);
     const outgoingUserId = window.FETS?._meUserId;
-    const incomingIds = incoming.map((name) => window.FETS?._staffUserIdByName?.[name]).filter(Boolean);
+    const incomingIds = incoming.slice(0, 1).map((name) => window.FETS?._staffUserIdByName?.[name]).filter(Boolean);
     const sig = { name: me, user_id: outgoingUserId || null, time: new Date().toISOString() };
     const result = await DB.dbCreateHandover({
       branch: branch === "global" ? (window.FETS?._meBranch || "calicut") : branch,
       date,
       handover_time: time,
       outgoing_staff: [me],
-      incoming_staff: incoming,
+      incoming_staff: incoming.slice(0, 1),
       outgoing_user_ids: outgoingUserId ? [outgoingUserId] : [],
       incoming_user_ids: incomingIds,
       currently_testing: Number(summary.attended) || 0,
@@ -616,16 +617,16 @@ export function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestio
         <div>
           <span className="sh-page-kicker">SHIFT END · {titleBranch(branch).toUpperCase()}</span>
           <h1>Close today. Prepare tomorrow.</h1>
-          <p>Record the day’s status and anything the opening team needs to know.</p>
+          <p>Record the day’s status and hand over to the incoming shift lead.</p>
         </div>
         {!existingHandover && <span className="sh-saved"><CheckCircle2 size={14} /> Draft saved</span>}
       </div>
 
-      <Section number={1} eyebrow="Step 1" title="Handover details" description="Staff and timing for this handover.">
+      <Section number={1} eyebrow="Step 1" title="Handover details" description="Designated shift lead and timing.">
         <div className="sh-form-grid">
           <Field label="Centre"><input value={titleBranch(branch)} disabled /></Field>
           <Field label="Handover date"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
-          <Field label="Closing staff"><input value={me} disabled /></Field>
+          <Field label="Closing Shift Lead"><input value={me} disabled /></Field>
           <Field label="Closing time"><input type="time" value={time} onChange={(e) => setTime(e.target.value)} disabled={isLocked} /></Field>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12, marginBottom: 4 }}>
@@ -647,7 +648,7 @@ export function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestio
               type="button"
               key={name}
               className={incoming.includes(name) ? "active" : ""}
-              onClick={() => !isLocked && toggleIncoming(name)}
+              onClick={() => !isLocked && selectIncoming(name)}
               disabled={isLocked}
             >
               <span>{initials(name)}</span>
@@ -798,9 +799,9 @@ export function ShiftBeginning({ branch, refreshKey, onAccepted, trimmed }: any)
   const incomingStaffList = (selected.incoming_staff && selected.incoming_staff.length > 0)
     ? selected.incoming_staff
     : [me];
-  const incomingName = incomingStaffList.join(", ");
-  const incomingFirstName = incomingStaffList.map((s: string) => s.split(" ")[0]).join(" & ");
-  const outgoingName = selected.sig_out?.name || (selected.outgoing_staff && selected.outgoing_staff.length > 0 ? selected.outgoing_staff.join(", ") : "Outgoing staff");
+  const incomingName = incomingStaffList[0] || me;
+  const incomingFirstName = incomingName.split(" ")[0];
+  const outgoingName = selected.sig_out?.name || (selected.outgoing_staff && selected.outgoing_staff.length > 0 ? selected.outgoing_staff[0] : "Outgoing Lead");
 
   const summary = {
     total: selected.total_sessions ?? "—",
