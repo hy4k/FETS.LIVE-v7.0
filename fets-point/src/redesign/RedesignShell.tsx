@@ -1119,6 +1119,14 @@ function fmt12(t) {
   return pfmt12(t);
 }
 
+function ymdFormat(d: any): string {
+  if (!d) return "";
+  if (typeof d === "string") return d.slice(0, 10);
+  const date = new Date(d);
+  if (isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
 function branchSessions(offset, branch) {
   return window.FETS?.sessionsOn ? window.FETS.sessionsOn(window.FETS.ISO(offset), branch) : [];
 }
@@ -1136,6 +1144,7 @@ if (typeof window !== "undefined") {
   window.P_WDL = P_WDL;
   window.P_MO = P_MO;
   window.pfmt12 = pfmt12;
+  window.ymdFormat = ymdFormat;
 }
 
 const OPEN = { calicut: 2, cochin: 1, global: 3 };
@@ -4186,7 +4195,6 @@ function RosterGrid({ offsets, branch }) {
   };
   const cols = `250px repeat(${offsets.length}, minmax(46px,1fr))`;
 
-  const ymdFormat = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const reqMarkOf = (name, off) => {
     if (!F()._staffRequests) return false;
     const dstr = ymdFormat(F().ISO(off));
@@ -4512,7 +4520,6 @@ function RosterDutiesScheduleMatrix({ offsets, branch, leadsMap, onReloadLeads, 
   const F = window.FETS;
   const meName = F().user.name || "Staff";
   const todayD = new Date();
-  const ymdFormat = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const todayStr = ymdFormat(todayD);
   const effectiveBranch = branch === "global" ? (F()._meBranch || "calicut") : branch;
   const isTodayLead = !!leadsMap[`${todayStr}_${effectiveBranch}`] && (leadsMap[`${todayStr}_${effectiveBranch}`].toLowerCase().trim() === meName.toLowerCase().trim());
