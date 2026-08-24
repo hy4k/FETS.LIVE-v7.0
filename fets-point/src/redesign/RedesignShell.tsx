@@ -4517,8 +4517,8 @@ function RosterDutiesScheduleMatrix({ offsets, branch, leadsMap, onReloadLeads, 
   onReloadLeads: () => void;
   cols: string;
 }) {
-  const F = window.FETS;
-  const meName = F().user.name || "Staff";
+  const F = () => window.FETS;
+  const meName = F().user?.name || "Staff";
   const todayD = new Date();
   const todayStr = ymdFormat(todayD);
   const effectiveBranch = branch === "global" ? (F()._meBranch || "calicut") : branch;
