@@ -1099,22 +1099,45 @@ Object.assign(window, { Icon, Segmented, IconButton, Avatar, ToastHost, toast, D
    FETS · Command Centre widgets (shelf + drawer model)
    ============================================================ */
 
-const VENDOR_BY_SLUG = Object.fromEntries(window.FETS.VENDORS.map((v) => [v.slug, v]));
+const VENDOR_BY_SLUG = Object.fromEntries((window.FETS?.VENDORS || []).map((v) => [v.slug, v]));
 const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const WDL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const MO = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-function fmt12(t) {
+const P_WD  = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const P_WDL = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+const P_MO  = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+function pfmt12(t) {
+  if (!t) return "";
   const [h, m] = t.split(":").map(Number);
   const ap = h >= 12 ? "PM" : "AM";
   return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${ap}`;
 }
+
+function fmt12(t) {
+  return pfmt12(t);
+}
+
 function branchSessions(offset, branch) {
-  return window.FETS.sessionsOn(window.FETS.ISO(offset), branch);
+  return window.FETS?.sessionsOn ? window.FETS.sessionsOn(window.FETS.ISO(offset), branch) : [];
 }
+
 function branchRoster(offset, branch) {
-  return window.FETS.rosterOn(window.FETS.ISO(offset), branch);
+  return window.FETS?.rosterOn ? window.FETS.rosterOn(window.FETS.ISO(offset), branch) : [];
 }
+
+if (typeof window !== "undefined") {
+  window.VENDORS = window.FETS?.VENDORS || [];
+  window.VENDOR_BY_SLUG = VENDOR_BY_SLUG;
+  window.branchSessions = branchSessions;
+  window.branchRoster = branchRoster;
+  window.P_WD = P_WD;
+  window.P_WDL = P_WDL;
+  window.P_MO = P_MO;
+  window.pfmt12 = pfmt12;
+}
+
 const OPEN = { calicut: 2, cochin: 1, global: 3 };
 
 /* totals across the next 7 days for a branch */
@@ -2308,15 +2331,6 @@ Object.assign(window, { StatusRow, Shelf, ExamOutlookPanel, VaultPanel, HelpDesk
    (exports to window for command-centre.jsx)
    ============================================================ */
 
-const P_WD  = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const P_WDL = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-const P_MO  = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-
-function pfmt12(t) {
-  const [h, m] = t.split(":").map(Number);
-  const ap = h >= 12 ? "PM" : "AM";
-  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${ap}`;
-}
 function capBranch(b) { return b === "global" ? "All Centres" : b.charAt(0).toUpperCase() + b.slice(1); }
 
 /* ---------- shared small bits ---------- */
@@ -4265,7 +4279,7 @@ function RosterGrid({ offsets, branch }) {
                   {activeVendors.length > 0 && (
                     <div style={{ display: "flex", gap: 2, justifyContent: "center" }}>
                       {activeVendors.slice(0, 3).map(v => {
-                        const vObj = window.VENDORS.find(x => x.slug === v);
+                        const vObj = (window.VENDORS || F().VENDORS || []).find(x => x && x.slug === v) || VENDOR_BY_SLUG[v];
                         const vColor = vObj ? vObj.color : "var(--ink-4)";
                         return (
                           <span key={v} style={{
