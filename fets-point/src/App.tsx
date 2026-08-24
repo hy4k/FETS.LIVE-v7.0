@@ -76,10 +76,52 @@ const queryClient = new QueryClient({
   },
 })
 
+const getInitialTab = () => {
+  if (typeof window === 'undefined') return 'command-center';
+  const path = window.location.pathname.replace(/^\//, '').toLowerCase().trim();
+  const hash = window.location.hash.replace(/^#\/?/, '').toLowerCase().trim();
+  const target = path || hash;
+  if (target === 'roster' || target === 'fets-roster') return 'fets-roster';
+  if (target === 'calendar' || target === 'fets-calendar') return 'fets-calendar';
+  if (target === 'my-desk' || target === 'desk') return 'my-desk';
+  if (target === 'handover' || target === 'shift-handover') return 'handover';
+  if (target === 'candidate-tracker' || target === 'tracker') return 'candidate-tracker';
+  if (target === 'fets-intelligence' || target === 'intelligence' || target === 'ai') return 'fets-intelligence';
+  if (target === 'incident-log' || target === 'incidents' || target === 'cases') return 'incident-log';
+  if (target === 'user-management' || target === 'users') return 'user-management';
+  if (target === 'system-manager' || target === 'systems') return 'system-manager';
+  if (target === 'news-manager' || target === 'news') return 'news-manager';
+  return 'command-center';
+};
+
 function AppContent() {
   const { user, loading, profile, signOut } = useAuth()
   const { activeBranch, setActiveBranch, getBranchTheme } = useBranch()
-  const [activeTab, setActiveTab] = useState('command-center')
+  const [activeTab, setActiveTabState] = useState(getInitialTab)
+
+  const setActiveTab = (newTab: string) => {
+    setActiveTabState(newTab);
+    if (typeof window !== 'undefined') {
+      const path = newTab === 'command-center' ? '/' :
+                   newTab === 'fets-roster' ? '/roster' :
+                   newTab === 'fets-calendar' ? '/calendar' :
+                   newTab === 'my-desk' ? '/my-desk' :
+                   newTab === 'handover' ? '/handover' : `/${newTab}`;
+      if (window.location.pathname !== path) {
+        window.history.pushState(null, '', path);
+      }
+    }
+  };
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const tab = getInitialTab();
+      setActiveTabState(tab);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
   const isMobile = useIsMobile()
   const [isRecovering, setIsRecovering] = useState(false)
   const [aiQuery, setAiQuery] = useState<string | undefined>(undefined)

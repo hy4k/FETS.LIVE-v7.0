@@ -12730,15 +12730,9 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
   
   const [active, setActiveState] = React.useState(activeSubPage || "live");
 
-  // Sync only on first mount (deep links / external tab changes). After that,
-  // `setActive` is the single source of truth and updates both the local view
-  // and the parent tab, so we must NOT re-derive `active` from `activeSubPage`
-  // here — that would clobber remapped views like "case" (parent = incident-log).
-  const didInit = React.useRef(false);
   React.useEffect(() => {
-    if (!didInit.current && activeSubPage) {
-      didInit.current = true;
-      if (activeSubPage !== active) setActiveState(activeSubPage);
+    if (activeSubPage && activeSubPage !== active) {
+      setActiveState(activeSubPage);
     }
   }, [activeSubPage]);
 
