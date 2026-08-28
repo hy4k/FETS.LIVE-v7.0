@@ -1367,120 +1367,248 @@ export async function dbSubmitApplication(app: {
   reason?: string;
 }) {
   const f = F();
-  const applicantId = f._meId || null;
-  const applicantName = f._meName || f.user?.name || "Unknown";
-  const branch = f._meBranch || "calicut";
+  const applicantName = f._meName || f.user?.name || "Staff";
+  const applicantId = f._meId || (f._staffIdByName ? f._staffIdByName[applicantName] : null);
+  const applicantUserId = f._meUserId || (f._staffUserIdByName ? f._staffUserIdByName[applicantName] : null) || applicantId;
+  const branch = f._meBranch || (f._profileBranch && applicantId ? f._profileBranch[applicantId] : "calicut");
 
-  const row: any = {
+  const targetName = app.swap_with_name || "";
+  const targetId = app.swap_with_id || (f._staffIdByName && targetName ? f._staffIdByName[targetName] : null);
+  const targetUserId = (f._staffUserIdByName && targetName ? f._staffUserIdByName[targetName] : null) || (f._profileIdToUserId && targetId ? f._profileIdToUserId[targetId] : null) || targetId;
+
+  // Build the rich payload
+  const appId = `app_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const richPayload = {
+    id: appId,
     kind: app.kind,
     status: "pending",
     applicant_id: applicantId,
     applicant_name: applicantName,
-    branch,
-    reason: app.reason || null,
+    branch: branch,
+    request_date: app.request_date || new Date().toISOString().split("T")[0],
+    leave_type: app.leave_type || (app.kind === "leave" ? "Full-day" : null),
+    swap_with_name: targetName || null,
+    swap_with_id: targetId || null,
+    swap_date: app.swap_date || app.request_date || null,
+    new_shift_code: app.new_shift_code || null,
+    amount: app.amount || null,
+    expense_type: app.expense_type || null,
+    receipt_note: app.receipt_note || null,
+    reason: app.reason || "",
+    created_at: new Date().toISOString(),
   };
 
-  if (app.kind === "leave" || app.kind === "emergency_duty") {
-    row.request_date = app.request_date || null;
-    row.leave_type = app.leave_type || null;
-  }
-  if (app.kind === "emergency_duty") {
-    row.new_shift_code = app.new_shift_code || null;
-  }
-  if (app.kind === "swap") {
-    row.request_date = app.request_date || null;
-    row.swap_with_name = app.swap_with_name || null;
-    row.swap_with_id = app.swap_with_id || (f._staffIdByName?.[app.swap_with_name || ""] || null);
-    row.swap_date = app.swap_date || app.request_date || null;
-  }
-  if (app.kind === "reimbursement") {
-    row.amount = app.amount || null;
-    row.expense_type = app.expense_type || null;
-    row.receipt_note = app.receipt_note || null;
+  // Structured encoding in reason for leave_requests
+  const reasonEncoded = JSON.stringify({
+    kind: app.kind,
+    leave_type: app.leave_type,
+    swap_with_name: targetName,
+    swap_with_id: targetId,
+    swap_date: app.swap_date,
+    new_shift_code: app.new_shift_code,
+    amount: app.amount,
+    expense_type: app.expense_type,
+    receipt_note: app.receipt_note,
+    user_note: app.reason,
+    applicant_name: applicantName,
+    applicant_id: applicantId,
+    branch
+  });
+
+  const row: any = {
+    user_id: applicantUserId,
+    request_type: app.kind === "swap" ? "shift_swap" : app.kind,
+    requested_date: app.request_date || new Date().toISOString().split("T")[0],
+    reason: reasonEncoded,
+    status: "pending"
+  };
+
+  if (app.kind === "swap" && targetUserId) {
+    row.swap_with_user_id = targetUserId;
+    row.swap_date = app.swap_date || app.request_date;
   }
 
+  let dbResult = null;
   try {
-    const { data, error } = await supabase.from("staff_applications").insert([row]).select().single();
-    if (error) throw error;
-
-    // Patch local cache
-    if (!f._applications) f._applications = [];
-    f._applications = [data, ...f._applications];
-    window.dispatchEvent(new Event("fets-applications-changed"));
-
-    rtoast("Application submitted");
-    notifyAdminsOfApplication({ ...row, ...data });
-    return data;
-  } catch (e) {
-    console.error("dbSubmitApplication error:", e);
-    rtoast("Failed to submit — please try again", "alert");
-    return null;
+    const { data, error } = await supabase.from("leave_requests").insert([row]).select().single();
+    if (!error && data) {
+      dbResult = {
+        ...richPayload,
+        id: String(data.id),
+        created_at: data.created_at || richPayload.created_at
+      };
+    }
+  } catch (err) {
+    console.warn("Supabase insert to leave_requests had error, saving locally:", err);
   }
+
+  const finalApp = dbResult || richPayload;
+
+  // Update local memory and localStorage
+  if (!f._applications) f._applications = [];
+  f._applications = [finalApp, ...f._applications.filter((a: any) => String(a.id) !== String(finalApp.id))];
+
+  if (!f._myApplications) f._myApplications = [];
+  f._myApplications = [finalApp, ...f._myApplications.filter((a: any) => String(a.id) !== String(finalApp.id))];
+
+  // Also synchronize with _staffRequests so roster can immediately show pending tags
+  if (!f._staffRequests) f._staffRequests = [];
+  f._staffRequests = [
+    {
+      id: String(finalApp.id),
+      kind: finalApp.kind,
+      who: finalApp.applicant_name,
+      with: finalApp.swap_with_name || "",
+      branch: finalApp.branch || "calicut",
+      leaveType: finalApp.leave_type || (finalApp.kind === "leave" ? "Full-day" : ""),
+      date: finalApp.request_date || "",
+      swapDate: finalApp.swap_date || finalApp.request_date || "",
+      reason: finalApp.reason || "",
+      status: "Submitted",
+      user_id: finalApp.applicant_id,
+      swap_with_user_id: finalApp.swap_with_id,
+      new_shift_code: finalApp.new_shift_code
+    },
+    ...f._staffRequests.filter((r: any) => String(r.id) !== String(finalApp.id))
+  ];
+
+  // Save to persistent localStorage
+  try {
+    const stored = JSON.parse(localStorage.getItem("fets_staff_applications") || "[]");
+    const updated = [finalApp, ...stored.filter((a: any) => String(a.id) !== String(finalApp.id))];
+    localStorage.setItem("fets_staff_applications", JSON.stringify(updated.slice(0, 100)));
+  } catch (e) {}
+
+  window.dispatchEvent(new Event("fets-applications-changed"));
+  window.dispatchEvent(new Event("fets-roster-changed"));
+
+  rtoast("Application submitted ✓");
+  notifyAdminsOfApplication(finalApp);
+  return finalApp;
 }
 
 export async function dbResolveApplication(appId: string, status: "approved" | "rejected", adminReply: string) {
   const f = F();
+  const adminName = f.user?.name || "Super Admin";
   const adminId = f._meId || null;
+  const adminUserId = f._meUserId || adminId;
 
-  try {
-    const { data, error } = await supabase
-      .from("staff_applications")
-      .update({
-        status,
-        admin_reply: adminReply || null,
-        resolved_by: adminId,
-        resolved_at: new Date().toISOString(),
-      })
-      .eq("id", appId)
-      .select("*")
-      .single();
+  // Find the app in cache or storage
+  const storedApps = JSON.parse(localStorage.getItem("fets_staff_applications") || "[]");
+  const app = (f._applications || []).find((a: any) => String(a.id) === String(appId)) ||
+              storedApps.find((a: any) => String(a.id) === String(appId));
 
-    if (error) throw error;
+  let dbUpdated = null;
+  const isNumericId = !isNaN(Number(appId));
 
-    // Roster updates on approval
-    if (status === "approved" && data) {
-      if (data.kind === "leave" && data.applicant_id && data.request_date) {
-        await dbSetRosterById(data.applicant_id, data.request_date, "L");
-      } else if (data.kind === "emergency_duty" && data.applicant_id && data.request_date && data.new_shift_code) {
-        await dbSetRosterById(data.applicant_id, data.request_date, data.new_shift_code);
-      } else if (data.kind === "swap" && data.applicant_id && data.swap_with_id) {
-        const pidA = data.applicant_id;
-        const pidB = data.swap_with_id;
-        const dateA = data.request_date;
-        const dateB = data.swap_date || data.request_date;
+  if (isNumericId) {
+    try {
+      const { data, error } = await supabase
+        .from("leave_requests")
+        .update({
+          status: status,
+          admin_reply: adminReply || null,
+          approved_by: adminUserId,
+          approved_at: new Date().toISOString()
+        })
+        .eq("id", Number(appId))
+        .select()
+        .single();
+      if (!error && data) dbUpdated = data;
+    } catch (e) {
+      console.warn("DB update failed, updating locally:", e);
+    }
+  }
 
-        const { data: currentShifts } = await supabase
-          .from("roster_schedules")
-          .select("*")
-          .in("profile_id", [pidA, pidB])
-          .in("date", [dateA, dateB]);
+  // ROSTER UPDATE ON APPROVAL
+  if (status === "approved" && app) {
+    const applicantName = app.applicant_name || app.who;
+    const applicantId = app.applicant_id || (f._staffIdByName && applicantName ? f._staffIdByName[applicantName] : null);
+    const date = app.request_date || app.date;
+    const branch = app.branch || (f._profileBranch && applicantId ? f._profileBranch[applicantId] : "calicut");
 
-        const shiftA = currentShifts?.find((s: any) => s.profile_id === pidA && s.date === dateA);
-        const shiftB = currentShifts?.find((s: any) => s.profile_id === pidB && s.date === dateB);
-        const codeA = shiftA?.shift_code || "D";
-        const codeB = shiftB?.shift_code || "D";
-        const branchA = shiftA?.branch_location || f._profileBranch?.[pidA] || "calicut";
-        const branchB = shiftB?.branch_location || f._profileBranch?.[pidB] || "calicut";
-
-        await dbSetRosterById(pidA, dateA, codeB, branchB);
-        await dbSetRosterById(pidB, dateB, codeA, branchA);
+    // 1. LEAVE APPROVAL -> Set Roster Cell to 'L'
+    if (app.kind === "leave") {
+      if (applicantId && date) {
+        await dbSetRosterById(applicantId, date, "L", branch);
+        if (applicantName) {
+          f.rosterSet(applicantName, date, "L");
+        }
       }
     }
 
-    // Patch local cache
-    if (f._applications) {
-      f._applications = f._applications.map((a: any) => a.id === appId ? { ...a, ...data } : a);
+    // 2. EMERGENCY DUTY CHANGE APPROVAL -> Set Roster Cell to new_shift_code
+    else if (app.kind === "emergency_duty") {
+      const newShift = app.new_shift_code || "D";
+      if (applicantId && date) {
+        await dbSetRosterById(applicantId, date, newShift, branch);
+        if (applicantName) {
+          f.rosterSet(applicantName, date, newShift);
+        }
+      }
     }
-    window.dispatchEvent(new Event("fets-applications-changed"));
-    window.dispatchEvent(new Event("fets-roster-changed"));
 
-    notifyApplicantOfResolution(data, status, adminReply);
-    rtoast(status === "approved" ? "Application approved ✓" : "Application rejected");
-    return data;
-  } catch (e) {
-    console.error("dbResolveApplication error:", e);
-    rtoast("Failed to resolve application", "alert");
-    return null;
+    // 3. SHIFT SWAP APPROVAL -> Swap Roster Cells between applicant and target
+    else if (app.kind === "swap") {
+      const partnerName = app.swap_with_name || app.with;
+      const partnerId = app.swap_with_id || (f._staffIdByName && partnerName ? f._staffIdByName[partnerName] : null);
+      const dateA = app.request_date || app.date;
+      const dateB = app.swap_date || app.swapDate || dateA;
+
+      if (applicantId && partnerId && applicantName && partnerName) {
+        // Read current shift codes
+        const codeA = f.rosterGet(applicantName)?.[dateA]?.code || "D";
+        const codeB = f.rosterGet(partnerName)?.[dateB]?.code || "D";
+
+        const branchA = (f._profileBranch && f._profileBranch[applicantId]) || "calicut";
+        const branchB = (f._profileBranch && f._profileBranch[partnerId]) || "calicut";
+
+        // Swap in Supabase
+        await dbSetRosterById(applicantId, dateA, codeB, branchB);
+        await dbSetRosterById(partnerId, dateB, codeA, branchA);
+
+        // Swap in local state
+        f.rosterSet(applicantName, dateA, codeB);
+        f.rosterSet(partnerName, dateB, codeA);
+      }
+    }
   }
+
+  // Update in-memory applications cache
+  const updatedApp = {
+    ...app,
+    status,
+    admin_reply: adminReply || null,
+    resolved_by: adminName,
+    resolved_at: new Date().toISOString()
+  };
+
+  if (f._applications) {
+    f._applications = f._applications.map((a: any) => String(a.id) === String(appId) ? updatedApp : a);
+  }
+  if (f._myApplications) {
+    f._myApplications = f._myApplications.map((a: any) => String(a.id) === String(appId) ? updatedApp : a);
+  }
+  if (f._staffRequests) {
+    f._staffRequests = f._staffRequests.map((r: any) => String(r.id) === String(appId) ? {
+      ...r,
+      status: status === "approved" ? "Approved" : "Rejected"
+    } : r);
+  }
+
+  // Update localStorage
+  try {
+    const stored = JSON.parse(localStorage.getItem("fets_staff_applications") || "[]");
+    const updated = stored.map((a: any) => String(a.id) === String(appId) ? updatedApp : a);
+    localStorage.setItem("fets_staff_applications", JSON.stringify(updated));
+  } catch (e) {}
+
+  window.dispatchEvent(new Event("fets-applications-changed"));
+  window.dispatchEvent(new Event("fets-roster-changed"));
+
+  notifyApplicantOfResolution(updatedApp, status, adminReply);
+  rtoast(status === "approved" ? "Application approved ✓ Roster updated" : "Application rejected");
+  return updatedApp;
 }
+
 

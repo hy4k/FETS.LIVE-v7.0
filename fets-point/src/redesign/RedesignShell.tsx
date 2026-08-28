@@ -4212,13 +4212,42 @@ function RosterGrid({ offsets, branch }) {
   };
   /* detect if a roster cell was part of an approved shift swap */
   const isSwappedCellOf = (name, off) => {
-    if (!F()._staffRequests) return null;
     const dstr = ymdFormat(F().ISO(off));
+    const appMatch = (F()._applications || []).find(a =>
+      (a.kind === "swap" || a.request_type === "shift_swap") &&
+      (a.status === "approved" || a.status === "Approved") && (
+        ((a.applicant_name === name || a.who === name) && (a.request_date === dstr || a.date === dstr)) ||
+        ((a.swap_with_name === name || a.with === name) && (a.swap_date === dstr || a.swapDate === dstr || a.request_date === dstr || a.date === dstr))
+      )
+    );
+    if (appMatch) return { who: appMatch.applicant_name, with: appMatch.swap_with_name || "", date: appMatch.request_date, swapDate: appMatch.swap_date };
+
+    if (!F()._staffRequests) return null;
     return F()._staffRequests.find(r =>
-      r.kind === "swap" && r.status === "Approved" && (
+      (r.kind === "swap" || r.kind === "shift_swap") && (r.status === "Approved" || r.status === "approved") && (
         (r.who === name && r.date === dstr) ||
         (r.with === name && (r.swapDate || r.date) === dstr)
       )
+    ) || null;
+  };
+
+  /* detect if a roster cell was part of an approved emergency duty change */
+  const isEmergencyDutyCellOf = (name, off) => {
+    const dstr = ymdFormat(F().ISO(off));
+    const appMatch = (F()._applications || []).find(a =>
+      a.kind === "emergency_duty" &&
+      (a.status === "approved" || a.status === "Approved") &&
+      (a.applicant_name === name || a.who === name || a.applicant_id === F()._staffIdByName?.[name]) &&
+      (a.request_date === dstr || a.date === dstr)
+    );
+    if (appMatch) return appMatch;
+
+    if (!F()._staffRequests) return null;
+    return F()._staffRequests.find(r =>
+      r.kind === "emergency_duty" &&
+      (r.status === "Approved" || r.status === "approved") &&
+      r.who === name &&
+      r.date === dstr
     ) || null;
   };
 
@@ -4343,14 +4372,16 @@ function RosterGrid({ offsets, branch }) {
               const unseenRes = unseenResolutionOf(n, o);
               const isSelf = n === F().user.name;
               const swapMatch = isSwappedCellOf(n, o);
+              const emergencyMatch = isEmergencyDutyCellOf(n, o);
 
               // Check if lead staff dynamically
               const dstr = ymdFormat(d);
               const targetLead = leadsMap[`${dstr}_${b.toLowerCase()}`] || leadsMap[dstr];
               const isLead = targetLead ? targetLead.toLowerCase().trim() === n.toLowerCase().trim() : false;
 
-              // Premium styles matching the code tint
-              const SWAP_COLOR = "#F2994A";
+              // Distinct color codes for swap and emergency
+              const SWAP_COLOR = "#0284c7"; // Electric Sky / Vibrant Cyan
+              const EMERGENCY_COLOR = "#e11d48"; // Vivid Crimson / Neon Rose
               const baseColor = m.ink;
               let bg = "var(--panel-3)";
               let border = "1px solid var(--glass-edge-lo)";
@@ -4368,8 +4399,8 @@ function RosterGrid({ offsets, branch }) {
                 
                 if (code === "L") {
                   bg = `linear-gradient(135deg, color-mix(in oklch, var(--bad) 26%, var(--panel)) 0%, color-mix(in oklch, var(--bad) 10%, var(--panel-3)) 100%)`;
-                  border = `1px solid color-mix(in oklch, var(--bad) 45%, transparent)`;
-                  shadow = `0 3px 8px color-mix(in oklch, var(--bad) 12%, transparent)`;
+                  border = `1.5px solid color-mix(in oklch, var(--bad) 55%, transparent)`;
+                  shadow = `0 3px 8px color-mix(in oklch, var(--bad) 18%, transparent)`;
                 }
               }
               
@@ -4384,10 +4415,20 @@ function RosterGrid({ offsets, branch }) {
                 bg = `linear-gradient(135deg, rgba(245, 158, 11, 0.32) 0%, rgba(217, 119, 6, 0.18) 100%)`;
               }
 
-              /* ---- shift-swap visual override ---- */
+              /* ---- SHIFT SWAP VIBRANT OVERRIDE (Different Color) ---- */
               if (swapMatch) {
-                border = `2px dashed ${SWAP_COLOR}`;
-                shadow = `0 0 12px color-mix(in oklch, ${SWAP_COLOR} 28%, transparent)${shadow !== "none" ? `, ${shadow}` : ""}`;
+                border = `2.5px dashed ${SWAP_COLOR}`;
+                shadow = `0 0 16px rgba(2, 132, 199, 0.55)${shadow !== "none" ? `, ${shadow}` : ""}`;
+                bg = `linear-gradient(135deg, rgba(2, 132, 199, 0.35) 0%, rgba(56, 189, 248, 0.2) 100%)`;
+                color = "#38bdf8";
+              }
+
+              /* ---- EMERGENCY DUTY VIBRANT OVERRIDE (Different Color) ---- */
+              if (emergencyMatch) {
+                border = `2.5px solid ${EMERGENCY_COLOR}`;
+                shadow = `0 0 18px rgba(225, 29, 72, 0.65)${shadow !== "none" ? `, ${shadow}` : ""}`;
+                bg = `linear-gradient(135deg, rgba(225, 29, 72, 0.38) 0%, rgba(244, 63, 94, 0.2) 100%)`;
+                color = "#fda4af";
               }
  
               const cellStyle = {
@@ -4412,6 +4453,9 @@ function RosterGrid({ offsets, branch }) {
               /* swap partner label for tooltip */
               const swapTitle = swapMatch
                 ? `Shift swapped · ${swapMatch.who === n ? swapMatch.with : swapMatch.who}`
+                : "";
+              const emergencyTitle = emergencyMatch
+                ? `🚨 Approved Emergency Duty Change (${cell.code})`
                 : "";
  
               return (
@@ -4438,7 +4482,7 @@ function RosterGrid({ offsets, branch }) {
                   } else if (window.FETS.isAdmin) {
                     setDialog({ name: n, off: o, date: d, cell, defaultCode: cell.dflt || "RD" });
                   }
-                }} className="tap roster-cell-btn" title={(window.FETS.isAdmin || isSelf) ? `${m.label}${isLead ? " · 👑 Weekly Shift Lead" : ""}${ot > 0 ? ` + OT ${ot}h` : ""}${swapTitle ? ` · ${swapTitle}` : ""} — tap to change` : (swapTitle || `${m.label}${isLead ? " · 👑 Weekly Shift Lead" : ""}`)}
+                }} className="tap roster-cell-btn" title={(window.FETS.isAdmin || isSelf) ? `${m.label}${isLead ? " · 👑 Weekly Shift Lead" : ""}${emergencyTitle ? ` · ${emergencyTitle}` : ""}${swapTitle ? ` · ${swapTitle}` : ""}${ot > 0 ? ` + OT ${ot}h` : ""} — tap to change` : (emergencyTitle || swapTitle || `${m.label}${isLead ? " · 👑 Weekly Shift Lead" : ""}`)}
                   style={cellStyle}>
                   {/* Lead Crown badge */}
                   {isLead && (
@@ -4449,16 +4493,23 @@ function RosterGrid({ offsets, branch }) {
                       filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.6))",
                     }}>👑</span>
                   )}
+                  {/* Emergency Duty badge */}
+                  {emergencyMatch && (
+                    <span title={emergencyTitle} style={{
+                      position: "absolute", top: -7, left: -5,
+                      fontSize: 12, lineHeight: 1,
+                      zIndex: 4,
+                      filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.6))",
+                    }}>🚨</span>
+                  )}
                   {/* Swap indicator badge */}
-                  {swapMatch && (
+                  {swapMatch && !emergencyMatch && (
                     <span title={swapTitle} style={{
-                      position: "absolute", top: 2, left: 2,
-                      fontSize: 8, fontWeight: 900, lineHeight: 1,
-                      color: "#fff", background: SWAP_COLOR,
-                      padding: "2px 3px", borderRadius: 4,
-                      boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
-                      letterSpacing: 0,
-                    }}>↔</span>
+                      position: "absolute", top: -7, left: -5,
+                      fontSize: 12, lineHeight: 1,
+                      zIndex: 4,
+                      filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.6))",
+                    }}>🔄</span>
                   )}
                   <span style={{ fontSize: code.length > 2 ? 9 : 13.5, fontWeight: 900, lineHeight: 1 }}>{code}</span>
                   {ot > 0 && (
@@ -11316,7 +11367,8 @@ function ApplicationsHub({ isSuperAdmin }) {
   const TABS = isSuperAdmin
     ? [
         { k: "inbox",  icon: "inbox",  label: "Applications Inbox", badge: pendingCount },
-        { k: "apply",  icon: "edit",   label: "Submit on Behalf" },
+        { k: "apply",  icon: "edit",   label: "New Application" },
+        { k: "mine",   icon: "list",   label: "My Requests" },
       ]
     : [
         { k: "apply",  icon: "edit",   label: "New Application" },
@@ -11374,9 +11426,14 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
   const u = window.FETS.user;
   const gap = "calc(24px * var(--density))";
 
-  // Determine if the user is a super admin (Mithun or Niyas)
-  const isSuperAdmin = ["mithun", "niyas"].includes((u.name || "").toLowerCase()) ||
-                       ["mithun@fets.in", "mithun@fets.live", "niyas@fets.in", "niyas@fets.live"].includes((u.email || "").toLowerCase());
+  // Determine if the user is a super admin
+  const isSuperAdmin = Boolean(
+    window.FETS.isAdmin ||
+    (u.role || "").toLowerCase().includes("super") ||
+    (u.role || "").toLowerCase().includes("admin") ||
+    ["mithun", "niyas"].includes((u.name || "").toLowerCase()) ||
+    ["mithun@fets.in", "mithun@fets.live", "niyas@fets.in", "niyas@fets.live"].includes((u.email || "").toLowerCase())
+  );
 
   // Only Super Admins see the modules
   const [searchQuery, setSearchQuery] = React.useState("");
@@ -12966,6 +13023,16 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
         async (payload) => {
           console.log("Realtime: leave_requests changed", payload);
           await loadLeaveRequests(window.FETS);
+          await loadApplications(window.FETS);
+          window.dispatchEvent(new Event("fets-roster-changed"));
+          window.dispatchEvent(new Event("fets-applications-changed"));
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "roster_schedules" },
+        async (payload) => {
+          console.log("Realtime: roster_schedules changed", payload);
           window.dispatchEvent(new Event("fets-roster-changed"));
         }
       )
@@ -12975,14 +13042,6 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
         async (payload) => {
           console.log("Realtime: roster_discussions changed", payload);
           window.dispatchEvent(new Event("fets-discussion-changed"));
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "staff_applications" },
-        async (payload) => {
-          console.log("Realtime: staff_applications changed", payload);
-          await loadApplications(window.FETS);
         }
       )
       .subscribe();

@@ -642,19 +642,97 @@ export async function loadLeaveRequests(F: any) {
 export async function loadApplications(F: any) {
   if (!F) return;
   try {
+    const localStored: any[] = JSON.parse(localStorage.getItem("fets_staff_applications") || "[]");
+
     const { data, error } = await supabase
-      .from("staff_applications")
-      .select("*")
+      .from("leave_requests")
+      .select(`
+        *,
+        requestor:staff_profiles!leave_requests_user_id_fkey(id, full_name, branch_assigned),
+        target:staff_profiles!leave_requests_swap_with_user_id_fkey(id, full_name, branch_assigned)
+      `)
       .order("created_at", { ascending: false });
 
+    const serverApps: any[] = [];
     if (!error && data) {
-      F._applications = data;
-      F._myApplications = data.filter(
-        (a: any) => a.applicant_id === F._meId || a.applicant_name === F.user?.name
-      );
-      window.dispatchEvent(new Event("fets-applications-changed"));
+      data.forEach((r: any) => {
+        let parsed: any = {};
+        if (r.reason && typeof r.reason === "string" && r.reason.startsWith("{") && r.reason.endsWith("}")) {
+          try { parsed = JSON.parse(r.reason); } catch (e) {}
+        }
+
+        const who = parsed.applicant_name || r.requestor?.full_name || F._staffProfiles?.find((p: any) => p.user_id === r.user_id || p.id === r.user_id)?.full_name || "Staff";
+        const applicantId = parsed.applicant_id || r.requestor?.id || (F._userIdToProfileId && F._userIdToProfileId[r.user_id]) || r.user_id;
+        const branch = parsed.branch || branchOf(r.requestor?.branch_assigned);
+        const withWho = parsed.swap_with_name || r.target?.full_name || F._staffProfiles?.find((p: any) => p.user_id === r.swap_with_user_id || p.id === r.swap_with_user_id)?.full_name || "";
+        const withId = parsed.swap_with_id || r.target?.id || (F._userIdToProfileId && F._userIdToProfileId[r.swap_with_user_id]) || r.swap_with_user_id;
+
+        let kind = parsed.kind || (r.request_type === "shift_swap" ? "swap" : r.request_type) || "leave";
+        let status = (r.status || "pending").toLowerCase();
+        if (status === "submitted") status = "pending";
+
+        serverApps.push({
+          id: String(r.id),
+          kind,
+          status,
+          applicant_id: applicantId,
+          applicant_name: who,
+          branch,
+          request_date: r.requested_date || parsed.request_date || "",
+          leave_type: parsed.leave_type || (kind === "leave" ? "Full-day" : null),
+          swap_with_name: withWho,
+          swap_with_id: withId,
+          swap_date: r.swap_date || parsed.swap_date || r.requested_date,
+          new_shift_code: parsed.new_shift_code || "D",
+          amount: parsed.amount || null,
+          expense_type: parsed.expense_type || null,
+          receipt_note: parsed.receipt_note || null,
+          reason: parsed.user_note || r.reason || "",
+          admin_reply: r.admin_reply || null,
+          created_at: r.created_at || new Date().toISOString()
+        });
+      });
     }
+
+    // Merge serverApps with localStored (avoiding duplicates by id)
+    const map = new Map();
+    serverApps.forEach(a => map.set(String(a.id), a));
+    localStored.forEach(a => {
+      if (!map.has(String(a.id))) {
+        map.set(String(a.id), a);
+      }
+    });
+
+    const allApps = Array.from(map.values()).sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+
+    F._applications = allApps;
+    F._myApplications = allApps.filter((a: any) => 
+      a.applicant_id === F._meId || 
+      a.applicant_name === F.user?.name || 
+      (F._staffUserIdByName && F.user?.name && a.applicant_id === F._staffUserIdByName[F.user.name])
+    );
+
+    // Synchronize into _staffRequests for roster indicators
+    F._staffRequests = allApps.map((a: any) => ({
+      id: String(a.id),
+      kind: a.kind,
+      who: a.applicant_name,
+      with: a.swap_with_name || "",
+      branch: a.branch || "calicut",
+      leaveType: a.leave_type || (a.kind === "leave" ? "Full-day" : ""),
+      date: a.request_date || "",
+      swapDate: a.swap_date || a.request_date || "",
+      reason: a.reason || "",
+      status: a.status === "approved" ? "Approved" : (a.status === "rejected" ? "Rejected" : "Submitted"),
+      user_id: a.applicant_id,
+      swap_with_user_id: a.swap_with_id,
+      new_shift_code: a.new_shift_code
+    }));
+
+    window.dispatchEvent(new Event("fets-applications-changed"));
+    window.dispatchEvent(new Event("fets-roster-changed"));
   } catch (e) {
     console.error("loadApplications error:", e);
   }
 }
+
