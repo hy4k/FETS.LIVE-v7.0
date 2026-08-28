@@ -1555,23 +1555,33 @@ export async function dbResolveApplication(appId: string, status: "approved" | "
       const dateA = app.request_date || app.date;
       const dateB = app.swap_date || app.swapDate || dateA;
 
-      if (applicantId && partnerId && applicantName && partnerName) {
-        // Read current shift codes
-        const codeA = f.rosterGet(applicantName)?.[dateA]?.code || "D";
-        const codeB = f.rosterGet(partnerName)?.[dateB]?.code || "D";
+      if (applicantId && partnerId && applicantName && partnerName && dateA) {
+        // Read CURRENT shift codes directly from DB (local cache uses numeric offsets, not date strings — always fetch from DB)
+        let codeA = "D", codeB = "D";
+        try {
+          const [rA, rB] = await Promise.all([
+            supabase.from("roster_schedules").select("shift_code").eq("profile_id", applicantId).eq("date", dateA).maybeSingle(),
+            supabase.from("roster_schedules").select("shift_code").eq("profile_id", partnerId).eq("date", dateB).maybeSingle()
+          ]);
+          if (rA.data?.shift_code) codeA = rA.data.shift_code;
+          if (rB.data?.shift_code) codeB = rB.data.shift_code;
+        } catch(e) { console.warn("Swap: could not read current codes from DB, using D fallback:", e); }
 
         const branchA = (f._profileBranch && f._profileBranch[applicantId]) || "calicut";
         const branchB = (f._profileBranch && f._profileBranch[partnerId]) || "calicut";
 
-        // Swap in Supabase
-        await dbSetRosterById(applicantId, dateA, codeB, branchB);
-        await dbSetRosterById(partnerId, dateB, codeA, branchA);
+        // Swap in Supabase — each person gets the other's original code
+        await dbSetRosterById(applicantId, dateA, codeB, branchA);
+        await dbSetRosterById(partnerId, dateB, codeA, branchB);
 
-        // Swap in local state
-        f.rosterSet(applicantName, dateA, codeB);
-        f.rosterSet(partnerName, dateB, codeA);
+        // Update local state immediately for instant UI feedback
+        if (f.rosterSet) {
+          f.rosterSet(applicantName, dateA, codeB);
+          f.rosterSet(partnerName, dateB, codeA);
+        }
       }
     }
+
   }
 
   // Update in-memory applications cache
@@ -1605,6 +1615,21 @@ export async function dbResolveApplication(appId: string, status: "approved" | "
 
   window.dispatchEvent(new Event("fets-applications-changed"));
   window.dispatchEvent(new Event("fets-roster-changed"));
+
+  // Force roster re-fetch so the swapped/changed cells are immediately visible
+  if (status === "approved") {
+    try {
+      const { ensureMonth } = await import("./live-data");
+      const today = new Date();
+      // Clear month cache so ensureMonth re-fetches fresh from DB
+      (window as any).__fetsLoadedMonths?.clear?.();
+      await Promise.all([
+        ensureMonth(today),
+        ensureMonth(new Date(today.getFullYear(), today.getMonth() + 1, 1)),
+        ensureMonth(new Date(today.getFullYear(), today.getMonth() - 1, 1))
+      ]);
+    } catch(e) { /* ignore — roster event was already fired */ }
+  }
 
   notifyApplicantOfResolution(updatedApp, status, adminReply);
   rtoast(status === "approved" ? "Application approved ✓ Roster updated" : "Application rejected");

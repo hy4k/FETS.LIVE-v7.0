@@ -403,6 +403,8 @@ export async function loadLiveData(F: any) {
    so the calendar/roster cover any range — past or future, not just today.
    ===================================================================== */
 const _loadedMonths = new Set<string>();
+// Expose on window so write-data can clear it after roster mutations (e.g. swap approval)
+(window as any).__fetsLoadedMonths = _loadedMonths;
 export async function ensureMonth(d: Date) {
   const F = window.FETS; if (!F) return false;
   const y = d.getFullYear(), m = d.getMonth();
@@ -694,14 +696,21 @@ export async function loadApplications(F: any) {
       });
     }
 
-    // Merge serverApps with localStored (avoiding duplicates by id)
+    // Merge serverApps with localStored:
+    // Server DB record always wins for status (prevents reappearing after refresh).
+    // Local-only apps (app_xxx ids not in DB) are added in addition.
     const map = new Map();
-    serverApps.forEach(a => map.set(String(a.id), a));
-    localStored.forEach(a => {
-      if (!map.has(String(a.id))) {
-        map.set(String(a.id), a);
-      }
+    // First load localStorage (lower priority)
+    localStored.forEach((a: any) => map.set(String(a.id), a));
+    // Then server overwrites — DB status is source of truth
+    serverApps.forEach((a: any) => map.set(String(a.id), a));
+
+    // Also sync approved DB status back to localStorage so it survives next load
+    const updatedLocal = localStored.map((la: any) => {
+      const serverVer = serverApps.find((sa: any) => String(sa.id) === String(la.id));
+      return serverVer ? { ...la, status: serverVer.status, admin_reply: serverVer.admin_reply } : la;
     });
+    try { localStorage.setItem("fets_staff_applications", JSON.stringify(updatedLocal.slice(0, 100))); } catch(e) {}
 
     const allApps = Array.from(map.values()).sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
 
