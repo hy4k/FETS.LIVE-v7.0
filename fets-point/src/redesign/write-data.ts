@@ -1376,73 +1376,100 @@ export async function dbSubmitApplication(app: {
   const targetId = app.swap_with_id || (f._staffIdByName && targetName ? f._staffIdByName[targetName] : null);
   const targetUserId = (f._staffUserIdByName && targetName ? f._staffUserIdByName[targetName] : null) || (f._profileIdToUserId && targetId ? f._profileIdToUserId[targetId] : null) || targetId;
 
-  // Build the rich payload
-  const appId = `app_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-  const richPayload = {
-    id: appId,
+  // ── 1. Insert into staff_applications (canonical table, UUID id) ──────────
+  const saRow: any = {
     kind: app.kind,
     status: "pending",
-    applicant_id: applicantId,
+    applicant_id: applicantId || undefined,
     applicant_name: applicantName,
-    branch: branch,
+    branch,
     request_date: app.request_date || new Date().toISOString().split("T")[0],
     leave_type: app.leave_type || (app.kind === "leave" ? "Full-day" : null),
     swap_with_name: targetName || null,
-    swap_with_id: targetId || null,
+    swap_with_id: targetId || undefined,
     swap_date: app.swap_date || app.request_date || null,
     new_shift_code: app.new_shift_code || null,
     amount: app.amount || null,
     expense_type: app.expense_type || null,
     receipt_note: app.receipt_note || null,
-    reason: app.reason || "",
-    created_at: new Date().toISOString(),
+    reason: app.reason || ""
   };
+  // Remove undefined keys
+  Object.keys(saRow).forEach(k => { if (saRow[k] === undefined) delete saRow[k]; });
 
-  // Structured encoding in reason for leave_requests
-  const reasonEncoded = JSON.stringify({
-    kind: app.kind,
-    leave_type: app.leave_type,
-    swap_with_name: targetName,
-    swap_with_id: targetId,
-    swap_date: app.swap_date,
-    new_shift_code: app.new_shift_code,
-    amount: app.amount,
-    expense_type: app.expense_type,
-    receipt_note: app.receipt_note,
-    user_note: app.reason,
-    applicant_name: applicantName,
-    applicant_id: applicantId,
-    branch
-  });
-
-  const row: any = {
-    user_id: applicantUserId,
-    request_type: app.kind === "swap" ? "shift_swap" : app.kind,
-    requested_date: app.request_date || new Date().toISOString().split("T")[0],
-    reason: reasonEncoded,
-    status: "pending"
-  };
-
-  if (app.kind === "swap" && targetUserId) {
-    row.swap_with_user_id = targetUserId;
-    row.swap_date = app.swap_date || app.request_date;
-  }
-
-  let dbResult = null;
+  let dbResult: any = null;
   try {
-    const { data, error } = await supabase.from("leave_requests").insert([row]).select().single();
-    if (!error && data) {
+    const { data: saData, error: saError } = await supabase
+      .from("staff_applications")
+      .insert([saRow])
+      .select()
+      .single();
+    if (!saError && saData) {
       dbResult = {
-        ...richPayload,
-        id: String(data.id),
-        created_at: data.created_at || richPayload.created_at
+        id: String(saData.id),
+        kind: saData.kind,
+        status: saData.status,
+        applicant_id: saData.applicant_id,
+        applicant_name: saData.applicant_name,
+        branch: saData.branch,
+        request_date: saData.request_date,
+        leave_type: saData.leave_type,
+        swap_with_name: saData.swap_with_name,
+        swap_with_id: saData.swap_with_id,
+        swap_date: saData.swap_date,
+        new_shift_code: saData.new_shift_code,
+        amount: saData.amount,
+        expense_type: saData.expense_type,
+        receipt_note: saData.receipt_note,
+        reason: saData.reason,
+        admin_reply: null,
+        created_at: saData.created_at
       };
+    } else {
+      console.warn("staff_applications insert error:", saError?.message);
     }
   } catch (err) {
-    console.warn("Supabase insert to leave_requests had error, saving locally:", err);
+    console.warn("staff_applications insert threw:", err);
   }
 
-  const finalApp = dbResult || richPayload;
+  // ── 2. Also notify via leave_requests (best-effort, audit trail) ──────────
+  try {
+    const reasonEncoded = JSON.stringify({
+      kind: app.kind, leave_type: app.leave_type,
+      swap_with_name: targetName, swap_with_id: targetId, swap_date: app.swap_date,
+      new_shift_code: app.new_shift_code, amount: app.amount,
+      expense_type: app.expense_type, receipt_note: app.receipt_note,
+      user_note: app.reason, applicant_name: applicantName, applicant_id: applicantId, branch,
+      staff_application_id: dbResult?.id  // link back to canonical record
+    });
+    const lrRow: any = {
+      user_id: applicantUserId,
+      request_type: app.kind === "swap" ? "shift_swap" : app.kind,
+      requested_date: app.request_date || new Date().toISOString().split("T")[0],
+      reason: reasonEncoded,
+      status: "pending"
+    };
+    if (app.kind === "swap" && targetUserId) {
+      lrRow.swap_with_user_id = targetUserId;
+      lrRow.swap_date = app.swap_date || app.request_date;
+    }
+    await supabase.from("leave_requests").insert([lrRow]);
+  } catch (_) {}
+
+  // ── 3. Build final app object ──────────────────────────────────────────────
+  const finalApp = dbResult || {
+    id: `app_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    kind: app.kind, status: "pending",
+    applicant_id: applicantId, applicant_name: applicantName, branch,
+    request_date: app.request_date || new Date().toISOString().split("T")[0],
+    leave_type: app.leave_type || (app.kind === "leave" ? "Full-day" : null),
+    swap_with_name: targetName || null, swap_with_id: targetId || null,
+    swap_date: app.swap_date || app.request_date || null,
+    new_shift_code: app.new_shift_code || null, amount: app.amount || null,
+    expense_type: app.expense_type || null, receipt_note: app.receipt_note || null,
+    reason: app.reason || "", admin_reply: null,
+    created_at: new Date().toISOString()
+  };
 
   // Update local memory and localStorage
   if (!f._applications) f._applications = [];
@@ -1498,26 +1525,32 @@ export async function dbResolveApplication(appId: string, status: "approved" | "
   const app = (f._applications || []).find((a: any) => String(a.id) === String(appId)) ||
               storedApps.find((a: any) => String(a.id) === String(appId));
 
-  let dbUpdated = null;
-  const isNumericId = !isNaN(Number(appId));
-
-  if (isNumericId) {
-    try {
-      const { data, error } = await supabase
-        .from("leave_requests")
-        .update({
-          status: status,
-          admin_reply: adminReply || null,
-          approved_by: adminUserId,
-          approved_at: new Date().toISOString()
-        })
-        .eq("id", Number(appId))
-        .select()
-        .single();
-      if (!error && data) dbUpdated = data;
-    } catch (e) {
-      console.warn("DB update failed, updating locally:", e);
+  // ── Update staff_applications (UUID — always the canonical source) ──────────
+  let dbUpdated = false;
+  try {
+    const { error } = await supabase
+      .from("staff_applications")
+      .update({
+        status,
+        admin_reply: adminReply || null,
+        resolved_by: adminId || undefined,
+        resolved_at: new Date().toISOString()
+      })
+      .eq("id", appId);
+    if (!error) {
+      dbUpdated = true;
+    } else {
+      console.warn("staff_applications update error:", error.message);
+      // Fallback: try leave_requests if numeric id
+      if (!isNaN(Number(appId))) {
+        await supabase.from("leave_requests").update({
+          status, admin_reply: adminReply || null,
+          approved_by: adminUserId, approved_at: new Date().toISOString()
+        }).eq("id", Number(appId));
+      }
     }
+  } catch (e) {
+    console.warn("resolve DB update threw:", e);
   }
 
   // ROSTER UPDATE ON APPROVAL
