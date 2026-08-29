@@ -1560,13 +1560,29 @@ export async function dbResolveApplication(appId: string, status: "approved" | "
     const date = app.request_date || app.date;
     const branch = app.branch || (f._profileBranch && applicantId ? f._profileBranch[applicantId] : "calicut");
 
+    // Helper: update both the localStorage rosterSet AND the live _dbRoster cache
+    // rosterSet expects a numeric offset; _dbRoster[name][offset] = {code, ot}
+    const applyRosterChange = (name: string, dateStr: string, code: string) => {
+      if (!name || !dateStr) return;
+      try {
+        const offset = f.offsetOf ? f.offsetOf(new Date(dateStr)) : null;
+        if (offset != null && !isNaN(offset)) {
+          // Update localStorage-backed roster (for persistent display)
+          if (f.rosterSet) f.rosterSet(name, offset, { code, ot: 0 });
+          // Update live _dbRoster cache directly (what the roster grid reads)
+          if (f._dbRoster) {
+            f._dbRoster[name] = f._dbRoster[name] || {};
+            f._dbRoster[name][offset] = { code, ot: 0 };
+          }
+        }
+      } catch(e) { console.warn("applyRosterChange error:", e); }
+    };
+
     // 1. LEAVE APPROVAL -> Set Roster Cell to 'L'
     if (app.kind === "leave") {
       if (applicantId && date) {
         await dbSetRosterById(applicantId, date, "L", branch);
-        if (applicantName) {
-          f.rosterSet(applicantName, date, "L");
-        }
+        applyRosterChange(applicantName, date, "L");
       }
     }
 
@@ -1575,9 +1591,7 @@ export async function dbResolveApplication(appId: string, status: "approved" | "
       const newShift = app.new_shift_code || "D";
       if (applicantId && date) {
         await dbSetRosterById(applicantId, date, newShift, branch);
-        if (applicantName) {
-          f.rosterSet(applicantName, date, newShift);
-        }
+        applyRosterChange(applicantName, date, newShift);
       }
     }
 
@@ -1589,7 +1603,7 @@ export async function dbResolveApplication(appId: string, status: "approved" | "
       const dateB = app.swap_date || app.swapDate || dateA;
 
       if (applicantId && partnerId && applicantName && partnerName && dateA) {
-        // Read CURRENT shift codes directly from DB (local cache uses numeric offsets, not date strings — always fetch from DB)
+        // Read CURRENT shift codes directly from DB
         let codeA = "D", codeB = "D";
         try {
           const [rA, rB] = await Promise.all([
@@ -1598,20 +1612,18 @@ export async function dbResolveApplication(appId: string, status: "approved" | "
           ]);
           if (rA.data?.shift_code) codeA = rA.data.shift_code;
           if (rB.data?.shift_code) codeB = rB.data.shift_code;
-        } catch(e) { console.warn("Swap: could not read current codes from DB, using D fallback:", e); }
+        } catch(e) { console.warn("Swap: could not read current codes from DB:", e); }
 
         const branchA = (f._profileBranch && f._profileBranch[applicantId]) || "calicut";
         const branchB = (f._profileBranch && f._profileBranch[partnerId]) || "calicut";
 
-        // Swap in Supabase — each person gets the other's original code
+        // Write swapped codes to Supabase
         await dbSetRosterById(applicantId, dateA, codeB, branchA);
         await dbSetRosterById(partnerId, dateB, codeA, branchB);
 
-        // Update local state immediately for instant UI feedback
-        if (f.rosterSet) {
-          f.rosterSet(applicantName, dateA, codeB);
-          f.rosterSet(partnerName, dateB, codeA);
-        }
+        // Update local display immediately using correct offset key + {code,ot} format
+        applyRosterChange(applicantName, dateA, codeB);
+        applyRosterChange(partnerName, dateB, codeA);
       }
     }
 
