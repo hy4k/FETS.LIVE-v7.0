@@ -1596,6 +1596,9 @@ export async function dbResolveApplication(appId: string, status: "approved" | "
     }
 
     // 3. SHIFT SWAP APPROVAL -> Swap Roster Cells between applicant and target
+    // A full shift swap affects 4 cells:
+    //   dateA: Person A and Person B swap their shifts on dateA
+    //   dateB: Person A and Person B swap their shifts on dateB
     else if (app.kind === "swap") {
       const partnerName = app.swap_with_name || app.with;
       const partnerId = app.swap_with_id || (f._staffIdByName && partnerName ? f._staffIdByName[partnerName] : null);
@@ -1603,27 +1606,36 @@ export async function dbResolveApplication(appId: string, status: "approved" | "
       const dateB = app.swap_date || app.swapDate || dateA;
 
       if (applicantId && partnerId && applicantName && partnerName && dateA) {
-        // Read CURRENT shift codes directly from DB
-        let codeA = "D", codeB = "D";
+        // Read all 4 current shift codes from DB
+        let codeA_onDateA = "D", codeB_onDateA = "D";
+        let codeA_onDateB = "D", codeB_onDateB = "D";
         try {
-          const [rA, rB] = await Promise.all([
+          const [rA_A, rB_A, rA_B, rB_B] = await Promise.all([
             supabase.from("roster_schedules").select("shift_code").eq("profile_id", applicantId).eq("date", dateA).maybeSingle(),
+            supabase.from("roster_schedules").select("shift_code").eq("profile_id", partnerId).eq("date", dateA).maybeSingle(),
+            supabase.from("roster_schedules").select("shift_code").eq("profile_id", applicantId).eq("date", dateB).maybeSingle(),
             supabase.from("roster_schedules").select("shift_code").eq("profile_id", partnerId).eq("date", dateB).maybeSingle()
           ]);
-          if (rA.data?.shift_code) codeA = rA.data.shift_code;
-          if (rB.data?.shift_code) codeB = rB.data.shift_code;
+          if (rA_A.data?.shift_code) codeA_onDateA = rA_A.data.shift_code;
+          if (rB_A.data?.shift_code) codeB_onDateA = rB_A.data.shift_code;
+          if (rA_B.data?.shift_code) codeA_onDateB = rA_B.data.shift_code;
+          if (rB_B.data?.shift_code) codeB_onDateB = rB_B.data.shift_code;
         } catch(e) { console.warn("Swap: could not read current codes from DB:", e); }
 
         const branchA = (f._profileBranch && f._profileBranch[applicantId]) || "calicut";
         const branchB = (f._profileBranch && f._profileBranch[partnerId]) || "calicut";
 
-        // Write swapped codes to Supabase
-        await dbSetRosterById(applicantId, dateA, codeB, branchA);
-        await dbSetRosterById(partnerId, dateB, codeA, branchB);
+        // On dateA: Person A gets Person B's code, Person B gets Person A's code
+        await dbSetRosterById(applicantId, dateA, codeB_onDateA, branchA);
+        await dbSetRosterById(partnerId,   dateA, codeA_onDateA, branchB);
+        applyRosterChange(applicantName, dateA, codeB_onDateA);
+        applyRosterChange(partnerName,   dateA, codeA_onDateA);
 
-        // Update local display immediately using correct offset key + {code,ot} format
-        applyRosterChange(applicantName, dateA, codeB);
-        applyRosterChange(partnerName, dateB, codeA);
+        // On dateB: Person A gets Person B's code, Person B gets Person A's code
+        await dbSetRosterById(applicantId, dateB, codeB_onDateB, branchA);
+        await dbSetRosterById(partnerId,   dateB, codeA_onDateB, branchB);
+        applyRosterChange(applicantName, dateB, codeB_onDateB);
+        applyRosterChange(partnerName,   dateB, codeA_onDateB);
       }
     }
 

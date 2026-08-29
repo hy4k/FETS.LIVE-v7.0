@@ -4216,9 +4216,14 @@ function RosterGrid({ offsets, branch }) {
     const appMatch = (F()._applications || []).find(a =>
       (a.kind === "swap" || a.request_type === "shift_swap") &&
       (a.status === "approved" || a.status === "Approved") && (
-        // applicant: their day is request_date
+        // All 4 cells affected by a swap:
+        // 1. Applicant on dateA (their original swap day)
         ((a.applicant_name === name || a.who === name) && (a.request_date === dstr || a.date === dstr)) ||
-        // partner: their day is swap_date ONLY (not request_date — that's the applicant's day)
+        // 2. Partner on dateA (they also swap on that same day)
+        ((a.swap_with_name === name || a.with === name) && (a.request_date === dstr || a.date === dstr)) ||
+        // 3. Applicant on dateB (they swap on the partner's day too)
+        ((a.applicant_name === name || a.who === name) && (a.swap_date === dstr || a.swapDate === dstr)) ||
+        // 4. Partner on dateB (their original swap day)
         ((a.swap_with_name === name || a.with === name) && (a.swap_date === dstr || a.swapDate === dstr))
       )
     );
@@ -4227,12 +4232,14 @@ function RosterGrid({ offsets, branch }) {
     if (!F()._staffRequests) return null;
     return F()._staffRequests.find(r =>
       (r.kind === "swap" || r.kind === "shift_swap") && (r.status === "Approved" || r.status === "approved") && (
-        (r.who === name && r.date === dstr) ||
-        // partner: must match swapDate specifically, not fall back to r.date (applicant's date)
-        (r.with === name && r.swapDate && r.swapDate === dstr)
+        // Applicant on either date
+        (r.who === name && (r.date === dstr || r.swapDate === dstr)) ||
+        // Partner on either date
+        (r.with === name && (r.date === dstr || r.swapDate === dstr))
       )
     ) || null;
   };
+
 
   /* detect if a roster cell was part of an approved emergency duty change */
   const isEmergencyDutyCellOf = (name, off) => {
