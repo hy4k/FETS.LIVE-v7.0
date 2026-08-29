@@ -4216,8 +4216,10 @@ function RosterGrid({ offsets, branch }) {
     const appMatch = (F()._applications || []).find(a =>
       (a.kind === "swap" || a.request_type === "shift_swap") &&
       (a.status === "approved" || a.status === "Approved") && (
+        // applicant: their day is request_date
         ((a.applicant_name === name || a.who === name) && (a.request_date === dstr || a.date === dstr)) ||
-        ((a.swap_with_name === name || a.with === name) && (a.swap_date === dstr || a.swapDate === dstr || a.request_date === dstr || a.date === dstr))
+        // partner: their day is swap_date ONLY (not request_date — that's the applicant's day)
+        ((a.swap_with_name === name || a.with === name) && (a.swap_date === dstr || a.swapDate === dstr))
       )
     );
     if (appMatch) return { who: appMatch.applicant_name, with: appMatch.swap_with_name || "", date: appMatch.request_date, swapDate: appMatch.swap_date };
@@ -4226,7 +4228,8 @@ function RosterGrid({ offsets, branch }) {
     return F()._staffRequests.find(r =>
       (r.kind === "swap" || r.kind === "shift_swap") && (r.status === "Approved" || r.status === "approved") && (
         (r.who === name && r.date === dstr) ||
-        (r.with === name && (r.swapDate || r.date) === dstr)
+        // partner: must match swapDate specifically, not fall back to r.date (applicant's date)
+        (r.with === name && r.swapDate && r.swapDate === dstr)
       )
     ) || null;
   };
