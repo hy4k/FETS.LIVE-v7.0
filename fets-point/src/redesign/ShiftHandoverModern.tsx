@@ -564,10 +564,8 @@ export function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestio
     };
   });
 
-  const issueCount = readinessRows.filter((item) => item.status === "issue").length;
-  const uncheckedCount = readinessRows.filter((item) => item.status === "unchecked").length;
   const invalidTask = tasks.some((task) => !task.title.trim() || !task.owner || !task.deadline);
-  const canSubmit = incoming.length > 0 && confirmed && uncheckedCount === 0 && !invalidTask;
+  const canSubmit = incoming.length > 0 && confirmed && !invalidTask;
 
   async function submit() {
     if (!canSubmit || submitting) return;
@@ -717,31 +715,9 @@ export function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestio
       </Section>
       )}
 
-      <Section
-        number={trimmed ? 3 : 4}
-        eyebrow={trimmed ? "Step 3" : "Step 4"}
-        title="Centre readiness"
-        description="Use Not checked when a closing verification was not performed."
-        action={isAdmin && (
-          <button type="button" className="sh-manage-q-btn" onClick={onManageQuestions} disabled={isLocked}>
-            <Settings size={14} /> Manage Questions
-          </button>
-        )}
-      >
-        <div className="sh-readiness">
-          {readinessRows.map((item: any) => {
-            return <div className={`sh-ready-row ${item.status === "issue" ? "has-issue" : ""}`} key={item.id}>
-              <span className="sh-ready-icon"><Laptop size={16} /></span><span className="sh-ready-name"><strong>{item.label}</strong><small>{item.description}</small></span>
-              <StatusChoice value={item.status} onChange={(value: string) => updateReadiness(item.id, { status: value })} disabled={isLocked} />
-              {item.status === "issue" && <label className="sh-issue-note"><span>Issue details required</span><input value={item.note} onChange={(e) => updateReadiness(item.id, { note: e.target.value })} placeholder="What is wrong, what was done, and what remains?" disabled={isLocked} /></label>}
-            </div>;
-          })}
-        </div>
-        {(issueCount > 0 || uncheckedCount > 0) && <div className="sh-warning"><AlertTriangle size={18} /><p><strong>{issueCount} issue{issueCount === 1 ? "" : "s"}, {uncheckedCount} not checked.</strong> Unchecked items must be reviewed before submission.</p></div>}
-      </Section>
 
       {!trimmed && (
-      <Section number={5} eyebrow="Step 5" title="Pending tasks" description="Every pending action needs an owner and deadline.">
+      <Section number={trimmed ? 3 : 4} eyebrow={trimmed ? "Step 3" : "Step 4"} title="Pending tasks" description="Every pending action needs an owner and deadline.">
         <div className="sh-task-list">
           {tasks.map((task) => <div className="sh-task" key={task.id}>
             <div className="sh-task-top"><select value={task.priority} onChange={(e) => updateTask(task.id, { priority: e.target.value })} disabled={isLocked}><option value="critical">Critical</option><option value="before_first_session">Before first session</option><option value="today">Today</option><option value="routine">Routine</option></select><button type="button" onClick={() => !isLocked && removeTask(task.id)} title="Remove task" disabled={isLocked}><Trash2 size={16} /></button></div>
@@ -755,7 +731,7 @@ export function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestio
       </Section>
       )}
 
-      <Section number={trimmed ? 4 : 6} eyebrow={trimmed ? "Final step" : "Final step"} title="Confirm and send handover" description="The opening staff will receive this record for review and acceptance.">
+      <Section number={trimmed ? 4 : 5} eyebrow={trimmed ? "Final step" : "Final step"} title="Confirm and send handover" description="The opening staff will receive this record for review and acceptance.">
         <label className="sh-declaration"><input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} disabled={isLocked} /><span><strong>I confirm that this handover is accurate.</strong><small>All known incidents, technical issues and pending actions have been recorded or linked.</small></span></label>
         <div className="sh-signature"><span>{initials(me)}</span><span><strong>{me}</strong><small>Closing staff · {titleBranch(branch)}</small></span><small>Digitally signed on submission</small></div>
         <button type="button" className="sh-primary" disabled={!canSubmit || submitting || isLocked} onClick={submit}>{submitting ? <><Loader2 className="spin" size={16} /> Submitting…</> : <>Submit shift handover <ChevronRight size={17} /></>}</button>
@@ -764,7 +740,7 @@ export function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestio
         ) : isLocked ? (
           <p className="sh-submit-help" style={{ color: "var(--sh-red)", fontWeight: "bold" }}>You are not the outgoing staff member for this shift. Access is view-only.</p>
         ) : (
-          !canSubmit && <p className="sh-submit-help">Select incoming staff, complete all readiness checks, fix incomplete tasks and confirm the declaration.</p>
+          !canSubmit && <p className="sh-submit-help">Select incoming staff, fix incomplete tasks and confirm the declaration.</p>
         )}
       </Section>
     </div>
@@ -776,7 +752,7 @@ export function ShiftBeginning({ branch, refreshKey, onAccepted, trimmed }: any)
   const [items, setItems] = React.useState<any[]>([]);
   const [selected, setSelected] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(true);
-  const [checks, setChecks] = React.useState([true, false, false, false]);
+  const [checks, setChecks] = React.useState([true, false, false]);
   const [status, setStatus] = React.useState("ready");
   const [comment, setComment] = React.useState("");
   const [confirmed, setConfirmed] = React.useState(false);
@@ -812,7 +788,7 @@ export function ShiftBeginning({ branch, refreshKey, onAccepted, trimmed }: any)
   const sessions = selected.next_day_sessions || [];
   const tasks = selected.pending_items || [];
   const completeCount = checks.filter(Boolean).length;
-  const acceptEnabled = completeCount === 4 && confirmed && (status === "ready" || comment.trim());
+  const acceptEnabled = completeCount === 3 && confirmed && (status === "ready" || comment.trim());
 
   async function accept() {
     if (!acceptEnabled || signing) return;
@@ -827,7 +803,7 @@ export function ShiftBeginning({ branch, refreshKey, onAccepted, trimmed }: any)
     const result = await DB.dbCompleteHandover(selected.id, sig, comment);
     setSigning(false);
     if (result) {
-      setChecks([true, false, false, false]); setConfirmed(false); setComment(""); setStatus("ready");
+      setChecks([true, false, false]); setConfirmed(false); setComment(""); setStatus("ready");
       await load(); onAccepted?.();
     }
   }
@@ -867,11 +843,10 @@ export function ShiftBeginning({ branch, refreshKey, onAccepted, trimmed }: any)
       <Section number={trimmed ? 2 : 3} eyebrow="Opening check" title="Verify before operations" description="Complete these checks after reaching the centre.">
         <div className="sh-opening-checks">{[
           "I reviewed the previous handover",
-          "I reviewed today’s sessions",
-          "I verified centre readiness",
+          "I reviewed today's sessions",
           "I checked all pending actions",
         ].map((label, index) => <label className={checks[index] ? "checked" : ""} key={label}><input type="checkbox" checked={checks[index]} onChange={(e) => setChecks((state) => state.map((value, i) => i === index ? e.target.checked : value))} /><span><Check size={14} /></span>{label}</label>)}</div>
-        <div className="sh-progress"><span><i style={{ width: `${completeCount * 25}%` }} /></span><strong>{completeCount} of 4 completed</strong></div>
+        <div className="sh-progress"><span><i style={{ width: `${completeCount * 33.33}%` }} /></span><strong>{completeCount} of 3 completed</strong></div>
       </Section>
 
       {!trimmed && (
@@ -890,7 +865,7 @@ export function ShiftBeginning({ branch, refreshKey, onAccepted, trimmed }: any)
         <label className="sh-declaration"><input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} /><span><strong>I have reviewed and accept responsibility for this shift.</strong><small>Any difference or new issue has been recorded above.</small></span></label>
         <div className="sh-signature"><span>{initials(incomingName)}</span><span><strong>{incomingName}</strong><small>Taking over shift · {titleBranch(branch)}</small></span><small>Digitally signed on acceptance</small></div>
         <button type="button" className="sh-primary" disabled={!acceptEnabled || signing} onClick={accept}>{signing ? <><Loader2 className="spin" size={16} /> Signing…</> : <>Accept & begin shift <ChevronRight size={17} /></>}</button>
-        {!acceptEnabled && <p className="sh-submit-help">Complete all four opening checks, record any exception and confirm acceptance.</p>}
+        {!acceptEnabled && <p className="sh-submit-help">Complete all three opening checks, record any exception and confirm acceptance.</p>}
       </Section>
     </div>
   );
