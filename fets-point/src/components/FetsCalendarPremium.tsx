@@ -89,11 +89,11 @@ const EXAM_COLORS: Record<string, {
 type ExamKind = keyof typeof EXAM_COLORS
 
 const KIND_SECTION_LABEL: Record<ExamKind, string> = {
-  PROMETRIC: 'CMA US (PRO)',
+  PROMETRIC: 'CMA US (CMA)',
   PEARSON: 'Pearson VUE (VUE)',
   PSI: 'PSI',
   CELPIP: 'CELPIP (CEL)',
-  CMA: 'CMA',
+  CMA: 'CMA US (CMA)',
   ITTS: 'ITTS',
   IELTS: 'IELTS',
   OTHER: 'Other',
@@ -115,7 +115,7 @@ const CLIENT_PALETTE = [
 export const getClientColorByCode = (code3: string): string => {
   const u = (code3 || '').toUpperCase().trim()
   if (u === 'VUE' || u === 'PEARSON') return '#3B82F6'
-  if (u === 'PRO' || u === 'PROMETRIC' || u === 'CMA') return '#10B981'
+  if (u === 'CMA' || u === 'PRO' || u === 'PROMETRIC') return '#10B981'
   if (u === 'PSI') return '#8B5CF6'
   if (u === 'CEL' || u === 'CELPIP') return '#EF4444'
   if (u === 'IEL' || u === 'IELTS') return '#F59E0B'
@@ -136,7 +136,7 @@ export const getClient3LetterCode = (clientName?: string, examName?: string): st
   const u = raw.toUpperCase()
 
   if (u.includes('PEARSON') || u === 'VUE' || u.includes('PEARSON VUE')) return 'VUE'
-  if (u.includes('PROMETRIC') || u.includes('CMA') || u.includes('IMA')) return 'PRO'
+  if (u.includes('CMA') || u.includes('IMA') || u.includes('PROMETRIC') || u === 'PRO') return 'CMA'
   if (u.includes('PSI')) return 'PSI'
   if (u.includes('CELPIP') || u.startsWith('CEL')) return 'CEL'
   if (u.includes('IELTS') || u.startsWith('IEL')) return 'IEL'
@@ -175,7 +175,7 @@ const getExamColor = (kindOrCode: string) => {
   const u = (kindOrCode || '').toUpperCase().trim()
   if (EXAM_COLORS[u]) return EXAM_COLORS[u]
   if (u === 'VUE') return EXAM_COLORS.PEARSON
-  if (u === 'PRO') return EXAM_COLORS.PROMETRIC
+  if (u === 'CMA' || u === 'PRO') return EXAM_COLORS.PROMETRIC
   if (u === 'PSI') return EXAM_COLORS.PSI
   if (u === 'CEL') return EXAM_COLORS.CELPIP
   if (u === 'IEL') return EXAM_COLORS.IELTS
@@ -996,24 +996,65 @@ export function FetsCalendarPremium() {
 
           <div className="hidden lg:block lg:flex-1" />
 
-          <div className="flex items-center gap-3 flex-wrap justify-end w-full lg:w-auto">
-            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--recessed-bg)] border border-[var(--border-color)] text-[var(--accent-mint)] rounded-lg text-xs font-bold shadow-sm">
-              <Users size={12} />{stats.total} candidates
-            </div>
-            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--recessed-bg)] border border-[var(--border-color)] text-[var(--accent-mint)] rounded-lg text-xs font-bold shadow-sm">
-              <Calendar size={12} />{stats.totalSessions} sessions
-            </div>
-            {monthClientBreakdown.map((item) => (
-              <div 
-                key={item.code3} 
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--recessed-bg)] border border-[var(--border-color)] rounded-lg text-xs font-bold shadow-sm"
-                title={`${item.clientName}: ${item.candidateCount} candidates (${item.sessionCount} session${item.sessionCount > 1 ? 's' : ''})`}
-              >
-                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
-                <span className="uppercase text-[var(--text-primary)] font-extrabold">{item.code3}</span>
-                <span className="text-[var(--accent-mint)] font-black">{item.candidateCount} PAX</span>
+          {/* ── STRUCTURED SUMMARY DASHBOARD ── */}
+          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] p-3 rounded-2xl shadow-xl backdrop-blur-md flex flex-col md:flex-row items-stretch md:items-center gap-3.5 max-w-full">
+            {/* Primary Totals (Candidates & Sessions) */}
+            <div className="flex items-center gap-3 bg-[var(--recessed-bg)] border border-[var(--border-color)]/70 px-3.5 py-2 rounded-xl shrink-0">
+              {/* Total Candidates */}
+              <div className="flex items-center gap-2.5 pr-3.5 border-r border-[var(--border-color)]/60">
+                <div className="w-8 h-8 rounded-lg bg-[var(--accent-mint)]/10 text-[var(--accent-mint)] flex items-center justify-center shrink-0 border border-[var(--accent-mint)]/20">
+                  <Users size={15} />
+                </div>
+                <div>
+                  <div className="text-[9px] uppercase tracking-widest font-black text-[var(--text-secondary)]">Total PAX</div>
+                  <div className="text-base font-black tabular-nums text-[var(--accent-mint)] leading-none mt-0.5">
+                    {stats.total.toLocaleString()}
+                  </div>
+                </div>
               </div>
-            ))}
+
+              {/* Total Sessions */}
+              <div className="flex items-center gap-2.5 pl-0.5">
+                <div className="w-8 h-8 rounded-lg bg-[var(--text-accent)]/10 text-[var(--text-accent)] flex items-center justify-center shrink-0 border border-[var(--text-accent)]/20">
+                  <Calendar size={15} />
+                </div>
+                <div>
+                  <div className="text-[9px] uppercase tracking-widest font-black text-[var(--text-secondary)]">Sessions</div>
+                  <div className="text-base font-black tabular-nums text-[var(--text-primary)] leading-none mt-0.5">
+                    {stats.totalSessions.toLocaleString()}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Client Breakdown Section */}
+            <div className="flex flex-col justify-center min-w-0">
+              <div className="text-[9px] uppercase tracking-widest font-black text-[var(--text-secondary)]/80 mb-1.5 flex items-center gap-1.5">
+                <span>Client Breakdown</span>
+                <span className="text-[8px] bg-[var(--recessed-bg)] text-[var(--text-secondary)] px-1.5 py-0.2 rounded border border-[var(--border-color)]/50 font-bold">
+                  {monthClientBreakdown.length} {monthClientBreakdown.length === 1 ? 'client' : 'clients'}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {monthClientBreakdown.length > 0 ? (
+                  monthClientBreakdown.map((item) => (
+                    <div 
+                      key={item.code3} 
+                      className="flex items-center gap-1.5 px-2.5 py-1 bg-[var(--recessed-bg)] hover:bg-[var(--recessed-bg)]/80 border border-[var(--border-color)] hover:border-[var(--accent-mint)]/50 rounded-lg text-xs transition-all shadow-2xs group"
+                      title={`${item.clientName}: ${item.candidateCount} candidates across ${item.sessionCount} session${item.sessionCount > 1 ? 's' : ''}`}
+                    >
+                      <span className="w-2 h-2 rounded-full shrink-0 shadow-xs" style={{ backgroundColor: item.color }} />
+                      <span className="uppercase text-[var(--text-primary)] font-extrabold tracking-wider text-[11px]">{item.code3}</span>
+                      <span className="h-3 w-px bg-[var(--border-color)]/60" />
+                      <span className="font-black text-[var(--accent-mint)] text-[11px] tabular-nums">{item.candidateCount}</span>
+                      <span className="text-[9px] text-[var(--text-secondary)]/70 font-semibold hidden group-hover:inline">PAX</span>
+                    </div>
+                  ))
+                ) : (
+                  <span className="text-xs text-[var(--text-secondary)] font-semibold italic">No sessions in this month</span>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 

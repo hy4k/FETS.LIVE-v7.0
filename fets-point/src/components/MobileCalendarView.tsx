@@ -50,7 +50,7 @@ const getBadgeLabel = (s: { client_name?: string; exam_name?: string }) => {
   const k = resolveExamKind(s)
   switch (k) {
     case 'PEARSON': return 'VUE'
-    case 'PROMETRIC': return 'PRO'
+    case 'PROMETRIC': return 'CMA'
     case 'PSI': return 'PSI'
     case 'CELPIP': return 'CEL'
     default: return 'VUE'
