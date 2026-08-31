@@ -99,64 +99,107 @@ const KIND_SECTION_LABEL: Record<ExamKind, string> = {
   OTHER: 'Other',
 }
 
+const CLIENT_PALETTE = [
+  '#06B6D4', // Cyan
+  '#3B82F6', // Blue
+  '#8B5CF6', // Purple
+  '#10B981', // Emerald
+  '#F59E0B', // Amber
+  '#EC4899', // Pink
+  '#14B8A6', // Teal
+  '#6366F1', // Indigo
+  '#EF4444', // Red
+  '#84CC16', // Lime
+]
+
+export const getClientColorByCode = (code3: string): string => {
+  const u = (code3 || '').toUpperCase().trim()
+  if (u === 'VUE' || u === 'PEARSON') return '#3B82F6'
+  if (u === 'PRO' || u === 'PROMETRIC' || u === 'CMA') return '#10B981'
+  if (u === 'PSI') return '#8B5CF6'
+  if (u === 'CEL' || u === 'CELPIP') return '#EF4444'
+  if (u === 'IEL' || u === 'IELTS') return '#F59E0B'
+  if (u === 'ITT' || u === 'ITTS') return '#14B8A6'
+  
+  let hash = 0
+  for (let i = 0; i < u.length; i++) {
+    hash = u.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  const idx = Math.abs(hash) % CLIENT_PALETTE.length
+  return CLIENT_PALETTE[idx]
+}
+
+export const getClient3LetterCode = (clientName?: string, examName?: string): string => {
+  const cl = (clientName || '').trim()
+  const ex = (examName || '').trim()
+  const raw = cl || ex || 'VUE'
+  const u = raw.toUpperCase()
+
+  if (u.includes('PEARSON') || u === 'VUE' || u.includes('PEARSON VUE')) return 'VUE'
+  if (u.includes('PROMETRIC') || u.includes('CMA') || u.includes('IMA')) return 'PRO'
+  if (u.includes('PSI')) return 'PSI'
+  if (u.includes('CELPIP') || u.startsWith('CEL')) return 'CEL'
+  if (u.includes('IELTS') || u.startsWith('IEL')) return 'IEL'
+  if (u.includes('ITTS') || u.startsWith('ITT')) return 'ITT'
+
+  const cleaned = raw.replace(/[^a-zA-Z0-9]/g, '')
+  if (cleaned.length >= 3) {
+    return cleaned.slice(0, 3).toUpperCase()
+  }
+  return (cleaned || 'CLI').padEnd(3, ' ').slice(0, 3).toUpperCase()
+}
+
 /** Uses exam title + client so CMA / CELPIP / Paragon-hosted exams don’t all read as “Prometric”. */
-const resolveExamKind = (s: Pick<Session, 'client_name' | 'exam_name'>): ExamKind => {
-  const ex = (s.exam_name || '').toUpperCase().trim()
-  const cl = (s.client_name || '').toUpperCase().trim()
-
-  // 1. CELPIP: only for CELPIP, seen as CEL
-  if (ex.includes('CELPIP') || cl.includes('CELPIP') || ex.includes('CEL') || cl.includes('CEL')) {
-    return 'CELPIP'
-  }
-
-  // 2. Prometric / PRO: only used for CMA US exam
-  if (ex.includes('CMA') || cl.includes('CMA') || ex.includes('IMA') || cl.includes('IMA')) {
-    return 'PROMETRIC'
-  }
-
-  // 3. PSI
-  if (cl.includes('PSI') || ex.includes('PSI')) {
-    return 'PSI'
-  }
-
-  // 4. Default: all rest of the exams are Pearson VUE
-  return 'PEARSON'
+const resolveExamKind = (s: Pick<Session, 'client_name' | 'exam_name'>): string => {
+  return getClient3LetterCode(s.client_name, s.exam_name)
 }
 
 const groupSessionsByKind = (list: Session[]) => {
-  const order: ExamKind[] = ['PROMETRIC', 'PEARSON', 'PSI', 'CELPIP', 'CMA', 'ITTS', 'IELTS', 'OTHER']
-  const byKind = new Map<ExamKind, Session[]>()
-  order.forEach(k => byKind.set(k, []))
+  const byKind = new Map<string, Session[]>()
   list.forEach(s => {
-    const k = resolveExamKind(s)
+    const k = getClient3LetterCode(s.client_name, s.exam_name)
+    if (!byKind.has(k)) byKind.set(k, [])
     byKind.get(k)!.push(s)
   })
-  order.forEach(k => {
-    byKind.get(k)!.sort((a, b) => a.start_time.localeCompare(b.start_time))
+  byKind.forEach((sess) => {
+    sess.sort((a, b) => a.start_time.localeCompare(b.start_time))
   })
-  return order.map(k => ({ kind: k, sessions: byKind.get(k)! })).filter(g => g.sessions.length > 0)
+  return Array.from(byKind.entries()).map(([k, sess]) => ({
+    kind: k as ExamKind,
+    clientName: sess[0]?.client_name || k,
+    sessions: sess
+  }))
 }
 
-const getExamColor = (kind: ExamKind) => EXAM_COLORS[kind] ?? EXAM_COLORS.OTHER
-
-/** Cell / pill label: PV, PMT (not PRO), full CELPIP, PSI, ITTS, etc. */
-const getClientBadgeLabel = (s: Pick<Session, 'client_name' | 'exam_name'>) => {
-  const k = resolveExamKind(s)
-  switch (k) {
-    case 'PEARSON': return 'VUE'
-    case 'PROMETRIC': return 'PRO'
-    case 'PSI': return 'PSI'
-    case 'CELPIP': return 'CEL'
-    default: return 'VUE'
+const getExamColor = (kindOrCode: string) => {
+  const u = (kindOrCode || '').toUpperCase().trim()
+  if (EXAM_COLORS[u]) return EXAM_COLORS[u]
+  if (u === 'VUE') return EXAM_COLORS.PEARSON
+  if (u === 'PRO') return EXAM_COLORS.PROMETRIC
+  if (u === 'PSI') return EXAM_COLORS.PSI
+  if (u === 'CEL') return EXAM_COLORS.CELPIP
+  if (u === 'IEL') return EXAM_COLORS.IELTS
+  if (u === 'ITT') return EXAM_COLORS.ITTS
+  
+  const code3 = getClient3LetterCode(kindOrCode)
+  const dotColor = getClientColorByCode(code3)
+  return {
+    bg: `${dotColor}18`,
+    text: 'var(--text-primary)',
+    border: 'var(--border-color)',
+    dot: dotColor,
+    badge: 'var(--recessed-bg)',
+    badgeText: dotColor,
   }
 }
 
-const normalizeClientName = (name: string): ExamKind => {
-  const u = (name || '').toUpperCase().trim()
-  if (u.includes('CELPIP') || u.includes('CEL')) return 'CELPIP'
-  if (u.includes('CMA') || u.includes('IMA')) return 'PROMETRIC'
-  if (u.includes('PSI')) return 'PSI'
-  return 'PEARSON'
+/** Cell / pill label: 3-letter client code */
+const getClientBadgeLabel = (s: Pick<Session, 'client_name' | 'exam_name'>) => {
+  return getClient3LetterCode(s.client_name, s.exam_name)
+}
+
+const normalizeClientName = (name: string): string => {
+  return getClient3LetterCode(name)
 }
 
 const formatTime = (time: string) => {
@@ -224,6 +267,19 @@ export function FetsCalendarPremium() {
   }, [isError, error])
 
   // ── Computed ──────────────────────────────────────────────────────────────
+  const allAvailableClients = useMemo(() => {
+    const set = new Map<string, string>()
+    clientsWithOptions.forEach((c: any) => {
+      const code = getClient3LetterCode(c.name)
+      if (!set.has(code)) set.set(code, `${c.name} (${code})`)
+    })
+    sessions.forEach(s => {
+      const code = getClient3LetterCode(s.client_name, s.exam_name)
+      if (!set.has(code)) set.set(code, `${s.client_name || code} (${code})`)
+    })
+    return Array.from(set.entries()).map(([code, label]) => ({ code, label }))
+  }, [clientsWithOptions, sessions])
+
   const filteredSessions = useMemo(() => {
     return sessions.filter(s => {
       if (searchQuery) {
@@ -233,7 +289,10 @@ export function FetsCalendarPremium() {
           String(s.id || '').includes(q)
         if (!match) return false
       }
-      if (examTypeFilter !== 'all' && resolveExamKind(s) !== examTypeFilter) return false
+      if (examTypeFilter !== 'all') {
+        const code = getClient3LetterCode(s.client_name, s.exam_name)
+        if (code !== examTypeFilter && s.client_name !== examTypeFilter) return false
+      }
       return true
     })
   }, [sessions, searchQuery, examTypeFilter])
@@ -275,11 +334,16 @@ export function FetsCalendarPremium() {
 
   // ── Navigation ────────────────────────────────────────────────────────────
   const navigate = (dir: 'prev' | 'next') => {
-    const d = new Date(currentDate)
     const delta = dir === 'next' ? 1 : -1
-    if (viewMode === 'month') d.setMonth(d.getMonth() + delta)
-    else if (viewMode === 'week') d.setDate(d.getDate() + delta * 7)
-    else d.setDate(d.getDate() + delta)
+    const d = new Date(currentDate)
+    if (viewMode === 'month') {
+      d.setDate(1)
+      d.setMonth(d.getMonth() + delta)
+    } else if (viewMode === 'week') {
+      d.setDate(d.getDate() + delta * 7)
+    } else {
+      d.setDate(d.getDate() + delta)
+    }
     setCurrentDate(d)
   }
 
@@ -343,18 +407,18 @@ export function FetsCalendarPremium() {
     try {
       if (activeBranch === 'global') { toast.error('Select a centre to add/edit sessions.'); return }
       
-      let clientName = formData.client_name;
-      const examNameUpper = formData.exam_name.toUpperCase().trim();
-      const clientNameUpper = clientName.toUpperCase().trim();
-      
-      if (examNameUpper.includes('CELPIP') || clientNameUpper.includes('CELPIP') || examNameUpper.includes('CEL') || clientNameUpper.includes('CEL')) {
-        clientName = 'CELPIP';
-      } else if (examNameUpper.includes('CMA') || clientNameUpper.includes('CMA') || examNameUpper.includes('IMA') || clientNameUpper.includes('IMA')) {
-        clientName = 'CMA US';
-      } else if (clientNameUpper.includes('PSI') || examNameUpper.includes('PSI')) {
-        clientName = 'PSI';
-      } else {
-        clientName = 'PEARSON VUE';
+      let clientName = (formData.client_name || '').trim();
+      if (!clientName) {
+        const examNameUpper = formData.exam_name.toUpperCase().trim();
+        if (examNameUpper.includes('CELPIP') || examNameUpper.includes('CEL')) {
+          clientName = 'CELPIP';
+        } else if (examNameUpper.includes('CMA') || examNameUpper.includes('IMA')) {
+          clientName = 'CMA US';
+        } else if (examNameUpper.includes('PSI')) {
+          clientName = 'PSI';
+        } else {
+          clientName = 'PEARSON VUE';
+        }
       }
 
       const data: any = { 
@@ -383,8 +447,30 @@ export function FetsCalendarPremium() {
   const stats = useMemo(() => ({
     total: sessions.reduce((s, x) => s + x.candidate_count, 0),
     totalSessions: sessions.length,
-    uniqueClients: new Set(sessions.map(s => resolveExamKind(s))).size
+    uniqueClients: new Set(sessions.map(s => getClient3LetterCode(s.client_name, s.exam_name))).size
   }), [sessions])
+
+  const monthClientBreakdown = useMemo(() => {
+    const map = new Map<string, { code3: string; clientName: string; candidateCount: number; sessionCount: number; color: string }>()
+    sessions.forEach(s => {
+      const code3 = getClient3LetterCode(s.client_name, s.exam_name)
+      const color = getExamColor(code3).dot
+      const existing = map.get(code3)
+      if (existing) {
+        existing.candidateCount += s.candidate_count
+        existing.sessionCount += 1
+      } else {
+        map.set(code3, {
+          code3,
+          clientName: s.client_name || code3,
+          candidateCount: s.candidate_count,
+          sessionCount: 1,
+          color
+        })
+      }
+    })
+    return Array.from(map.values()).sort((a, b) => b.candidateCount - a.candidateCount)
+  }, [sessions])
 
   const days = useMemo(() => getDaysInMonth(), [getDaysInMonth])
   const isToday = (d: Date | null) => d ? isTodayIST(d) : false
@@ -433,17 +519,26 @@ export function FetsCalendarPremium() {
           const isCurrentDay = isToday(date)
           const isWeekend = date.getDay() === 0 || date.getDay() === 6
           
-          // Group by resolved exam kind
-          const groups: Record<string, { count: number; kind: ExamKind }> = {}
+          // Group by 3-letter client code
+          const clientMap = new Map<string, { code3: string; clientName: string; count: number; sessionCount: number; color: string }>()
           ds.forEach(s => {
-            const k = resolveExamKind(s)
-            if (!groups[k]) groups[k] = { count: 0, kind: k }
-            groups[k].count += s.candidate_count
+            const code3 = getClient3LetterCode(s.client_name, s.exam_name)
+            const color = getExamColor(code3).dot
+            const existing = clientMap.get(code3)
+            if (existing) {
+              existing.count += s.candidate_count
+              existing.sessionCount += 1
+            } else {
+              clientMap.set(code3, {
+                code3,
+                clientName: s.client_name || code3,
+                count: s.candidate_count,
+                sessionCount: 1,
+                color
+              })
+            }
           })
-          const entries = Object.entries(groups).sort((a, b) => {
-            const order: ExamKind[] = ['PROMETRIC', 'PEARSON', 'PSI', 'CELPIP', 'CMA', 'ITTS', 'IELTS', 'OTHER']
-            return order.indexOf(a[1].kind) - order.indexOf(b[1].kind)
-          })
+          const clientEntries = Array.from(clientMap.values()).sort((a, b) => b.count - a.count)
 
           const capacity = activeBranch === 'global' ? 100 : getBranchCapacity(activeBranch)
           const isOverloaded = total >= capacity * 1.5
@@ -519,14 +614,14 @@ export function FetsCalendarPremium() {
             )
           }
 
-          // Stacked progress bar representing proportions of exam kinds
-          const examProportions = entries.map(([_, stat]) => {
+          // Stacked progress bar representing proportions of clients
+          const examProportions = clientEntries.map(stat => {
             const propPct = (stat.count / total) * 100
             return {
-              kind: stat.kind,
+              kind: stat.code3,
               pct: propPct,
               count: stat.count,
-              color: getExamColor(stat.kind).dot
+              color: stat.color
             }
           })
 
@@ -574,23 +669,21 @@ export function FetsCalendarPremium() {
                   )}
                 </div>
 
-                {/* Session List */}
+                {/* Client / Session List */}
                 <div className="space-y-1 mt-2">
-                  {entries.slice(0, 3).map(([key, stat]) => {
-                    const label = getClientBadgeLabel({ client_name: stat.kind, exam_name: '' })
-                    return (
-                      <div 
-                        key={key} 
-                        className="flex items-center justify-between text-[11px] font-semibold text-[var(--text-secondary)] py-1 border-b border-[var(--border-color)]/20 last:border-b-0"
-                      >
-                        <span className="truncate tracking-wide uppercase text-[var(--text-primary)] font-bold">{label}</span>
-                        <span className="tabular-nums font-extrabold text-[var(--accent-mint)]">{stat.count} PAX</span>
-                      </div>
-                    )
-                  })}
-                  {entries.length > 3 && (
-                    <div className="text-[9px] text-[var(--text-secondary)] opacity-80 font-bold pl-1 pt-1 uppercase tracking-wider">+{entries.length - 3} more clients</div>
-                  )}
+                  {clientEntries.map(stat => (
+                    <div 
+                      key={stat.code3} 
+                      className="flex items-center justify-between text-[11px] font-semibold text-[var(--text-secondary)] py-1 border-b border-[var(--border-color)]/20 last:border-b-0"
+                      title={`${stat.clientName}: ${stat.count} candidates (${stat.sessionCount} session${stat.sessionCount > 1 ? 's' : ''})`}
+                    >
+                      <span className="flex items-center gap-1.5 truncate tracking-wide uppercase text-[var(--text-primary)] font-bold">
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: stat.color }} />
+                        <span>{stat.code3}</span>
+                      </span>
+                      <span className="tabular-nums font-extrabold text-[var(--accent-mint)]">{stat.count} PAX</span>
+                    </div>
+                  ))}
                   {allDs.length > ds.length && (
                     <div className="text-[9px] text-[var(--accent-mint)]/70 font-bold pl-1 pt-0.5 uppercase tracking-wider">+{allDs.length - ds.length} filtered</div>
                   )}
@@ -904,15 +997,23 @@ export function FetsCalendarPremium() {
           <div className="hidden lg:block lg:flex-1" />
 
           <div className="flex items-center gap-3 flex-wrap justify-end w-full lg:w-auto">
-            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--recessed-bg)] border border-[var(--border-color)] text-[var(--accent-mint)] rounded-lg text-xs font-bold">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--recessed-bg)] border border-[var(--border-color)] text-[var(--accent-mint)] rounded-lg text-xs font-bold shadow-sm">
               <Users size={12} />{stats.total} candidates
             </div>
-            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--recessed-bg)] border border-[var(--border-color)] text-[var(--accent-mint)] rounded-lg text-xs font-bold">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--recessed-bg)] border border-[var(--border-color)] text-[var(--accent-mint)] rounded-lg text-xs font-bold shadow-sm">
               <Calendar size={12} />{stats.totalSessions} sessions
             </div>
-            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--recessed-bg)] border border-[var(--border-color)] text-[var(--accent-mint)] rounded-lg text-xs font-bold">
-              <Building size={12} />{stats.uniqueClients} clients
-            </div>
+            {monthClientBreakdown.map((item) => (
+              <div 
+                key={item.code3} 
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--recessed-bg)] border border-[var(--border-color)] rounded-lg text-xs font-bold shadow-sm"
+                title={`${item.clientName}: ${item.candidateCount} candidates (${item.sessionCount} session${item.sessionCount > 1 ? 's' : ''})`}
+              >
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
+                <span className="uppercase text-[var(--text-primary)] font-extrabold">{item.code3}</span>
+                <span className="text-[var(--accent-mint)] font-black">{item.candidateCount} PAX</span>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -973,8 +1074,8 @@ export function FetsCalendarPremium() {
                 className="pl-3 pr-8 py-2.5 bg-[var(--recessed-bg)] border border-[var(--border-color)] rounded-lg text-sm font-bold text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-mint)] transition-all appearance-none"
               >
                 <option value="all">All Clients</option>
-                {Object.keys(EXAM_COLORS).filter(k => k !== 'OTHER').map(k => (
-                  <option key={k} value={k}>{k}</option>
+                {allAvailableClients.map(k => (
+                  <option key={k.code} value={k.code}>{k.label}</option>
                 ))}
               </select>
               <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)] pointer-events-none" />
@@ -997,12 +1098,12 @@ export function FetsCalendarPremium() {
                     <p className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-3">Filters</p>
                     <div className="space-y-3">
                       <div>
-                        <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase">Exam Type</label>
+                        <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase">Client / Exam</label>
                         <select value={examTypeFilter} onChange={e => setExamTypeFilter(e.target.value)}
                           className="mt-1 w-full px-2 py-1.5 bg-[var(--recessed-bg)] border border-[var(--border-color)] rounded-lg text-xs text-[var(--text-primary)] focus:outline-none">
-                          <option value="all">All Types</option>
-                          {Object.keys(EXAM_COLORS).filter(k => k !== 'OTHER').map(k => (
-                            <option key={k} value={k}>{k}</option>
+                          <option value="all">All Clients</option>
+                          {allAvailableClients.map(k => (
+                            <option key={k.code} value={k.code}>{k.label}</option>
                           ))}
                         </select>
                       </div>

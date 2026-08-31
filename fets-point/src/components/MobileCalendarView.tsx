@@ -80,26 +80,21 @@ export function MobileCalendarView({ setActiveTab }: MobileCalendarViewProps) {
           .order('start_time', { ascending: true });
         if (error) throw error;
         const mapped = (data || []).map((s: any) => {
-          const clientUpper = (s.client_name || '').toUpperCase().trim();
-          const examUpper = (s.exam_name || '').toUpperCase().trim();
-
-          // 1. CELPIP: seen as CEL, only for CELPIP, no other exam
-          if (examUpper.includes('CELPIP') || clientUpper.includes('CELPIP') || examUpper.includes('CEL') || clientUpper.includes('CEL')) {
-            return { ...s, client_name: 'CELPIP' };
+          let cl = (s.client_name || '').trim();
+          if (!cl) {
+            const clientUpper = (s.client_name || '').toUpperCase().trim();
+            const examUpper = (s.exam_name || '').toUpperCase().trim();
+            if (examUpper.includes('CELPIP') || clientUpper.includes('CELPIP') || examUpper.includes('CEL') || clientUpper.includes('CEL')) {
+              cl = 'CELPIP';
+            } else if (examUpper.includes('CMA') || clientUpper.includes('CMA') || examUpper.includes('IMA') || clientUpper.includes('IMA')) {
+              cl = 'CMA US';
+            } else if (clientUpper.includes('PSI') || examUpper.includes('PSI')) {
+              cl = 'PSI';
+            } else {
+              cl = 'PEARSON VUE';
+            }
           }
-
-          // 2. CMA US: only for Prometric/PRO
-          if (examUpper.includes('CMA') || clientUpper.includes('CMA') || examUpper.includes('IMA') || clientUpper.includes('IMA')) {
-            return { ...s, client_name: 'CMA US' };
-          }
-
-          // 3. PSI
-          if (clientUpper.includes('PSI') || examUpper.includes('PSI')) {
-            return { ...s, client_name: 'PSI' };
-          }
-
-          // 4. Default: all rest of the exams are Pearson VUE
-          return { ...s, client_name: 'PEARSON VUE' };
+          return { ...s, client_name: cl };
         });
         setSessions(mapped);
       } catch (err) {
@@ -124,6 +119,7 @@ export function MobileCalendarView({ setActiveTab }: MobileCalendarViewProps) {
 
   const navigateMonth = (direction: 'prev' | 'next') => {
     const next = new Date(currentMonth);
+    next.setDate(1);
     next.setMonth(currentMonth.getMonth() + (direction === 'next' ? 1 : -1));
     setCurrentMonth(next);
     setSelectedDate(startOfMonth(next));

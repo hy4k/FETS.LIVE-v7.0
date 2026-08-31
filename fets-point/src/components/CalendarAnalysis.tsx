@@ -712,6 +712,7 @@ ${overlap.suggestions.map(s => `      → ${s}`).join('\n')}
 
     const navigateMonth = (direction: 'prev' | 'next') => {
         const newDate = new Date(currentMonth);
+        newDate.setDate(1);
         if (direction === 'prev') {
             newDate.setMonth(newDate.getMonth() - 1);
         } else {
@@ -817,7 +818,7 @@ ${overlap.suggestions.map(s => `      → ${s}`).join('\n')}
                             <div className={`${neumorphicInset} px-3 py-2 flex items-center gap-3`}>
                                 <span className="text-gray-500 text-sm font-bold">to</span>
                                 <button
-                                    onClick={() => { const d = new Date(rangeEndMonth); d.setMonth(d.getMonth() - 1); setRangeEndMonth(d); }}
+                                    onClick={() => { const d = new Date(rangeEndMonth); d.setDate(1); d.setMonth(d.getMonth() - 1); setRangeEndMonth(d); }}
                                     className="p-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors"
                                 >
                                     <ChevronLeft size={18} />
@@ -826,7 +827,7 @@ ${overlap.suggestions.map(s => `      → ${s}`).join('\n')}
                                     {rangeEndMonth.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
                                 </span>
                                 <button
-                                    onClick={() => { const d = new Date(rangeEndMonth); d.setMonth(d.getMonth() + 1); setRangeEndMonth(d); }}
+                                    onClick={() => { const d = new Date(rangeEndMonth); d.setDate(1); d.setMonth(d.getMonth() + 1); setRangeEndMonth(d); }}
                                     className="p-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors"
                                 >
                                     <ChevronRight size={18} />
