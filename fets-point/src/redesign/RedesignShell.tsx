@@ -11807,20 +11807,8 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
               )}
             </div>
           </div>
-        </div>
-      ) : (
-        /* Staff view: full Applications portal replacing Watch This Space */
-        <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
-          <ApplicationsHub isSuperAdmin={false} />
-        </div>
-      )}
-
-      {/* Applications hub always visible below for super admins too */}
-      {isSuperAdmin && (
-        <div style={{ borderTop: "1px solid #C4DBF6", paddingTop: 28 }}>
-          <ApplicationsHub isSuperAdmin={true} />
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
