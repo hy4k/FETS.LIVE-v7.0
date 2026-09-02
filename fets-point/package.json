@@ -25,6 +25,7 @@
     "@capacitor/haptics": "^8.0.0",
     "@capacitor/push-notifications": "^8.0.0",
     "@capacitor/status-bar": "^8.0.0",
+    "@google/genai": "^2.20.0",
     "@google/generative-ai": "^0.24.1",
     "@headlessui/react": "^2.2.9",
     "@hello-pangea/dnd": "^18.0.1",

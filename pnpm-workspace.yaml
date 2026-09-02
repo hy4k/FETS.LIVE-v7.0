@@ -2,10 +2,12 @@ packages:
   - fets-point
 
 allowBuilds:
+  '@google/genai': set this to true or false
   core-js: true
   cpu-features: true
   esbuild: true
   msw: true
+  protobufjs: set this to true or false
   sharp: true
   ssh2: true
 

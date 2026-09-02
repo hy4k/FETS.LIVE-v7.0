@@ -59,7 +59,7 @@ const SystemManager = lazy(() => import('./components/SystemManager').then(modul
 
 const NewsManager = lazy(() => import('./components/NewsManager').then(module => ({ default: module.NewsManager })))
 const UserManagement = lazy(() => import('./components/UserManagement').then(module => ({ default: module.UserManagement })))
-const LostAndFound = lazy(() => import('./components/LostAndFound').then(module => ({ default: module.LostAndFound })))
+const EnhancedChat = lazy(() => import('./components/Chat/EnhancedChatDeck').then(module => ({ default: module.EnhancedChatDeck })))
 const RaiseACasePage = lazy(() => import('./components/RaiseACasePage').then(module => ({ default: module.RaiseACasePage })))
 
 const FetsProfilePage = lazy(() => import('./components/FetsProfile').then(module => ({ default: module.FetsProfile })))
@@ -240,7 +240,7 @@ function AppContent() {
  
       if (activeTab === 'system-manager') return <SystemManager />;
       if (activeTab === 'news-manager') return <NewsManager />;
-      if (activeTab === 'lost-and-found') return <LostAndFound />;
+      if (activeTab === 'lost-and-found' || activeTab === 'fets-chat' || activeTab === 'chat') return <EnhancedChat branch={activeBranch} />;
       if (activeTab === 'cma-availability' || activeTab === 'branch-delegation') return isMithun ? <BranchDelegationWidget /> : <MobileHome setActiveTab={setActiveTab} profile={profile} />;
       if (activeTab === 'gbp') return <GBPDashboard />;
     }
@@ -285,7 +285,9 @@ function AppContent() {
       'fets-calendar-demo': { component: isMithun ? <FetsCalendar /> : <CommandCentre onNavigate={setActiveTab} onAiQuery={(q: string) => { setAiQuery(q); setActiveTab('fets-intelligence'); }} />, name: 'CELPIP Calendar' },
       'client-portal': { component: isMithun ? <ClientPortal /> : <CommandCentre onNavigate={setActiveTab} onAiQuery={(q: string) => { setAiQuery(q); setActiveTab('fets-intelligence'); }} />, name: 'Client Portal' },
       'staff-management': { component: <StaffManagement />, name: 'Staff Management' },
-      'lost-and-found': { component: <LostAndFound />, name: 'Lost & Found' },
+      'fets-chat': { component: <EnhancedChat branch={activeBranch} />, name: 'Live Chat & Gemini Studio' },
+      'chat': { component: <EnhancedChat branch={activeBranch} />, name: 'Live Chat & Gemini Studio' },
+      'lost-and-found': { component: <EnhancedChat branch={activeBranch} />, name: 'Live Chat & Gemini Studio' },
       'profile': { component: <FetsProfilePage />, name: 'Profile' },
     };
 

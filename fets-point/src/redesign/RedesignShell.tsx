@@ -34,6 +34,9 @@ import { BranchDelegationWidget } from "../components/BranchDelegationWidget";
 import { ICloudDashboard as Dashboard } from "../components/iCloud/iCloudDashboard";
 import { FetsIntelligence } from "../components/FetsIntelligence";
 import GBPDashboard from "../pages/GBPDashboard";
+import MyDeskLivingBoard from "../components/MyDeskLivingBoard";
+import { GeminiLiveStudio } from "../components/Chat/GeminiLiveStudio";
+import { EnhancedChatDeck } from "../components/Chat/EnhancedChatDeck";
 
 
 /* ============================================================
@@ -11433,7 +11436,7 @@ function DeskMenu({ tab, setTab, pendingHandovers }) {
 
 
 function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
-  const u = window.FETS.user;
+  const u = window.FETS?.user || { name: "Staff Member", email: "" };
   const gap = "calc(24px * var(--density))";
 
   // Determine if the user is a super admin
@@ -11445,9 +11448,30 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
     ["mithun@fets.in", "mithun@fets.live", "niyas@fets.in", "niyas@fets.live"].includes((u.email || "").toLowerCase())
   );
 
-  // Only Super Admins see the modules
+  // Sub-tab selection state
+  const [deskTab, setDeskTab] = React.useState("cockpit");
+
+  // Admin module filter states
   const [searchQuery, setSearchQuery] = React.useState("");
   const [selectedCat, setSelectedCat] = React.useState("all");
+
+  // Pending handovers count for badge
+  const [pendingHandovers, setPendingHandovers] = React.useState(0);
+
+  React.useEffect(() => {
+    const fetchHandovers = async () => {
+      try {
+        const items = await DB.dbFetchPendingHandovers(u.name);
+        setPendingHandovers(items ? items.length : 0);
+      } catch (e) {
+        console.error("Error fetching pending handovers for badge:", e);
+      }
+    };
+    fetchHandovers();
+    const handler = () => fetchHandovers();
+    window.addEventListener("fets-handover-pending", handler);
+    return () => window.removeEventListener("fets-handover-pending", handler);
+  }, [u.name]);
 
   const nativeIds = ["live", "calendar", "roster", "desk", "attn-admin", "business", "staff-requests", "staff-ot"];
 
@@ -11480,8 +11504,7 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
       "branch-delegation": { bg: "linear-gradient(135deg, #F3D250, #E0BE2B)", text: "#2c3e50", iconBg: "rgba(0,0,0,0.07)", iconColor: "#2c3e50" }
   };
 
-  // Filter NAV items and TOOLS
-  const allModules = isSuperAdmin ? [
+  const allAdminModules = isSuperAdmin ? [
     ...NAV.map((n) => ({ 
       ...n, 
       icon: n.id === "live" ? "globe" : n.id === "calendar" ? "calendar" : n.id === "roster" ? "layers" : "briefcase", 
@@ -11491,7 +11514,7 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
     ...TOOLS
   ] : [];
 
-  const filtered = allModules.filter(it => {
+  const filteredAdminModules = allAdminModules.filter(it => {
     const matchesSearch = it.label.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           (it.sub && it.sub.toLowerCase().includes(searchQuery.toLowerCase()));
     const status = getModuleStatus(it);
@@ -11501,10 +11524,23 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
     return matchesSearch && matchesCategory;
   });
 
+  const DESK_SUB_TABS = [
+    { id: "cockpit", label: "⚡ Cockpit", icon: "zap" },
+    { id: "handovers", label: "📥 Handovers", icon: "clipboard", badge: pendingHandovers },
+    { id: "tasks", label: "📋 My Tasks", icon: "check" },
+    { id: "checklist", label: "✅ Checklist", icon: "list" },
+    { id: "leave", label: "⏱️ Attendance & Leaves", icon: "clock" },
+    { id: "living-board", label: "💬 Living Board", icon: "spark" },
+    { id: "certs", label: "🛡️ Certificates", icon: "shield" },
+    { id: "readiness", label: "📊 Readiness", icon: "trend" },
+    ...(isSuperAdmin ? [{ id: "admin", label: "⚙️ Admin Control", icon: "settings" }] : [])
+  ];
+
+  const branchLabel = (branch === "all" || !branch) ? "All centres" : branch.charAt(0).toUpperCase() + branch.slice(1);
+
   return (
     <div style={{ maxWidth: 1600, margin: "0 auto", padding: "clamp(22px,3.2vw,40px) clamp(14px,3vw,30px) 80px", display: "flex", flexDirection: "column", gap }}>
       <style>{`
-        /* Search Input – Elespacio palette */
         .desk-search-input {
           background: rgba(255,255,255,0.85) !important;
           border: 2px solid #90CCF4 !important;
@@ -11520,8 +11556,6 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
           color: #5DA2D5 !important;
           opacity: 0.55;
         }
-
-        /* Category pills – Elespacio */
         .desk-cat-btn {
           border: 2px solid #90CCF4 !important;
           background: rgba(255,255,255,0.7) !important;
@@ -11545,8 +11579,6 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
           border-color: #F3D250 !important;
           box-shadow: 0 3px 10px rgba(243,210,80,0.35) !important;
         }
-
-        /* Cards – Elespacio warm-sky gradient base */
         .desk-module-card {
           position: relative;
           border: none !important;
@@ -11560,158 +11592,220 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
           justify-content: space-between;
           min-height: 154px;
           overflow: hidden;
-          box-shadow:
-            0 6px 20px rgba(93,162,213,0.18),
-            inset 0 1px 0 rgba(255,255,255,0.3) !important;
+          box-shadow: 0 6px 20px rgba(93,162,213,0.18), inset 0 1px 0 rgba(255,255,255,0.3) !important;
         }
-
         .desk-module-card:hover {
           transform: translateY(-5px) !important;
-          box-shadow:
-            0 12px 32px rgba(93,162,213,0.28),
-            inset 0 1px 0 rgba(255,255,255,0.35) !important;
+          box-shadow: 0 12px 32px rgba(93,162,213,0.28), inset 0 1px 0 rgba(255,255,255,0.35) !important;
         }
-
-        /* Shine overlay */
         .desk-module-card::before {
-          content: "";
-          position: absolute;
-          top: 0; left: 0;
-          width: 100%; height: 100%;
-          background: linear-gradient(
-            120deg,
-            transparent,
-            rgba(255,255,255,0.06),
-            rgba(255,255,255,0.18),
-            rgba(255,255,255,0.06),
-            transparent
-          );
-          background-size: 200% 100%;
-          background-position: -200% 0;
-          transition: all 0.5s ease;
-          border-radius: 22px;
-          pointer-events: none;
+          content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+          background: linear-gradient(120deg, transparent, rgba(255,255,255,0.06), rgba(255,255,255,0.18), rgba(255,255,255,0.06), transparent);
+          background-size: 200% 100%; background-position: -200% 0; transition: all 0.5s ease; border-radius: 22px; pointer-events: none;
         }
-
-        .desk-module-card:hover::before {
-          animation: desk-shine 2s infinite ease-in-out;
-        }
-
-        @keyframes desk-shine {
-          0%   { background-position: -200% 0; }
-          100% { background-position:  200% 0; }
-        }
-
-        /* Icon wrap – white frosted pill base */
+        .desk-module-card:hover::before { animation: desk-shine 2s infinite ease-in-out; }
+        @keyframes desk-shine { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
         .desk-module-icon-wrap {
-          width: 44px;
-          height: 44px;
-          border-radius: 12px;
-          display: grid;
-          place-items: center;
-          border: 1px solid rgba(255,255,255,0.2);
-          transition: all 0.3s ease;
+          width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,0.2); transition: all 0.3s ease;
+        }
+        .subtab-pill {
+          padding: 10px 18px; border-radius: 14px; border: 1px solid rgba(93,162,213,0.3); background: rgba(255,255,255,0.65);
+          color: #2c3e50; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 8px; position: relative;
+        }
+        .subtab-pill:hover { background: rgba(144,204,244,0.4); }
+        .subtab-pill.active {
+          background: #5DA2D5; color: #ffffff; border-color: #5DA2D5; box-shadow: 0 4px 14px rgba(93,162,213,0.35);
+        }
+        .subtab-pill.admin-tab.active {
+          background: linear-gradient(135deg, #F3D250, #E0BE2B); color: #2c3e50; border-color: #F3D250; box-shadow: 0 4px 14px rgba(243,210,80,0.4);
         }
       `}</style>
 
-      {/* masthead — name + profile photo only */}
-      <header className="rise" style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
-        <ProfileAvatar name={u.name} size={66} />
-        <h1 style={{ margin: 0, fontFamily: '"Archivo Expanded", var(--font)', fontWeight: 800, whiteSpace: "nowrap",
-          fontSize: "clamp(30px,4vw,48px)", lineHeight: 1, letterSpacing: "-0.03em", color: "#2c3e50" }}>{u.name}</h1>
-      </header>
-
-      {isSuperAdmin ? (
-        <div className="rise" style={{ display: "flex", flexDirection: "column", gap: 20, marginTop: 10 }}>
-          {/* Section head & controls */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 20, flexWrap: "wrap", borderBottom: "1px solid rgba(93,162,213,0.2)", paddingBottom: 16 }}>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button 
-                onClick={() => setSelectedCat("all")}
-                className={`desk-cat-btn ${selectedCat === "all" ? "active" : ""}`}
-              >
-                All Modules
-              </button>
-              <button 
-                onClick={() => setSelectedCat("native")}
-                className={`desk-cat-btn ${selectedCat === "native" ? "active" : ""}`}
-              >
-                Native React
-              </button>
-              <button 
-                onClick={() => setSelectedCat("legacy")}
-                className={`desk-cat-btn ${selectedCat === "legacy" ? "active" : ""}`}
-              >
-                Legacy Bridged
-              </button>
-            </div>
-
-            {/* Search Input */}
-            <div style={{ flex: 1, minWidth: 260, maxWidth: 400, position: "relative" }}>
-              <Icon name="search" size={16} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#5DA2D5" }} />
-              <input 
-                value={searchQuery} 
-                onChange={(e) => setSearchQuery(e.target.value)} 
-                placeholder="Search modules..." 
-                className="desk-search-input"
-                style={{ 
-                  padding: "8px 14px 8px 42px",
-                  width: "100%",
-                  outline: "none"
-                }} 
-              />
+      {/* masthead — name + branch pill */}
+      <header className="rise" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 18, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+          <ProfileAvatar name={u.name} size={66} />
+          <div>
+            <h1 style={{ margin: 0, fontFamily: '"Archivo Expanded", var(--font)', fontWeight: 800, whiteSpace: "nowrap",
+              fontSize: "clamp(26px,3.5vw,42px)", lineHeight: 1, letterSpacing: "-0.03em", color: "#2c3e50" }}>{u.name}</h1>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+              <span style={{ padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 800, background: "rgba(93,162,213,0.2)", color: "#2c3e50" }}>
+                📍 {branchLabel}
+              </span>
+              <span style={{ padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 800, background: isSuperAdmin ? "rgba(243,210,80,0.4)" : "rgba(93,162,213,0.15)", color: "#2c3e50" }}>
+                {isSuperAdmin ? "⭐ Super Admin" : "👤 Staff Workspace"}
+              </span>
             </div>
           </div>
+        </div>
 
-          {/* Grid of Modules - premium neomorphic dark style */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
-            {filtered.length === 0 ? (
-              <div style={{ gridColumn: "1 / -1", padding: 60, textAlign: "center", color: "rgba(255,255,255,0.3)", fontSize: 14 }}>
-                No modules match your query. Try searching for something else.
+        {/* Quick action bar for drawers */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button onClick={() => setDrawer("vault")} className="subtab-pill" style={{ fontSize: 12, padding: "8px 14px" }}>
+            <Icon name="key" size={14} /> Vault
+          </button>
+          <button onClick={() => setDrawer("help")} className="subtab-pill" style={{ fontSize: 12, padding: "8px 14px" }}>
+            <Icon name="headset" size={14} /> Help Desk
+          </button>
+          <button onClick={() => setDrawer("ai_live")} className="subtab-pill" style={{ fontSize: 12, padding: "8px 14px", background: "rgba(245,158,11,0.15)", color: "#d97706", borderColor: "rgba(245,158,11,0.3)" }}>
+            <Icon name="spark" size={14} /> Gemini 3.1 Live
+          </button>
+        </div>
+      </header>
+
+      {/* Sub-Feature Navigation Bar */}
+      <nav className="rise" style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: "12px 0", borderBottom: "1px solid rgba(93,162,213,0.25)" }}>
+        {DESK_SUB_TABS.map((st) => {
+          const isActive = deskTab === st.id;
+          const isAdminTab = st.id === "admin";
+          return (
+            <button
+              key={st.id}
+              onClick={() => setDeskTab(st.id)}
+              className={`subtab-pill ${isActive ? "active" : ""} ${isAdminTab ? "admin-tab" : ""}`}
+            >
+              {st.label}
+              {st.badge > 0 && (
+                <span style={{
+                  padding: "1px 6px", borderRadius: 999, fontSize: 10, fontWeight: 900,
+                  background: "#FF7675", color: "#fff", marginLeft: 4
+                }}>
+                  {st.badge}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Active Sub-Tab View Rendering */}
+      <div className="rise" style={{ marginTop: 12 }}>
+        {deskTab === "cockpit" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+            <AttendanceCard />
+            <PerformanceSnapshot />
+          </div>
+        )}
+
+        {deskTab === "handovers" && (
+          <HandoverInbox />
+        )}
+
+        {deskTab === "tasks" && (
+          <TasksModule />
+        )}
+
+        {deskTab === "checklist" && (
+          <ChecklistModule />
+        )}
+
+        {deskTab === "leave" && (
+          <LeaveModule />
+        )}
+
+        {deskTab === "living-board" && (
+          <MyDeskLivingBoard />
+        )}
+
+        {deskTab === "certs" && (
+          <CertsModule />
+        )}
+
+        {deskTab === "readiness" && (
+          <PerformanceSnapshot />
+        )}
+
+        {deskTab === "admin" && isSuperAdmin && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            {/* Admin section head & controls */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 20, flexWrap: "wrap", borderBottom: "1px solid rgba(93,162,213,0.2)", paddingBottom: 16 }}>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button 
+                  onClick={() => setSelectedCat("all")}
+                  className={`desk-cat-btn ${selectedCat === "all" ? "active" : ""}`}
+                >
+                  All Modules ({allAdminModules.length})
+                </button>
+                <button 
+                  onClick={() => setSelectedCat("native")}
+                  className={`desk-cat-btn ${selectedCat === "native" ? "active" : ""}`}
+                >
+                  Native React
+                </button>
+                <button 
+                  onClick={() => setSelectedCat("legacy")}
+                  className={`desk-cat-btn ${selectedCat === "legacy" ? "active" : ""}`}
+                >
+                  Legacy Bridged
+                </button>
               </div>
-            ) : (
-              filtered.map((it) => {
-                const status = getModuleStatus(it);
-                const cardTheme = MODULE_CARD_THEMES[it.id] || { bg: "linear-gradient(135deg, #5DA2D5, #90CCF4)", text: "#fff", iconBg: "rgba(255,255,255,0.22)", iconColor: "#fff" };
-                return (
-                  <button 
-                    key={it.id} 
-                    onClick={() => handlePick(it)} 
-                    className="desk-module-card"
-                    style={{ background: cardTheme.bg, border: "none" }}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", width: "100%" }}>
-                      <div className="desk-module-icon-wrap" style={{ background: cardTheme.iconBg, color: cardTheme.iconColor }}>
-                        <Icon name={it.icon} size={20} />
-                      </div>
-                      {/* Status badge */}
-                      <span style={{ 
-                        fontSize: 9, 
-                        fontWeight: 800, 
-                        textTransform: "uppercase", 
-                        letterSpacing: "0.5px",
-                        padding: "4px 10px", 
-                        borderRadius: 999, 
-                        color: "#fff", 
-                        background: status.isNative ? "rgba(93,162,213,0.45)" : "rgba(247,136,136,0.5)",
-                        border: "none"
-                      }}>
-                        {status.label}
-                      </span>
-                    </div>
 
-                    <div style={{ marginTop: 20 }}>
-                      <h3 style={{ fontSize: 16, fontWeight: 800, color: "#fff", margin: 0, letterSpacing: "-0.01em" }}>
-                        {it.label}
-                      </h3>
-                      <p style={{ fontSize: 12, color: "rgba(255,255,255,0.75)", marginTop: 6, lineHeight: 1.4, marginBlockEnd: 0 }}>
-                        {it.sub}
-                      </p>
-                    </div>
-                  </button>
-                );
-              })
-            )}
+              {/* Search Input */}
+              <div style={{ flex: 1, minWidth: 260, maxWidth: 400, position: "relative" }}>
+                <Icon name="search" size={16} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#5DA2D5" }} />
+                <input 
+                  value={searchQuery} 
+                  onChange={(e) => setSearchQuery(e.target.value)} 
+                  placeholder="Search admin modules..." 
+                  className="desk-search-input"
+                  style={{ 
+                    padding: "8px 14px 8px 42px",
+                    width: "100%",
+                    outline: "none"
+                  }} 
+                />
+              </div>
+            </div>
+
+            {/* Grid of Modules */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
+              {filteredAdminModules.length === 0 ? (
+                <div style={{ gridColumn: "1 / -1", padding: 60, textAlign: "center", color: "rgba(255,255,255,0.4)", fontSize: 14 }}>
+                  No modules match your query. Try searching for something else.
+                </div>
+              ) : (
+                filteredAdminModules.map((it) => {
+                  const status = getModuleStatus(it);
+                  const cardTheme = MODULE_CARD_THEMES[it.id] || { bg: "linear-gradient(135deg, #5DA2D5, #90CCF4)", text: "#fff", iconBg: "rgba(255,255,255,0.22)", iconColor: "#fff" };
+                  return (
+                    <button 
+                      key={it.id} 
+                      onClick={() => handlePick(it)} 
+                      className="desk-module-card"
+                      style={{ background: cardTheme.bg, border: "none" }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", width: "100%" }}>
+                        <div className="desk-module-icon-wrap" style={{ background: cardTheme.iconBg, color: cardTheme.iconColor }}>
+                          <Icon name={it.icon} size={20} />
+                        </div>
+                        <span style={{ 
+                          fontSize: 9, 
+                          fontWeight: 800, 
+                          textTransform: "uppercase", 
+                          letterSpacing: "0.5px",
+                          padding: "4px 10px", 
+                          borderRadius: 999, 
+                          color: "#fff", 
+                          background: status.isNative ? "rgba(93,162,213,0.45)" : "rgba(247,136,136,0.5)",
+                          border: "none"
+                        }}>
+                          {status.label}
+                        </span>
+                      </div>
+
+                      <div style={{ marginTop: 20 }}>
+                        <h3 style={{ fontSize: 16, fontWeight: 800, color: "#fff", margin: 0, letterSpacing: "-0.01em" }}>
+                          {it.label}
+                        </h3>
+                        <p style={{ fontSize: 12, color: "rgba(255,255,255,0.75)", marginTop: 6, lineHeight: 1.4, marginBlockEnd: 0 }}>
+                          {it.sub}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
           </div>
         </div>
       ) : (
@@ -11730,6 +11824,7 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
     </div>
   );
 }
+
 
 Object.assign(window, { MyDeskPage, AttendanceCard, PerformanceSnapshot, DeskMenu, ProfileAvatar });
 
@@ -12343,7 +12438,7 @@ function LivePage({ branch, setDrawer, setActive, bridge }) {
   const support = [
     { label: "Quick Access", sub: "Vendor credentials, portals & site codes", on: () => setDrawer("vault") },
     { label: "Help Desk", sub: "Live vendor support portals & helplines", on: () => setDrawer("help") },
-    { label: "Lost & Found", sub: "Items handed in, logged & waiting to be claimed", on: () => setDrawer("lostfound") },
+    { label: "Gemini 3.1 Live", sub: "Real-time multimodal voice, vision & screen studio", on: () => setDrawer("ai_live") },
   ];
 
   const branchLabel = branch === "global" ? "All centres" : branch.charAt(0).toUpperCase() + branch.slice(1);
@@ -12364,8 +12459,13 @@ function LivePage({ branch, setDrawer, setActive, bridge }) {
         <MenuRow items={support} />
       </section>
 
-      {/* Unique Integrated Live Chat Command Deck (Placed below Quick access & support) */}
-      <LiveChatCommandDeck branch={branch} onOpenChat={(staff) => window.dispatchEvent(new CustomEvent("fets-open-chat", { detail: staff }))} />
+      {/* Enhanced Gemini 3.1 Flash Live Chat & Team Mesh Command Deck */}
+      <section style={{ display: "flex", flexDirection: "column", gap: "calc(16px * var(--density))" }}>
+        <EnhancedChatDeck 
+          branch={branch} 
+          onOpenDirectChat={(staff) => window.dispatchEvent(new CustomEvent("fets-open-chat", { detail: staff }))} 
+        />
+      </section>
     </div>
   );
 }
@@ -13126,9 +13226,11 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
         icon="headset" title="Help Desk" sub="Live support portals" accentColor={V.cma.color}>
         <HelpDeskPanel />
       </Drawer>
-      <Drawer open={drawer === "lostfound"} onClose={() => setDrawer(null)}
-        icon="package" title="Lost & Found" sub={`${branchLabel} · items handed in & logged`} accentColor={V.ielts.color}>
-        <LostFoundPanel branch={branch} />
+      <Drawer open={drawer === "ai_live" || drawer === "lostfound"} onClose={() => setDrawer(null)}
+        icon="spark" title="Gemini 3.1 Flash Live Studio" sub={`${branchLabel} · real-time multimodal voice, vision & screen`} accentColor="var(--gold)">
+        <div style={{ padding: "16px 0", height: "100%" }}>
+          <GeminiLiveStudio branch={branch} onOpenTeamChat={() => { setDrawer(null); window.dispatchEvent(new CustomEvent("fets-open-chat")); }} />
+        </div>
       </Drawer>
 
       <ToolsSheet open={tools} onClose={() => setTools(false)} onPick={handlePick} />

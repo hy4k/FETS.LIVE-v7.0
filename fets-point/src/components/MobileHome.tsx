@@ -113,7 +113,7 @@ export function MobileHome({ setActiveTab, profile }: MobileHomeProps) {
   const utilityModules = [
     { id: 'system-manager', label: 'System Manager', icon: Server, color: '#64748b' },
     { id: 'news-manager', label: 'News & Notices', icon: Newspaper, color: '#f59e0b' },
-    { id: 'lost-and-found', label: 'Lost & Found', icon: PackageSearch, color: '#ef4444' },
+    { id: 'fets-chat', label: 'Live Chat & AI', icon: MessageSquare, color: '#10b981' },
     { id: 'fets-intelligence', label: 'FETS AI', icon: Brain, color: '#8b5cf6' },
   ].filter(item => {
     const mod = modules.find(m => m.id === item.id);
@@ -124,7 +124,7 @@ export function MobileHome({ setActiveTab, profile }: MobileHomeProps) {
   const managementItems = [
     { id: 'incident-log', label: 'Raise A Case', icon: AlertCircle },
     { id: 'system-manager', label: 'System Manager', icon: Server },
-    { id: 'lost-and-found', label: 'Lost & Found', icon: PackageSearch },
+    { id: 'fets-chat', label: 'Live Chat & AI', icon: MessageSquare },
     { id: 'fets-intelligence', label: 'FETS AI', icon: Brain },
   ].filter(item => {
     const mod = modules.find(m => m.id === item.id);
