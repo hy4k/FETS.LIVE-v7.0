@@ -11527,6 +11527,7 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
   const DESK_SUB_TABS = [
     { id: "cockpit", label: "⚡ Cockpit", icon: "zap" },
     { id: "handovers", label: "📥 Handovers", icon: "clipboard", badge: pendingHandovers },
+    { id: "actionables", label: "📌 Actionables", icon: "check" },
     { id: "tasks", label: "📋 My Tasks", icon: "check" },
     { id: "checklist", label: "✅ Checklist", icon: "list" },
     { id: "leave", label: "⏱️ Attendance & Leaves", icon: "clock" },
@@ -11689,6 +11690,10 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
 
         {deskTab === "handovers" && (
           <HandoverInbox />
+        )}
+
+        {deskTab === "actionables" && (
+          <ActionablesView branch={branch} />
         )}
 
         {deskTab === "tasks" && (
@@ -12418,15 +12423,11 @@ function LivePage({ branch, setDrawer, setActive, bridge }) {
     };
   }, [branch]);
 
-  const ops = [
+  const quickActions = [
     { label: "Raise a Case", sub: "Incident Manager", on: () => setActive("case") },
     { label: "Shift Handover", sub: "Log checklist, headcount & sign-off", on: () => setActive("handover") },
-    { label: "Actionables", sub: "Standardisation, procedures, rollout & compliance", on: () => setActive("actionables") },
-  ];
-  const support = [
     { label: "Quick Access", sub: "Vendor credentials, portals & site codes", on: () => setDrawer("vault") },
     { label: "Help Desk", sub: "Live vendor support portals & helplines", on: () => setDrawer("help") },
-    { label: "Gemini 3.1 Live", sub: "Real-time multimodal voice, vision & screen studio", on: () => setDrawer("ai_live") },
   ];
 
   const branchLabel = branch === "global" ? "All centres" : branch.charAt(0).toUpperCase() + branch.slice(1);
@@ -12434,25 +12435,19 @@ function LivePage({ branch, setDrawer, setActive, bridge }) {
   return (
     <div style={{ maxWidth: 1600, margin: "0 auto", padding: "clamp(22px,3.2vw,40px) clamp(14px,3vw,30px) 80px", display: "flex", flexDirection: "column", gap }}>
       <Masthead branch={branch} />
-      
-      {/* Existing Menu Tabs (Operations) */}
-      <section style={{ display: "flex", flexDirection: "column", gap: "calc(16px * var(--density))" }}>
-        <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>operations</span>}>Operations</SectionLabel>
-        <MenuRow items={ops} />
-      </section>
 
-      {/* Existing Menu Tabs (Support) */}
+      {/* Gemini 3.1 Flash Live Studio — hero section */}
       <section style={{ display: "flex", flexDirection: "column", gap: "calc(16px * var(--density))" }}>
-        <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>support</span>}>Quick access &amp; support</SectionLabel>
-        <MenuRow items={support} />
-      </section>
-
-      {/* Enhanced Gemini 3.1 Flash Live Chat & Team Mesh Command Deck */}
-      <section style={{ display: "flex", flexDirection: "column", gap: "calc(16px * var(--density))" }}>
-        <EnhancedChatDeck 
-          branch={branch} 
-          onOpenDirectChat={(staff) => window.dispatchEvent(new CustomEvent("fets-open-chat", { detail: staff }))} 
+        <EnhancedChatDeck
+          branch={branch}
+          onOpenDirectChat={(staff) => window.dispatchEvent(new CustomEvent("fets-open-chat", { detail: staff }))}
         />
+      </section>
+
+      {/* Quick Actions — compact single row */}
+      <section style={{ display: "flex", flexDirection: "column", gap: "calc(16px * var(--density))" }}>
+        <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>operations &amp; support</span>}>Quick Actions</SectionLabel>
+        <MenuRow items={quickActions} />
       </section>
     </div>
   );

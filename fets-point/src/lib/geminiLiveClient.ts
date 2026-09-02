@@ -63,9 +63,10 @@ export class GeminiLiveClient {
 
   private currentGeminiTurnId: string | null = null;
   private currentGeminiTurnText = '';
+  private setupCompleteResolver: (() => void) | null = null;
 
   constructor(config: LiveClientConfig) {
-    this.apiKey = config.apiKey || (import.meta.env.VITE_AI_API_KEY as string) || (import.meta.env.VITE_GEMINI_API_KEY as string) || '';
+    this.apiKey = config.apiKey || (import.meta.env.VITE_AI_API_KEY as string) || (import.meta.env.VITE_GEMINI_API_KEY as string) || (import.meta.env.VITE_GEMINI_LIVE_API_KEY as string) || '';
     this.voiceName = config.voiceName || 'Zephyr';
     this.model = config.model || 'models/gemini-3.1-flash-live-preview';
     this.systemPrompt = config.systemPrompt || '';
@@ -103,9 +104,9 @@ export class GeminiLiveClient {
    * Connects to the Gemini 3.1 Flash Live preview endpoint
    */
   public async connect(): Promise<void> {
-    const key = this.apiKey || (import.meta.env.VITE_AI_API_KEY as string) || (import.meta.env.VITE_GEMINI_API_KEY as string) || localStorage.getItem('fets_gemini_api_key') || '';
+    const key = this.apiKey || (import.meta.env.VITE_AI_API_KEY as string) || (import.meta.env.VITE_GEMINI_API_KEY as string) || (import.meta.env.VITE_GEMINI_LIVE_API_KEY as string) || '';
     if (!key) {
-      this.updateStatus('error', 'API Key is missing. Please provide a Gemini API Key in the studio settings.');
+      this.updateStatus('error', 'Gemini API Key is not configured. Contact your administrator.');
       throw new Error('API Key missing');
     }
 
@@ -119,11 +120,13 @@ export class GeminiLiveClient {
         this.ws = new WebSocket(wsUrl);
 
         this.ws.onopen = () => {
+          // Send setup message first — status stays 'connecting' until server confirms
           this.sendSetupMessage();
           this.initAudioPlayback();
           this.startVisualizerLoop();
-          this.updateStatus('connected');
-          resolve();
+          // Resolve immediately so caller can await connection open,
+          // but status transitions to 'connected' only after setupComplete
+          this.setupCompleteResolver = resolve;
         };
 
         this.ws.onmessage = (event) => {
@@ -132,13 +135,19 @@ export class GeminiLiveClient {
 
         this.ws.onerror = (err) => {
           console.error('[GeminiLive] WebSocket Error:', err);
-          this.updateStatus('error', 'WebSocket connection error');
+          this.updateStatus('error', 'WebSocket connection error. Check API key and network.');
+          this.setupCompleteResolver = null;
           reject(err);
         };
 
         this.ws.onclose = (event) => {
           console.log('[GeminiLive] WebSocket Closed:', event.code, event.reason);
           this.cleanupStreams();
+          // If we never got setupComplete, resolve the promise anyway to avoid hanging
+          if (this.setupCompleteResolver) {
+            this.setupCompleteResolver();
+            this.setupCompleteResolver = null;
+          }
           this.updateStatus('disconnected');
         };
       } catch (err: any) {
@@ -202,6 +211,7 @@ export class GeminiLiveClient {
     this.stopScreenStream();
     this.stopVisualizerLoop();
     this.clearAudioPlaybackQueue();
+    this.setupCompleteResolver = null;
 
     if (this.ws) {
       try {
@@ -533,6 +543,16 @@ export class GeminiLiveClient {
   private handleServerMessage(rawData: any) {
     try {
       const msg = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
+
+      // Handle setupComplete — server confirmed our setup, now we're truly connected
+      if (msg.setupComplete) {
+        this.updateStatus('connected');
+        if (this.setupCompleteResolver) {
+          this.setupCompleteResolver();
+          this.setupCompleteResolver = null;
+        }
+        return;
+      }
 
       // Handle serverContent
       if (msg.serverContent) {

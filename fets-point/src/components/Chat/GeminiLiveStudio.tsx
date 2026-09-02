@@ -59,24 +59,31 @@ export const GeminiLiveStudio: React.FC<GeminiLiveStudioProps> = ({
 
   // Settings
   const [showSettings, setShowSettings] = useState(false);
-  const [customKey, setCustomKey] = useState(() => localStorage.getItem('fets_gemini_api_key') || '');
 
   // Media references
   const videoRef = useRef<HTMLVideoElement>(null);
   const screenRef = useRef<HTMLVideoElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Initialize client
+  // Stable ref for system prompt values (avoids recreating client on profile load)
+  const branchRef = useRef(currentBranch);
+  const nameRef = useRef(profile?.full_name || 'Staff');
+  branchRef.current = currentBranch;
+  nameRef.current = profile?.full_name || 'Staff';
+
+  // Initialize client once on mount
   useEffect(() => {
+    const buildSystemPrompt = () =>
+      `You are FETS LIVE OMNI, the real-time AI multimodal assistant for FETS (Frontline Examination & Testing Services). ` +
+      `Current Centre: ${branchRef.current.toUpperCase()}. User: ${nameRef.current}. ` +
+      `You provide instant, real-time voice, vision, and text intelligence for exam sessions (Pearson VUE, Prometric, IELTS, CELPIP, PSI, CMA), ` +
+      `incident escalation, invigilation rules, candidate verification, and daily staff handovers. ` +
+      `Keep voice responses concise, conversational, and direct.`;
+
     const liveClient = new GeminiLiveClient({
       voiceName: selectedVoice,
       model: 'models/gemini-3.1-flash-live-preview',
-      systemPrompt:
-        `You are FETS LIVE OMNI, the real-time AI multimodal assistant for FETS (Frontline Examination & Testing Services). ` +
-        `Current Centre: ${currentBranch.toUpperCase()}. User: ${profile?.full_name || 'Staff'}. ` +
-        `You provide instant, real-time voice, vision, and text intelligence for exam sessions (Pearson VUE, Prometric, IELTS, CELPIP, PSI, CMA), ` +
-        `incident escalation, invigilation rules, candidate verification, and daily staff handovers. ` +
-        `Keep voice responses concise, conversational, and direct.`,
+      systemPrompt: buildSystemPrompt(),
       onTurnUpdate: (updatedTurn) => {
         setTurns((prev) => {
           const index = prev.findIndex((t) => t.id === updatedTurn.id);
@@ -110,7 +117,21 @@ export const GeminiLiveStudio: React.FC<GeminiLiveStudioProps> = ({
     return () => {
       liveClient.disconnect();
     };
-  }, [currentBranch, profile?.full_name]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Update system prompt when branch or profile changes (without recreating client)
+  useEffect(() => {
+    if (client) {
+      client.setSystemPrompt(
+        `You are FETS LIVE OMNI, the real-time AI multimodal assistant for FETS (Frontline Examination & Testing Services). ` +
+        `Current Centre: ${currentBranch.toUpperCase()}. User: ${profile?.full_name || 'Staff'}. ` +
+        `You provide instant, real-time voice, vision, and text intelligence for exam sessions (Pearson VUE, Prometric, IELTS, CELPIP, PSI, CMA), ` +
+        `incident escalation, invigilation rules, candidate verification, and daily staff handovers. ` +
+        `Keep voice responses concise, conversational, and direct.`
+      );
+    }
+  }, [currentBranch, profile?.full_name, client]);
 
   // Auto-scroll conversation
   useEffect(() => {
@@ -226,13 +247,6 @@ export const GeminiLiveStudio: React.FC<GeminiLiveStudioProps> = ({
     toast.success(`Voice set to ${voice}`);
   };
 
-  const handleSaveApiKey = () => {
-    localStorage.setItem('fets_gemini_api_key', customKey.trim());
-    if (client) client.setApiKey(customKey.trim());
-    setShowSettings(false);
-    toast.success('API Key updated');
-  };
-
   const quickPrompts = [
     "Check today's Pearson & Prometric exam session schedule",
     "Candidate verification checklist for IELTS exam",
@@ -300,7 +314,7 @@ export const GeminiLiveStudio: React.FC<GeminiLiveStudioProps> = ({
           <button
             onClick={() => setShowSettings(!showSettings)}
             className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 transition-all"
-            title="Studio Settings & API Key"
+            title="Voice Settings"
           >
             <Settings size={15} />
           </button>
@@ -335,53 +349,26 @@ export const GeminiLiveStudio: React.FC<GeminiLiveStudioProps> = ({
             exit={{ opacity: 0, height: 0 }}
             className="bg-[#0c1322] border-b border-white/10 px-5 py-4 flex flex-col gap-4 text-xs"
           >
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* API Key */}
-              <div>
-                <label className="block text-slate-300 font-bold mb-1.5 text-[11px] uppercase tracking-wider">
-                  Gemini API Key (Optional Override)
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="password"
-                    value={customKey}
-                    onChange={(e) => setCustomKey(e.target.value)}
-                    placeholder="AIzaSy..."
-                    className="flex-1 px-3 py-2 rounded-lg bg-slate-900 border border-white/10 text-white text-xs focus:outline-none focus:border-indigo-400"
-                  />
+            {/* Voice Picker */}
+            <div>
+              <label className="block text-slate-300 font-bold mb-1.5 text-[11px] uppercase tracking-wider">
+                Select Prebuilt Voice Persona
+              </label>
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                {VOICES.map((v) => (
                   <button
-                    onClick={handleSaveApiKey}
-                    className="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 font-bold text-white transition-all text-xs"
+                    key={v.id}
+                    onClick={() => handleVoiceChange(v.id)}
+                    className={`p-2 rounded-lg border text-left transition-all ${
+                      selectedVoice === v.id
+                        ? 'bg-indigo-600/30 border-indigo-400 text-white font-bold'
+                        : 'bg-slate-900/50 border-white/5 text-slate-400 hover:text-slate-200'
+                    }`}
                   >
-                    Save
+                    <div className="text-[11px] font-bold">{v.label}</div>
+                    <div className="text-[9px] text-slate-400 line-clamp-1">{v.desc}</div>
                   </button>
-                </div>
-                <p className="text-[10px] text-slate-500 mt-1">
-                  Default reads from <code>VITE_AI_API_KEY</code>.
-                </p>
-              </div>
-
-              {/* Voice Picker */}
-              <div>
-                <label className="block text-slate-300 font-bold mb-1.5 text-[11px] uppercase tracking-wider">
-                  Select Prebuilt Voice Persona
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {VOICES.map((v) => (
-                    <button
-                      key={v.id}
-                      onClick={() => handleVoiceChange(v.id)}
-                      className={`p-2 rounded-lg border text-left transition-all ${
-                        selectedVoice === v.id
-                          ? 'bg-indigo-600/30 border-indigo-400 text-white font-bold'
-                          : 'bg-slate-900/50 border-white/5 text-slate-400 hover:text-slate-200'
-                      }`}
-                    >
-                      <div className="text-[11px] font-bold">{v.label}</div>
-                      <div className="text-[9px] text-slate-400 line-clamp-1">{v.desc}</div>
-                    </button>
-                  ))}
-                </div>
+                ))}
               </div>
             </div>
           </motion.div>
