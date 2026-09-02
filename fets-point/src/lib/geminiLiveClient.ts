@@ -4,6 +4,38 @@
  * Supports real-time bidirectional audio (16kHz in / 24kHz out), video camera, screen sharing, and text turns.
  */
 
+import { supabase } from './supabase';
+
+/** Fetch Gemini API key from app_config table (cached in memory) */
+let _cachedGeminiKey: string | null = null;
+async function fetchGeminiApiKey(): Promise<string> {
+  if (_cachedGeminiKey) return _cachedGeminiKey;
+
+  // Try env vars first (dev mode)
+  const envKey = (import.meta.env.VITE_AI_API_KEY as string) || (import.meta.env.VITE_GEMINI_API_KEY as string) || (import.meta.env.VITE_GEMINI_LIVE_API_KEY as string);
+  if (envKey) {
+    _cachedGeminiKey = envKey;
+    return envKey;
+  }
+
+  // Fetch from app_config table
+  try {
+    const { data } = await supabase
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'gemini_api_key')
+      .single();
+    if (data?.value) {
+      _cachedGeminiKey = data.value;
+      return data.value;
+    }
+  } catch (err) {
+    console.warn('[GeminiLive] Failed to fetch API key from app_config:', err);
+  }
+
+  return '';
+}
+
 export type GeminiLiveVoice = 'Zephyr' | 'Puck' | 'Charon' | 'Kore' | 'Fenrir' | 'Aoede';
 
 export interface LiveMessageTurn {
@@ -66,7 +98,7 @@ export class GeminiLiveClient {
   private setupCompleteResolver: (() => void) | null = null;
 
   constructor(config: LiveClientConfig) {
-    this.apiKey = config.apiKey || (import.meta.env.VITE_AI_API_KEY as string) || (import.meta.env.VITE_GEMINI_API_KEY as string) || (import.meta.env.VITE_GEMINI_LIVE_API_KEY as string) || '';
+    this.apiKey = config.apiKey || '';
     this.voiceName = config.voiceName || 'Zephyr';
     this.model = config.model || 'models/gemini-3.1-flash-live-preview';
     this.systemPrompt = config.systemPrompt || '';
@@ -104,9 +136,9 @@ export class GeminiLiveClient {
    * Connects to the Gemini 3.1 Flash Live preview endpoint
    */
   public async connect(): Promise<void> {
-    const key = this.apiKey || (import.meta.env.VITE_AI_API_KEY as string) || (import.meta.env.VITE_GEMINI_API_KEY as string) || (import.meta.env.VITE_GEMINI_LIVE_API_KEY as string) || '';
+    const key = this.apiKey || await fetchGeminiApiKey();
     if (!key) {
-      this.updateStatus('error', 'Gemini API Key is not configured. Contact your administrator.');
+      this.updateStatus('error', 'Gemini API Key is not configured. Add it to app_settings table or set VITE_AI_API_KEY.');
       throw new Error('API Key missing');
     }
 

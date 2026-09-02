@@ -6,7 +6,31 @@ import { supabase } from './supabase';
  * Using REST API with v1 endpoint for broader model compatibility
  */
 
+/** Cached API key — fetched once from env or app_config */
+let _geminiKeyCache: string | null = null;
+
 const getApiKey = () => import.meta.env.VITE_AI_API_KEY;
+
+async function getApiKeyAsync(): Promise<string> {
+  if (_geminiKeyCache) return _geminiKeyCache;
+  const envKey = getApiKey();
+  if (envKey && envKey !== 'undefined' && envKey.length >= 10) {
+    _geminiKeyCache = envKey;
+    return envKey;
+  }
+  try {
+    const { data } = await supabase
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'gemini_api_key')
+      .single();
+    if (data?.value) {
+      _geminiKeyCache = data.value;
+      return data.value;
+    }
+  } catch {}
+  return '';
+}
 
 // Helper to safely fetch data without throwing
 async function safeFetch(promise: Promise<any>, tableName: string) {
@@ -287,10 +311,10 @@ function processExamStatistics(examsConducted: any[], candidates: any[], session
 }
 
 export async function askGemini(userPrompt: string, userProfile?: any) {
-    const apiKey = getApiKey();
+    const apiKey = await getApiKeyAsync();
 
-    if (!apiKey || apiKey === 'undefined' || apiKey.length < 10) {
-        console.error("❌ CRITICAL: VITE_AI_API_KEY is missing or invalid.");
+    if (!apiKey || apiKey.length < 10) {
+        console.error("❌ CRITICAL: Gemini API key not found in env or app_config table.");
         throw new Error("System Alert: AI Neural Key is missing. Please check your system configuration.");
     }
 
