@@ -12436,18 +12436,18 @@ function LivePage({ branch, setDrawer, setActive, bridge }) {
     <div style={{ maxWidth: 1600, margin: "0 auto", padding: "clamp(22px,3.2vw,40px) clamp(14px,3vw,30px) 80px", display: "flex", flexDirection: "column", gap }}>
       <Masthead branch={branch} />
 
-      {/* Gemini 3.1 Flash Live Studio — hero section */}
+      {/* Quick Actions — compact single row */}
+      <section style={{ display: "flex", flexDirection: "column", gap: "calc(16px * var(--density))" }}>
+        <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>operations &amp; support</span>}>Quick Actions</SectionLabel>
+        <MenuRow items={quickActions} />
+      </section>
+
+      {/* Gemini 3.1 Flash Live Studio — below menu boxes */}
       <section style={{ display: "flex", flexDirection: "column", gap: "calc(16px * var(--density))" }}>
         <EnhancedChatDeck
           branch={branch}
           onOpenDirectChat={(staff) => window.dispatchEvent(new CustomEvent("fets-open-chat", { detail: staff }))}
         />
-      </section>
-
-      {/* Quick Actions — compact single row */}
-      <section style={{ display: "flex", flexDirection: "column", gap: "calc(16px * var(--density))" }}>
-        <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>operations &amp; support</span>}>Quick Actions</SectionLabel>
-        <MenuRow items={quickActions} />
       </section>
     </div>
   );

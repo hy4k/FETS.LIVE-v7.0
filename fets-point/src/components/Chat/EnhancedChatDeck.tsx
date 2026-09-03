@@ -81,16 +81,16 @@ export const EnhancedChatDeck: React.FC<EnhancedChatDeckProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-sm font-black tracking-wider uppercase text-white">
-                Live Operations Command & Chat Deck
+                FETS AI & Chat Deck
               </h2>
               <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[9px] font-black uppercase tracking-widest">
-                Active Mesh
+                FETS AI
               </span>
             </div>
             <p className="text-[11px] text-slate-400">
               {activeMode === 'gemini-live'
                 ? 'Gemini 3.1 Flash Multimodal Live Intelligence (Voice, Vision & Screen streaming)'
-                : `Instant Team Roster Messenger (${onlineCount} staff online)`}
+                : `Chat Deck — Instant Team Roster Messenger (${onlineCount} staff online)`}
             </p>
           </div>
         </div>
@@ -118,7 +118,7 @@ export const EnhancedChatDeck: React.FC<EnhancedChatDeckProps> = ({
             }`}
           >
             <Users size={14} className={activeMode === 'team-chat' ? 'text-indigo-400' : ''} />
-            <span>Staff Messenger ({onlineCount})</span>
+            <span>Chat Deck ({onlineCount})</span>
           </button>
         </div>
       </div>

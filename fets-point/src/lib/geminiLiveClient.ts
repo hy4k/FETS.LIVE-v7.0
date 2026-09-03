@@ -95,7 +95,6 @@ export class GeminiLiveClient {
 
   private currentGeminiTurnId: string | null = null;
   private currentGeminiTurnText = '';
-  private setupCompleteResolver: (() => void) | null = null;
 
   constructor(config: LiveClientConfig) {
     this.apiKey = config.apiKey || '';
@@ -152,13 +151,11 @@ export class GeminiLiveClient {
         this.ws = new WebSocket(wsUrl);
 
         this.ws.onopen = () => {
-          // Send setup message first — status stays 'connecting' until server confirms
           this.sendSetupMessage();
           this.initAudioPlayback();
           this.startVisualizerLoop();
-          // Resolve immediately so caller can await connection open,
-          // but status transitions to 'connected' only after setupComplete
-          this.setupCompleteResolver = resolve;
+          this.updateStatus('connected');
+          resolve();
         };
 
         this.ws.onmessage = (event) => {
@@ -168,18 +165,12 @@ export class GeminiLiveClient {
         this.ws.onerror = (err) => {
           console.error('[GeminiLive] WebSocket Error:', err);
           this.updateStatus('error', 'WebSocket connection error. Check API key and network.');
-          this.setupCompleteResolver = null;
           reject(err);
         };
 
         this.ws.onclose = (event) => {
           console.log('[GeminiLive] WebSocket Closed:', event.code, event.reason);
           this.cleanupStreams();
-          // If we never got setupComplete, resolve the promise anyway to avoid hanging
-          if (this.setupCompleteResolver) {
-            this.setupCompleteResolver();
-            this.setupCompleteResolver = null;
-          }
           this.updateStatus('disconnected');
         };
       } catch (err: any) {
@@ -243,7 +234,6 @@ export class GeminiLiveClient {
     this.stopScreenStream();
     this.stopVisualizerLoop();
     this.clearAudioPlaybackQueue();
-    this.setupCompleteResolver = null;
 
     if (this.ws) {
       try {
@@ -574,15 +564,18 @@ export class GeminiLiveClient {
    */
   private handleServerMessage(rawData: any) {
     try {
+      // Handle Blob data from WebSocket (convert to text first)
+      if (rawData instanceof Blob) {
+        rawData.text().then((text: string) => this.handleServerMessage(text));
+        return;
+      }
+
       const msg = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
 
-      // Handle setupComplete — server confirmed our setup, now we're truly connected
+      // Handle setupComplete — server confirmed our setup
       if (msg.setupComplete) {
+        console.log('[GeminiLive] Setup confirmed by server');
         this.updateStatus('connected');
-        if (this.setupCompleteResolver) {
-          this.setupCompleteResolver();
-          this.setupCompleteResolver = null;
-        }
         return;
       }
 
