@@ -10481,7 +10481,7 @@ function Readout({ label, time, tone }) {
   );
 }
 
-function AttendanceCard({ shift }) {
+function AttendanceCard({ shift = window.FETS?.user?.shift || { start: "09:00", end: "17:00", branch: "calicut" } }) {
   const dayKey = "fets-att-" + window.FETS.ISO(0).toDateString();
   const [att, setAtt] = useLocal(dayKey, ATT_BLANK);
   const meta = ATT_META[att.status];
