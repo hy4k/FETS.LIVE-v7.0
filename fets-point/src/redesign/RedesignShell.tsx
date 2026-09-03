@@ -11961,25 +11961,6 @@ function TopNav({ active, onNavigate, branch, setBranch, t, setTweak, onTools, o
 
       <div style={{ flex: 1 }} />
 
-      {/* FETS AI — prominent, always-visible entry point (desktop + mobile) */}
-      <button
-        onClick={() => onNavigate({ id: "fets-intelligence" })}
-        title="Ask FETS AI — your operations copilot"
-        className="tap fets-ai-navbtn"
-        style={{
-          display: "inline-flex", alignItems: "center", gap: 8, height: 42, padding: "0 16px", borderRadius: 12,
-          border: "1px solid rgba(255,255,255,0.14)", cursor: "pointer", flexShrink: 0,
-          background: "linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)",
-          color: "#fff", fontFamily: "var(--font)", fontSize: 13.5, fontWeight: 750,
-          boxShadow: active === "fets-intelligence"
-            ? "0 0 0 2px rgba(124,58,237,0.45), 0 6px 18px rgba(79,70,229,0.45)"
-            : "0 6px 18px rgba(79,70,229,0.35)",
-        }}
-      >
-        <Icon name="spark" size={16} />
-        <span>FETS AI</span>
-      </button>
-
       {/* right controls */}
       {/* candidates today — compact, reacts to the branch toggle */}
       <span title={`${candToday} candidates booked today · ${BRANCH_NAME[branch]}`} className="tap glass-2 topnav-count" style={{
