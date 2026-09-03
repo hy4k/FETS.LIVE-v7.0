@@ -198,14 +198,7 @@ export class GeminiLiveClient {
               },
             },
           },
-          thinkingConfig: {
-            thinkingLevel: 'MINIMAL',
-          },
           mediaResolution: 'MEDIA_RESOLUTION_MEDIUM',
-          contextWindowCompression: {
-            triggerTokens: '104857',
-            slidingWindow: { targetTokens: '52428' },
-          },
         },
         systemInstruction: {
           parts: [
@@ -519,16 +512,18 @@ export class GeminiLiveClient {
   public sendRealtimeMedia(mimeType: string, base64Data: string) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
 
-    const msg = {
-      realtimeInput: {
-        mediaChunks: [
-          {
-            mimeType,
-            data: base64Data,
-          },
-        ],
-      },
-    };
+    // Use new format: realtimeInput.audio / realtimeInput.video (mediaChunks is deprecated)
+    const mediaPayload = { data: base64Data, mimeType };
+
+    const msg: any = { realtimeInput: {} };
+    if (mimeType.startsWith('audio/')) {
+      msg.realtimeInput.audio = mediaPayload;
+    } else if (mimeType.startsWith('image/') || mimeType.startsWith('video/')) {
+      msg.realtimeInput.video = mediaPayload;
+    } else {
+      msg.realtimeInput.audio = mediaPayload;
+    }
+
     this.ws.send(JSON.stringify(msg));
   }
 

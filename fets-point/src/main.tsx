@@ -1,5 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+
+(window as any).__FETS_BUILD__ = '7.0.3-20260903';
 import App from './App.tsx'
 import PrivacyPolicy from './components/PrivacyPolicy.tsx'
 import './index.css'
