@@ -12018,11 +12018,11 @@ function Masthead({ branch }) {
           </div>
           <h1 style={{
             margin: 0, fontFamily: '"Archivo Expanded", var(--font)', fontWeight: 900,
-            fontSize: "clamp(56px,11vw,128px)", lineHeight: 0.86, letterSpacing: "-0.03em",
-            color: "var(--accent)", display: "flex", alignItems: "flex-end", gap: "0.1em", flexWrap: "wrap",
+            fontSize: "clamp(56px,11vw,128px)", lineHeight: 0.82, letterSpacing: "-0.045em",
+            display: "flex", alignItems: "flex-end", gap: 0, flexWrap: "wrap",
           }}>
-            <span>FETS</span>
-            <span style={{ display: "inline-flex", alignItems: "flex-end", gap: "0.18em" }}>
+            <span style={{ color: "var(--accent)" }}>FETS</span>
+            <span style={{ color: "var(--ink)", display: "inline-flex", alignItems: "flex-end", gap: "0.18em" }}>
               LIVE
               <span className="mono" style={{ fontSize: "clamp(11px,1.1vw,15px)", fontWeight: 700, letterSpacing: "0.1em",
                 color: "var(--ink-4)", paddingBottom: "0.7em" }}>V7.0</span>
@@ -12217,16 +12217,23 @@ function OutlookMiniPanel({ branch }) {
   );
 }
 
-/* ---------- LIVE page — outline-button menu ---------- */
+/* ---------- LIVE page — quick-action card grid ---------- */
 function MenuRow({ items }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "calc(16px * var(--density))" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 18 }}>
       {items.map((q) => (
-        <div key={q.label} className="glass" style={{ position: "relative", borderRadius: "var(--radius)", padding: "30px 22px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14, minHeight: 140, textAlign: "center" }}>
+        <button key={q.label} onClick={q.on} className="glass tap" style={{
+          position: "relative", borderRadius: 14, padding: "22px 22px 20px", display: "flex", flexDirection: "column",
+          gap: 0, border: "1px solid var(--hairline)", background: "var(--glass)", cursor: "pointer",
+          textAlign: "left", fontFamily: "var(--font)", transition: "border-color 0.2s, background 0.2s",
+        }}>
           {q.badge ? <span title={`${q.badge} new`} style={{ position: "absolute", top: 12, right: 12, minWidth: 22, height: 22, padding: "0 6px", borderRadius: 999, display: "grid", placeItems: "center", fontSize: 11, fontWeight: 800, color: "var(--accent-ink)", background: "var(--accent)", boxShadow: "0 0 12px color-mix(in oklch, var(--accent) 60%, transparent)" }}>{q.badge > 99 ? "99+" : q.badge}</span> : null}
-          <StartButton label={q.label} onClick={q.on} />
-          <span style={{ fontSize: 12.5, color: "var(--ink-3)", fontWeight: 500 }}>{q.sub}</span>
-        </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+            <span style={{ width: 3, height: 19, borderRadius: 2, background: "#FF7A5C", flexShrink: 0 }} />
+            <span style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.01em", color: "var(--ink)", whiteSpace: "nowrap" }}>{q.label.toUpperCase()}</span>
+          </div>
+          <div style={{ marginTop: 22, fontSize: 13, color: "var(--ink-3)" }}>{q.sub}</div>
+        </button>
       ))}
     </div>
   );
@@ -12417,14 +12424,17 @@ function LivePage({ branch, setDrawer, setActive, bridge }) {
     <div style={{ maxWidth: 1600, margin: "0 auto", padding: "clamp(22px,3.2vw,40px) clamp(14px,3vw,30px) 80px", display: "flex", flexDirection: "column", gap }}>
       <Masthead branch={branch} />
 
-      {/* Quick Actions — compact single row */}
-      <section style={{ display: "flex", flexDirection: "column", gap: "calc(16px * var(--density))" }}>
-        <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>operations &amp; support</span>}>Quick Actions</SectionLabel>
+      {/* Quick Actions */}
+      <section>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <SectionLabel>Quick Actions</SectionLabel>
+          <span className="mono" style={{ fontSize: 11, letterSpacing: "0.12em", color: "var(--ink-4)" }}>operations &amp; support</span>
+        </div>
         <MenuRow items={quickActions} />
       </section>
 
       {/* Gemini 3.1 Flash Live Studio — below menu boxes */}
-      <section style={{ display: "flex", flexDirection: "column", gap: "calc(16px * var(--density))" }}>
+      <section>
         <EnhancedChatDeck
           branch={branch}
           onOpenDirectChat={(staff) => window.dispatchEvent(new CustomEvent("fets-open-chat", { detail: staff }))}
