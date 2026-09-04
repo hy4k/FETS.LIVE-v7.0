@@ -6,11 +6,11 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 
 WORKDIR /app
 
-# Copy workspace config files
+# Copy only package manifests first (layer cache for install)
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY fets-point/ ./fets-point/
+COPY fets-point/package.json ./fets-point/
 
-# Install dependencies
+# Install dependencies (cached unless lockfile changes)
 RUN pnpm install --no-frozen-lockfile --dangerously-allow-all-builds
 # Build-time environment variables
 ARG VITE_SUPABASE_URL
@@ -25,6 +25,9 @@ ENV VITE_GBP_CLIENT_ID=$VITE_GBP_CLIENT_ID
 ENV VITE_GBP_LOCATION_COCHIN=$VITE_GBP_LOCATION_COCHIN
 ENV VITE_GBP_LOCATION_CALICUT=$VITE_GBP_LOCATION_CALICUT
 ENV VITE_APP_URL=$VITE_APP_URL
+
+# Copy source code (after install for better layer caching)
+COPY fets-point/ ./fets-point/
 
 # Build the app
 RUN pnpm build
