@@ -114,18 +114,27 @@ export const useSendMessage = () => {
       type?: 'text' | 'voice' | 'file' | 'image' | 'video' | 'call_log';
       filePath?: string;
     }) => {
-      const { data: rpcData, error: rpcErr } = await supabase.rpc('send_chat_message', {
-        p_conversation_id: conversationId,
-        p_sender_id: senderId,
-        p_content: content,
-        p_type: type,
-        p_file_path: filePath || null,
-      });
+      // Attempt 1: Try RPC function (may not exist in all deployments)
+      try {
+        const { data: rpcData, error: rpcErr } = await supabase.rpc('send_chat_message', {
+          p_conversation_id: conversationId,
+          p_sender_id: senderId,
+          p_content: content,
+          p_type: type,
+          p_file_path: filePath || null,
+        });
 
-      if (!rpcErr && rpcData) {
-        return rpcData;
+        if (!rpcErr && rpcData) {
+          return rpcData;
+        }
+        if (rpcErr) {
+          console.warn('[Chat] RPC send_chat_message unavailable, using direct insert:', rpcErr.message);
+        }
+      } catch (rpcEx) {
+        console.warn('[Chat] RPC call failed:', rpcEx);
       }
 
+      // Attempt 2: Direct insert with auth user ID
       const { data, error } = await supabase
         .from('messages')
         .insert({
@@ -139,7 +148,44 @@ export const useSendMessage = () => {
         .select()
         .single();
 
-      if (error) throw new Error(error.message);
+      if (error) {
+        console.error('[Chat] Direct insert failed:', error.message, error.details, error.hint);
+
+        // Attempt 3: If FK/RLS issue, try with profile ID from window.FETS
+        const F = (window as any).FETS;
+        const profileId = F?._meId;
+        if (profileId && profileId !== senderId) {
+          console.log('[Chat] Retrying with profile ID:', profileId);
+          const { data: retryData, error: retryErr } = await supabase
+            .from('messages')
+            .insert({
+              conversation_id: conversationId,
+              sender_id: profileId,
+              content,
+              type,
+              file_path: filePath,
+              status: 'sent',
+            })
+            .select()
+            .single();
+
+          if (!retryErr && retryData) {
+            // Profile ID worked — update conversation preview
+            const previewText = type === 'text' ? content.substring(0, 100) : `[${type.toUpperCase()}] Attachment`;
+            await supabase
+              .from('conversations')
+              .update({ last_message_at: new Date().toISOString(), last_message_preview: previewText })
+              .eq('id', conversationId)
+              .catch(() => {});
+            return retryData;
+          }
+          if (retryErr) {
+            console.error('[Chat] Profile ID insert also failed:', retryErr.message);
+          }
+        }
+
+        throw new Error(error.message);
+      }
 
       const previewText = type === 'text' ? content.substring(0, 100) : `[${type.toUpperCase()}] Attachment`;
       await supabase
@@ -159,6 +205,7 @@ export const useSendMessage = () => {
       queryClient.invalidateQueries({ queryKey: ['conversation', variables.conversationId] });
     },
     onError: (error: Error) => {
+      console.error('[Chat] Send message failed:', error.message);
       toast.error(`Failed to send message: ${error.message}`);
     },
   });
@@ -177,10 +224,16 @@ export const useUpdateMessage = () => {
       content: string;
       conversationId: string;
     }) => {
-      const { error: rpcErr } = await supabase.rpc('update_chat_message', {
-        p_message_id: messageId,
-        p_content: content,
-      });
+      let rpcErr: any = null;
+      try {
+        const res = await supabase.rpc('update_chat_message', {
+          p_message_id: messageId,
+          p_content: content,
+        });
+        rpcErr = res.error;
+      } catch {
+        rpcErr = { message: 'RPC unavailable' };
+      }
 
       if (rpcErr) {
         const { data, error } = await supabase
@@ -222,10 +275,16 @@ export const useDeleteMessage = () => {
       conversationId: string;
       forEveryone?: boolean;
     }) => {
-      const { error: rpcErr } = await supabase.rpc('delete_chat_message', {
-        p_message_id: messageId,
-        p_for_everyone: forEveryone,
-      });
+      let rpcErr: any = null;
+      try {
+        const res = await supabase.rpc('delete_chat_message', {
+          p_message_id: messageId,
+          p_for_everyone: forEveryone,
+        });
+        rpcErr = res.error;
+      } catch {
+        rpcErr = { message: 'RPC unavailable' };
+      }
 
       if (rpcErr) {
         if (forEveryone) {
@@ -308,15 +367,57 @@ export const useGetOrCreateDM = () => {
       userId1: string;
       userId2: string;
     }) => {
-      const { data: existing, error: searchError } = await supabase.rpc('get_or_create_conversation', {
-        user_id_1: userId1,
-        user_id_2: userId2,
-      });
+      // Attempt RPC (may not exist)
+      try {
+        const { data: existing, error: searchError } = await supabase.rpc('get_or_create_conversation', {
+          user_id_1: userId1,
+          user_id_2: userId2,
+        });
 
-      if (!searchError && existing) {
-        return { id: existing };
+        if (!searchError && existing) {
+          return { id: existing };
+        }
+        if (searchError) {
+          console.warn('[Chat] RPC get_or_create_conversation unavailable:', searchError.message);
+        }
+      } catch (rpcEx) {
+        console.warn('[Chat] RPC call failed:', rpcEx);
       }
 
+      // Manual fallback: check if DM already exists between these two users
+      try {
+        const { data: myConvos } = await supabase
+          .from('conversation_members')
+          .select('conversation_id')
+          .eq('user_id', userId1);
+
+        if (myConvos && myConvos.length > 0) {
+          const myConvoIds = myConvos.map((c: any) => c.conversation_id);
+          const { data: theirConvos } = await supabase
+            .from('conversation_members')
+            .select('conversation_id')
+            .eq('user_id', userId2)
+            .in('conversation_id', myConvoIds);
+
+          if (theirConvos && theirConvos.length > 0) {
+            // Check which of these shared conversations is a DM (not group)
+            for (const tc of theirConvos) {
+              const { data: conv } = await supabase
+                .from('conversations')
+                .select('id, is_group')
+                .eq('id', tc.conversation_id)
+                .eq('is_group', false)
+                .maybeSingle();
+
+              if (conv) return { id: conv.id };
+            }
+          }
+        }
+      } catch (lookupErr) {
+        console.warn('[Chat] DM lookup failed:', lookupErr);
+      }
+
+      // Create new DM conversation
       const { data: conversation, error: convError } = await supabase
         .from('conversations')
         .insert({
@@ -326,14 +427,20 @@ export const useGetOrCreateDM = () => {
         .select()
         .single();
 
-      if (convError) throw new Error(convError.message);
+      if (convError) {
+        console.error('[Chat] Create conversation failed:', convError.message);
+        throw new Error(convError.message);
+      }
 
       const { error: membersError } = await supabase.from('conversation_members').insert([
         { conversation_id: conversation.id, user_id: userId1 },
         { conversation_id: conversation.id, user_id: userId2 },
       ]);
 
-      if (membersError) throw new Error(membersError.message);
+      if (membersError) {
+        console.error('[Chat] Add members failed:', membersError.message);
+        throw new Error(membersError.message);
+      }
 
       return conversation;
     },
@@ -341,6 +448,7 @@ export const useGetOrCreateDM = () => {
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
     },
     onError: (error: Error) => {
+      console.error('[Chat] Create DM failed:', error.message);
       toast.error(`Failed to create conversation: ${error.message}`);
     },
   });
@@ -361,13 +469,18 @@ export const useCreateGroupConversation = () => {
     }) => {
       const allIds = Array.from(new Set([createdBy, ...memberIds]));
       
-      const { data: rpcConvId, error: rpcErr } = await supabase.rpc('create_group_conversation', {
-        p_name: name,
-        p_member_ids: allIds,
-      });
+      try {
+        const { data: rpcConvId, error: rpcErr } = await supabase.rpc('create_group_conversation', {
+          p_name: name,
+          p_member_ids: allIds,
+        });
 
-      if (!rpcErr && rpcConvId) {
-        return { id: rpcConvId, name, is_group: true };
+        if (!rpcErr && rpcConvId) {
+          return { id: rpcConvId, name, is_group: true };
+        }
+        if (rpcErr) console.warn('[Chat] RPC create_group_conversation unavailable:', rpcErr.message);
+      } catch (rpcEx) {
+        console.warn('[Chat] Group RPC failed:', rpcEx);
       }
 
       const { data: conversation, error: convError } = await supabase

@@ -57,6 +57,9 @@ export const GeminiLiveStudio: React.FC<GeminiLiveStudioProps> = ({
   const [outputLevel, setOutputLevel] = useState(0);
   const [frequencies, setFrequencies] = useState<number[]>(new Array(16).fill(0));
 
+  // Tool activity
+  const [activeToolName, setActiveToolName] = useState<string | null>(null);
+
   // Settings
   const [showSettings, setShowSettings] = useState(false);
 
@@ -76,8 +79,8 @@ export const GeminiLiveStudio: React.FC<GeminiLiveStudioProps> = ({
     const buildSystemPrompt = () =>
       `You are FETS LIVE OMNI, the real-time AI multimodal assistant for FETS (Frontline Examination & Testing Services). ` +
       `Current Centre: ${branchRef.current.toUpperCase()}. User: ${nameRef.current}. ` +
-      `You provide instant, real-time voice, vision, and text intelligence for exam sessions (Pearson VUE, Prometric, IELTS, CELPIP, PSI, CMA), ` +
-      `incident escalation, invigilation rules, candidate verification, and daily staff handovers. ` +
+      `You have LIVE operational data about today's exams, staff roster, incidents, tasks, and news injected into your context. ` +
+      `Use this data to answer questions about current operations. For historical lookups, use the query tools. ` +
       `Keep voice responses concise, conversational, and direct.`;
 
     const liveClient = new GeminiLiveClient({
@@ -99,6 +102,9 @@ export const GeminiLiveStudio: React.FC<GeminiLiveStudioProps> = ({
         setStatus(newStatus);
         if (msg) setErrorMsg(msg);
         else if (newStatus === 'connected') setErrorMsg(null);
+      },
+      onToolActivity: (toolName) => {
+        setActiveToolName(toolName);
       },
       onAudioVisualizerData: (inLvl, outLvl, freqData) => {
         setInputLevel(inLvl);
@@ -126,8 +132,8 @@ export const GeminiLiveStudio: React.FC<GeminiLiveStudioProps> = ({
       client.setSystemPrompt(
         `You are FETS LIVE OMNI, the real-time AI multimodal assistant for FETS (Frontline Examination & Testing Services). ` +
         `Current Centre: ${currentBranch.toUpperCase()}. User: ${profile?.full_name || 'Staff'}. ` +
-        `You provide instant, real-time voice, vision, and text intelligence for exam sessions (Pearson VUE, Prometric, IELTS, CELPIP, PSI, CMA), ` +
-        `incident escalation, invigilation rules, candidate verification, and daily staff handovers. ` +
+        `You have LIVE operational data about today's exams, staff roster, incidents, tasks, and news injected into your context. ` +
+        `Use this data to answer questions about current operations. For historical lookups, use the query tools. ` +
         `Keep voice responses concise, conversational, and direct.`
       );
     }
@@ -466,6 +472,21 @@ export const GeminiLiveStudio: React.FC<GeminiLiveStudioProps> = ({
               }`}>
                 {status === 'speaking' ? '🔊 Gemini Streaming Voice' : status === 'listening' ? '🎙️ Mic Active (Speaking permitted)' : status === 'connected' ? '⚡ Multimodal Live Ready' : '💤 Idle'}
               </span>
+
+              {/* Tool activity indicator */}
+              <AnimatePresence>
+                {activeToolName && (
+                  <motion.span
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 flex items-center gap-1.5"
+                  >
+                    <RefreshCw size={10} className="animate-spin" />
+                    Querying {activeToolName.replace('query_', '')}...
+                  </motion.span>
+                )}
+              </AnimatePresence>
             </div>
           </div>
 

@@ -5,6 +5,8 @@
  */
 
 import { supabase } from './supabase';
+import { buildLiveContext } from './geminiContextBuilder';
+import { getToolDeclarations, executeToolCall } from './geminiToolHandlers';
 
 /** Fetch Gemini API key from app_config table (cached in memory) */
 let _cachedGeminiKey: string | null = null;
@@ -56,6 +58,7 @@ export interface LiveClientConfig {
   onTurnUpdate?: (turn: LiveMessageTurn) => void;
   onStatusChange?: (status: 'disconnected' | 'connecting' | 'connected' | 'speaking' | 'listening' | 'error', errorMsg?: string) => void;
   onAudioVisualizerData?: (inputLevel: number, outputLevel: number, outputFrequencies: Uint8Array) => void;
+  onToolActivity?: (toolName: string | null) => void;
 }
 
 export class GeminiLiveClient {
@@ -92,6 +95,7 @@ export class GeminiLiveClient {
   private onTurnUpdate?: (turn: LiveMessageTurn) => void;
   private onStatusChange?: (status: 'disconnected' | 'connecting' | 'connected' | 'speaking' | 'listening' | 'error', errorMsg?: string) => void;
   private onAudioVisualizerData?: (inputLevel: number, outputLevel: number, outputFrequencies: Uint8Array) => void;
+  private onToolActivity?: (toolName: string | null) => void;
 
   private currentGeminiTurnId: string | null = null;
   private currentGeminiTurnText = '';
@@ -104,6 +108,7 @@ export class GeminiLiveClient {
     this.onTurnUpdate = config.onTurnUpdate;
     this.onStatusChange = config.onStatusChange;
     this.onAudioVisualizerData = config.onAudioVisualizerData;
+    this.onToolActivity = config.onToolActivity;
   }
 
   public setApiKey(key: string) {
@@ -186,7 +191,22 @@ export class GeminiLiveClient {
   private sendSetupMessage() {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
 
-    const setupPayload = {
+    const basePrompt = this.systemPrompt ||
+      `You are FETS LIVE OMNI, the real-time AI operational assistant for FETS (Frontline Examination & Testing Services).`;
+
+    // Inject live operational context from window.FETS
+    const liveContext = buildLiveContext();
+    const fullPrompt = basePrompt +
+      `\n\nIMPORTANT GROUNDING RULES:` +
+      `\n1. You have real-time operational data injected below. ALWAYS use this data to answer questions about today's exams, roster, incidents, tasks, news, and staff.` +
+      `\n2. When the user asks about today's schedule, sessions, who is on duty, open incidents, pending tasks — answer directly from the OPERATIONAL CONTEXT below. Do NOT say "I don't have access" or make up data.` +
+      `\n3. For HISTORICAL queries (past dates, specific candidate lookups, attendance history, old incidents) — use the available function tools (query_sessions, query_roster, query_attendance, etc.) to fetch from the database.` +
+      `\n4. Be concise, proactive, friendly, and authoritative. Use crisp voice and natural cadence.` +
+      `\n5. You know everything about FETS exam operations: Pearson VUE, Prometric, IELTS, CELPIP, PSI, CMA exams. Candidate verification, incident triage, staff rosters, centre health.` +
+      `\n6. When asked "what exams today" or "who is working today" — look at the data sections below and speak the answer directly.` +
+      liveContext;
+
+    const setupPayload: any = {
       setup: {
         model: this.model,
         generationConfig: {
@@ -201,21 +221,14 @@ export class GeminiLiveClient {
           mediaResolution: 'MEDIA_RESOLUTION_MEDIUM',
         },
         systemInstruction: {
-          parts: [
-            {
-              text:
-                this.systemPrompt ||
-                `You are FETS LIVE OMNI, the real-time AI operational assistant for FETS (Frontline Examination & Testing Services). ` +
-                `You assist test centre administrators, duty officers, and invigilators with exam operations (Pearson VUE, Prometric, IELTS, CELPIP, PSI, CMA), ` +
-                `candidate verification, technical incident triage, staff rosters, and centre health. ` +
-                `Be concise, proactive, friendly, and authoritative in exam logistics. Answer using crisp voice and natural cadence.`,
-            },
-          ],
+          parts: [{ text: fullPrompt }],
         },
+        tools: getToolDeclarations(),
       },
     };
 
     this.ws.send(JSON.stringify(setupPayload));
+    console.log('[GeminiLive] Setup sent with live context + 9 tools');
   }
 
   /**
@@ -574,6 +587,12 @@ export class GeminiLiveClient {
         return;
       }
 
+      // Handle toolCall from Gemini (function calling)
+      if (msg.toolCall) {
+        this.handleToolCalls(msg.toolCall);
+        return;
+      }
+
       // Handle serverContent
       if (msg.serverContent) {
         const sc = msg.serverContent;
@@ -656,6 +675,45 @@ export class GeminiLiveClient {
       }
     } catch (err) {
       console.error('[GeminiLive] Parse message error:', err);
+    }
+  }
+
+  /* -------------------------------------------------------------------------- */
+  /*                          TOOL CALL HANDLING                                */
+  /* -------------------------------------------------------------------------- */
+
+  private async handleToolCalls(toolCall: any) {
+    const functionCalls = toolCall.functionCalls;
+    if (!functionCalls || !functionCalls.length) return;
+
+    const functionResponses: any[] = [];
+
+    for (const fc of functionCalls) {
+      const { name, args, id } = fc;
+      console.log(`[GeminiLive] Tool call: ${name}`, args);
+
+      // Notify UI of active tool
+      this.onToolActivity?.(name);
+
+      const result = await executeToolCall(name, args || {});
+
+      functionResponses.push({
+        id,
+        name,
+        response: result,
+      });
+    }
+
+    // Clear tool activity indicator
+    this.onToolActivity?.(null);
+
+    // Send tool responses back to Gemini
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      const response = {
+        toolResponse: { functionResponses },
+      };
+      this.ws.send(JSON.stringify(response));
+      console.log('[GeminiLive] Tool responses sent:', functionResponses.length);
     }
   }
 
