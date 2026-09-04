@@ -38,7 +38,7 @@ jobs:
             git fetch origin
             git checkout main
             git pull --ff-only
-            docker compose build --no-cache app
+            docker compose build app
             docker compose up -d app
 
       - name: Note when skipped
