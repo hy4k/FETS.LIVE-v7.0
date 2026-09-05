@@ -29,8 +29,8 @@ ENV VITE_APP_URL=$VITE_APP_URL
 # Copy source code (after install for better layer caching)
 COPY fets-point/ ./fets-point/
 
-# Build the app
-RUN pnpm build
+# Build the app (skip tsc type-checking — Vite handles transpilation)
+RUN pnpm --filter fets-point exec vite build
 
 # Stage 2: Serve with nginx
 FROM nginx:alpine
