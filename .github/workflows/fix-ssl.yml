@@ -1,0 +1,40 @@
+name: Fix SSL Certificate (one-time)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  fix-ssl:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Diagnose and fix Traefik SSL
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          command_timeout: 5m
+          script: |
+            set -e
+            echo "=== Docker containers ==="
+            docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" || true
+
+            echo ""
+            echo "=== Traefik container logs (last 50 lines) ==="
+            docker logs $(docker ps -q --filter name=traefik) --tail 50 2>&1 || echo "No traefik container found"
+
+            echo ""
+            echo "=== ACME/cert files ==="
+            find / -name "acme.json" -o -name "letsencrypt" -type d 2>/dev/null | head -10 || true
+
+            echo ""
+            echo "=== Restarting Traefik to trigger cert renewal ==="
+            docker restart $(docker ps -q --filter name=traefik) 2>/dev/null && echo "Traefik restarted" || echo "Could not find/restart traefik container"
+
+            echo ""
+            echo "=== Waiting 15s for cert renewal ==="
+            sleep 15
+
+            echo ""
+            echo "=== Traefik logs after restart ==="
+            docker logs $(docker ps -q --filter name=traefik) --tail 30 2>&1 || true
