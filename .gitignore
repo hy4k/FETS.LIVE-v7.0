@@ -28,7 +28,6 @@ npm-debug.log*
 .vscode/
 .idea/
 .kilocode/
-.kilo/
 .claude/
 
 # Build/debug artifacts
