@@ -35,6 +35,7 @@ import { ICloudDashboard as Dashboard } from "../components/iCloud/iCloudDashboa
 import { FetsIntelligence } from "../components/FetsIntelligence";
 import GBPDashboard from "../pages/GBPDashboard";
 import MyDeskLivingBoard from "../components/MyDeskLivingBoard";
+import FetsLiveBoard from "../components/FetsLiveBoard";
 import { GeminiLiveStudio } from "../components/Chat/GeminiLiveStudio";
 import { EnhancedChatDeck } from "../components/Chat/EnhancedChatDeck";
 
@@ -11531,7 +11532,6 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
     { id: "tasks", label: "📋 My Tasks", icon: "check" },
     { id: "checklist", label: "✅ Checklist", icon: "list" },
     { id: "leave", label: "⏱️ Attendance & Leaves", icon: "clock" },
-    { id: "living-board", label: "💬 Living Board", icon: "spark" },
     { id: "certs", label: "🛡️ Certificates", icon: "shield" },
     { id: "readiness", label: "📊 Readiness", icon: "trend" },
     ...(isSuperAdmin ? [{ id: "admin", label: "⚙️ Admin Control", icon: "settings" }] : [])
@@ -11708,10 +11708,6 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
           <LeaveModule />
         )}
 
-        {deskTab === "living-board" && (
-          <MyDeskLivingBoard />
-        )}
-
         {deskTab === "certs" && (
           <CertsModule />
         )}
@@ -11879,9 +11875,6 @@ const MODULE_COLORS = {
 
 /* primary nav */
 const NAV = [
-  { id: "live", label: "Live" },
-  { id: "calendar", label: "Calendar" },
-  { id: "roster", label: "Roster" },
   { id: "desk", label: "My Desk" },
 ];
 
@@ -11929,8 +11922,8 @@ function TopNav({ active, onNavigate, branch, setBranch, t, setTweak, onTools, o
       padding: "16px 20px 16px 24px", display: "flex", alignItems: "center", gap: "clamp(16px,2.8vw,36px)",
       boxShadow: "var(--shadow)", "--branch": BRANCH_TINT[branch] || "var(--accent)",
     }}>
-      {/* brand mark */}
-      <button onClick={() => onNavigate({ id: "live" })} className="tap" style={{
+      {/* brand mark / Home button */}
+      <button onClick={() => onNavigate({ id: "live" })} className="tap" title="Home // Command Centre" aria-label="Home" style={{
         display: "flex", alignItems: "center", gap: 14, border: "none", background: "transparent",
         cursor: "pointer", padding: 0, flexShrink: 0, fontFamily: "var(--font)",
       }}>
@@ -12222,20 +12215,43 @@ function OutlookMiniPanel({ branch }) {
 function MenuRow({ items }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 18 }}>
-      {items.map((q) => (
-        <button key={q.label} onClick={q.on} className="glass tap" style={{
-          position: "relative", borderRadius: 14, padding: "22px 22px 20px", display: "flex", flexDirection: "column",
-          gap: 0, border: "1px solid var(--hairline)", background: "var(--glass)", cursor: "pointer",
-          textAlign: "left", fontFamily: "var(--font)", transition: "border-color 0.2s, background 0.2s",
-        }}>
-          {q.badge ? <span title={`${q.badge} new`} style={{ position: "absolute", top: 12, right: 12, minWidth: 22, height: 22, padding: "0 6px", borderRadius: 999, display: "grid", placeItems: "center", fontSize: 11, fontWeight: 800, color: "var(--accent-ink)", background: "var(--accent)", boxShadow: "0 0 12px color-mix(in oklch, var(--accent) 60%, transparent)" }}>{q.badge > 99 ? "99+" : q.badge}</span> : null}
-          <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
-            <span style={{ width: 3, height: 19, borderRadius: 2, background: "#FF7A5C", flexShrink: 0 }} />
-            <span style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.01em", color: "var(--ink)", whiteSpace: "nowrap" }}>{q.label.toUpperCase()}</span>
-          </div>
-          <div style={{ marginTop: 22, fontSize: 13, color: "var(--ink-3)" }}>{q.sub}</div>
-        </button>
-      ))}
+      {items.map((q) => {
+        const isLive = q.isLive || q.label.toLowerCase() === "live";
+        if (isLive) {
+          return (
+            <button key={q.label} onClick={q.on} className="glass tap" style={{
+              position: "relative", borderRadius: 14, padding: "22px 22px 20px", display: "flex", flexDirection: "column",
+              gap: 0, border: "2px solid #10B981", background: "linear-gradient(135deg, rgba(16,185,129,0.14) 0%, rgba(6,78,59,0.22) 100%)", cursor: "pointer",
+              textAlign: "left", fontFamily: "var(--font)", transition: "all 0.25s ease",
+              boxShadow: "0 0 24px rgba(16,185,129,0.22)"
+            }}>
+              <span style={{ position: "absolute", top: 12, right: 12, padding: "2px 8px", borderRadius: 999, display: "flex", alignItems: "center", gap: 5, fontSize: 10, fontWeight: 800, color: "#10B981", background: "rgba(16,185,129,0.2)", border: "1px solid rgba(16,185,129,0.4)" }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#10B981", boxShadow: "0 0 8px #10B981", display: "inline-block" }} />
+                <span>ONLINE</span>
+              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+                <span style={{ width: 3, height: 19, borderRadius: 2, background: "#10B981", flexShrink: 0 }} />
+                <span style={{ fontSize: 20, fontWeight: 900, letterSpacing: "-0.01em", color: "#10B981", whiteSpace: "nowrap" }}>LIVE</span>
+              </div>
+              <div style={{ marginTop: 22, fontSize: 13, color: "var(--ink)", fontWeight: 650 }}>{q.sub}</div>
+            </button>
+          );
+        }
+        return (
+          <button key={q.label} onClick={q.on} className="glass tap" style={{
+            position: "relative", borderRadius: 14, padding: "22px 22px 20px", display: "flex", flexDirection: "column",
+            gap: 0, border: "1px solid var(--hairline)", background: "var(--glass)", cursor: "pointer",
+            textAlign: "left", fontFamily: "var(--font)", transition: "border-color 0.2s, background 0.2s",
+          }}>
+            {q.badge ? <span title={`${q.badge} new`} style={{ position: "absolute", top: 12, right: 12, minWidth: 22, height: 22, padding: "0 6px", borderRadius: 999, display: "grid", placeItems: "center", fontSize: 11, fontWeight: 800, color: "var(--accent-ink)", background: "var(--accent)", boxShadow: "0 0 12px color-mix(in oklch, var(--accent) 60%, transparent)" }}>{q.badge > 99 ? "99+" : q.badge}</span> : null}
+            <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+              <span style={{ width: 3, height: 19, borderRadius: 2, background: "#FF7A5C", flexShrink: 0 }} />
+              <span style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.01em", color: "var(--ink)", whiteSpace: "nowrap" }}>{q.label.toUpperCase()}</span>
+            </div>
+            <div style={{ marginTop: 22, fontSize: 13, color: "var(--ink-3)" }}>{q.sub}</div>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -12413,7 +12429,7 @@ function LivePage({ branch, setDrawer, setActive, bridge }) {
   }, [branch]);
 
   const quickActions = [
-    { label: "Raise a Case", sub: "Incident Manager", on: () => setActive("case") },
+    { label: "Live", sub: "Exam notices, new tasks & bulletins", isLive: true, on: () => setActive("live-board") },
     { label: "Shift Handover", sub: "Log checklist, headcount & sign-off", on: () => setActive("handover") },
     { label: "Quick Access", sub: "Vendor credentials, portals & site codes", on: () => setDrawer("vault") },
     { label: "Help Desk", sub: "Live vendor support portals & helplines", on: () => setDrawer("help") },
@@ -13158,11 +13174,12 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
         flex: 1,
         overflowY: "auto",
         background: isDeskActive ? "linear-gradient(160deg, #ECECEC 0%, #90CCF4 50%, #5DA2D5 100%)" : undefined,
-        padding: (active === "calendar" || active === "roster" || active === "live" || active === "desk")
+        padding: (active === "calendar" || active === "roster" || active === "live" || active === "desk" || active === "live-board" || active === "living-board")
           ? "0" 
           : (active === "handover" ? "0 0 80px" : "clamp(22px,3.2vw,40px) clamp(14px,3vw,30px) 80px")
       }}>
         {active === "live" && <LivePage branch={branch} setDrawer={setDrawer} setActive={setActive} bridge={bridge} />}
+        {(active === "live-board" || active === "living-board") && <FetsLiveBoard branch={branch} onNavigate={setActive} />}
         {active === "calendar" && (
           <div style={{ width: "100%" }}>
             {isMobile ? <MobileCalendar /> : <FetsCalendar />}
