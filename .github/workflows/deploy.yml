@@ -36,8 +36,8 @@ jobs:
             set -e
             cd /opt/apps/fets-live
             git fetch origin
-            git checkout main
-            git pull --ff-only
+            git checkout -f main
+            git reset --hard origin/main
             docker compose build app
             docker compose up -d --force-recreate app
             echo ""
