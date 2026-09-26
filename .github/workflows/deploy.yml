@@ -40,6 +40,8 @@ jobs:
             git reset --hard origin/main
             docker compose build app
             docker compose up -d --force-recreate app
+            # Restart Traefik to trigger SSL / ACME certificate renewal
+            (docker ps -q --filter "name=traefik" | xargs -r docker restart) || true
             echo ""
             echo "=== Verify deployed content ==="
             sleep 3
