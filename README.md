@@ -10,9 +10,29 @@ FETS.LIVE is a comprehensive staff management and operations platform built with
 - **docs/**: Project documentation and guides.
 - **supabase/**: Supabase configuration.
 
+## Deployment
+
+fets.live is a static SPA served by nginx on a VPS; Supabase provides the
+backend. To restore the site on a fresh or rebuilt server, and for the ongoing
+deploy flow, see **[VPS Restore Runbook](docs/VPS_RESTORE.md)**.
+
+```bash
+# on the VPS, from scratch
+bash scripts/vps/restore-fets-live.sh
+
+# subsequent releases
+bash deploy.sh
+```
+
+`scripts/vps/` also holds restore scripts for the other sites on the same
+server (e.g. `restore-costudy.sh`) and the shared `lib/common.sh` they build
+on.
+
 ## Documentation
 
 Key documentation files can be found in the `docs/` directory:
+
+- [VPS Restore Runbook](docs/VPS_RESTORE.md)
 
 - [Getting Started](docs/GETTING_STARTED.md)
 - [Start Here](docs/START-HERE.md)
