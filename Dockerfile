@@ -1,8 +1,18 @@
 # Stage 1: Build
 FROM node:22-alpine AS builder
 
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# ── System deps ──────────────────────────────────────────────────────────────
+# python3 + make + g++ → lets node-gyp compile native modules from source
+# vips-dev             → sharp's libvips binding (avoids CDN binary download)
+RUN apk add --no-cache python3 make g++ vips-dev
+
+# Install pnpm (pinned for reproducibility)
+RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
+
+# Force sharp to compile from source instead of downloading a prebuilt binary
+# (the VPS cannot reliably reach the sharp CDN)
+ENV SHARP_IGNORE_GLOBAL_LIBVIPS=1
+ENV npm_config_build_from_source=true
 
 WORKDIR /app
 
