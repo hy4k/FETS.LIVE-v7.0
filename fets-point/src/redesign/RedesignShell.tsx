@@ -4558,14 +4558,6 @@ function RosterGrid({ offsets, branch }) {
       </div>
     </div>
 
-    {/* ── CONSECUTIVE 7-DAY DUTY & LEAD SCHEDULE MATRIX (Directly under Roster Grid) ── */}
-    <RosterDutiesScheduleMatrix
-      offsets={offsets}
-      branch={branch}
-      leadsMap={leadsMap}
-      onReloadLeads={loadLeads}
-      cols={cols}
-    />
 
     {dialog && <RosterCellDialog ctx={dialog} onClose={() => setDialog(null)} onApply={(cell) => apply(dialog.name, dialog.off, cell)} />}
     {otDialog && <OtToilClaimDialog ctx={otDialog} onClose={() => setOtDialog(null)} />}
@@ -4573,8 +4565,9 @@ function RosterGrid({ offsets, branch }) {
   );
 }
 
-/* ═══ WEEKLY 6-DAY WORKING STRETCH DUTY & LEAD SCHEDULE DASHBOARD ══════════════ */
-function RosterDutiesScheduleMatrix({ offsets, branch, leadsMap, onReloadLeads, cols }: {
+/* ═══ RosterDutiesScheduleMatrix REMOVED — replaced by new method ══════════════ */
+// Placeholder — new implementation to be added here
+function _RosterDutiesScheduleMatrix_REMOVED({ offsets, branch, leadsMap, onReloadLeads, cols }: {
   offsets: number[];
   branch: string;
   leadsMap: Record<string, string>;
