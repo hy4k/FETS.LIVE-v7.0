@@ -6,6 +6,8 @@ FROM node:22-alpine AS builder
 # vips-dev             → sharp's libvips binding (avoids CDN binary download)
 RUN apk add --no-cache python3 make g++ vips-dev
 
+RUN npm install -g node-gyp
+
 # Install pnpm (v10+ required for --dangerously-allow-all-builds flag)
 RUN corepack enable && corepack prepare pnpm@10.13.1 --activate
 
