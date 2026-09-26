@@ -1085,28 +1085,37 @@ export async function dbCreateHandover(h: any) {
   }
 }
 
-export async function dbFetchPendingHandovers(staffName: string, userId?: string) {
+export async function dbFetchPendingHandovers(staffName?: string, userId?: string, branch?: string) {
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from("shift_handovers")
       .select("*")
       .eq("status", "pending")
       .order("created_at", { ascending: false });
+
+    if (branch && branch !== "global") {
+      query = query.in("branch", [branch, "all"]);
+    }
+
+    const { data, error } = await query;
     if (error) throw error;
     
-    const nameLower = staffName.toLowerCase().trim();
-    const results = (data || []).filter((h: any) => {
-      const hasName = (h.incoming_staff || []).some((n: string) => n.toLowerCase().trim() === nameLower);
-      const hasId = userId && (h.incoming_user_ids || []).includes(userId);
-      return hasName || hasId;
-    }).map((h: any) => {
+    let results = data || [];
+    if (staffName) {
+      const nameLower = staffName.toLowerCase().trim();
+      results = results.filter((h: any) => {
+        const hasName = (h.incoming_staff || []).some((n: string) => n.toLowerCase().trim() === nameLower);
+        const hasId = userId && (h.incoming_user_ids || []).includes(userId);
+        return hasName || hasId;
+      });
+    }
+    return results.map((h: any) => {
       const now = new Date();
       if (h.expires_at && new Date(h.expires_at) < now) {
         return { ...h, status: "expired" };
       }
       return h;
     });
-    return results;
   } catch (e) {
     console.error("dbFetchPendingHandovers error:", e);
     return [];
@@ -1198,7 +1207,7 @@ export async function dbCountPendingHandovers(staffName: string) {
       .from("shift_handovers")
       .select("id", { count: "exact", head: true })
       .eq("status", "pending")
-      .contains("incoming_staff", [staffName])
+      .filter("incoming_staff", "cs", JSON.stringify([staffName]))
       .gt("expires_at", new Date().toISOString());
     if (error) throw error;
     return count || 0;
@@ -1264,3 +1273,424 @@ export function markHandoverSeen(id: string) {
     localStorage.setItem("fets_seen_handovers", JSON.stringify(seen.slice(-200)));
   } catch {}
 }
+
+/* ====================================================================
+   STAFF APPLICATIONS PORTAL
+   New table: staff_applications (leave | swap | emergency_duty | reimbursement)
+   ==================================================================== */
+
+const APP_KIND_LABEL: Record<string, string> = {
+  leave:          "Leave",
+  swap:           "Shift Swap",
+  emergency_duty: "Emergency Duty Change",
+  reimbursement:  "Reimbursement",
+};
+
+async function notifyAdminsOfApplication(app: any) {
+  try {
+    const { data: admins } = await supabase
+      .from("staff_profiles")
+      .select("id, branch_assigned")
+      .or("role.eq.super_admin,role.eq.admin,role.eq.Super Admin,role.eq.Admin");
+
+    if (!admins || admins.length === 0) return;
+
+    const kindLabel = APP_KIND_LABEL[app.kind] || app.kind;
+    let title = `[${kindLabel}] ${app.applicant_name}`;
+    let message = "";
+
+    if (app.kind === "leave") {
+      message = `${app.applicant_name} applied for ${app.leave_type || "leave"} on ${app.request_date}. Reason: ${app.reason || "—"}`;
+    } else if (app.kind === "swap") {
+      message = `${app.applicant_name} wants to swap ${app.request_date} with ${app.swap_with_name} (${app.swap_date || "same date"}). Reason: ${app.reason || "—"}`;
+    } else if (app.kind === "emergency_duty") {
+      message = `${app.applicant_name} requests emergency duty change on ${app.request_date} → shift ${app.new_shift_code || "?"}. Reason: ${app.reason || "—"}`;
+    } else if (app.kind === "reimbursement") {
+      message = `${app.applicant_name} claims ₹${app.amount || 0} for ${app.expense_type || "expenses"}. Note: ${app.receipt_note || "—"}`;
+    }
+
+    const notifications = admins.map((admin: any) => ({
+      recipient_id: admin.id,
+      type: "critical_incident",
+      title,
+      message,
+      priority: app.kind === "emergency_duty" ? "critical" : "high",
+      branch_location: app.branch || admin.branch_assigned || "global",
+      is_read: false,
+      created_at: new Date().toISOString(),
+    }));
+
+    await supabase.from("notifications").insert(notifications);
+  } catch (err) {
+    console.error("notifyAdminsOfApplication error:", err);
+  }
+}
+
+async function notifyApplicantOfResolution(app: any, status: string, adminReply: string) {
+  try {
+    if (!app.applicant_id) return;
+    const kindLabel = APP_KIND_LABEL[app.kind] || app.kind;
+    const approved = status === "approved";
+    const title = approved
+      ? `✅ ${kindLabel} Approved`
+      : `❌ ${kindLabel} Rejected`;
+    const message = adminReply
+      ? `Your ${kindLabel.toLowerCase()} request was ${status}. Admin says: "${adminReply}"`
+      : `Your ${kindLabel.toLowerCase()} request was ${status}.`;
+
+    await supabase.from("notifications").insert([{
+      recipient_id: app.applicant_id,
+      type: approved ? "success" : "critical_incident",
+      title,
+      message,
+      priority: "high",
+      branch_location: app.branch || "global",
+      is_read: false,
+      created_at: new Date().toISOString(),
+    }]);
+  } catch (err) {
+    console.error("notifyApplicantOfResolution error:", err);
+  }
+}
+
+export async function dbSubmitApplication(app: {
+  kind: string;
+  request_date?: string;
+  leave_type?: string;
+  swap_with_name?: string;
+  swap_with_id?: string;
+  swap_date?: string;
+  new_shift_code?: string;
+  amount?: number;
+  expense_type?: string;
+  receipt_note?: string;
+  reason?: string;
+}) {
+  const f = F();
+  const applicantName = f._meName || f.user?.name || "Staff";
+  const applicantId = f._meId || (f._staffIdByName ? f._staffIdByName[applicantName] : null);
+  const applicantUserId = f._meUserId || (f._staffUserIdByName ? f._staffUserIdByName[applicantName] : null) || applicantId;
+  const branch = f._meBranch || (f._profileBranch && applicantId ? f._profileBranch[applicantId] : "calicut");
+
+  const targetName = app.swap_with_name || "";
+  const targetId = app.swap_with_id || (f._staffIdByName && targetName ? f._staffIdByName[targetName] : null);
+  const targetUserId = (f._staffUserIdByName && targetName ? f._staffUserIdByName[targetName] : null) || (f._profileIdToUserId && targetId ? f._profileIdToUserId[targetId] : null) || targetId;
+
+  // ── 1. Insert into staff_applications (canonical table, UUID id) ──────────
+  const saRow: any = {
+    kind: app.kind,
+    status: "pending",
+    applicant_id: applicantId || undefined,
+    applicant_name: applicantName,
+    branch,
+    request_date: app.request_date || new Date().toISOString().split("T")[0],
+    leave_type: app.leave_type || (app.kind === "leave" ? "Full-day" : null),
+    swap_with_name: targetName || null,
+    swap_with_id: targetId || undefined,
+    swap_date: app.swap_date || app.request_date || null,
+    new_shift_code: app.new_shift_code || null,
+    amount: app.amount || null,
+    expense_type: app.expense_type || null,
+    receipt_note: app.receipt_note || null,
+    reason: app.reason || ""
+  };
+  // Remove undefined keys
+  Object.keys(saRow).forEach(k => { if (saRow[k] === undefined) delete saRow[k]; });
+
+  let dbResult: any = null;
+  try {
+    const { data: saData, error: saError } = await supabase
+      .from("staff_applications")
+      .insert([saRow])
+      .select()
+      .single();
+    if (!saError && saData) {
+      dbResult = {
+        id: String(saData.id),
+        kind: saData.kind,
+        status: saData.status,
+        applicant_id: saData.applicant_id,
+        applicant_name: saData.applicant_name,
+        branch: saData.branch,
+        request_date: saData.request_date,
+        leave_type: saData.leave_type,
+        swap_with_name: saData.swap_with_name,
+        swap_with_id: saData.swap_with_id,
+        swap_date: saData.swap_date,
+        new_shift_code: saData.new_shift_code,
+        amount: saData.amount,
+        expense_type: saData.expense_type,
+        receipt_note: saData.receipt_note,
+        reason: saData.reason,
+        admin_reply: null,
+        created_at: saData.created_at
+      };
+    } else {
+      console.warn("staff_applications insert error:", saError?.message);
+    }
+  } catch (err) {
+    console.warn("staff_applications insert threw:", err);
+  }
+
+  // ── 2. Also notify via leave_requests (best-effort, audit trail) ──────────
+  try {
+    const reasonEncoded = JSON.stringify({
+      kind: app.kind, leave_type: app.leave_type,
+      swap_with_name: targetName, swap_with_id: targetId, swap_date: app.swap_date,
+      new_shift_code: app.new_shift_code, amount: app.amount,
+      expense_type: app.expense_type, receipt_note: app.receipt_note,
+      user_note: app.reason, applicant_name: applicantName, applicant_id: applicantId, branch,
+      staff_application_id: dbResult?.id  // link back to canonical record
+    });
+    const lrRow: any = {
+      user_id: applicantUserId,
+      request_type: app.kind === "swap" ? "shift_swap" : app.kind,
+      requested_date: app.request_date || new Date().toISOString().split("T")[0],
+      reason: reasonEncoded,
+      status: "pending"
+    };
+    if (app.kind === "swap" && targetUserId) {
+      lrRow.swap_with_user_id = targetUserId;
+      lrRow.swap_date = app.swap_date || app.request_date;
+    }
+    await supabase.from("leave_requests").insert([lrRow]);
+  } catch (_) {}
+
+  // ── 3. Build final app object ──────────────────────────────────────────────
+  const finalApp = dbResult || {
+    id: `app_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    kind: app.kind, status: "pending",
+    applicant_id: applicantId, applicant_name: applicantName, branch,
+    request_date: app.request_date || new Date().toISOString().split("T")[0],
+    leave_type: app.leave_type || (app.kind === "leave" ? "Full-day" : null),
+    swap_with_name: targetName || null, swap_with_id: targetId || null,
+    swap_date: app.swap_date || app.request_date || null,
+    new_shift_code: app.new_shift_code || null, amount: app.amount || null,
+    expense_type: app.expense_type || null, receipt_note: app.receipt_note || null,
+    reason: app.reason || "", admin_reply: null,
+    created_at: new Date().toISOString()
+  };
+
+  // Update local memory and localStorage
+  if (!f._applications) f._applications = [];
+  f._applications = [finalApp, ...f._applications.filter((a: any) => String(a.id) !== String(finalApp.id))];
+
+  if (!f._myApplications) f._myApplications = [];
+  f._myApplications = [finalApp, ...f._myApplications.filter((a: any) => String(a.id) !== String(finalApp.id))];
+
+  // Also synchronize with _staffRequests so roster can immediately show pending tags
+  if (!f._staffRequests) f._staffRequests = [];
+  f._staffRequests = [
+    {
+      id: String(finalApp.id),
+      kind: finalApp.kind,
+      who: finalApp.applicant_name,
+      with: finalApp.swap_with_name || "",
+      branch: finalApp.branch || "calicut",
+      leaveType: finalApp.leave_type || (finalApp.kind === "leave" ? "Full-day" : ""),
+      date: finalApp.request_date || "",
+      swapDate: finalApp.swap_date || finalApp.request_date || "",
+      reason: finalApp.reason || "",
+      status: "Submitted",
+      user_id: finalApp.applicant_id,
+      swap_with_user_id: finalApp.swap_with_id,
+      new_shift_code: finalApp.new_shift_code
+    },
+    ...f._staffRequests.filter((r: any) => String(r.id) !== String(finalApp.id))
+  ];
+
+  // Save to persistent localStorage
+  try {
+    const stored = JSON.parse(localStorage.getItem("fets_staff_applications") || "[]");
+    const updated = [finalApp, ...stored.filter((a: any) => String(a.id) !== String(finalApp.id))];
+    localStorage.setItem("fets_staff_applications", JSON.stringify(updated.slice(0, 100)));
+  } catch (e) {}
+
+  window.dispatchEvent(new Event("fets-applications-changed"));
+  window.dispatchEvent(new Event("fets-roster-changed"));
+
+  rtoast("Application submitted ✓");
+  notifyAdminsOfApplication(finalApp);
+  return finalApp;
+}
+
+export async function dbResolveApplication(appId: string, status: "approved" | "rejected", adminReply: string) {
+  const f = F();
+  const adminName = f.user?.name || "Super Admin";
+  const adminId = f._meId || null;
+  const adminUserId = f._meUserId || adminId;
+
+  // Find the app in cache or storage
+  const storedApps = JSON.parse(localStorage.getItem("fets_staff_applications") || "[]");
+  const app = (f._applications || []).find((a: any) => String(a.id) === String(appId)) ||
+              storedApps.find((a: any) => String(a.id) === String(appId));
+
+  // ── Update staff_applications (UUID — always the canonical source) ──────────
+  let dbUpdated = false;
+  try {
+    const { error } = await supabase
+      .from("staff_applications")
+      .update({
+        status,
+        admin_reply: adminReply || null,
+        resolved_by: adminId || undefined,
+        resolved_at: new Date().toISOString()
+      })
+      .eq("id", appId);
+    if (!error) {
+      dbUpdated = true;
+    } else {
+      console.warn("staff_applications update error:", error.message);
+      // Fallback: try leave_requests if numeric id
+      if (!isNaN(Number(appId))) {
+        await supabase.from("leave_requests").update({
+          status, admin_reply: adminReply || null,
+          approved_by: adminUserId, approved_at: new Date().toISOString()
+        }).eq("id", Number(appId));
+      }
+    }
+  } catch (e) {
+    console.warn("resolve DB update threw:", e);
+  }
+
+  // ROSTER UPDATE ON APPROVAL
+  if (status === "approved" && app) {
+    const applicantName = app.applicant_name || app.who;
+    const applicantId = app.applicant_id || (f._staffIdByName && applicantName ? f._staffIdByName[applicantName] : null);
+    const date = app.request_date || app.date;
+    const branch = app.branch || (f._profileBranch && applicantId ? f._profileBranch[applicantId] : "calicut");
+
+    // Helper: update both the localStorage rosterSet AND the live _dbRoster cache
+    // rosterSet expects a numeric offset; _dbRoster[name][offset] = {code, ot}
+    const applyRosterChange = (name: string, dateStr: string, code: string) => {
+      if (!name || !dateStr) return;
+      try {
+        const offset = f.offsetOf ? f.offsetOf(new Date(dateStr)) : null;
+        if (offset != null && !isNaN(offset)) {
+          // Update localStorage-backed roster (for persistent display)
+          if (f.rosterSet) f.rosterSet(name, offset, { code, ot: 0 });
+          // Update live _dbRoster cache directly (what the roster grid reads)
+          if (f._dbRoster) {
+            f._dbRoster[name] = f._dbRoster[name] || {};
+            f._dbRoster[name][offset] = { code, ot: 0 };
+          }
+        }
+      } catch(e) { console.warn("applyRosterChange error:", e); }
+    };
+
+    // 1. LEAVE APPROVAL -> Set Roster Cell to 'L'
+    if (app.kind === "leave") {
+      if (applicantId && date) {
+        await dbSetRosterById(applicantId, date, "L", branch);
+        applyRosterChange(applicantName, date, "L");
+      }
+    }
+
+    // 2. EMERGENCY DUTY CHANGE APPROVAL -> Set Roster Cell to new_shift_code
+    else if (app.kind === "emergency_duty") {
+      const newShift = app.new_shift_code || "D";
+      if (applicantId && date) {
+        await dbSetRosterById(applicantId, date, newShift, branch);
+        applyRosterChange(applicantName, date, newShift);
+      }
+    }
+
+    // 3. SHIFT SWAP APPROVAL -> Swap Roster Cells between applicant and target
+    // A full shift swap affects 4 cells:
+    //   dateA: Person A and Person B swap their shifts on dateA
+    //   dateB: Person A and Person B swap their shifts on dateB
+    else if (app.kind === "swap") {
+      const partnerName = app.swap_with_name || app.with;
+      const partnerId = app.swap_with_id || (f._staffIdByName && partnerName ? f._staffIdByName[partnerName] : null);
+      const dateA = app.request_date || app.date;
+      const dateB = app.swap_date || app.swapDate || dateA;
+
+      if (applicantId && partnerId && applicantName && partnerName && dateA) {
+        // Read all 4 current shift codes from DB
+        let codeA_onDateA = "D", codeB_onDateA = "D";
+        let codeA_onDateB = "D", codeB_onDateB = "D";
+        try {
+          const [rA_A, rB_A, rA_B, rB_B] = await Promise.all([
+            supabase.from("roster_schedules").select("shift_code").eq("profile_id", applicantId).eq("date", dateA).maybeSingle(),
+            supabase.from("roster_schedules").select("shift_code").eq("profile_id", partnerId).eq("date", dateA).maybeSingle(),
+            supabase.from("roster_schedules").select("shift_code").eq("profile_id", applicantId).eq("date", dateB).maybeSingle(),
+            supabase.from("roster_schedules").select("shift_code").eq("profile_id", partnerId).eq("date", dateB).maybeSingle()
+          ]);
+          if (rA_A.data?.shift_code) codeA_onDateA = rA_A.data.shift_code;
+          if (rB_A.data?.shift_code) codeB_onDateA = rB_A.data.shift_code;
+          if (rA_B.data?.shift_code) codeA_onDateB = rA_B.data.shift_code;
+          if (rB_B.data?.shift_code) codeB_onDateB = rB_B.data.shift_code;
+        } catch(e) { console.warn("Swap: could not read current codes from DB:", e); }
+
+        const branchA = (f._profileBranch && f._profileBranch[applicantId]) || "calicut";
+        const branchB = (f._profileBranch && f._profileBranch[partnerId]) || "calicut";
+
+        // On dateA: Person A gets Person B's code, Person B gets Person A's code
+        await dbSetRosterById(applicantId, dateA, codeB_onDateA, branchA);
+        await dbSetRosterById(partnerId,   dateA, codeA_onDateA, branchB);
+        applyRosterChange(applicantName, dateA, codeB_onDateA);
+        applyRosterChange(partnerName,   dateA, codeA_onDateA);
+
+        // On dateB: Person A gets Person B's code, Person B gets Person A's code
+        await dbSetRosterById(applicantId, dateB, codeB_onDateB, branchA);
+        await dbSetRosterById(partnerId,   dateB, codeA_onDateB, branchB);
+        applyRosterChange(applicantName, dateB, codeB_onDateB);
+        applyRosterChange(partnerName,   dateB, codeA_onDateB);
+      }
+    }
+
+  }
+
+  // Update in-memory applications cache
+  const updatedApp = {
+    ...app,
+    status,
+    admin_reply: adminReply || null,
+    resolved_by: adminName,
+    resolved_at: new Date().toISOString()
+  };
+
+  if (f._applications) {
+    f._applications = f._applications.map((a: any) => String(a.id) === String(appId) ? updatedApp : a);
+  }
+  if (f._myApplications) {
+    f._myApplications = f._myApplications.map((a: any) => String(a.id) === String(appId) ? updatedApp : a);
+  }
+  if (f._staffRequests) {
+    f._staffRequests = f._staffRequests.map((r: any) => String(r.id) === String(appId) ? {
+      ...r,
+      status: status === "approved" ? "Approved" : "Rejected"
+    } : r);
+  }
+
+  // Update localStorage
+  try {
+    const stored = JSON.parse(localStorage.getItem("fets_staff_applications") || "[]");
+    const updated = stored.map((a: any) => String(a.id) === String(appId) ? updatedApp : a);
+    localStorage.setItem("fets_staff_applications", JSON.stringify(updated));
+  } catch (e) {}
+
+  window.dispatchEvent(new Event("fets-applications-changed"));
+  window.dispatchEvent(new Event("fets-roster-changed"));
+
+  // Force roster re-fetch so the swapped/changed cells are immediately visible
+  if (status === "approved") {
+    try {
+      const { ensureMonth } = await import("./live-data");
+      const today = new Date();
+      // Clear month cache so ensureMonth re-fetches fresh from DB
+      (window as any).__fetsLoadedMonths?.clear?.();
+      await Promise.all([
+        ensureMonth(today),
+        ensureMonth(new Date(today.getFullYear(), today.getMonth() + 1, 1)),
+        ensureMonth(new Date(today.getFullYear(), today.getMonth() - 1, 1))
+      ]);
+    } catch(e) { /* ignore — roster event was already fired */ }
+  }
+
+  notifyApplicantOfResolution(updatedApp, status, adminReply);
+  rtoast(status === "approved" ? "Application approved ✓ Roster updated" : "Application rejected");
+  return updatedApp;
+}
+
+

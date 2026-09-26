@@ -18,6 +18,7 @@ import { NewsManager } from './NewsManager'
 import { TelemetryPanel } from './fetsai/TelemetryPanel'
 import { DataVaultPanel } from './fetsai/DataVaultPanel'
 import { SettingsPanel } from './fetsai/SettingsPanel'
+import { GeminiLiveStudio } from './Chat/GeminiLiveStudio'
 
 interface ChatMessage {
   id: string
@@ -90,6 +91,7 @@ export function FetsIntelligence({ initialTab = 'chat', initialQuery }: FetsAIPr
   const handleSend = (e?: React.FormEvent) => { e?.preventDefault(); if (query.trim()) submitQuery(query) }
 
   const tabs = [
+    { id: 'gemini-live', label: 'Gemini 3.1 Live', icon: Sparkles },
     { id: 'chat', label: 'Assistant', icon: Sparkles },
     { id: 'news', label: 'Broadcasts', icon: Newspaper },
     { id: 'exam-stats', label: 'Telemetry', icon: Activity },
@@ -162,6 +164,18 @@ export function FetsIntelligence({ initialTab = 'chat', initialQuery }: FetsAIPr
         {/* ---------- CONTENT ---------- */}
         <div className="flex-1 flex flex-col pb-6">
           <AnimatePresence mode="wait">
+            {activeTab === 'gemini-live' && (
+              <motion.div
+                key="gemini-live"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                className="flex-1 w-full mb-4"
+              >
+                <GeminiLiveStudio />
+              </motion.div>
+            )}
+
             {activeTab === 'chat' && (
               <motion.div key="chat" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
                 className="flex-1 flex flex-col bg-white/80 backdrop-blur-xl border border-white rounded-[24px] shadow-[0_20px_50px_-30px_rgba(30,41,59,0.5)] overflow-hidden">

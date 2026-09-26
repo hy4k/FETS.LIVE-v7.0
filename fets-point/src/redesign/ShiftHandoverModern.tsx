@@ -204,7 +204,12 @@ export function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestio
   const isAdmin = !!window.FETS?.isAdmin;
   const people = React.useMemo(() => {
     const centre = branch === "global" ? (window.FETS?._meBranch || "calicut") : branch;
-    return Array.from(new Set(window.FETS?.STAFF?.[centre] || window.FETS?.PEOPLE || [])).filter(Boolean).sort();
+    const defaultStaff = centre === "cochin" ? ["Naima MM", "NIMMY M", "Shimna"] : ["Anshitha K", "Aysha", "Bindu Rajan", "Lazeem", "Nilufer"];
+    return Array.from(new Set([
+      ...(window.FETS?.STAFF?.[centre] || []),
+      ...(window.FETS?.PEOPLE || []),
+      ...defaultStaff
+    ])).filter(Boolean).sort();
   }, [branch]);
   const draftKey = `fets_handover_v2_draft_${branch}`;
   const [date, setDate] = React.useState(nowDate());
@@ -394,9 +399,10 @@ export function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestio
         if (!alive) return;
 
         if (assignData && assignData.staff_names && assignData.staff_names.length > 0) {
-          setAssignedIncoming(assignData.staff_names);
+          const leadPerson = assignData.staff_names[0];
+          setAssignedIncoming([leadPerson]);
           setHasIncomingAssignment(true);
-          setIncoming(assignData.staff_names);
+          setIncoming([leadPerson]);
           return;
         }
 
@@ -422,7 +428,7 @@ export function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestio
           const uniqueNames = Array.from(new Set(names)) as string[];
           setRosteredIncoming(uniqueNames);
           if (uniqueNames.length) {
-            setIncoming(uniqueNames);
+            setIncoming([uniqueNames[0]]);
           } else {
             setIncoming([]);
           }
@@ -523,20 +529,24 @@ export function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestio
     return false;
   }, [existingHandover, todayAssignment, hasTodayAssignment, assignedIncoming, hasIncomingAssignment, me, date, branch]);
 
+  const [showAllIncoming, setShowAllIncoming] = React.useState(false);
+  const primaryIncomingLead = React.useMemo(() => {
+    if (assignedIncoming.length > 0) return assignedIncoming[0];
+    if (rosteredIncoming.length > 0) return rosteredIncoming[0];
+    return people.find((n: string) => n !== me) || people[0] || me;
+  }, [assignedIncoming, rosteredIncoming, people, me]);
+
   const allowedIncomingOptions = React.useMemo(() => {
     if (existingHandover) {
       return incoming;
     }
-    if (hasIncomingAssignment) {
-      return assignedIncoming;
+    if (showAllIncoming) {
+      return people;
     }
-    if (rosteredIncoming.length > 0) {
-      return rosteredIncoming;
-    }
-    return people.filter((name: string) => name !== me);
-  }, [existingHandover, incoming, hasIncomingAssignment, assignedIncoming, rosteredIncoming, people, me]);
+    return [primaryIncomingLead];
+  }, [existingHandover, incoming, showAllIncoming, primaryIncomingLead, people]);
 
-  const toggleIncoming = (name: string) => setIncoming((list) => list.includes(name) ? list.filter((x) => x !== name) : [...list, name]);
+  const selectIncoming = (name: string) => setIncoming([name]);
   const updateSummary = (key: string, value: any) => setSummary((state) => ({ ...state, [key]: value }));
   const updateReadiness = (id: string, patch: any) => setReadiness((state) => ({ ...state, [id]: { ...state[id], ...patch } }));
   const addTask = () => setTasks((list) => [...list, { id: crypto.randomUUID(), title: "", priority: "before_first_session", owner: incoming[0] || "", deadline: `${toYMD(tomorrow)}T08:00`, notes: "" }]);
@@ -554,23 +564,21 @@ export function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestio
     };
   });
 
-  const issueCount = readinessRows.filter((item) => item.status === "issue").length;
-  const uncheckedCount = readinessRows.filter((item) => item.status === "unchecked").length;
   const invalidTask = tasks.some((task) => !task.title.trim() || !task.owner || !task.deadline);
-  const canSubmit = incoming.length > 0 && confirmed && uncheckedCount === 0 && !invalidTask;
+  const canSubmit = incoming.length > 0 && confirmed && !invalidTask;
 
   async function submit() {
     if (!canSubmit || submitting) return;
     setSubmitting(true);
     const outgoingUserId = window.FETS?._meUserId;
-    const incomingIds = incoming.map((name) => window.FETS?._staffUserIdByName?.[name]).filter(Boolean);
+    const incomingIds = incoming.slice(0, 1).map((name) => window.FETS?._staffUserIdByName?.[name]).filter(Boolean);
     const sig = { name: me, user_id: outgoingUserId || null, time: new Date().toISOString() };
     const result = await DB.dbCreateHandover({
       branch: branch === "global" ? (window.FETS?._meBranch || "calicut") : branch,
       date,
       handover_time: time,
       outgoing_staff: [me],
-      incoming_staff: incoming,
+      incoming_staff: incoming.slice(0, 1),
       outgoing_user_ids: outgoingUserId ? [outgoingUserId] : [],
       incoming_user_ids: incomingIds,
       currently_testing: Number(summary.attended) || 0,
@@ -607,26 +615,38 @@ export function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestio
         <div>
           <span className="sh-page-kicker">SHIFT END · {titleBranch(branch).toUpperCase()}</span>
           <h1>Close today. Prepare tomorrow.</h1>
-          <p>Record the day’s status and anything the opening team needs to know.</p>
+          <p>Record the day’s status and hand over to the incoming shift lead.</p>
         </div>
         {!existingHandover && <span className="sh-saved"><CheckCircle2 size={14} /> Draft saved</span>}
       </div>
 
-      <Section number={1} eyebrow="Step 1" title="Handover details" description="Staff and timing for this handover.">
+      <Section number={1} eyebrow="Step 1" title="Handover details" description="Designated shift lead and timing.">
         <div className="sh-form-grid">
           <Field label="Centre"><input value={titleBranch(branch)} disabled /></Field>
           <Field label="Handover date"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
-          <Field label="Closing staff"><input value={me} disabled /></Field>
+          <Field label="Closing Shift Lead"><input value={me} disabled /></Field>
           <Field label="Closing time"><input type="time" value={time} onChange={(e) => setTime(e.target.value)} disabled={isLocked} /></Field>
         </div>
-        <div className="sh-sub-label">Next opening staff</div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12, marginBottom: 4 }}>
+          <div className="sh-sub-label" style={{ margin: 0 }}>Designated Opening Lead (Next Shift)</div>
+          {!isLocked && !existingHandover && (
+            <button
+              type="button"
+              className="at-btn at-btn-sm"
+              style={{ fontSize: 10.5, padding: "2px 8px" }}
+              onClick={() => setShowAllIncoming((prev) => !prev)}
+            >
+              {showAllIncoming ? "Show Only Designated Lead" : "Change / Select Other Staff"}
+            </button>
+          )}
+        </div>
         <div className="sh-people">
           {allowedIncomingOptions.map((name: string) => (
             <button
               type="button"
               key={name}
               className={incoming.includes(name) ? "active" : ""}
-              onClick={() => !isLocked && toggleIncoming(name)}
+              onClick={() => !isLocked && selectIncoming(name)}
               disabled={isLocked}
             >
               <span>{initials(name)}</span>
@@ -695,31 +715,9 @@ export function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestio
       </Section>
       )}
 
-      <Section
-        number={trimmed ? 3 : 4}
-        eyebrow={trimmed ? "Step 3" : "Step 4"}
-        title="Centre readiness"
-        description="Use Not checked when a closing verification was not performed."
-        action={isAdmin && (
-          <button type="button" className="sh-manage-q-btn" onClick={onManageQuestions} disabled={isLocked}>
-            <Settings size={14} /> Manage Questions
-          </button>
-        )}
-      >
-        <div className="sh-readiness">
-          {readinessRows.map((item: any) => {
-            return <div className={`sh-ready-row ${item.status === "issue" ? "has-issue" : ""}`} key={item.id}>
-              <span className="sh-ready-icon"><Laptop size={16} /></span><span className="sh-ready-name"><strong>{item.label}</strong><small>{item.description}</small></span>
-              <StatusChoice value={item.status} onChange={(value: string) => updateReadiness(item.id, { status: value })} disabled={isLocked} />
-              {item.status === "issue" && <label className="sh-issue-note"><span>Issue details required</span><input value={item.note} onChange={(e) => updateReadiness(item.id, { note: e.target.value })} placeholder="What is wrong, what was done, and what remains?" disabled={isLocked} /></label>}
-            </div>;
-          })}
-        </div>
-        {(issueCount > 0 || uncheckedCount > 0) && <div className="sh-warning"><AlertTriangle size={18} /><p><strong>{issueCount} issue{issueCount === 1 ? "" : "s"}, {uncheckedCount} not checked.</strong> Unchecked items must be reviewed before submission.</p></div>}
-      </Section>
 
       {!trimmed && (
-      <Section number={5} eyebrow="Step 5" title="Pending tasks" description="Every pending action needs an owner and deadline.">
+      <Section number={trimmed ? 3 : 4} eyebrow={trimmed ? "Step 3" : "Step 4"} title="Pending tasks" description="Every pending action needs an owner and deadline.">
         <div className="sh-task-list">
           {tasks.map((task) => <div className="sh-task" key={task.id}>
             <div className="sh-task-top"><select value={task.priority} onChange={(e) => updateTask(task.id, { priority: e.target.value })} disabled={isLocked}><option value="critical">Critical</option><option value="before_first_session">Before first session</option><option value="today">Today</option><option value="routine">Routine</option></select><button type="button" onClick={() => !isLocked && removeTask(task.id)} title="Remove task" disabled={isLocked}><Trash2 size={16} /></button></div>
@@ -733,7 +731,7 @@ export function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestio
       </Section>
       )}
 
-      <Section number={trimmed ? 4 : 6} eyebrow={trimmed ? "Final step" : "Final step"} title="Confirm and send handover" description="The opening staff will receive this record for review and acceptance.">
+      <Section number={trimmed ? 4 : 5} eyebrow={trimmed ? "Final step" : "Final step"} title="Confirm and send handover" description="The opening staff will receive this record for review and acceptance.">
         <label className="sh-declaration"><input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} disabled={isLocked} /><span><strong>I confirm that this handover is accurate.</strong><small>All known incidents, technical issues and pending actions have been recorded or linked.</small></span></label>
         <div className="sh-signature"><span>{initials(me)}</span><span><strong>{me}</strong><small>Closing staff · {titleBranch(branch)}</small></span><small>Digitally signed on submission</small></div>
         <button type="button" className="sh-primary" disabled={!canSubmit || submitting || isLocked} onClick={submit}>{submitting ? <><Loader2 className="spin" size={16} /> Submitting…</> : <>Submit shift handover <ChevronRight size={17} /></>}</button>
@@ -742,7 +740,7 @@ export function ShiftEnd({ branch, onSubmitted, refreshQTrigger, onManageQuestio
         ) : isLocked ? (
           <p className="sh-submit-help" style={{ color: "var(--sh-red)", fontWeight: "bold" }}>You are not the outgoing staff member for this shift. Access is view-only.</p>
         ) : (
-          !canSubmit && <p className="sh-submit-help">Select incoming staff, complete all readiness checks, fix incomplete tasks and confirm the declaration.</p>
+          !canSubmit && <p className="sh-submit-help">Select incoming staff, fix incomplete tasks and confirm the declaration.</p>
         )}
       </Section>
     </div>
@@ -754,7 +752,7 @@ export function ShiftBeginning({ branch, refreshKey, onAccepted, trimmed }: any)
   const [items, setItems] = React.useState<any[]>([]);
   const [selected, setSelected] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(true);
-  const [checks, setChecks] = React.useState([true, false, false, false]);
+  const [checks, setChecks] = React.useState([true, false, false]);
   const [status, setStatus] = React.useState("ready");
   const [comment, setComment] = React.useState("");
   const [confirmed, setConfirmed] = React.useState(false);
@@ -762,17 +760,24 @@ export function ShiftBeginning({ branch, refreshKey, onAccepted, trimmed }: any)
 
   const load = React.useCallback(async () => {
     setLoading(true);
-    const rows = await DB.dbFetchPendingHandovers(me, window.FETS?._meUserId);
+    const rows = await DB.dbFetchPendingHandovers(undefined, undefined, branch);
     const relevant = (rows || []).filter((row: any) => branch === "global" || row.branch === branch || row.branch === "all");
     setItems(relevant);
     setSelected((current: any) => relevant.find((row: any) => row.id === current?.id) || relevant[0] || null);
     setLoading(false);
-  }, [me, branch]);
+  }, [branch]);
 
   React.useEffect(() => { load(); }, [load, refreshKey]);
 
   if (loading) return <div className="sh-loading"><Loader2 className="spin" /> Loading handover…</div>;
   if (!selected) return <EmptyState icon={ClipboardCheck} title="No handover awaiting you" text="New handovers assigned to you will appear here before your next shift." />;
+
+  const incomingStaffList = (selected.incoming_staff && selected.incoming_staff.length > 0)
+    ? selected.incoming_staff
+    : [me];
+  const incomingName = incomingStaffList[0] || me;
+  const incomingFirstName = incomingName.split(" ")[0];
+  const outgoingName = selected.sig_out?.name || (selected.outgoing_staff && selected.outgoing_staff.length > 0 ? selected.outgoing_staff[0] : "Outgoing Lead");
 
   const summary = {
     total: selected.total_sessions ?? "—",
@@ -783,16 +788,22 @@ export function ShiftBeginning({ branch, refreshKey, onAccepted, trimmed }: any)
   const sessions = selected.next_day_sessions || [];
   const tasks = selected.pending_items || [];
   const completeCount = checks.filter(Boolean).length;
-  const acceptEnabled = completeCount === 4 && confirmed && (status === "ready" || comment.trim());
+  const acceptEnabled = completeCount === 3 && confirmed && (status === "ready" || comment.trim());
 
   async function accept() {
     if (!acceptEnabled || signing) return;
     setSigning(true);
-    const sig = { name: me, user_id: window.FETS?._meUserId || null, time: new Date().toISOString(), acceptance_status: status };
+    const sig = {
+      name: incomingName,
+      user_id: window.FETS?._meUserId || null,
+      time: new Date().toISOString(),
+      acceptance_status: status,
+      ...(me && me !== incomingName ? { entered_by: me } : {})
+    };
     const result = await DB.dbCompleteHandover(selected.id, sig, comment);
     setSigning(false);
     if (result) {
-      setChecks([true, false, false, false]); setConfirmed(false); setComment(""); setStatus("ready");
+      setChecks([true, false, false]); setConfirmed(false); setComment(""); setStatus("ready");
       await load(); onAccepted?.();
     }
   }
@@ -800,13 +811,24 @@ export function ShiftBeginning({ branch, refreshKey, onAccepted, trimmed }: any)
   return (
     <div className="sh-stack">
       <div className="sh-page-intro">
-        <div><span className="sh-page-kicker">SHIFT BEGINNING · {titleBranch(branch).toUpperCase()}</span><h1>Good morning, {me.split(" ")[0]}.</h1><p>Review the previous handover, verify the centre and take charge of today’s shift.</p></div>
-        <div className="sh-from"><span>{initials(selected.sig_out?.name || selected.outgoing_staff?.[0])}</span><span><small>Handover from</small><strong>{selected.sig_out?.name || selected.outgoing_staff?.join(", ")}</strong><small>{displayDate(selected.date)} · {selected.handover_time}</small></span></div>
+        <div>
+          <span className="sh-page-kicker">SHIFT BEGINNING · {titleBranch(branch).toUpperCase()}</span>
+          <h1>Good morning, {incomingFirstName}.</h1>
+          <p>Review the previous handover, verify the centre and take charge of today’s shift.</p>
+        </div>
+        <div className="sh-from">
+          <span>{initials(outgoingName)}</span>
+          <span>
+            <small>Handover from</small>
+            <strong>{outgoingName}</strong>
+            <small>{displayDate(selected.date)} · {selected.handover_time}</small>
+          </span>
+        </div>
       </div>
 
       {(selected.overall_status === "attention" || selected.overall_status === "not_ready" || tasks.length > 0) && <div className="sh-opening-alert"><AlertTriangle size={20} /><span><strong>{tasks.length || 1} item{tasks.length === 1 ? "" : "s"} needs attention</strong><small>Review the pending action before beginning operations.</small></span></div>}
 
-      <Section number={1} eyebrow="Previous shift" title="Handover summary" description={`Submitted by ${(selected.outgoing_staff || []).join(", ")} on ${displayDate(selected.date)}.`}>
+      <Section number={1} eyebrow="Previous shift" title="Handover summary" description={`Submitted by ${outgoingName} on ${displayDate(selected.date)}.`}>
         <div className={`sh-summary-status ${selected.overall_status || "ready"}`}><i /><span><strong>{selected.overall_status === "minor" ? "Ready with minor issues" : selected.overall_status === "attention" ? "Attention required" : selected.overall_status === "not_ready" ? "Not ready" : "Ready for the day"}</strong><small>Read the notes and actions before accepting responsibility.</small></span><em><Check size={13} /> Submitted</em></div>
         <div className="sh-summary-metrics"><div><strong>{summary.total}</strong><span>Sessions</span></div><div><strong>{summary.attended}</strong><span>Attended</span></div><div><strong>{summary.noShow}</strong><span>No-show</span></div><div><strong>{summary.incidents}</strong><span>Incidents</span></div></div>
         <div className="sh-closing-note"><span>Closing note</span><p>{selected.candidate_notes || "No additional closing note."}</p></div>
@@ -821,11 +843,10 @@ export function ShiftBeginning({ branch, refreshKey, onAccepted, trimmed }: any)
       <Section number={trimmed ? 2 : 3} eyebrow="Opening check" title="Verify before operations" description="Complete these checks after reaching the centre.">
         <div className="sh-opening-checks">{[
           "I reviewed the previous handover",
-          "I reviewed today’s sessions",
-          "I verified centre readiness",
+          "I reviewed today's sessions",
           "I checked all pending actions",
         ].map((label, index) => <label className={checks[index] ? "checked" : ""} key={label}><input type="checkbox" checked={checks[index]} onChange={(e) => setChecks((state) => state.map((value, i) => i === index ? e.target.checked : value))} /><span><Check size={14} /></span>{label}</label>)}</div>
-        <div className="sh-progress"><span><i style={{ width: `${completeCount * 25}%` }} /></span><strong>{completeCount} of 4 completed</strong></div>
+        <div className="sh-progress"><span><i style={{ width: `${completeCount * 33.33}%` }} /></span><strong>{completeCount} of 3 completed</strong></div>
       </Section>
 
       {!trimmed && (
@@ -842,9 +863,9 @@ export function ShiftBeginning({ branch, refreshKey, onAccepted, trimmed }: any)
         ].map(([id, label, detail, Icon]: any) => <button type="button" key={id} className={status === id ? "active" : ""} onClick={() => setStatus(id)}><Icon size={18} /><span><strong>{label}</strong><small>{detail}</small></span>{status === id && <Check size={14} />}</button>)}</div>
         {status !== "ready" && <Field label="Describe the exception or new issue" wide><textarea rows={3} value={comment} onChange={(e) => setComment(e.target.value)} placeholder="State what you found, the immediate action taken, and who was informed…" /></Field>}
         <label className="sh-declaration"><input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} /><span><strong>I have reviewed and accept responsibility for this shift.</strong><small>Any difference or new issue has been recorded above.</small></span></label>
-        <div className="sh-signature"><span>{initials(me)}</span><span><strong>{me}</strong><small>Opening staff · {titleBranch(branch)}</small></span><small>Digitally signed on acceptance</small></div>
+        <div className="sh-signature"><span>{initials(incomingName)}</span><span><strong>{incomingName}</strong><small>Taking over shift · {titleBranch(branch)}</small></span><small>Digitally signed on acceptance</small></div>
         <button type="button" className="sh-primary" disabled={!acceptEnabled || signing} onClick={accept}>{signing ? <><Loader2 className="spin" size={16} /> Signing…</> : <>Accept & begin shift <ChevronRight size={17} /></>}</button>
-        {!acceptEnabled && <p className="sh-submit-help">Complete all four opening checks, record any exception and confirm acceptance.</p>}
+        {!acceptEnabled && <p className="sh-submit-help">Complete all three opening checks, record any exception and confirm acceptance.</p>}
       </Section>
     </div>
   );
@@ -942,6 +963,9 @@ function HandoverAssignments({ branch }: any) {
             const dateStr = toYMD(d);
             const br = branch === "global" ? (window.FETS?._meBranch || "calicut") : branch;
             const rostered = window.FETS?.rosterOn?.(d, br) || [];
+            const defaultStaff = br === "cochin" ? ["Naima MM", "NIMMY M", "Shimna"] : ["Anshitha K", "Aysha", "Bindu Rajan", "Lazeem", "Nilufer"];
+            const branchStaff = Array.from(new Set([...(window.FETS?.STAFF?.[br] || []), ...(window.FETS?.PEOPLE || []), ...defaultStaff])).filter(Boolean).sort();
+            const staffListToOffer = rostered.length ? rostered : branchStaff;
             const assign = assignments.find(x => x.date === dateStr);
             const assignedNames = assign ? assign.staff_names : [];
 
@@ -949,28 +973,24 @@ function HandoverAssignments({ branch }: any) {
               <div key={dateStr} className="sh-assignment-card sh-card">
                 <div className="sh-assign-info">
                   <h3>{displayDate(dateStr)}</h3>
-                  <p>{rostered.length} staff rostered</p>
+                  <p>{rostered.length ? `${rostered.length} staff rostered` : `${staffListToOffer.length} staff available`}</p>
                 </div>
                 <div className="sh-assign-selectors">
-                  {rostered.length ? (
-                    rostered.map((name: string) => {
-                      const isAssigned = assignedNames.includes(name);
-                      return (
-                        <button
-                          type="button"
-                          key={name}
-                          className={`sh-assign-btn ${isAssigned ? "active" : ""}`}
-                          onClick={() => handleToggle(dateStr, name, assignedNames)}
-                        >
-                          <span>{initials(name)}</span>
-                          {name}
-                          {isAssigned && <Check size={13} />}
-                        </button>
-                      );
-                    })
-                  ) : (
-                    <span className="sh-no-staff">No staff rostered.</span>
-                  )}
+                  {staffListToOffer.map((name: string) => {
+                    const isAssigned = assignedNames.includes(name);
+                    return (
+                      <button
+                        type="button"
+                        key={name}
+                        className={`sh-assign-btn ${isAssigned ? "active" : ""}`}
+                        onClick={() => handleToggle(dateStr, name, assignedNames)}
+                      >
+                        <span>{initials(name)}</span>
+                        {name}
+                        {isAssigned && <Check size={13} />}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             );
@@ -990,7 +1010,8 @@ function ScheduleNotes({ branch }: any) {
 
   const people = React.useMemo(() => {
     const centre = branch === "global" ? (window.FETS?._meBranch || "calicut") : branch;
-    return Array.from(new Set(window.FETS?.STAFF?.[centre] || window.FETS?.PEOPLE || [])).filter(Boolean).sort();
+    const defaultStaff = centre === "cochin" ? ["Naima MM", "NIMMY M", "Shimna"] : ["Anshitha K", "Aysha", "Bindu Rajan", "Lazeem", "Nilufer"];
+    return Array.from(new Set([...(window.FETS?.STAFF?.[centre] || []), ...(window.FETS?.PEOPLE || []), ...defaultStaff])).filter(Boolean).sort();
   }, [branch]);
 
   const [assignments, setAssignments] = React.useState<any[]>([]);

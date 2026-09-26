@@ -4,6 +4,9 @@
 # The domain is served by the host nginx from a static root — the app is a
 # pure static bundle with no server side, so a deploy is just "build, then
 # swap the files in the web root".
+# One-command deploy for fets.live
+# Site is served via Traefik → Docker container (fets-live-app).
+# This script: pull → rebuild container → verify.
 #
 #   bash deploy.sh
 #
@@ -46,6 +49,12 @@ $SUDO rsync -a --delete --exclude='.well-known' fets-point/dist/ "$WEB_ROOT/"
 $SUDO chown -R www-data:www-data "/var/www/html/${DOMAIN}"
 
 $SUDO nginx -t && $SUDO systemctl reload nginx
+echo "→ Rebuilding Docker container…"
+docker compose build --no-cache app
+docker compose up -d app
+
+echo "→ Waiting for container to be healthy…"
+sleep 3
 
 # Ask the local nginx directly rather than going out over the internet, so the
 # check reports what this box is serving even before DNS or a CDN catches up.

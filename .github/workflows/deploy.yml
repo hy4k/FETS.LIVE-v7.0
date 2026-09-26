@@ -1,8 +1,7 @@
 name: Deploy to VPS (fets.live)
 
-# Permanent deploy: on every push to main, SSH into the VPS and run deploy.sh
-# (build + rsync into the nginx web root). The host nginx serves fets.live
-# from a static root, so this — not Coolify — is what publishes the site.
+# Deploy: SSH into VPS, pull latest in /opt/apps/fets-live, rebuild Docker.
+# Site is served via Traefik → fets-live-app container.
 #
 # If the server has been rebuilt from scratch, run
 # scripts/vps/restore-fets-live.sh on it once first — that installs nginx,
@@ -12,6 +11,8 @@ name: Deploy to VPS (fets.live)
 # One-time setup — add these repo secrets (Settings → Secrets → Actions):
 #   VPS_HOST     the server's IP or hostname
 #   VPS_USER     a deploy user (avoid root)
+#   VPS_HOST     e.g. 72.61.171.192
+#   VPS_USER     e.g. root
 #   VPS_SSH_KEY  a private SSH key whose public key is in the server's
 #                ~/.ssh/authorized_keys
 #
@@ -37,7 +38,7 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          command_timeout: 15m
+          command_timeout: 30m
           script: |
             set -e
             # Checkout lives at /opt/fets.live — the same path the bare-metal
@@ -52,6 +53,22 @@ jobs:
             git fetch origin main --prune
             git checkout -B main origin/main
             bash deploy.sh
+            cd /opt/apps/fets-live
+            git fetch origin
+            git checkout -f main
+            git reset --hard origin/main
+            docker compose build app
+            docker compose up -d --force-recreate app
+            # Restart Traefik to trigger SSL / ACME certificate renewal
+            (docker ps -q --filter "name=traefik" | xargs -r docker restart) || true
+            echo ""
+            echo "=== Verify deployed content ==="
+            sleep 3
+            # Check the index.html hash inside the running container
+            docker compose exec app md5sum /usr/share/nginx/html/index.html 2>/dev/null || true
+            # Check which JS chunks are referenced
+            docker compose exec app grep -oP 'RedesignShell-[A-Za-z0-9]+' /usr/share/nginx/html/index.html 2>/dev/null || true
+            docker compose exec app grep -oP 'index-[A-Za-z0-9]+' /usr/share/nginx/html/index.html 2>/dev/null || true
 
       - name: Note when skipped
         if: steps.cfg.outputs.ready != 'true'

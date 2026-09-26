@@ -122,12 +122,12 @@ export function BranchDelegationWidget() {
   };
 
   const handleDeleteDelegation = async (id: string) => {
-    if (!window.confirm('Are you sure you want to revoke this delegation?')) return;
     try {
+      setDelegations(prev => prev.filter(d => d.id !== id));
       await DB.dbDeleteBranchDelegation(id);
       await fetchDelegations();
     } catch (e: any) {
-      alert(e.message || 'Failed to revoke delegation');
+      console.error('Failed to revoke delegation:', e);
     }
   };
 

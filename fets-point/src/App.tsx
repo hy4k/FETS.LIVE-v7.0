@@ -59,12 +59,13 @@ const SystemManager = lazy(() => import('./components/SystemManager').then(modul
 
 const NewsManager = lazy(() => import('./components/NewsManager').then(module => ({ default: module.NewsManager })))
 const UserManagement = lazy(() => import('./components/UserManagement').then(module => ({ default: module.UserManagement })))
-const LostAndFound = lazy(() => import('./components/LostAndFound').then(module => ({ default: module.LostAndFound })))
+const EnhancedChat = lazy(() => import('./components/Chat/EnhancedChatDeck').then(module => ({ default: module.EnhancedChatDeck })))
 const RaiseACasePage = lazy(() => import('./components/RaiseACasePage').then(module => ({ default: module.RaiseACasePage })))
 
 const FetsProfilePage = lazy(() => import('./components/FetsProfile').then(module => ({ default: module.FetsProfile })))
 const BranchDelegationWidget = lazy(() => import('./components/BranchDelegationWidget').then(module => ({ default: module.BranchDelegationWidget })))
 const GBPDashboard = lazy(() => import('./pages/GBPDashboard'))
+const PearsonExpansionMission = lazy(() => import('./pages/PearsonExpansionMission').then(m => ({ default: m.PearsonExpansionMission })))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -76,10 +77,54 @@ const queryClient = new QueryClient({
   },
 })
 
+const getInitialTab = () => {
+  if (typeof window === 'undefined') return 'command-center';
+  const path = window.location.pathname.replace(/^\//, '').toLowerCase().trim();
+  const hash = window.location.hash.replace(/^#\/?/, '').toLowerCase().trim();
+  const target = path || hash;
+  if (target === 'roster' || target === 'fets-roster') return 'fets-roster';
+  if (target === 'calendar' || target === 'fets-calendar') return 'fets-calendar';
+  if (target === 'my-desk' || target === 'desk') return 'my-desk';
+  if (target === 'handover' || target === 'shift-handover') return 'handover';
+  if (target === 'candidate-tracker' || target === 'tracker') return 'candidate-tracker';
+  if (target === 'fets-intelligence' || target === 'intelligence' || target === 'ai') return 'fets-intelligence';
+  if (target === 'incident-log' || target === 'incidents' || target === 'cases') return 'incident-log';
+  if (target === 'user-management' || target === 'users') return 'user-management';
+  if (target === 'system-manager' || target === 'systems') return 'system-manager';
+  if (target === 'news-manager' || target === 'news') return 'news-manager';
+  if (target === 'expansion' || target === 'pearson-expansion') return 'expansion';
+  return 'command-center';
+};
+
 function AppContent() {
   const { user, loading, profile, signOut } = useAuth()
   const { activeBranch, setActiveBranch, getBranchTheme } = useBranch()
-  const [activeTab, setActiveTab] = useState('command-center')
+  const [activeTab, setActiveTabState] = useState(getInitialTab)
+
+  const setActiveTab = (newTab: string) => {
+    setActiveTabState(newTab);
+    if (typeof window !== 'undefined') {
+      const path = newTab === 'command-center' ? '/' :
+                   newTab === 'fets-roster' ? '/roster' :
+                   newTab === 'fets-calendar' ? '/calendar' :
+                   newTab === 'my-desk' ? '/my-desk' :
+                   newTab === 'handover' ? '/handover' :
+                   newTab === 'expansion' ? '/expansion' : `/${newTab}`;
+      if (window.location.pathname !== path) {
+        window.history.pushState(null, '', path);
+      }
+    }
+  };
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const tab = getInitialTab();
+      setActiveTabState(tab);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
   const isMobile = useIsMobile()
   const [isRecovering, setIsRecovering] = useState(false)
   const [aiQuery, setAiQuery] = useState<string | undefined>(undefined)
@@ -198,10 +243,24 @@ function AppContent() {
  
       if (activeTab === 'system-manager') return <SystemManager />;
       if (activeTab === 'news-manager') return <NewsManager />;
-      if (activeTab === 'lost-and-found') return <LostAndFound />;
+      if (activeTab === 'lost-and-found' || activeTab === 'fets-chat' || activeTab === 'chat') return <EnhancedChat branch={activeBranch} />;
       if (activeTab === 'cma-availability' || activeTab === 'branch-delegation') return isMithun ? <BranchDelegationWidget /> : <MobileHome setActiveTab={setActiveTab} profile={profile} />;
       if (activeTab === 'gbp') return <GBPDashboard />;
+      if (activeTab === 'expansion') return (
+        <Suspense fallback={<PageLoadingFallback pageName="Mission 7 · Expansion" />}>
+          <PearsonExpansionMission staffName={userName} isAdmin={isAdmin} />
+        </Suspense>
+      );
     }
+
+    // expansion has its own standalone render — exempt from RedesignShell
+    if (activeTab === 'expansion') return (
+      <LazyErrorBoundary routeName="Mission 7 · Pearson Expansion" onGoBack={() => setActiveTab('command-center')}>
+        <Suspense fallback={<PageLoadingFallback pageName="Mission 7 · Expansion" />}>
+          <PearsonExpansionMission staffName={userName} isAdmin={isAdmin} />
+        </Suspense>
+      </LazyErrorBoundary>
+    );
 
     const isRedesignPage = [
       'command-center', 'fets-calendar', 'fets-roster', 'my-desk',
@@ -243,7 +302,9 @@ function AppContent() {
       'fets-calendar-demo': { component: isMithun ? <FetsCalendar /> : <CommandCentre onNavigate={setActiveTab} onAiQuery={(q: string) => { setAiQuery(q); setActiveTab('fets-intelligence'); }} />, name: 'CELPIP Calendar' },
       'client-portal': { component: isMithun ? <ClientPortal /> : <CommandCentre onNavigate={setActiveTab} onAiQuery={(q: string) => { setAiQuery(q); setActiveTab('fets-intelligence'); }} />, name: 'Client Portal' },
       'staff-management': { component: <StaffManagement />, name: 'Staff Management' },
-      'lost-and-found': { component: <LostAndFound />, name: 'Lost & Found' },
+      'fets-chat': { component: <EnhancedChat branch={activeBranch} />, name: 'Live Chat & Gemini Studio' },
+      'chat': { component: <EnhancedChat branch={activeBranch} />, name: 'Live Chat & Gemini Studio' },
+      'lost-and-found': { component: <EnhancedChat branch={activeBranch} />, name: 'Live Chat & Gemini Studio' },
       'profile': { component: <FetsProfilePage />, name: 'Profile' },
     };
 
@@ -257,7 +318,7 @@ function AppContent() {
     );
   }
 
-  const isFullscreenPage = activeTab === 'my-desk' || activeTab === 'fets-intelligence' || activeTab === 'command-center' || activeTab === 'fets-roster' || activeTab === 'fets-calendar' || activeTab === 'access-hub' || activeTab === 'dashboard' || activeTab === 'candidate-tracker' || activeTab === 'incident-log' || activeTab === 'system-manager' || activeTab === 'news-manager' || activeTab === 'user-management' || activeTab === 'branch-delegation' || activeTab === 'gbp' || activeTab === 'attn-admin' || activeTab === 'business' || activeTab === 'staff-requests' || activeTab === 'staff-ot' || activeTab === 'handover' || activeTab === 'news';
+  const isFullscreenPage = activeTab === 'my-desk' || activeTab === 'fets-intelligence' || activeTab === 'command-center' || activeTab === 'fets-roster' || activeTab === 'fets-calendar' || activeTab === 'access-hub' || activeTab === 'dashboard' || activeTab === 'candidate-tracker' || activeTab === 'incident-log' || activeTab === 'system-manager' || activeTab === 'news-manager' || activeTab === 'user-management' || activeTab === 'branch-delegation' || activeTab === 'gbp' || activeTab === 'attn-admin' || activeTab === 'business' || activeTab === 'staff-requests' || activeTab === 'staff-ot' || activeTab === 'handover' || activeTab === 'news' || activeTab === 'expansion';
 
   return (
     <div className={`golden-theme min-h-screen h-screen flex flex-col overflow-hidden relative ${getBranchTheme(activeBranch)} ${(activeTab === 'fets-calendar' || activeTab === 'fets-calendar-demo') ? 'fets-calendar-active-page' : ''}`}>

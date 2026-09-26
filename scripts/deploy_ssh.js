@@ -1,6 +1,23 @@
 import { Client } from 'ssh2';
 import { readdirSync, readFileSync, statSync } from 'fs';
 import { join, relative } from 'path';
+import { homedir } from 'os';
+
+import { existsSync } from 'fs';
+
+let sshKeyPath = process.env.VPS_SSH_KEY_PATH;
+if (!sshKeyPath) {
+  const possibleKeys = ['~/.ssh/fets_vps', '~/.ssh/id_rsa', '~/.ssh/id_ed25519'];
+  for (const k of possibleKeys) {
+    const full = k.replace(/^~/, homedir());
+    if (existsSync(full)) {
+      sshKeyPath = full;
+      break;
+    }
+  }
+} else {
+  sshKeyPath = sshKeyPath.replace(/^~/, homedir());
+}
 
 // Credentials come from the environment — never hardcode them here.
 // This file is in a PUBLIC repository; anything committed to it is public.
@@ -26,6 +43,10 @@ const config = {
   ...(VPS_SSH_KEY
     ? { privateKey: readFileSync(VPS_SSH_KEY) }
     : { password: VPS_PASSWORD }),
+  host: process.env.VPS_HOST || '72.61.171.192',
+  port: 22,
+  username: process.env.VPS_USER || 'root',
+  privateKey: readFileSync(sshKeyPath),
 };
 
 const REMOTE_DIR = '/var/www/html/fets.live/public_html';
@@ -99,9 +120,19 @@ conn.on('ready', () => {
           console.error(`Encountered ${errors.length} errors:`, errors);
           process.exit(1);
         } else {
-          console.log('✅ Deployment successful!');
-          conn.end();
-          process.exit(0);
+          console.log('Static web root updated. Now rebuilding Docker container in /opt/apps/fets-live ...');
+          conn.exec('cd /opt/apps/fets-live && git pull origin main && docker compose build --no-cache app && docker compose down --remove-orphans && (docker rm -f fets-live-app-1 || true) && docker compose up -d app', (err, stream) => {
+            if (err) {
+              console.error('Docker rebuild error:', err);
+              conn.end();
+              process.exit(1);
+            }
+            stream.on('close', (code) => {
+              console.log(`✅ Docker container rebuilt and restarted (exit ${code})!`);
+              conn.end();
+              process.exit(code);
+            }).on('data', (d) => process.stdout.write(d)).stderr.on('data', (d) => process.stderr.write(d));
+          });
         }
         return;
       }

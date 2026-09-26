@@ -65,7 +65,7 @@ export default function CommandCentre({ onNavigate, onAiQuery }: { onNavigate?: 
 
     const secondRowItems = [
         { id: 'system-manager', label: 'SYSTEM MANAGER', icon: Server },
-        { id: 'lost-and-found', label: 'LOST & FOUND', icon: PackageSearch },
+        { id: 'fets-chat', label: 'LIVE CHAT & AI', icon: MessageSquare },
         { id: 'fets-intelligence', label: 'FETS AI', icon: Brain },
     ].filter(item => {
         const moduleState = modules.find(m => m.id === item.id);

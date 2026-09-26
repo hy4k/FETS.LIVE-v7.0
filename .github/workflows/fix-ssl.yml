@@ -1,0 +1,61 @@
+name: Fix SSL Certificate (one-time)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  fix-ssl:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Diagnose and fix Traefik SSL
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          command_timeout: 5m
+          script: |
+            echo "=== What is using port 80 and 443? ==="
+            ss -tlnp | grep -E ':80|:443' || echo "Nothing found on 80/443"
+
+            echo ""
+            echo "=== Docker containers ==="
+            docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | head -20
+
+            echo ""
+            echo "=== Traefik compose location ==="
+            docker inspect $(docker ps -aq --filter name=traefik) --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}' 2>/dev/null || echo "not found"
+
+            echo ""
+            echo "=== Traefik compose config ==="
+            TDIR=$(docker inspect $(docker ps -aq --filter name=traefik) --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}' 2>/dev/null)
+            if [ -n "$TDIR" ] && [ -d "$TDIR" ]; then
+              cat "$TDIR/docker-compose.yml" 2>/dev/null || cat "$TDIR/compose.yml" 2>/dev/null || echo "no compose file"
+            else
+              echo "Could not find traefik compose dir"
+            fi
+
+            echo ""
+            echo "=== Stopping Traefik, killing port 80 occupant, restarting ==="
+            # Stop traefik first
+            TDIR=$(docker inspect $(docker ps -aq --filter name=traefik) --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}' 2>/dev/null)
+            if [ -n "$TDIR" ] && [ -d "$TDIR" ]; then
+              cd "$TDIR"
+              docker compose down 2>/dev/null || true
+              sleep 2
+              # Kill anything still on port 80
+              fuser -k 80/tcp 2>/dev/null || true
+              fuser -k 443/tcp 2>/dev/null || true
+              sleep 1
+              echo "Ports cleared. Starting Traefik..."
+              docker compose up -d
+              sleep 10
+              echo ""
+              echo "=== Traefik status after fix ==="
+              docker ps --filter name=traefik --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+              echo ""
+              echo "=== Traefik logs ==="
+              docker logs $(docker ps -q --filter name=traefik) --tail 30 2>&1 || true
+            else
+              echo "Cannot find Traefik directory to restart"
+            fi

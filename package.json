@@ -21,7 +21,8 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "cpu-features",
-      "ssh2"
+      "ssh2",
+      "sharp"
     ]
   }
 }

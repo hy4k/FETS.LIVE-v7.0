@@ -10,12 +10,14 @@
 */
 import React from "react";
 import "./liquid-glass.css";
-import { loadLiveData, ensureMonth, loadLeaveRequests, loadOtClaims } from "./live-data";
+import { loadLiveData, ensureMonth, loadLeaveRequests, loadOtClaims, loadApplications } from "./live-data";
 import { supabase } from "../lib/supabase";
 import * as DB from "./write-data";
-import * as LAB from "./lab-data";
+import * as ACT from "./actionables-data";
+import { ActionablesView } from "./ActionablesView";
 import * as ATT from "./attendance-data";
 import { isStaffRosterVisible } from "../utils/rosterVisibility";
+import * as DD from "./dutyData";
 import html2canvas from "html2canvas";
 import { FetsChatPopup } from "../components/FetsChatPopup";
 import { FetsIncidentPremium } from "../components/FetsIncidentPremium";
@@ -32,6 +34,9 @@ import { BranchDelegationWidget } from "../components/BranchDelegationWidget";
 import { ICloudDashboard as Dashboard } from "../components/iCloud/iCloudDashboard";
 import { FetsIntelligence } from "../components/FetsIntelligence";
 import GBPDashboard from "../pages/GBPDashboard";
+import MyDeskLivingBoard from "../components/MyDeskLivingBoard";
+import { GeminiLiveStudio } from "../components/Chat/GeminiLiveStudio";
+import { EnhancedChatDeck } from "../components/Chat/EnhancedChatDeck";
 
 
 /* ============================================================
@@ -1097,22 +1102,54 @@ Object.assign(window, { Icon, Segmented, IconButton, Avatar, ToastHost, toast, D
    FETS · Command Centre widgets (shelf + drawer model)
    ============================================================ */
 
-const VENDOR_BY_SLUG = Object.fromEntries(window.FETS.VENDORS.map((v) => [v.slug, v]));
+const VENDOR_BY_SLUG = Object.fromEntries((window.FETS?.VENDORS || []).map((v) => [v.slug, v]));
 const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const WDL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const MO = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-function fmt12(t) {
+const P_WD  = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const P_WDL = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+const P_MO  = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+function pfmt12(t) {
+  if (!t) return "";
   const [h, m] = t.split(":").map(Number);
   const ap = h >= 12 ? "PM" : "AM";
   return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${ap}`;
 }
+
+function fmt12(t) {
+  return pfmt12(t);
+}
+
+function ymdFormat(d: any): string {
+  if (!d) return "";
+  if (typeof d === "string") return d.slice(0, 10);
+  const date = new Date(d);
+  if (isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
 function branchSessions(offset, branch) {
-  return window.FETS.sessionsOn(window.FETS.ISO(offset), branch);
+  return window.FETS?.sessionsOn ? window.FETS.sessionsOn(window.FETS.ISO(offset), branch) : [];
 }
+
 function branchRoster(offset, branch) {
-  return window.FETS.rosterOn(window.FETS.ISO(offset), branch);
+  return window.FETS?.rosterOn ? window.FETS.rosterOn(window.FETS.ISO(offset), branch) : [];
 }
+
+if (typeof window !== "undefined") {
+  window.VENDORS = window.FETS?.VENDORS || [];
+  window.VENDOR_BY_SLUG = VENDOR_BY_SLUG;
+  window.branchSessions = branchSessions;
+  window.branchRoster = branchRoster;
+  window.P_WD = P_WD;
+  window.P_WDL = P_WDL;
+  window.P_MO = P_MO;
+  window.pfmt12 = pfmt12;
+  window.ymdFormat = ymdFormat;
+}
+
 const OPEN = { calicut: 2, cochin: 1, global: 3 };
 
 /* totals across the next 7 days for a branch */
@@ -1355,9 +1392,86 @@ function VaultCard({ it, onEdit, onDelete }) {
   );
 }
 
+/* ---------- vault export modal (password-gated) ---------- */
+function VaultExportModal({ items, onClose }) {
+  const [pw, setPw] = React.useState("");
+  const [error, setError] = React.useState(false);
+  const [loading, setLoading] = React.useState(false);
+  const inputRef = React.useRef(null);
+  React.useEffect(() => { setTimeout(() => inputRef.current?.focus(), 120); }, []);
+  React.useEffect(() => {
+    const k = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", k);
+    return () => window.removeEventListener("keydown", k);
+  }, []);
+
+  const doExport = async () => {
+    setError(false);
+    setLoading(true);
+    // Option A: hardcoded password only
+    const correctPw = "FETS2026";
+    setLoading(false);
+    if (pw !== correctPw) {
+      setError(true);
+      toast("Incorrect password — export denied", "alert");
+      return;
+    }
+    // Build export payload (sanitised)
+    const payload = items.map((it) => ({
+      vendor: it.vendor || "",
+      label: it.label || "",
+      url: it.url || "",
+      username: it.username || "",
+      password: it.password || "",
+      notes: it.notes || "",
+    }));
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `fets-vault-export-${new Date().toISOString().split("T")[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast("Vault exported successfully", "check");
+    onClose();
+  };
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(8px)", display: "grid", placeItems: "center" }}>
+      <div onClick={(e) => e.stopPropagation()} className="glass" style={{ padding: "28px 26px", borderRadius: 22, minWidth: 340, maxWidth: 420, display: "flex", flexDirection: "column", gap: 18, boxShadow: "0 12px 48px rgba(0,0,0,0.45)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ width: 40, height: 40, borderRadius: 12, display: "grid", placeItems: "center", background: "color-mix(in oklch, var(--warn) 20%, transparent)", color: "var(--warn)" }}>
+            <Icon name="lock" size={20} />
+          </span>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 750, color: "var(--ink)" }}>Export vault credentials</div>
+            <div style={{ fontSize: 12, color: "var(--ink-4)" }}>Enter password to download {items.length} credential{items.length !== 1 ? "s" : ""}</div>
+          </div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <label className="eyebrow" style={{ fontSize: 9, color: "var(--ink-4)" }}>Export password</label>
+          <input ref={inputRef} type="password" value={pw} onChange={(e) => { setPw(e.target.value); setError(false); }} placeholder="Enter password…"
+            onKeyDown={(e) => { if (e.key === "Enter" && pw.length > 0) doExport(); }}
+            style={{ padding: "11px 14px", borderRadius: 10, border: error ? "2px solid var(--bad)" : "1px solid var(--hairline)", background: "var(--panel-3)", color: "var(--ink)", fontSize: 14, fontFamily: "var(--font)", outline: "none" }} />
+          {error && <span style={{ fontSize: 11, color: "var(--bad)", fontWeight: 600 }}>Wrong password. Try again.</span>}
+        </div>
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+          <button onClick={onClose} className="tap" style={{ padding: "10px 18px", borderRadius: 10, border: "1px solid var(--hairline)", background: "var(--panel-3)", color: "var(--ink-2)", fontSize: 13, fontWeight: 650, fontFamily: "var(--font)", cursor: "pointer" }}>Cancel</button>
+          <button onClick={doExport} disabled={pw.length === 0 || loading} className="tap" style={{ padding: "10px 22px", borderRadius: 10, border: "none", background: pw.length > 0 ? "var(--accent)" : "var(--panel-3)", color: pw.length > 0 ? "var(--accent-ink)" : "var(--ink-4)", fontSize: 13, fontWeight: 750, fontFamily: "var(--font)", cursor: pw.length > 0 ? "pointer" : "default", opacity: loading ? 0.6 : 1 }}>
+            <Icon name="download" size={14} /> {loading ? "Verifying…" : "Export"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function VaultPanel() {
   const [items, setItems] = React.useState(() => (window.FETS._vault ? [...window.FETS._vault] : []));
   const [editing, setEditing] = React.useState(null); // id | "__new" | null
+  const [showExport, setShowExport] = React.useState(false);
   const save = (entry) => {
     if (editing === "__new") {
       const tmp = { ...entry, id: "tmp" + Date.now() };
@@ -1372,12 +1486,22 @@ function VaultPanel() {
   const del = (it) => { if (!window.confirm("Delete this credential?")) return; if (it.id != null && String(it.id).indexOf("tmp") !== 0) DB.dbDeleteVault(it.id); setItems((xs) => xs.filter((x) => x !== it)); };
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {editing !== "__new" && <button onClick={() => setEditing("__new")} className="tap" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px", borderRadius: 12, cursor: "pointer", border: "none", color: "var(--accent-ink)", background: "var(--accent)", fontFamily: "var(--font)", fontSize: 13, fontWeight: 750 }}><Icon name="plus" size={16} /> Add credential</button>}
+      {editing !== "__new" && (
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <button onClick={() => setEditing("__new")} className="tap" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px", borderRadius: 12, cursor: "pointer", border: "none", color: "var(--accent-ink)", background: "var(--accent)", fontFamily: "var(--font)", fontSize: 13, fontWeight: 750, flex: 1 }}><Icon name="plus" size={16} /> Add credential</button>
+          {items.length > 0 && (
+            <button onClick={() => setShowExport(true)} className="tap" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px 18px", borderRadius: 12, cursor: "pointer", border: "1.5px solid var(--warn)", color: "var(--warn)", background: "color-mix(in oklch, var(--warn) 8%, transparent)", fontFamily: "var(--font)", fontSize: 13, fontWeight: 700 }}>
+              <Icon name="download" size={15} /> Export
+            </button>
+          )}
+        </div>
+      )}
       {editing === "__new" && <VaultEditForm initial={{}} onSave={save} onCancel={() => setEditing(null)} />}
       {items.length === 0 && editing !== "__new" && <div className="inset" style={{ padding: 22, borderRadius: 14, textAlign: "center", color: "var(--ink-4)", fontSize: 13 }}>No credentials saved yet. Add your portals & logins here.</div>}
       {items.map((it) => editing === it.id
         ? <VaultEditForm key={it.id} initial={it} onSave={save} onCancel={() => setEditing(null)} />
         : <VaultCard key={it.id} it={it} onEdit={() => setEditing(it.id)} onDelete={() => del(it)} />)}
+      {showExport && <VaultExportModal items={items} onClose={() => setShowExport(false)} />}
     </div>
   );
 }
@@ -2219,15 +2343,6 @@ Object.assign(window, { StatusRow, Shelf, ExamOutlookPanel, VaultPanel, HelpDesk
    (exports to window for command-centre.jsx)
    ============================================================ */
 
-const P_WD  = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const P_WDL = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-const P_MO  = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-
-function pfmt12(t) {
-  const [h, m] = t.split(":").map(Number);
-  const ap = h >= 12 ? "PM" : "AM";
-  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${ap}`;
-}
 function capBranch(b) { return b === "global" ? "All Centres" : b.charAt(0).toUpperCase() + b.slice(1); }
 
 /* ---------- shared small bits ---------- */
@@ -3993,8 +4108,7 @@ function RosterGrid({ offsets, branch }) {
   }, [branch, offsets[0]]);
   const [dialog, setDialog] = React.useState(null);   // { name, off, date, cell, defaultCode }
   const [otDialog, setOtDialog] = React.useState(null); // { name, off, date, cell }
-
-  const [leads, setLeads] = React.useState<any[]>([]);
+  const [leadsMap, setLeadsMap] = React.useState<Record<string, string>>({}); // "YYYY-MM-DD_branch" -> leadName
 
   const loadLeads = React.useCallback(async () => {
     try {
@@ -4003,22 +4117,57 @@ function RosterGrid({ offsets, branch }) {
       const startD = ymdFormat(F().ISO(startOff));
       const endD = ymdFormat(F().ISO(endOff));
       
-      let data: any[] = [];
-      if (branch === "global") {
+      // 1. Check DB overrides in handover_assignments
+      let dbLeads: any[] = [];
+      try {
         const { data: res } = await supabase
           .from("handover_assignments")
           .select("*")
           .gte("date", startD)
           .lte("date", endD);
-        data = res || [];
-      } else {
-        data = await DB.dbFetchHandoverAssignments(branch, startD, endD);
+        dbLeads = res || [];
+      } catch (e) {}
+
+      const dbMap: Record<string, string> = {};
+      dbLeads.forEach((l: any) => {
+        if (l.date && l.staff_names && l.staff_names[0]) {
+          const br = (l.branch || "").toLowerCase();
+          dbMap[`${l.date}_${br}`] = l.staff_names[0];
+          dbMap[l.date] = l.staff_names[0];
+        }
+      });
+
+      // 2. Fetch roster schedules to resolve stretch leads
+      let roster: any[] = [];
+      try {
+        const { data } = await supabase
+          .from("roster_schedules")
+          .select("date, shift_code, branch_location, staff_profiles(full_name, branch_assigned)")
+          .gte("date", startD)
+          .lte("date", endD);
+        roster = data || [];
+      } catch (e) {}
+
+      const finalMap: Record<string, string> = {};
+      for (const off of offsets) {
+        const dstr = ymdFormat(F().ISO(off));
+        for (const b of ["calicut", "cochin"]) {
+          const key = `${dstr}_${b}`;
+          if (dbMap[key]) {
+            finalMap[key] = dbMap[key];
+          } else {
+            const stretch = await DD.getStretchAssignmentsForDate(dstr, b, roster);
+            if (stretch.lead) {
+              finalMap[key] = stretch.lead;
+            }
+          }
+        }
       }
-      setLeads(data || []);
+      setLeadsMap(finalMap);
     } catch (err) {
       console.error("loadLeads error:", err);
     }
-  }, [branch, offsets]);
+  }, [offsets]);
 
   React.useEffect(() => {
     loadLeads();
@@ -4029,7 +4178,11 @@ function RosterGrid({ offsets, branch }) {
       loadLeads();
     };
     window.addEventListener("fets-roster-changed", h);
-    return () => window.removeEventListener("fets-roster-changed", h);
+    window.addEventListener("fets-handover-updated", h);
+    return () => {
+      window.removeEventListener("fets-roster-changed", h);
+      window.removeEventListener("fets-handover-updated", h);
+    };
   }, [loadLeads]);
 
   const apply = (name, off, cell) => {
@@ -4045,7 +4198,6 @@ function RosterGrid({ offsets, branch }) {
   };
   const cols = `250px repeat(${offsets.length}, minmax(46px,1fr))`;
 
-  const ymdFormat = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const reqMarkOf = (name, off) => {
     if (!F()._staffRequests) return false;
     const dstr = ymdFormat(F().ISO(off));
@@ -4060,6 +4212,56 @@ function RosterGrid({ offsets, branch }) {
       (r.status === "Approved" || r.status === "Rejected") && 
       !localStorage.getItem(`fets-seen-req-${r.id}`)
     );
+  };
+  /* detect if a roster cell was part of an approved shift swap */
+  const isSwappedCellOf = (name, off) => {
+    const dstr = ymdFormat(F().ISO(off));
+    const appMatch = (F()._applications || []).find(a =>
+      (a.kind === "swap" || a.request_type === "shift_swap") &&
+      (a.status === "approved" || a.status === "Approved") && (
+        // All 4 cells affected by a swap:
+        // 1. Applicant on dateA (their original swap day)
+        ((a.applicant_name === name || a.who === name) && (a.request_date === dstr || a.date === dstr)) ||
+        // 2. Partner on dateA (they also swap on that same day)
+        ((a.swap_with_name === name || a.with === name) && (a.request_date === dstr || a.date === dstr)) ||
+        // 3. Applicant on dateB (they swap on the partner's day too)
+        ((a.applicant_name === name || a.who === name) && (a.swap_date === dstr || a.swapDate === dstr)) ||
+        // 4. Partner on dateB (their original swap day)
+        ((a.swap_with_name === name || a.with === name) && (a.swap_date === dstr || a.swapDate === dstr))
+      )
+    );
+    if (appMatch) return { who: appMatch.applicant_name, with: appMatch.swap_with_name || "", date: appMatch.request_date, swapDate: appMatch.swap_date };
+
+    if (!F()._staffRequests) return null;
+    return F()._staffRequests.find(r =>
+      (r.kind === "swap" || r.kind === "shift_swap") && (r.status === "Approved" || r.status === "approved") && (
+        // Applicant on either date
+        (r.who === name && (r.date === dstr || r.swapDate === dstr)) ||
+        // Partner on either date
+        (r.with === name && (r.date === dstr || r.swapDate === dstr))
+      )
+    ) || null;
+  };
+
+
+  /* detect if a roster cell was part of an approved emergency duty change */
+  const isEmergencyDutyCellOf = (name, off) => {
+    const dstr = ymdFormat(F().ISO(off));
+    const appMatch = (F()._applications || []).find(a =>
+      a.kind === "emergency_duty" &&
+      (a.status === "approved" || a.status === "Approved") &&
+      (a.applicant_name === name || a.who === name || a.applicant_id === F()._staffIdByName?.[name]) &&
+      (a.request_date === dstr || a.date === dstr)
+    );
+    if (appMatch) return appMatch;
+
+    if (!F()._staffRequests) return null;
+    return F()._staffRequests.find(r =>
+      r.kind === "emergency_duty" &&
+      (r.status === "Approved" || r.status === "approved") &&
+      r.who === name &&
+      r.date === dstr
+    ) || null;
   };
 
   return (
@@ -4099,44 +4301,42 @@ function RosterGrid({ offsets, branch }) {
                   fontSize: 14,
                   fontWeight: 900,
                   color: isToday ? "var(--accent)" : "var(--ink)",
-                  lineHeight: 1.1,
-                  margin: "1px 0"
+                  lineHeight: 1,
+                  margin: "1px 0",
                 }}>
                   {d.getDate()}
                 </div>
-                
-                {/* Candidate & Vendor indicators */}
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%", marginTop: "auto" }}>
-                  {totalCandidates > 0 ? (
-                    <span className="mono" style={{
-                      fontSize: 8,
-                      fontWeight: 800,
-                      color: isToday ? "var(--accent)" : "var(--ink-2)",
-                      background: isToday ? "rgba(255,255,255,0.08)" : "var(--panel-2)",
-                      padding: "1px 3px",
-                      borderRadius: 4,
-                      lineHeight: 1,
-                      border: "1px solid var(--hairline)"
-                    }}>
-                      {totalCandidates}c
-                    </span>
-                  ) : (
-                    <span style={{ fontSize: 8, color: "var(--ink-4)" }}>—</span>
-                  )}
-                  
+                {/* Micro candidates & clients badge */}
+                <div style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 1.5,
+                  width: "100%",
+                  padding: "0 2px",
+                }}>
+                  <span className="mono" style={{
+                    fontSize: 8.5,
+                    fontWeight: 800,
+                    color: totalCandidates > 0 ? "var(--accent-ink)" : "var(--ink-4)",
+                    background: totalCandidates > 0 ? "var(--accent-soft)" : "transparent",
+                    padding: totalCandidates > 0 ? "1px 4px" : "0",
+                    borderRadius: 4,
+                    lineHeight: 1.1,
+                  }}>
+                    {totalCandidates > 0 ? `${totalCandidates}c` : "—"}
+                  </span>
                   {activeVendors.length > 0 && (
-                    <div style={{ display: "flex", gap: 2, justifyContent: "center", marginTop: 2 }}>
-                      {activeVendors.map(vSlug => {
-                        const vMeta = F().VENDORS.find(v => v.slug === vSlug);
-                        const vColor = vMeta ? vMeta.color : "var(--ink-4)";
+                    <div style={{ display: "flex", gap: 2, justifyContent: "center" }}>
+                      {activeVendors.slice(0, 3).map(v => {
+                        const vObj = (window.VENDORS || F().VENDORS || []).find(x => x && x.slug === v) || VENDOR_BY_SLUG[v];
+                        const vColor = vObj ? vObj.color : "var(--ink-4)";
                         return (
-                          <span key={vSlug} title={vMeta ? vMeta.name : vSlug} style={{
-                            width: 5,
-                            height: 5,
-                            borderRadius: "50%",
+                          <span key={v} style={{
+                            width: 4, height: 4, borderRadius: "50%",
                             background: vColor,
-                            display: "inline-block"
-                          }} />
+                            display: "inline-block",
+                          }} title={vObj ? vObj.name : v} />
                         );
                       })}
                     </div>
@@ -4151,31 +4351,26 @@ function RosterGrid({ offsets, branch }) {
             display: "grid",
             gridTemplateColumns: cols,
             gap: 6,
-            padding: "10px 10px",
-            margin: "8px 0",
-            background: "var(--panel-2, rgba(255, 253, 245, 0.04))",
-            border: "1px solid var(--hairline)",
-            borderRadius: 16,
-            boxShadow: "0 2px 10px rgba(0,0,0,0.12)"
+            padding: "3px 10px",
+            background: ri % 2 === 0 ? "transparent" : "var(--panel-2)",
+            alignItems: "center",
+            borderRadius: 8,
           }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0, justifyContent: "center" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
-                <Avatar name={n} size={28} />
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 650, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{n}</div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap", marginTop: 1 }}>
-                    {branch === "global" ? (
-                      <span className="eyebrow" style={{ fontSize: 8.5, color: "var(--ink-4)" }}>{b}</span>
-                    ) : (
-                      n === F().user.name && <span className="eyebrow" style={{ fontSize: 8.5, color: "var(--accent)" }}>you</span>
-                    )}
-                    {((branch === "global") || (n === F().user.name)) && (
-                      <span style={{ fontSize: 8.5, color: "var(--ink-4)", opacity: 0.6 }}>·</span>
-                    )}
-                    <span className="mono" style={{ fontSize: 8.5, color: "var(--ink-4)", fontWeight: 500 }}>
-                      Day {F()._staffDays?.[n] || 1}
-                    </span>
-                  </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, overflow: "hidden", paddingRight: 6 }}>
+              <Avatar name={n} size={28} />
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{
+                  fontSize: 12.5,
+                  fontWeight: 750,
+                  color: n === F().user.name ? "var(--accent)" : "var(--ink)",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}>
+                  {n}
+                </div>
+                <div className="eyebrow" style={{ fontSize: 9, color: "var(--ink-4)", textTransform: "capitalize" }}>
+                  {b}
                 </div>
               </div>
               {/* Personal check-in console — visible only on the logged-in staff member's own row */}
@@ -4189,17 +4384,17 @@ function RosterGrid({ offsets, branch }) {
               const pending = reqMarkOf(n, o);
               const unseenRes = unseenResolutionOf(n, o);
               const isSelf = n === F().user.name;
+              const swapMatch = isSwappedCellOf(n, o);
+              const emergencyMatch = isEmergencyDutyCellOf(n, o);
 
-              // Check if lead staff
+              // Check if lead staff dynamically
               const dstr = ymdFormat(d);
-              const isLead = leads.some(lead => 
-                lead.date === dstr && 
-                lead.branch === b && 
-                lead.staff_names && 
-                lead.staff_names.includes(n)
-              );
+              const targetLead = leadsMap[`${dstr}_${b.toLowerCase()}`] || leadsMap[dstr];
+              const isLead = targetLead ? targetLead.toLowerCase().trim() === n.toLowerCase().trim() : false;
 
-              // Premium styles matching the code tint
+              // Distinct color codes for swap and emergency
+              const SWAP_COLOR = "#0284c7"; // Electric Sky / Vibrant Cyan
+              const EMERGENCY_COLOR = "#e11d48"; // Vivid Crimson / Neon Rose
               const baseColor = m.ink;
               let bg = "var(--panel-3)";
               let border = "1px solid var(--glass-edge-lo)";
@@ -4217,8 +4412,8 @@ function RosterGrid({ offsets, branch }) {
                 
                 if (code === "L") {
                   bg = `linear-gradient(135deg, color-mix(in oklch, var(--bad) 26%, var(--panel)) 0%, color-mix(in oklch, var(--bad) 10%, var(--panel-3)) 100%)`;
-                  border = `1px solid color-mix(in oklch, var(--bad) 45%, transparent)`;
-                  shadow = `0 3px 8px color-mix(in oklch, var(--bad) 12%, transparent)`;
+                  border = `1.5px solid color-mix(in oklch, var(--bad) 55%, transparent)`;
+                  shadow = `0 3px 8px color-mix(in oklch, var(--bad) 18%, transparent)`;
                 }
               }
               
@@ -4228,7 +4423,25 @@ function RosterGrid({ offsets, branch }) {
               }
 
               if (isLead) {
-                border = `2px solid #d3ad12`;
+                border = `2.5px solid #f59e0b`;
+                shadow = `0 0 20px rgba(245, 158, 11, 0.75)${shadow !== "none" ? `, ${shadow}` : ""}`;
+                bg = `linear-gradient(135deg, rgba(245, 158, 11, 0.32) 0%, rgba(217, 119, 6, 0.18) 100%)`;
+              }
+
+              /* ---- SHIFT SWAP VIBRANT OVERRIDE (Different Color) ---- */
+              if (swapMatch) {
+                border = `2.5px dashed ${SWAP_COLOR}`;
+                shadow = `0 0 16px rgba(2, 132, 199, 0.55)${shadow !== "none" ? `, ${shadow}` : ""}`;
+                bg = `linear-gradient(135deg, rgba(2, 132, 199, 0.35) 0%, rgba(56, 189, 248, 0.2) 100%)`;
+                color = "#38bdf8";
+              }
+
+              /* ---- EMERGENCY DUTY VIBRANT OVERRIDE (Different Color) ---- */
+              if (emergencyMatch) {
+                border = `2.5px solid ${EMERGENCY_COLOR}`;
+                shadow = `0 0 18px rgba(225, 29, 72, 0.65)${shadow !== "none" ? `, ${shadow}` : ""}`;
+                bg = `linear-gradient(135deg, rgba(225, 29, 72, 0.38) 0%, rgba(244, 63, 94, 0.2) 100%)`;
+                color = "#fda4af";
               }
  
               const cellStyle = {
@@ -4249,6 +4462,14 @@ function RosterGrid({ offsets, branch }) {
                 fontWeight: 800,
                 letterSpacing: "0.02em",
               };
+
+              /* swap partner label for tooltip */
+              const swapTitle = swapMatch
+                ? `Shift swapped · ${swapMatch.who === n ? swapMatch.with : swapMatch.who}`
+                : "";
+              const emergencyTitle = emergencyMatch
+                ? `🚨 Approved Emergency Duty Change (${cell.code})`
+                : "";
  
               return (
                 <button key={o} onClick={() => {
@@ -4274,8 +4495,35 @@ function RosterGrid({ offsets, branch }) {
                   } else if (window.FETS.isAdmin) {
                     setDialog({ name: n, off: o, date: d, cell, defaultCode: cell.dflt || "RD" });
                   }
-                }} className="tap roster-cell-btn" title={(window.FETS.isAdmin || isSelf) ? `${m.label}${ot > 0 ? ` + OT ${ot}h` : ""} — tap to change` : m.label}
+                }} className="tap roster-cell-btn" title={(window.FETS.isAdmin || isSelf) ? `${m.label}${isLead ? " · 👑 Weekly Shift Lead" : ""}${emergencyTitle ? ` · ${emergencyTitle}` : ""}${swapTitle ? ` · ${swapTitle}` : ""}${ot > 0 ? ` + OT ${ot}h` : ""} — tap to change` : (emergencyTitle || swapTitle || `${m.label}${isLead ? " · 👑 Weekly Shift Lead" : ""}`)}
                   style={cellStyle}>
+                  {/* Lead Crown badge */}
+                  {isLead && (
+                    <span title="Designated Shift Lead for this week" style={{
+                      position: "absolute", top: -7, right: -5,
+                      fontSize: 12, lineHeight: 1,
+                      zIndex: 4,
+                      filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.6))",
+                    }}>👑</span>
+                  )}
+                  {/* Emergency Duty badge */}
+                  {emergencyMatch && (
+                    <span title={emergencyTitle} style={{
+                      position: "absolute", top: -7, left: -5,
+                      fontSize: 12, lineHeight: 1,
+                      zIndex: 4,
+                      filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.6))",
+                    }}>🚨</span>
+                  )}
+                  {/* Swap indicator badge */}
+                  {swapMatch && !emergencyMatch && (
+                    <span title={swapTitle} style={{
+                      position: "absolute", top: -7, left: -5,
+                      fontSize: 12, lineHeight: 1,
+                      zIndex: 4,
+                      filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.6))",
+                    }}>🔄</span>
+                  )}
                   <span style={{ fontSize: code.length > 2 ? 9 : 13.5, fontWeight: 900, lineHeight: 1 }}>{code}</span>
                   {ot > 0 && (
                     <span className="mono" style={{
@@ -4309,87 +4557,480 @@ function RosterGrid({ offsets, branch }) {
         ))}
       </div>
     </div>
+
+
     {dialog && <RosterCellDialog ctx={dialog} onClose={() => setDialog(null)} onApply={(cell) => apply(dialog.name, dialog.off, cell)} />}
     {otDialog && <OtToilClaimDialog ctx={otDialog} onClose={() => setOtDialog(null)} />}
     </React.Fragment>
   );
 }
 
-/* leave + swap approvals drawer body (super-admin) */
-const SREQ_STATUS = { Submitted: "var(--warn)", Approved: "var(--ok)", Rejected: "var(--bad)" };
-function StaffReqCard({ r, onResolve }) {
-  const isSwap = r.kind === "swap";
-  const isToil = r.kind === "toil";
-  const kindMeta = isSwap ? { label: "Shift swap", color: "var(--v-prometric)" }
-    : isToil ? { label: "TOIL", color: "var(--v-cma)" }
-    : { label: "Leave", color: "var(--v-ielts)" };
+/* ═══ RosterDutiesScheduleMatrix REMOVED — replaced by new method ══════════════ */
+// Placeholder — new implementation to be added here
+function _RosterDutiesScheduleMatrix_REMOVED({ offsets, branch, leadsMap, onReloadLeads, cols }: {
+  offsets: number[];
+  branch: string;
+  leadsMap: Record<string, string>;
+  onReloadLeads: () => void;
+  cols: string;
+}) {
+  const F = () => window.FETS;
+  const meName = F().user?.name || "Staff";
+  const todayD = new Date();
+  const todayStr = ymdFormat(todayD);
+  const effectiveBranch = branch === "global" ? (F()._meBranch || "calicut") : branch;
+  const isTodayLead = !!leadsMap[`${todayStr}_${effectiveBranch}`] && (leadsMap[`${todayStr}_${effectiveBranch}`].toLowerCase().trim() === meName.toLowerCase().trim());
+  const canEdit = !!window.FETS?.isAdmin || isTodayLead;
+
+  const [stretchData, setStretchData] = React.useState<any>(null);
+  const [editingModal, setEditingModal] = React.useState<{ type: "lead" | "category"; catId?: string; catName?: string; current: string } | null>(null);
+
+  const availableStaff = branch === "global"
+    ? [...F().STAFF.calicut, ...F().STAFF.cochin]
+    : F().STAFF[branch] || [];
+
+  const loadData = React.useCallback(async () => {
+    try {
+      const res = await DD.getStretchAssignmentsForDate(todayStr, effectiveBranch);
+      setStretchData(res);
+    } catch (e) {
+      console.error("loadData error:", e);
+    }
+  }, [todayStr, effectiveBranch]);
+
+  React.useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  React.useEffect(() => {
+    const h = () => { loadData(); };
+    window.addEventListener("fets-roster-changed", h);
+    window.addEventListener("fets-handover-updated", h);
+    return () => {
+      window.removeEventListener("fets-roster-changed", h);
+      window.removeEventListener("fets-handover-updated", h);
+    };
+  }, [loadData]);
+
+  const activeLead = leadsMap[`${todayStr}_${effectiveBranch}`] || leadsMap[todayStr] || stretchData?.lead || (effectiveBranch === "cochin" ? "Naima MM" : "Aysha");
+
+  const handleSaveLead = async (newLead: string) => {
+    try {
+      await DD.setDayLead(todayStr, effectiveBranch, newLead);
+      window.dispatchEvent(new CustomEvent("fets-roster-changed"));
+      window.dispatchEvent(new CustomEvent("fets-handover-updated"));
+      onReloadLeads();
+      loadData();
+      setEditingModal(null);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleSaveCategory = async (catId: string, newStaff: string) => {
+    try {
+      await DD.reassignCategoryDaily(todayStr, effectiveBranch, catId, newStaff, meName);
+      window.dispatchEvent(new CustomEvent("fets-roster-changed"));
+      window.dispatchEvent(new CustomEvent("fets-handover-updated"));
+      onReloadLeads();
+      loadData();
+      setEditingModal(null);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const CATEGORY_DETAILS: Record<string, { icon: string; tasks: string[]; color: string; tint: string }> = {
+    admin_calendar: {
+      icon: "📅",
+      color: "#3b82f6",
+      tint: "rgba(59, 130, 246, 0.12)",
+      tasks: [
+        "Daily Calendar Verification & Session Planning",
+        "Client Bookings, Room Allocations & Proctoring",
+        "Vendor Coordination & Timetable Alignment"
+      ]
+    },
+    data_systems: {
+      icon: "💻",
+      color: "#10b981",
+      tint: "rgba(16, 185, 129, 0.12)",
+      tasks: [
+        "Server Sync & Lab Workstation Health Readiness",
+        "Candidate Test Packages & Lockdown Security",
+        "End-of-Day Data Upload & Archive Verification"
+      ]
+    },
+    cases_docs: {
+      icon: "📝",
+      color: "#a855f7",
+      tint: "rgba(168, 85, 247, 0.12)",
+      tasks: [
+        "Incident Log Entry & Escalation Filing",
+        "Candidate IR / Voucher Documentation & Records",
+        "Daily Shift Sign-Offs & Compliance Audit"
+      ]
+    },
+    tech_ops: {
+      icon: "🖥️",
+      color: "#ec4899",
+      tint: "rgba(236, 72, 153, 0.12)",
+      tasks: [
+        "Biometric Scanners, Webcams & Headsets Check",
+        "Network Latency & Backup UPS Power Stability",
+        "Hardware Maintenance & Lab Cleanliness"
+      ]
+    },
+    candidate_desk: {
+      icon: "👥",
+      color: "#f97316",
+      tint: "rgba(249, 115, 22, 0.12)",
+      tasks: [
+        "Candidate Reception, ID Inspection & Locker Allocation",
+        "Exam Regulations Briefing & Seating Directives",
+        "Secure Test Room Escort & Identification Checks"
+      ]
+    },
+    facility_quality: {
+      icon: "🛡️",
+      color: "#14b8a6",
+      tint: "rgba(20, 184, 166, 0.12)",
+      tasks: [
+        "CCTV Surveillance & Testing Room Climate",
+        "Emergency Exits, Fire Safety & Restroom Cleanliness",
+        "Centre Access Control & Physical Security Audit"
+      ]
+    }
+  };
+
   return (
-    <div className="glass-2" style={{ padding: 16, borderRadius: 14, display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
-        <Avatar name={r.who} size={38} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)" }}>{r.who}</div>
-          <div style={{ fontSize: 11.5, color: "var(--ink-3)", fontWeight: 500, textTransform: "capitalize" }}>{r.branch} centre · {r.date}</div>
+    <div style={{ marginTop: 32, display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* ── SECTION TITLE BAR ── */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{
+            width: 42, height: 42, borderRadius: 12,
+            background: "linear-gradient(135deg, rgba(245, 158, 11, 0.25) 0%, rgba(217, 119, 6, 0.15) 100%)",
+            border: "1.5px solid rgba(245, 158, 11, 0.45)",
+            display: "grid", placeItems: "center",
+            fontSize: 22, boxShadow: "0 0 16px rgba(245, 158, 11, 0.25)"
+          }}>
+            👑
+          </div>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 900, color: "var(--ink)", letterSpacing: "-0.02em", display: "flex", alignItems: "center", gap: 10 }}>
+              Consecutive 6-Day Duty & Shift Lead Schedule
+              <span style={{
+                fontSize: 10.5, fontWeight: 850, padding: "3px 10px", borderRadius: 99,
+                background: "linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(79, 70, 229, 0.15) 100%)",
+                color: "#a5b4fc", border: "1px solid rgba(99, 102, 241, 0.35)",
+                textTransform: "uppercase", letterSpacing: "0.06em"
+              }}>
+                Synchronized with Roster
+              </span>
+            </div>
+            <div style={{ fontSize: 12.5, color: "var(--ink-3)", marginTop: 2, fontWeight: 600 }}>
+              Each category is assigned to 1 staff member for their entire 6-day working stretch · {canEdit ? "✏️ Super Admin & Lead Editable" : "Read-only"}
+            </div>
+          </div>
         </div>
-        <span style={{ fontSize: 9.5, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.07em", padding: "4px 9px", borderRadius: 99,
-          color: kindMeta.color, background: `color-mix(in oklch, ${kindMeta.color} 16%, transparent)` }}>
-          {kindMeta.label}
-        </span>
+
+        {canEdit && (
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              type="button"
+              className="tap"
+              onClick={() => setEditingModal({ type: "lead", current: activeLead })}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 16px",
+                borderRadius: 10, border: "1px solid rgba(245, 158, 11, 0.4)",
+                background: "linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(217, 119, 6, 0.1) 100%)",
+                color: "#f59e0b", fontSize: 12.5, fontWeight: 800, cursor: "pointer"
+              }}
+            >
+              👑 Reassign Shift Lead
+            </button>
+          </div>
+        )}
       </div>
-      <div style={{ fontSize: 12.5, color: "var(--ink-2)", fontWeight: 600 }}>
-        {isSwap ? <span>Swap with <b style={{ color: "var(--ink)" }}>{r.with}</b></span>
-          : isToil ? <span>Use <b style={{ color: "var(--ink)" }}>{r.days || 1} TOIL day{(r.days || 1) > 1 ? "s" : ""}</b></span>
-          : <span>{r.leaveType}</span>}
-      </div>
-      {r.reason && <p style={{ margin: 0, fontSize: 12.5, color: "var(--ink-3)", lineHeight: 1.5, fontStyle: "italic", fontFamily: "var(--font-serif)" }}>“{r.reason}”</p>}
-      {r.status === "Submitted" ? (
-        <div style={{ display: "flex", gap: 9 }}>
-          <button onClick={() => onResolve(r.id, "Approved")} className="tap" style={{ flex: 1, padding: "10px", borderRadius: 10, border: "none", cursor: "pointer", fontFamily: "var(--font)", fontSize: 13, fontWeight: 700, color: "var(--accent-ink)", background: "var(--accent)", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-            <Icon name="check" size={15} stroke={2.6} /> Approve
-          </button>
-          <button onClick={() => onResolve(r.id, "Rejected")} className="tap glass-2" style={{ flex: 1, padding: "10px", borderRadius: 10, cursor: "pointer", fontFamily: "var(--font)", fontSize: 13, fontWeight: 700, color: "var(--ink-2)", border: "1px solid var(--hairline)", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-            <Icon name="x" size={15} stroke={2.6} /> Reject
-          </button>
+
+      {/* ── 1. HERO LEAD SPOTLIGHT CARD ── */}
+      <div className="glass rise" style={{
+        borderRadius: "var(--radius)",
+        padding: "24px 28px",
+        background: "linear-gradient(135deg, rgba(245, 158, 11, 0.14) 0%, rgba(30, 41, 59, 0.4) 100%)",
+        border: "1.5px solid rgba(245, 158, 11, 0.4)",
+        boxShadow: "0 10px 30px rgba(0, 0, 0, 0.25)",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        flexWrap: "wrap",
+        gap: 20
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+          <div style={{ position: "relative" }}>
+            <Avatar name={activeLead} size={64} />
+            <span style={{
+              position: "absolute", bottom: -4, right: -4,
+              fontSize: 18, background: "#0f172a", borderRadius: "50%",
+              padding: "2px 4px", border: "1.5px solid #f59e0b",
+              boxShadow: "0 0 10px rgba(245, 158, 11, 0.6)"
+            }}>👑</span>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 850, textTransform: "uppercase", letterSpacing: "0.1em", color: "#f59e0b" }}>
+              Designated Shift Lead // Current 6-Day Stretch
+            </div>
+            <div style={{ fontSize: 24, fontWeight: 900, color: "var(--ink)", letterSpacing: "-0.02em", marginTop: 2 }}>
+              {activeLead}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6, flexWrap: "wrap" }}>
+              <span style={{
+                fontSize: 11.5, fontWeight: 750, padding: "3px 10px", borderRadius: 6,
+                background: "rgba(245, 158, 11, 0.18)", color: "#fbbf24", border: "1px solid rgba(245, 158, 11, 0.35)"
+              }}>
+                📍 {effectiveBranch.charAt(0).toUpperCase() + effectiveBranch.slice(1)} Centre
+              </span>
+              <span style={{
+                fontSize: 11.5, fontWeight: 750, padding: "3px 10px", borderRadius: 6,
+                background: "rgba(255, 255, 255, 0.08)", color: "var(--ink-2)", border: "1px solid var(--hairline)"
+              }}>
+                📅 Active Stretch: {effectiveBranch === "cochin" ? "24 Aug – 29 Aug 2026" : "22 Aug – 27 Aug 2026"} (6 Consecutive Days)
+              </span>
+              <span style={{
+                fontSize: 11.5, fontWeight: 750, padding: "3px 10px", borderRadius: 6,
+                background: "rgba(16, 185, 129, 0.15)", color: "#34d399", border: "1px solid rgba(16, 185, 129, 0.3)"
+              }}>
+                ● Shift Lead On Duty
+              </span>
+            </div>
+          </div>
         </div>
-      ) : (
-        <div style={{ fontSize: 12, fontWeight: 700, color: SREQ_STATUS[r.status], display: "flex", alignItems: "center", gap: 6 }}>
-          <Icon name={r.status === "Approved" ? "check" : "x"} size={14} stroke={2.6} /> {r.status}
+
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+          <div style={{ fontSize: 11, color: "var(--ink-3)", fontWeight: 700, textTransform: "uppercase" }}>
+            Lead Operational Authority
+          </div>
+          <div style={{ fontSize: 12.5, color: "var(--ink-2)", fontWeight: 650, maxWidth: 360, textAlign: "right" }}>
+            Conducts morning readiness check, verifies all category checklist completions, and signs evening handover.
+          </div>
+        </div>
+      </div>
+
+      {/* ── 2. SIX OPERATIONAL CATEGORY CARDS (2-COL SPACIOUS GRID) ── */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
+        gap: 16
+      }}>
+        {DD.DUTY_CATEGORIES.map((cat) => {
+          const details = CATEGORY_DETAILS[cat.id] || CATEGORY_DETAILS.admin_calendar;
+          const assignedStaff = stretchData?.catMap?.[cat.id] || (
+            cat.id === "admin_calendar" ? (effectiveBranch === "cochin" ? "NIMMY M" : "Aysha") :
+            cat.id === "data_systems" ? (effectiveBranch === "cochin" ? "Shimna" : "Nilufer") :
+            cat.id === "cases_docs" ? (effectiveBranch === "cochin" ? "Naima MM" : "Bindu Rajan") :
+            cat.id === "tech_ops" ? (effectiveBranch === "cochin" ? "NIMMY M" : "Lazeem") :
+            cat.id === "candidate_desk" ? (effectiveBranch === "cochin" ? "Shimna" : "Anshitha K") :
+            (effectiveBranch === "cochin" ? "Naima MM" : "Aysha")
+          );
+
+          return (
+            <div
+              key={cat.id}
+              className="glass rise"
+              style={{
+                borderRadius: 16,
+                padding: "20px 22px",
+                background: "linear-gradient(160deg, rgba(30, 41, 59, 0.5) 0%, rgba(15, 23, 42, 0.4) 100%)",
+                border: `1.5px solid ${details.color}35`,
+                boxShadow: "0 4px 20px rgba(0, 0, 0, 0.15)",
+                display: "flex",
+                flexDirection: "column",
+                gap: 14
+              }}
+            >
+              {/* Category Header */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{
+                    width: 38, height: 38, borderRadius: 10,
+                    background: details.tint,
+                    border: `1px solid ${details.color}50`,
+                    display: "grid", placeItems: "center",
+                    fontSize: 18
+                  }}>
+                    {details.icon}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 850, color: "var(--ink)", letterSpacing: "-0.01em" }}>
+                      {cat.name}
+                    </div>
+                    <div style={{ fontSize: 11, color: details.color, fontWeight: 700 }}>
+                      6-Day Working Stretch Assignment
+                    </div>
+                  </div>
+                </div>
+
+                {canEdit && (
+                  <button
+                    type="button"
+                    className="tap"
+                    onClick={() => setEditingModal({ type: "category", catId: cat.id, catName: cat.name, current: assignedStaff })}
+                    style={{
+                      padding: "4px 10px", borderRadius: 8, fontSize: 11, fontWeight: 750,
+                      background: "rgba(255, 255, 255, 0.06)", border: "1px solid var(--hairline)",
+                      color: "var(--ink-2)", cursor: "pointer"
+                    }}
+                  >
+                    ✏️ Reassign
+                  </button>
+                )}
+              </div>
+
+              {/* Assigned Staff Banner */}
+              <div style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "12px 14px", borderRadius: 12,
+                background: "rgba(255, 255, 255, 0.04)", border: "1px solid var(--hairline)"
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <Avatar name={assignedStaff} size={36} />
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 850, color: "var(--ink)" }}>
+                      {assignedStaff}
+                    </div>
+                    <div style={{ fontSize: 10.5, color: "var(--ink-3)", fontWeight: 650, marginTop: 1 }}>
+                      📅 Stretch: {effectiveBranch === "cochin" ? "24 Aug – 29 Aug (6 Days)" : "22 Aug – 27 Aug (6 Days)"}
+                    </div>
+                  </div>
+                </div>
+                <span style={{
+                  fontSize: 10.5, fontWeight: 800, padding: "3px 8px", borderRadius: 6,
+                  background: `${details.color}20`, color: details.color, border: `1px solid ${details.color}40`
+                }}>
+                  Active Assignee
+                </span>
+              </div>
+
+              {/* Responsibilities Checklist */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 2 }}>
+                <div style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--ink-4)" }}>
+                  Primary Daily Responsibilities
+                </div>
+                {details.tasks.map((task, idx) => (
+                  <div key={idx} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11.5, color: "var(--ink-2)", fontWeight: 600 }}>
+                    <span style={{ color: details.color, fontSize: 12 }}>✓</span>
+                    <span>{task}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── 3. UPCOMING ROTATION ROADMAP PREVIEW ── */}
+      <div className="glass" style={{
+        borderRadius: 14,
+        padding: "16px 20px",
+        background: "rgba(15, 23, 42, 0.3)",
+        border: "1px solid var(--hairline)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        flexWrap: "wrap",
+        gap: 12
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 18 }}>🔄</span>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: "var(--ink)" }}>
+              Next Stretch Cycle Rotation Schedule
+            </div>
+            <div style={{ fontSize: 11, color: "var(--ink-3)", fontWeight: 600 }}>
+              Upcoming working stretch begins {effectiveBranch === "cochin" ? "30 Aug 2026" : "28 Aug 2026"} · Category rotation automatically transfers on rest days.
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 11, color: "var(--ink-3)", fontWeight: 700 }}>
+            Rotation Rules: Equal distribution across staff working stretches
+          </span>
+        </div>
+      </div>
+
+      {/* ── REASSIGNMENT MODAL ── */}
+      {editingModal && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 9999,
+          background: "rgba(0, 0, 0, 0.75)", backdropFilter: "blur(6px)",
+          display: "grid", placeItems: "center", padding: 20
+        }}>
+          <div className="glass rise" style={{
+            width: "100%", maxWidth: 420, borderRadius: 18, padding: "24px 26px",
+            background: "var(--panel)", border: "1.5px solid var(--accent-line)",
+            boxShadow: "0 20px 50px rgba(0, 0, 0, 0.5)", display: "flex", flexDirection: "column", gap: 16
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: 16, fontWeight: 850, color: "var(--ink)" }}>
+                {editingModal.type === "lead" ? "👑 Reassign Shift Lead" : `Reassign ${editingModal.catName}`}
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingModal(null)}
+                style={{ background: "transparent", border: "none", color: "var(--ink-3)", cursor: "pointer", fontSize: 18 }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ fontSize: 12.5, color: "var(--ink-3)", fontWeight: 600 }}>
+              {editingModal.type === "lead"
+                ? `Select the staff member to designate as the Shift Lead for ${effectiveBranch.toUpperCase()} centre:`
+                : `Select the staff member to assign to ${editingModal.catName} for the 6-day stretch:`}
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 260, overflowY: "auto" }}>
+              {availableStaff.map((s: string) => {
+                const isSelected = editingModal.current === s;
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    className="tap"
+                    onClick={() => {
+                      if (editingModal.type === "lead") {
+                        handleSaveLead(s);
+                      } else if (editingModal.catId) {
+                        handleSaveCategory(editingModal.catId, s);
+                      }
+                    }}
+                    style={{
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                      padding: "12px 14px", borderRadius: 10,
+                      background: isSelected ? "var(--accent-soft)" : "rgba(255, 255, 255, 0.04)",
+                      border: isSelected ? "1.5px solid var(--accent)" : "1px solid var(--hairline)",
+                      color: "var(--ink)", fontWeight: 750, fontSize: 13, cursor: "pointer"
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <Avatar name={s} size={28} />
+                      <span>{s}</span>
+                    </div>
+                    {isSelected && <span style={{ color: "var(--accent)", fontWeight: 900 }}>✓ Active</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       )}
     </div>
   );
 }
-function LeaveApprovalsPanel({ branch }) {
-  const [reqs, setReqs] = React.useState(() => F().staffReqList());
-  React.useEffect(() => {
-    const h = () => setReqs(F().staffReqList());
-    window.addEventListener("fets-roster-changed", h);
-    return () => window.removeEventListener("fets-roster-changed", h);
-  }, []);
-  const inBranch = reqs.filter((r) => branch === "global" || r.branch === branch);
-  const resolve = (id, status) => {
-    const next = F().staffReqResolve(id, status);
-    setReqs(next);
-    if (status === "Approved") { const r = next.find((x) => x.id === id); reflectOnRoster(r); }
-    toast(status === "Approved" ? "Approved — roster updated" : "Request rejected", status === "Approved" ? "check" : "x");
-  };
-  const pending = inBranch.filter((r) => r.status === "Submitted").length;
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <StatPill value={pending} label="Awaiting you" tone={pending ? "var(--warn)" : "var(--ok)"} />
-        <StatPill value={inBranch.filter((r) => r.kind === "leave").length} label="Leave requests" />
-        <StatPill value={inBranch.filter((r) => r.kind === "swap").length} label="Swap requests" tone="var(--v-prometric)" />
-        <StatPill value={inBranch.filter((r) => r.kind === "toil").length} label="TOIL requests" tone="var(--v-cma)" />
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {inBranch.length === 0
-          ? <div className="inset" style={{ padding: 22, borderRadius: 14, textAlign: "center", color: "var(--ink-4)", fontSize: 13 }}>No requests for this centre.</div>
-          : inBranch.map((r) => <StaffReqCard key={r.id} r={r} onResolve={resolve} />)}
-      </div>
-    </div>
-  );
-}
+
+/* ---- StaffReqCard, LeaveApprovalsPanel — REMOVED: all request UI is now exclusively in My Desk → ApplicationsHub ---- */
 
 /* ---------- roster analysis ---------- */
 function RosterAnalysis({ offsets, branch }) {
@@ -4653,425 +5294,9 @@ function PersonalizedRosterOverview({ branch }) {
   );
 }
 
-/* ---------- roster request tabbed form ---------- */
-function RosterRequestForm({ branch, allowedKinds = ["leave", "swap", "toil"] }) {
-  const [kind, setKind] = React.useState(allowedKinds[0]);
-  const [leaveType, setLeaveType] = React.useState("Full-day leave");
-  const [reqDate, setReqDate] = React.useState("");
-  const [swapDate, setSwapDate] = React.useState("");
-  const [withWho, setWithWho] = React.useState("");
-  const [reason, setReason] = React.useState("");
-  const [submitting, setSubmitting] = React.useState(false);
+/* ---- RosterRequestForm — REMOVED: submission is now exclusively in My Desk → ApplicationsHub ---- */
 
-  const F = window.FETS;
-  const meName = F.user.name;
-
-  const isSuperAdmin = !!window.FETS?.isAdmin;
-  const userProfileBranch = window.FETS?._meBranch || 'cochin';
-  const isLocked = !isSuperAdmin && branch !== userProfileBranch;
-
-  React.useEffect(() => {
-    if (allowedKinds.length > 0 && !allowedKinds.includes(kind)) {
-      setKind(allowedKinds[0]);
-    }
-  }, [allowedKinds]);
-
-  if (isLocked) {
-    return (
-      <div className="glass" style={{ borderRadius: "var(--radius)", padding: 24, display: "flex", flexDirection: "column", gap: 14, alignItems: "center", justifyContent: "center", textAlign: "center" }}>
-        <div style={{ width: 44, height: 44, borderRadius: 12, background: "color-mix(in oklch, var(--bad) 12%, transparent)", display: "grid", placeItems: "center", color: "var(--bad)" }}>
-          <Icon name="lock" size={20} />
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <div style={{ fontSize: 15, fontWeight: 750, color: "var(--ink)" }}>Request Form Locked</div>
-          <div style={{ fontSize: 12.5, color: "var(--ink-3)", maxWidth: 300, lineHeight: 1.4 }}>
-            You are viewing the <strong>{branch.toUpperCase()}</strong> branch. To submit a leave, swap, or TOIL request, please switch back to your home branch: <strong>{userProfileBranch.toUpperCase()}</strong>.
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const pool = branch === "global"
-    ? [...F.STAFF.calicut, ...F.STAFF.cochin]
-    : F.STAFF[branch] || [];
-  const colleagues = pool.filter((n) => n !== meName);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!reqDate) {
-      toast("Please select a date", "alert");
-      return;
-    }
-    if (kind === "swap" && !withWho) {
-      toast("Please select a staff member to swap with", "alert");
-      return;
-    }
-    if (kind === "swap" && !swapDate) {
-      toast("Please select the target swap date", "alert");
-      return;
-    }
-
-    setSubmitting(true);
-    const req = {
-      who: meName,
-      branch: branch === "global" ? (F._meBranch || "calicut") : branch,
-      kind,
-      date: reqDate,
-      reason,
-      ...(kind === "leave" && { leaveType }),
-      ...(kind === "swap" && { with: withWho, swapDate }),
-      ...(kind === "toil" && { days: 1 })
-    };
-
-    const res = await DB.dbAddStaffRequest(req);
-    setSubmitting(false);
-
-    if (res) {
-      setReqDate("");
-      setSwapDate("");
-      setWithWho("");
-      setReason("");
-    }
-  };
-
-  const inpStyle = {
-    background: "var(--inset)",
-    border: "1px solid var(--hairline)",
-    borderRadius: 10,
-    color: "var(--ink)",
-    fontFamily: "var(--font)",
-    fontSize: 13.5,
-    padding: "10px 12px",
-    width: "100%",
-    outline: "none",
-    boxSizing: "border-box" as const
-  };
-
-  const KIND_META = {
-    leave: { icon: "calendar", label: "Leave", desc: "Apply for a scheduled day off", color: "var(--bad)" },
-    swap:  { icon: "refresh",  label: "Shift Swap", desc: "Exchange shifts with a colleague", color: "var(--v-prometric)" },
-    toil:  { icon: "clock",    label: "Redeem TOIL", desc: "Use accrued time-off-in-lieu balance", color: "var(--v-cma)" },
-  };
-
-  const activeKinds = Object.entries(KIND_META).filter(([k]) => allowedKinds.includes(k));
-  const showSelector = activeKinds.length > 1;
-
-  return (
-    <div className="glass rise" style={{ borderRadius: "var(--radius)", padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid var(--hairline)", paddingBottom: 14 }}>
-        <div style={{ width: 38, height: 38, borderRadius: 11, background: "rgba(255, 255, 255, 0.05)", display: "grid", placeItems: "center", border: "1px solid var(--hairline)" }}>
-          <Icon name="edit" size={18} style={{ color: "var(--accent)" }} />
-        </div>
-        <div>
-          <div style={{ fontSize: 15, fontWeight: 750, color: "var(--ink)", letterSpacing: "-0.01em" }}>Staff Request Portal</div>
-          <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 1 }}>Submit requests directly to Super Admins. Real-time status shows below.</div>
-        </div>
-      </div>
-
-      {/* Main dual-pane layout */}
-      <div style={{ display: "grid", gridTemplateColumns: showSelector ? "1fr 1.5fr" : "1fr", gap: 24 }} className="request-portal-grid">
-        {/* Left selector pane */}
-        {showSelector && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {activeKinds.map(([k, m]) => {
-              const on = kind === k;
-              return (
-                <button 
-                  type="button" 
-                  key={k} 
-                  onClick={() => setKind(k)} 
-                  className="tap hover-lift" 
-                  style={{
-                    display: "flex", 
-                    alignItems: "center", 
-                    gap: 12,
-                    padding: "16px 18px", 
-                    borderRadius: 14,
-                    border: `1px solid ${on ? m.color : "var(--hairline)"}`,
-                    background: on ? `color-mix(in oklch, ${m.color} 8%, var(--inset))` : "var(--inset)",
-                    cursor: "pointer",
-                    textAlign: "left",
-                    width: "100%",
-                    transition: "all 0.2s"
-                  }}
-                >
-                  <div style={{ 
-                    width: 32, 
-                    height: 32, 
-                    borderRadius: 8, 
-                    background: on ? `color-mix(in oklch, ${m.color} 20%, transparent)` : "rgba(255,255,255,0.04)", 
-                    display: "grid", 
-                    placeItems: "center",
-                    color: on ? m.color : "var(--ink-3)",
-                    border: `1px solid ${on ? m.color : "var(--hairline)"}`
-                  }}>
-                    <Icon name={m.icon} size={15} />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 750, color: on ? m.color : "var(--ink)" }}>{m.label}</div>
-                    <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2 }}>{m.desc}</div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Right input pane */}
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {kind === "leave" && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }} className="case-2col">
-              <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
-                Leave Date
-                <input type="date" value={reqDate} onChange={(e) => setReqDate(e.target.value)} style={inpStyle} />
-              </label>
-              <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
-                Leave Type
-                <select value={leaveType} onChange={(e) => setLeaveType(e.target.value)} style={inpStyle}>
-                  <option value="Full-day leave">Full-day leave</option>
-                  <option value="Half day">Half day</option>
-                </select>
-              </label>
-            </div>
-          )}
-
-          {kind === "swap" && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }} className="case-cols">
-              <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 650, color: "var(--ink-2)", gridColumn: "1 / -1" }}>
-                Swap With
-                <select value={withWho} onChange={(e) => setWithWho(e.target.value)} style={inpStyle}>
-                  <option value="">Select colleague…</option>
-                  {colleagues.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </label>
-              <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
-                Your Shift Date
-                <input type="date" value={reqDate} onChange={(e) => setReqDate(e.target.value)} style={inpStyle} />
-              </label>
-              <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
-                Their Shift Date
-                <input type="date" value={swapDate} onChange={(e) => setSwapDate(e.target.value)} style={inpStyle} />
-              </label>
-            </div>
-          )}
-
-          {kind === "toil" && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr", gap: 14 }}>
-              <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
-                Date to Redeem TOIL
-                <input type="date" value={reqDate} onChange={(e) => setReqDate(e.target.value)} style={inpStyle} />
-              </label>
-              <div className="inset" style={{ borderRadius: 10, padding: "10px 14px", display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ width: 28, height: 28, borderRadius: 999, background: "rgba(0, 184, 148, 0.1)", display: "grid", placeItems: "center", color: "var(--ok)" }}>
-                  <Icon name="clock" size={14} />
-                </div>
-                <div>
-                  <div style={{ fontSize: 10, fontWeight: 650, color: "var(--ink-4)", textTransform: "uppercase" }}>TOIL Balance</div>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: "var(--v-cma)", marginTop: 2 }}>
-                    {(window.FETS._meToilBalance || 0)} <span style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)" }}>days left</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 650, color: "var(--ink-2)" }}>
-            Reason / Comments
-            <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2}
-              placeholder="Briefly explain your request (optional)…"
-              style={{ ...inpStyle, resize: "vertical", lineHeight: 1.55 }} />
-          </label>
-
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <button type="submit" disabled={submitting} className="tap" style={{
-              height: 42, borderRadius: 11, border: "none", cursor: submitting ? "not-allowed" : "pointer",
-              fontFamily: "var(--font)", fontSize: 13, fontWeight: 780,
-              color: "var(--accent-ink)", background: submitting ? "var(--ink-4)" : "var(--accent)",
-              padding: "0 28px", display: "inline-flex", alignItems: "center", gap: 9,
-              transition: "background .2s", opacity: submitting ? 0.7 : 1
-            }}>
-              <Icon name={submitting ? "loader" : "check"} size={14} stroke={2.5} />
-              {submitting ? "Submitting…" : "Submit Request"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-/* ---------- admin: everyone's attendance for a day (Mithun only) ---------- */
-function AttendanceAdminPage({ branch }) {
-  const [date, setDate] = React.useState(ATT.attDateStr());
-  const [rows, setRows] = React.useState(null);
-  React.useEffect(() => { setRows(null); ATT.attAllForDate(date).then(setRows); }, [date]);
-  const totalWorked = (rows || []).reduce((a, r) => a + (r.worked || 0), 0);
-  const SCOL = { present: "var(--ok)", late: "var(--warn)", half_day: "var(--v-ielts)", absent: "var(--bad)" };
-  return (
-    <div style={{ maxWidth: 1000, margin: "0 auto", display: "flex", flexDirection: "column", gap: "calc(24px * var(--density))" }}>
-      <PageHeader eyebrow="Admin // attendance" title="Daily Attendance" />
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ background: "var(--inset)", border: "1px solid var(--hairline)", borderRadius: 10, color: "var(--ink)", fontFamily: "var(--font)", fontSize: 14, padding: "10px 12px" }} />
-        <div style={{ flex: 1 }} />
-        <StatPill value={(rows || []).length} label="Records" />
-        <StatPill value={ATT.attFmtMins(totalWorked)} label="Total worked" tone="var(--accent)" />
-      </div>
-      <div className="glass" style={{ borderRadius: "var(--radius)", padding: "8px 4px", overflow: "auto" }}>
-        <div style={{ minWidth: 640 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr 0.9fr 0.9fr 0.8fr 1fr", gap: 8, padding: "8px 14px" }}>
-            {["Staff", "Branch", "In", "Out", "Break", "Worked"].map((h) => <div key={h} className="eyebrow" style={{ fontSize: 9, color: "var(--ink-4)" }}>{h}</div>)}
-          </div>
-          {!rows ? <div style={{ padding: 20, color: "var(--ink-4)" }}>Loading…</div>
-            : rows.length === 0 ? <div style={{ padding: 20, color: "var(--ink-4)" }}>No attendance recorded for this day.</div>
-            : rows.map((r, i) => (
-              <div key={i} style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr 0.9fr 0.9fr 0.8fr 1fr", gap: 8, padding: "11px 14px", borderTop: "1px solid var(--hairline)", alignItems: "center" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 9 }}><Avatar name={r.name} size={26} /><span style={{ fontSize: 13, fontWeight: 650, color: "var(--ink)" }}>{r.name}</span></div>
-                <div style={{ fontSize: 12, color: "var(--ink-3)", textTransform: "capitalize" }}>{r.branch || "—"}</div>
-                <div className="mono" style={{ fontSize: 12.5 }}>{r.check_in || "—"}</div>
-                <div className="mono" style={{ fontSize: 12.5 }}>{r.check_out || "—"}</div>
-                <div className="mono" style={{ fontSize: 12, color: "var(--ink-3)" }}>{r.breakMins ? r.breakMins + "m" : "—"}</div>
-                <div className="mono" style={{ fontSize: 12.5, color: "var(--accent)", fontWeight: 700 }}>{r.worked ? ATT.attFmtMins(r.worked) : "—"}</div>
-              </div>
-            ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ---------- Roster Approvals Hub page (recreation of staff management) ---------- */
-function RosterApprovalsHub({ branch }) {
-  const [reqs, setReqs] = React.useState([]);
-  const [loading, setLoading] = React.useState(true);
-  const [tab, setTab] = React.useState("pending");
-
-  const F = window.FETS;
-
-  const load = () => {
-    setLoading(true);
-    loadLiveData(F).then(() => {
-      setReqs(F.staffReqList() || []);
-      setLoading(false);
-    });
-  };
-
-  React.useEffect(() => {
-    load();
-    window.addEventListener("fets-roster-changed", load);
-    return () => window.removeEventListener("fets-roster-changed", load);
-  }, []);
-
-  const resolve = async (id, status) => {
-    const adminId = F._meId || "00000000-0000-0000-0000-000000000000";
-    await DB.dbResolveStaffRequest(id, status, adminId);
-    load();
-  };
-
-  const filtered = reqs.filter((r) => {
-    const matchesBranch = branch === "global" || r.branch === branch;
-    if (tab === "pending") return matchesBranch && r.status === "Submitted";
-    return matchesBranch && r.status !== "Submitted";
-  });
-
-  const SCOL = { Submitted: "var(--warn)", Approved: "var(--ok)", Rejected: "var(--bad)" };
-
-  return (
-    <div style={{ maxWidth: 1000, margin: "0 auto", display: "flex", flexDirection: "column", gap: 20 }}>
-      <PageHeader eyebrow="Modules // Admin" title="Roster Approvals Hub" />
-
-      <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-        <Segmented value={tab} onChange={setTab} size="sm" options={[
-          { value: "pending", label: "Pending Requests" },
-          { value: "history", label: "History" },
-          { value: "discussions", label: "Staff Discussions" }
-        ]} />
-        <div style={{ flex: 1 }} />
-        <button onClick={load} className="tap glass-2" style={{ width: 36, height: 36, borderRadius: 10, display: "grid", placeItems: "center", border: "1px solid var(--hairline)", cursor: "pointer", color: "var(--ink-2)" }}>
-          <Icon name="refresh" size={15} />
-        </button>
-      </div>
-
-      {loading ? (
-        <div className="glass" style={{ padding: 40, borderRadius: "var(--radius)", textAlign: "center", color: "var(--ink-4)" }}>
-          Loading requests…
-        </div>
-      ) : tab === "discussions" ? (
-        <RosterDiscussionsAdmin />
-      ) : filtered.length === 0 ? (
-        <div className="glass" style={{ padding: 40, borderRadius: "var(--radius)", textAlign: "center", color: "var(--ink-4)" }}>
-          No {tab === "pending" ? "pending" : "resolved"} requests found.
-        </div>
-      ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
-          {filtered.map((r) => {
-            const isSwap = r.kind === "swap";
-            const isToil = r.kind === "toil";
-            const kindMeta = isSwap ? { label: "Shift Swap", color: "var(--v-prometric)" }
-              : isToil ? { label: "TOIL", color: "var(--v-cma)" }
-              : { label: "Leave", color: "var(--v-ielts)" };
-              
-            return (
-              <div key={r.id} className="glass rise" style={{ padding: 20, borderRadius: "var(--radius)", display: "flex", flexDirection: "column", gap: 14 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <Avatar name={r.who} size={36} />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 14.5, fontWeight: 700, color: "var(--ink)" }}>{r.who}</div>
-                    <div style={{ fontSize: 11.5, color: "var(--ink-4)", marginTop: 1 }}>
-                      {r.branch} center
-                    </div>
-                  </div>
-                  <span style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", padding: "4px 10px", borderRadius: 99,
-                    color: kindMeta.color, background: `color-mix(in oklch, ${kindMeta.color} 15%, transparent)` }}>
-                    {kindMeta.label}
-                  </span>
-                </div>
-
-                <div style={{ fontSize: 13.5, color: "var(--ink-2)", fontWeight: 600 }}>
-                  {isSwap ? (
-                    <span>
-                      Swap shift on <b style={{ color: "var(--ink)" }}>{r.date}</b> with <b style={{ color: "var(--ink)" }}>{r.with}</b> (their shift on <b style={{ color: "var(--ink)" }}>{r.swapDate || r.date}</b>)
-                    </span>
-                  ) : isToil ? (
-                    <span>
-                      Redeem TOIL day on <b style={{ color: "var(--ink)" }}>{r.date}</b>
-                    </span>
-                  ) : (
-                    <span>
-                      Take leave on <b style={{ color: "var(--ink)" }}>{r.date}</b> ({r.leaveType})
-                    </span>
-                  )}
-                </div>
-
-                {r.reason && (
-                  <p style={{ margin: 0, padding: "10px 12px", borderRadius: 8, background: "var(--inset)", fontSize: 12.5, color: "var(--ink-3)", fontStyle: "italic", fontFamily: "var(--font-serif)", lineHeight: 1.4 }}>
-                    “{r.reason}”
-                  </p>
-                )}
-
-                {r.status === "Submitted" ? (
-                  <div style={{ display: "flex", gap: 9, alignSelf: "flex-end", marginTop: 4 }}>
-                    <button onClick={() => resolve(r.id, "Approved")} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 34, padding: "0 16px", borderRadius: 8, border: "none", cursor: "pointer", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 750, color: "var(--accent-ink)", background: "var(--accent)" }}>
-                      <Icon name="check" size={14} stroke={2.6} /> Approve
-                    </button>
-                    <button onClick={() => resolve(r.id, "Rejected")} className="tap glass-2" style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 34, padding: "0 16px", borderRadius: 8, border: "1px solid var(--hairline)", cursor: "pointer", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 650, color: "var(--ink-2)" }}>
-                      <Icon name="x" size={14} stroke={2.6} /> Reject
-                    </button>
-                  </div>
-                ) : (
-                  <div style={{ alignSelf: "flex-end", fontSize: 12.5, fontWeight: 700, color: SCOL[r.status], display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
-                    <Icon name={r.status === "Approved" ? "check" : "x"} size={14} stroke={2.6} /> {r.status}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
+/* ---- RosterApprovalsHub — REMOVED: admin inbox is now exclusively in My Desk → ApplicationsHub ---- */
 
 /* ---------- OT & TOIL Claims Manager Hub Page ---------- */
 function OtToilClaimsHub({ branch }) {
@@ -7496,124 +7721,6 @@ function RosterPage({ branch }) {
     );
   };
 
-  // User requests list for Shift Desk
-  const UserRequestsList = ({ forceKind }: { forceKind?: string }) => {
-    const mine = (F()._staffRequests?.filter(r => r.who === meName) || [])
-      .filter(r => !forceKind || r.kind === forceKind);
-    const statusMeta = {
-      Submitted: { color: "var(--warn)", label: "Awaiting Admin Review", icon: "clock" },
-      Approved: { color: "var(--ok)", label: "Approved & Synced", icon: "check" },
-      Rejected: { color: "var(--bad)", label: "Rejected", icon: "x" }
-    };
-
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 24 }}>
-        <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>{mine.length} requests</span>}>
-          {forceKind === "swap" ? "Your Shift Swap Requests" : "Your Shift & Leave Requests"}
-        </SectionLabel>
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {mine.length === 0 ? (
-            <div className="glass" style={{ borderRadius: "var(--radius)", padding: "24px", textAlign: "center", color: "var(--ink-4)", fontSize: 13.5 }}>
-              No requests submitted yet.
-            </div>
-          ) : (
-            mine.map((r, i) => {
-              const meta = statusMeta[r.status] || { color: "var(--ink-3)", label: r.status, icon: "info" };
-              const isSwap = r.kind === "swap";
-              const isToil = r.kind === "toil";
-              
-              return (
-                <div key={r.id || i} className="glass rise hover-lift" style={{ 
-                  borderRadius: "var(--radius)", 
-                  padding: "16px 20px", 
-                  borderLeft: `4px solid ${meta.color}`,
-                  display: "flex", 
-                  justifyContent: "space-between", 
-                  alignItems: "center", 
-                  flexWrap: "wrap", 
-                  gap: 16,
-                  transition: "all 0.2s"
-                }}>
-                  <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
-                    <div style={{ 
-                      width: 36, 
-                      height: 36, 
-                      borderRadius: 10, 
-                      background: "rgba(255,255,255,0.04)", 
-                      display: "grid", 
-                      placeItems: "center",
-                      color: meta.color,
-                      border: "1px solid var(--hairline)",
-                      flexShrink: 0
-                    }}>
-                      <Icon name={r.kind === "swap" ? "refresh" : (r.kind === "toil" ? "clock" : "calendar")} size={16} />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 14, fontWeight: 750, color: "var(--ink)", display: "flex", alignItems: "center", gap: 8 }}>
-                        <span>{r.kind.toUpperCase()}</span>
-                        {r.leaveType && (
-                          <span style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", background: "var(--glass-2)", padding: "1px 6px", borderRadius: 4 }}>
-                            {r.leaveType}
-                          </span>
-                        )}
-                      </div>
-                      
-                      <div style={{ fontSize: 12.5, color: "var(--ink-2)", marginTop: 6, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
-                        <span>Target:</span>
-                        <strong style={{ color: "var(--ink)" }}>{r.date}</strong>
-                        {isSwap && r.with && (
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                            <span style={{ color: "var(--ink-4)" }}>⇄</span>
-                            <span>colleague</span>
-                            <strong style={{ color: "var(--ink)" }}>{r.with}</strong>
-                            <span>(shift: {r.swapDate || r.date})</span>
-                          </span>
-                        )}
-                      </div>
-
-                      {r.reason && (
-                        <div style={{ fontSize: 12, color: "var(--ink-3)", fontStyle: "italic", marginTop: 6, display: "flex", alignItems: "flex-start", gap: 4 }}>
-                          <span style={{ opacity: 0.5 }}>“</span>
-                          <span>{r.reason}</span>
-                          <span style={{ opacity: 0.5 }}>”</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
-                    <span style={{ 
-                      fontSize: 10.5, 
-                      fontWeight: 800, 
-                      textTransform: "uppercase", 
-                      letterSpacing: "0.06em",
-                      padding: "4px 10px", 
-                      borderRadius: 99, 
-                      color: meta.color, 
-                      background: `color-mix(in oklch, ${meta.color} 12%, transparent)`, 
-                      border: `1px solid color-mix(in oklch, ${meta.color} 20%, transparent)`,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 6
-                    }}>
-                      {r.status === "Submitted" && <span style={{ width: 6, height: 6, borderRadius: 999, background: "var(--warn)", display: "inline-block" }} className="pulse" />}
-                      {meta.label}
-                    </span>
-                    {r.status !== "Submitted" && (
-                      <span style={{ fontSize: 10, color: "var(--ink-4)" }}>
-                        Processed in Real-time
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div style={{
       maxWidth: 1600,
@@ -7645,69 +7752,8 @@ function RosterPage({ branch }) {
         </div>
       </div>
 
-      {(() => {
-        const myUnseenResolutions = F()._staffRequests?.filter(r => 
-          r.who === meName && 
-          (r.status === "Approved" || r.status === "Rejected") && 
-          !localStorage.getItem(`fets-seen-req-${r.id}`)
-        ) || [];
-        if (myUnseenResolutions.length === 0) return null;
-        return (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {myUnseenResolutions.map((r) => (
-              <div 
-                key={r.id} 
-                className="glass rise" 
-                style={{ 
-                  padding: "12px 16px", 
-                  borderRadius: 12, 
-                  borderLeft: `4px solid ${r.status === "Approved" ? "var(--ok)" : "var(--bad)"}`,
-                  display: "flex", 
-                  alignItems: "center", 
-                  justifyContent: "space-between",
-                  gap: 12
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={{ 
-                    width: 24, 
-                    height: 24, 
-                    borderRadius: 6, 
-                    display: "grid", 
-                    placeItems: "center", 
-                    color: r.status === "Approved" ? "var(--ok)" : "var(--bad)",
-                    background: r.status === "Approved" ? "color-mix(in oklch, var(--ok) 15%, transparent)" : "color-mix(in oklch, var(--bad) 15%, transparent)"
-                  }}>
-                    <Icon name={r.status === "Approved" ? "check" : "x"} size={14} />
-                  </span>
-                  <span style={{ fontSize: 13, color: "var(--ink)", fontWeight: 550 }}>
-                    Your request for <strong>{r.leaveType || r.kind.toUpperCase()}</strong> on <strong>{r.date}</strong> has been <strong>{r.status.toLowerCase()}</strong>.
-                  </span>
-                </div>
-                <button 
-                  onClick={() => {
-                    localStorage.setItem(`fets-seen-req-${r.id}`, "true");
-                    window.dispatchEvent(new Event("fets-roster-changed"));
-                  }}
-                  className="tap glass-2" 
-                  style={{ 
-                    padding: "5px 10px", 
-                    borderRadius: 6, 
-                    border: "1px solid var(--hairline)", 
-                    fontSize: 11, 
-                    fontWeight: 700, 
-                    color: "var(--ink-2)", 
-                    cursor: "pointer" 
-                  }}
-                >
-                  Dismiss
-                </button>
-              </div>
-            ))}
-          </div>
-        );
-      })()}
-
+      {/* Resolution alerts removed — staff see application status in My Desk → ApplicationsHub */
+      null}
       {/* Desk tabs & tools — calendar-style toolbar card */}
       <div style={{
         display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12,
@@ -7815,19 +7861,7 @@ function RosterPage({ branch }) {
         </section>
       )}
 
-      {activeRosterTab === "shift" && (
-        <section style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <RosterRequestForm branch={branch} allowedKinds={["leave", "toil"]} />
-          <UserRequestsList forceKind={undefined} />
-        </section>
-      )}
-
-      {activeRosterTab === "swap" && (
-        <section style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <RosterRequestForm branch={branch} allowedKinds={["swap"]} />
-          <UserRequestsList forceKind="swap" />
-        </section>
-      )}
+      {/* shift & swap tabs removed — all applications exclusively in My Desk → ApplicationsHub */}
 
       {activeRosterTab === "review" && (
         <section style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -10440,7 +10474,7 @@ function Readout({ label, time, tone }) {
   );
 }
 
-function AttendanceCard({ shift }) {
+function AttendanceCard({ shift = window.FETS?.user?.shift || { start: "09:00", end: "17:00", branch: "calicut" } }) {
   const dayKey = "fets-att-" + window.FETS.ISO(0).toDateString();
   const [att, setAtt] = useLocal(dayKey, ATT_BLANK);
   const meta = ATT_META[att.status];
@@ -10951,6 +10985,440 @@ function PresetCard({ m, idx, on, onClick, badge }) {
   );
 }
 
+/* ============================================================
+   APPLICATIONS HUB  — My Desk embedded portal
+   Four types: leave | swap | emergency_duty | reimbursement
+   ============================================================ */
+const APP_KINDS = [
+  { k: "leave",          icon: "calendar", label: "Leave",                 color: "#B23850",  desc: "Apply for a scheduled day off" },
+  { k: "swap",           icon: "refresh",  label: "Shift Swap",            color: "#3B8BEB",  desc: "Propose a swap with a colleague" },
+  { k: "emergency_duty", icon: "zap",      label: "Emergency Duty Change", color: "#B23850",  desc: "Request an urgent shift change" },
+  { k: "reimbursement",  icon: "dollar",   label: "Reimbursement",         color: "#3B8BEB",  desc: "Claim work expenses" },
+];
+const APP_STATUS_STYLE = {
+  pending:  { label: "Pending",  color: "#8590AA" },
+  approved: { label: "Approved", color: "#3B8BEB" },
+  rejected: { label: "Rejected", color: "#B23850" },
+};
+const SHIFT_CODE_OPTIONS = ["D","E","N","HD","RD","TOIL","TR","SW"];
+const EXPENSE_TYPES = ["Travel","Meal","Material","Communication","Other"];
+const LEAVE_TYPES   = ["Full-day","Half-day","Emergency"];
+
+function AppStatusBadge({ status }) {
+  const s = APP_STATUS_STYLE[status] || APP_STATUS_STYLE.pending;
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10, fontWeight: 700,
+      letterSpacing: "0.05em", textTransform: "uppercase", padding: "3px 9px", borderRadius: 999,
+      color: s.color, background: `color-mix(in srgb, ${s.color} 14%, #E7E3D4)`,
+      border: `1px solid color-mix(in srgb, ${s.color} 35%, transparent)` }}>
+      <span style={{ width: 5, height: 5, borderRadius: 999, background: s.color }} />
+      {s.label}
+    </span>
+  );
+}
+
+function AppKindSelector({ selected, onChange, adminMode }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))", gap: 10 }}>
+      {APP_KINDS.map(({ k, icon, label, color, desc }) => {
+        const on = selected === k;
+        return (
+          <button key={k} type="button" onClick={() => onChange(k)} className="tap"
+            style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", borderRadius: 14, textAlign: "left", width: "100%", cursor: "pointer",
+              border: `1.5px solid ${on ? color : "#C4DBF6"}`,
+              background: on ? "#C4DBF6" : "#E7E3D4",
+              transition: "all 0.18s" }}>
+            <div style={{ width: 32, height: 32, borderRadius: 9, display: "grid", placeItems: "center", flexShrink: 0,
+              background: `color-mix(in srgb, ${color} 18%, #E7E3D4)`,
+              color, border: "none" }}>
+              <Icon name={icon} size={15} />
+            </div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 750, color: on ? color : "#2c3e50", lineHeight: 1.2 }}>{label}</div>
+              <div style={{ fontSize: 10.5, color: "#8590AA", marginTop: 2 }}>{desc}</div>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function AppForm({ onSubmitted }) {
+  const F = () => window.FETS;
+  const [kind, setKind] = React.useState("leave");
+  const [submitting, setSubmitting] = React.useState(false);
+
+  // Leave fields
+  const [date, setDate] = React.useState("");
+  const [leaveType, setLeaveType] = React.useState("Full-day");
+  const [reason, setReason] = React.useState("");
+
+  // Swap fields
+  const [swapDate, setSwapDate] = React.useState("");
+  const [swapWith, setSwapWith] = React.useState("");
+  const [swapPartnerDate, setSwapPartnerDate] = React.useState("");
+
+  // Emergency duty fields
+  const [emergDate, setEmergDate] = React.useState("");
+  const [newShift, setNewShift] = React.useState("D");
+
+  // Reimbursement fields
+  const [amount, setAmount] = React.useState("");
+  const [expenseType, setExpenseType] = React.useState("Travel");
+  const [receiptNote, setReceiptNote] = React.useState("");
+
+  const staffList = (F().PEOPLE || []);
+
+  const inpStyle = {
+    padding: "10px 12px", borderRadius: 10, border: "1.5px solid #C4DBF6",
+    background: "#fff", color: "#2c3e50", fontSize: 13.5,
+    fontFamily: "var(--font)", outline: "none", width: "100%", boxSizing: "border-box"
+  };
+  const labelStyle = { display: "flex", flexDirection: "column", gap: 6, fontSize: 11.5, fontWeight: 650, color: "#8590AA" };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+    let payload = { kind, reason };
+    if (kind === "leave")          payload = { ...payload, request_date: date, leave_type: leaveType };
+    if (kind === "swap")           payload = { ...payload, request_date: swapDate, swap_with_name: swapWith, swap_date: swapPartnerDate };
+    if (kind === "emergency_duty") payload = { ...payload, request_date: emergDate, new_shift_code: newShift, leave_type: "Emergency" };
+    if (kind === "reimbursement")  payload = { ...payload, amount: parseFloat(amount) || 0, expense_type: expenseType, receipt_note: receiptNote };
+    const res = await DB.dbSubmitApplication(payload);
+    setSubmitting(false);
+    if (res) {
+      setDate(""); setLeaveType("Full-day"); setReason(""); setSwapDate(""); setSwapWith(""); setSwapPartnerDate(""); setEmergDate(""); setNewShift("D"); setAmount(""); setExpenseType("Travel"); setReceiptNote("");
+      onSubmitted?.();
+    }
+  };
+
+  const kindMeta = APP_KINDS.find(a => a.k === kind);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <AppKindSelector selected={kind} onChange={setKind} />
+      <div style={{ borderRadius: 16, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 18, background: "#E7E3D4", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, borderBottom: "1px solid #C4DBF6", paddingBottom: 14 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 10, display: "grid", placeItems: "center",
+            background: `color-mix(in srgb, ${kindMeta?.color} 18%, #E7E3D4)`, color: kindMeta?.color }}>
+            <Icon name={kindMeta?.icon} size={16} />
+          </div>
+          <div>
+            <div style={{ fontSize: 14.5, fontWeight: 750, color: "#2c3e50" }}>New {kindMeta?.label} Application</div>
+            <div style={{ fontSize: 11, color: "#8590AA", marginTop: 1 }}>Fill in the details and submit — Super Admin will be notified immediately.</div>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {/* Leave */}
+          {kind === "leave" && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              <label style={labelStyle}>Date<input type="date" value={date} onChange={e => setDate(e.target.value)} required style={inpStyle} /></label>
+              <label style={labelStyle}>Leave Type
+                <select value={leaveType} onChange={e => setLeaveType(e.target.value)} style={inpStyle}>
+                  {LEAVE_TYPES.map(lt => <option key={lt} value={lt}>{lt}</option>)}
+                </select>
+              </label>
+            </div>
+          )}
+
+          {/* Swap */}
+          {kind === "swap" && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              <label style={labelStyle}>Your Date<input type="date" value={swapDate} onChange={e => setSwapDate(e.target.value)} required style={inpStyle} /></label>
+              <label style={{...labelStyle, gridColumn: "1 / -1"}}>Swap With
+                <select value={swapWith} onChange={e => setSwapWith(e.target.value)} required style={inpStyle}>
+                  <option value="">— select staff —</option>
+                  {staffList.filter(n => n !== (window.FETS._meName || window.FETS.user.name)).map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </label>
+              <label style={labelStyle}>Their Date (that you'll take)<input type="date" value={swapPartnerDate} onChange={e => setSwapPartnerDate(e.target.value)} required style={inpStyle} /></label>
+            </div>
+          )}
+
+          {/* Emergency Duty */}
+          {kind === "emergency_duty" && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              <label style={labelStyle}>Date<input type="date" value={emergDate} onChange={e => setEmergDate(e.target.value)} required style={inpStyle} /></label>
+              <label style={labelStyle}>New Shift Code
+                <select value={newShift} onChange={e => setNewShift(e.target.value)} style={inpStyle}>
+                  {SHIFT_CODE_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </label>
+            </div>
+          )}
+
+          {/* Reimbursement */}
+          {kind === "reimbursement" && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              <label style={labelStyle}>Amount (₹)<input type="number" min="0" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} required placeholder="0.00" style={inpStyle} /></label>
+              <label style={labelStyle}>Expense Type
+                <select value={expenseType} onChange={e => setExpenseType(e.target.value)} style={inpStyle}>
+                  {EXPENSE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </label>
+              <label style={{...labelStyle, gridColumn: "1 / -1"}}>Receipt / Description
+                <input type="text" value={receiptNote} onChange={e => setReceiptNote(e.target.value)} placeholder="Receipt number or brief description…" style={inpStyle} />
+              </label>
+            </div>
+          )}
+
+          <label style={labelStyle}>Reason / Notes
+            <textarea value={reason} onChange={e => setReason(e.target.value)} rows={2} placeholder="Optional — add any context for the admin…"
+              style={{ ...inpStyle, resize: "vertical", lineHeight: 1.5 }} />
+          </label>
+
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <button type="submit" disabled={submitting} className="tap"
+              style={{ padding: "11px 26px", borderRadius: 11, border: "none", fontFamily: "var(--font)", fontSize: 13, fontWeight: 750,
+                cursor: submitting ? "default" : "pointer", opacity: submitting ? 0.6 : 1,
+                background: "#B23850", color: "#fff",
+                display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <Icon name="send" size={14} /> {submitting ? "Submitting…" : "Submit Application"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function MyApplicationsList() {
+  const [apps, setApps] = React.useState(() => window.FETS._myApplications || []);
+  React.useEffect(() => {
+    const refresh = () => setApps([...(window.FETS._myApplications || [])]);
+    window.addEventListener("fets-applications-changed", refresh);
+    return () => window.removeEventListener("fets-applications-changed", refresh);
+  }, []);
+
+  if (apps.length === 0) {
+    return <div style={{ padding: 30, borderRadius: 14, textAlign: "center", color: "#8590AA", fontSize: 13, background: "#E7E3D4" }}>No applications submitted yet. Use the form above to apply.</div>;
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {apps.map(app => {
+        const km = APP_KINDS.find(a => a.k === app.kind);
+        let detail = "";
+        if (app.kind === "leave")          detail = `${app.leave_type || "Full-day"} · ${app.request_date || ""}`;
+        if (app.kind === "swap")           detail = `${app.request_date} ↔ ${app.swap_with_name} (${app.swap_date || ""})`;
+        if (app.kind === "emergency_duty") detail = `${app.request_date} → ${app.new_shift_code} shift`;
+        if (app.kind === "reimbursement")  detail = `₹${app.amount || 0} · ${app.expense_type || ""}`;
+        return (
+          <div key={app.id} style={{ borderRadius: 14, padding: "14px 16px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", background: "#E7E3D4", border: "1px solid #C4DBF6" }}>
+            <div style={{ width: 32, height: 32, borderRadius: 9, display: "grid", placeItems: "center", flexShrink: 0,
+              background: `color-mix(in srgb, ${km?.color || "#3B8BEB"} 14%, #E7E3D4)`, color: km?.color || "#3B8BEB" }}>
+              <Icon name={km?.icon || "file"} size={15} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#2c3e50" }}>{km?.label || app.kind}</div>
+              <div style={{ fontSize: 11, color: "#8590AA", marginTop: 2 }}>{detail}</div>
+              {app.reason && <div style={{ fontSize: 11, color: "#8590AA", marginTop: 3, fontStyle: "italic" }}>"{app.reason}"</div>}
+              {app.admin_reply && app.status !== "pending" && (
+                <div style={{ fontSize: 11, color: app.status === "approved" ? "#3B8BEB" : "#B23850", marginTop: 4, fontWeight: 600 }}>
+                  Admin: "{app.admin_reply}"
+                </div>
+              )}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+              <AppStatusBadge status={app.status} />
+              <span style={{ fontSize: 10, color: "#8590AA" }}>{app.created_at ? new Date(app.created_at).toLocaleDateString() : ""}</span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function AdminApplicationsInbox() {
+  const [apps, setApps] = React.useState(() => window.FETS._applications || []);
+  const [filter, setFilter] = React.useState("pending");
+  const [replyModal, setReplyModal] = React.useState(null); // { app, action }
+  const [replyText, setReplyText] = React.useState("");
+  const [resolving, setResolving] = React.useState(false);
+
+  React.useEffect(() => {
+    const refresh = () => setApps([...(window.FETS._applications || [])]);
+    window.addEventListener("fets-applications-changed", refresh);
+    return () => window.removeEventListener("fets-applications-changed", refresh);
+  }, []);
+
+  const filtered = apps.filter(a => filter === "all" ? true : a.status === filter);
+  const pendingCount = apps.filter(a => a.status === "pending").length;
+
+  const doResolve = async () => {
+    if (!replyModal) return;
+    setResolving(true);
+    await DB.dbResolveApplication(replyModal.app.id, replyModal.action === "approve" ? "approved" : "rejected", replyText);
+    setResolving(false);
+    setReplyModal(null);
+    setReplyText("");
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Tab bar */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {[
+          { k: "pending", label: `Pending${pendingCount > 0 ? ` (${pendingCount})` : ""}`, activeColor: "#8590AA" },
+          { k: "approved", label: "Approved", activeColor: "#3B8BEB" },
+          { k: "rejected", label: "Rejected", activeColor: "#B23850" },
+          { k: "all", label: "All", activeColor: "#3B8BEB" },
+        ].map(({ k, label, activeColor }) => (
+          <button key={k} onClick={() => setFilter(k)} className="tap"
+            style={{ padding: "8px 16px", borderRadius: 20, fontSize: 12, fontWeight: 700, fontFamily: "var(--font)", cursor: "pointer",
+              border: `1.5px solid ${filter === k ? activeColor : "#C4DBF6"}`,
+              background: filter === k ? activeColor : "#E7E3D4",
+              color: filter === k ? "#fff" : "#8590AA" }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Application cards */}
+      {filtered.length === 0 ? (
+        <div style={{ padding: 30, borderRadius: 14, textAlign: "center", color: "#8590AA", fontSize: 13, background: "#E7E3D4" }}>
+          No {filter === "all" ? "" : filter} applications.
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {filtered.map(app => {
+            const km = APP_KINDS.find(a => a.k === app.kind);
+            let detail = "";
+            if (app.kind === "leave")          detail = `${app.leave_type || "Full-day"} · ${app.request_date || ""}`;
+            if (app.kind === "swap")           detail = `${app.request_date} ↔ ${app.swap_with_name} (${app.swap_date || ""})`;
+            if (app.kind === "emergency_duty") detail = `${app.request_date} → ${app.new_shift_code} shift`;
+            if (app.kind === "reimbursement")  detail = `₹${app.amount || 0} · ${app.expense_type || ""}`;
+            return (
+              <div key={app.id} style={{ borderRadius: 14, padding: "16px 18px", display: "flex", gap: 14, alignItems: "flex-start", flexWrap: "wrap", background: "#E7E3D4", border: "1px solid #C4DBF6" }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, display: "grid", placeItems: "center", flexShrink: 0,
+                  background: `color-mix(in srgb, ${km?.color || "#3B8BEB"} 14%, #E7E3D4)`, color: km?.color || "#3B8BEB" }}>
+                  <Icon name={km?.icon || "file"} size={16} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
+                    <span style={{ fontSize: 13.5, fontWeight: 750, color: "#2c3e50" }}>{app.applicant_name}</span>
+                    <AppStatusBadge status={app.status} />
+                    <span style={{ fontSize: 10.5, color: "#8590AA" }}>{km?.label}</span>
+                    <span style={{ fontSize: 10, color: "#8590AA", marginLeft: "auto" }}>{app.created_at ? new Date(app.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : ""}</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: "#2c3e50", fontWeight: 600 }}>{detail}</div>
+                  {app.reason && <div style={{ fontSize: 11, color: "#8590AA", marginTop: 3, fontStyle: "italic" }}>"{app.reason}"</div>}
+                  {app.admin_reply && <div style={{ fontSize: 11, color: "#8590AA", marginTop: 3 }}>Reply: "{app.admin_reply}"</div>}
+                </div>
+                {app.status === "pending" && (
+                  <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                    <button onClick={() => { setReplyModal({ app, action: "approve" }); setReplyText(""); }} className="tap"
+                      style={{ padding: "8px 16px", borderRadius: 9, border: "none", background: "#3B8BEB", color: "#fff", fontSize: 12, fontWeight: 700, fontFamily: "var(--font)", cursor: "pointer" }}>
+                      <Icon name="check" size={13} /> Approve
+                    </button>
+                    <button onClick={() => { setReplyModal({ app, action: "reject" }); setReplyText(""); }} className="tap"
+                      style={{ padding: "8px 16px", borderRadius: 9, border: "1.5px solid #B23850", background: "transparent", color: "#B23850", fontSize: 12, fontWeight: 700, fontFamily: "var(--font)", cursor: "pointer" }}>
+                      <Icon name="x" size={13} /> Reject
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Reply modal */}
+      {replyModal && (
+        <div onClick={() => setReplyModal(null)}
+          style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(8px)", display: "grid", placeItems: "center" }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ padding: "26px 24px", borderRadius: 20, minWidth: 360, maxWidth: 440, display: "flex", flexDirection: "column", gap: 16, boxShadow: "0 12px 48px rgba(0,0,0,0.45)", background: "#E7E3D4" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ width: 38, height: 38, borderRadius: 11, display: "grid", placeItems: "center",
+                background: `color-mix(in srgb, ${replyModal.action === "approve" ? "#3B8BEB" : "#B23850"} 16%, #E7E3D4)`,
+                color: replyModal.action === "approve" ? "#3B8BEB" : "#B23850" }}>
+                <Icon name={replyModal.action === "approve" ? "check" : "x"} size={18} />
+              </span>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 750, color: "#2c3e50" }}>
+                  {replyModal.action === "approve" ? "Approve" : "Reject"} Application
+                </div>
+                <div style={{ fontSize: 11.5, color: "#8590AA" }}>{replyModal.app.applicant_name} · {APP_KINDS.find(a => a.k === replyModal.app.kind)?.label}</div>
+              </div>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <label style={{ fontSize: 10, fontWeight: 700, color: "#8590AA", textTransform: "uppercase", letterSpacing: "0.08em" }}>Reply Note (optional)</label>
+              <textarea value={replyText} onChange={e => setReplyText(e.target.value)} rows={3} placeholder={replyModal.action === "approve" ? "e.g. Approved, have a good rest." : "e.g. Coverage issue that week."}
+                style={{ padding: "10px 12px", borderRadius: 10, border: "1.5px solid #C4DBF6", background: "#fff", color: "#2c3e50", fontSize: 13.5, fontFamily: "var(--font)", outline: "none", resize: "vertical" }} />
+            </div>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button onClick={() => setReplyModal(null)} className="tap"
+                style={{ padding: "9px 18px", borderRadius: 10, border: "1.5px solid #C4DBF6", background: "#fff", color: "#8590AA", fontSize: 13, fontWeight: 650, fontFamily: "var(--font)", cursor: "pointer" }}>Cancel</button>
+              <button onClick={doResolve} disabled={resolving} className="tap"
+                style={{ padding: "9px 22px", borderRadius: 10, border: "none", fontFamily: "var(--font)", fontSize: 13, fontWeight: 750, cursor: resolving ? "default" : "pointer", opacity: resolving ? 0.6 : 1,
+                  background: replyModal.action === "approve" ? "#3B8BEB" : "#B23850", color: "#fff" }}>
+                {resolving ? "Processing…" : (replyModal.action === "approve" ? "Approve" : "Reject")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ApplicationsHub({ isSuperAdmin }) {
+  const [tab, setTab] = React.useState(isSuperAdmin ? "inbox" : "apply");
+  const pendingCount = (window.FETS._applications || []).filter(a => a.status === "pending").length;
+
+  const TABS = isSuperAdmin
+    ? [
+        { k: "inbox",  icon: "inbox",  label: "Applications Inbox", badge: pendingCount },
+        { k: "apply",  icon: "edit",   label: "New Application" },
+        { k: "mine",   icon: "list",   label: "My Requests" },
+      ]
+    : [
+        { k: "apply",  icon: "edit",   label: "New Application" },
+        { k: "mine",   icon: "list",   label: "My Requests" },
+      ];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* Section header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <div style={{ width: 40, height: 40, borderRadius: 12, display: "grid", placeItems: "center", background: "#C4DBF6", color: "#3B8BEB" }}>
+          <Icon name="file-text" size={20} />
+        </div>
+        <div>
+          <div style={{ fontSize: 17, fontWeight: 800, color: "#2c3e50", letterSpacing: "-0.01em" }}>Applications</div>
+          <div style={{ fontSize: 12, color: "#8590AA" }}>
+            {isSuperAdmin ? `${pendingCount} pending review` : "Manage your leave, swaps & claims"}
+          </div>
+        </div>
+        {/* Tab pills */}
+        <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+          {TABS.map(t => (
+            <button key={t.k} onClick={() => setTab(t.k)} className="tap"
+              style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 16px", borderRadius: 20, fontSize: 12.5, fontWeight: 700, fontFamily: "var(--font)", cursor: "pointer",
+                border: "none",
+                background: tab === t.k ? "#3B8BEB" : "#E7E3D4",
+                color: tab === t.k ? "#fff" : "#8590AA" }}>
+              <Icon name={t.icon} size={13} />{t.label}
+              {t.badge > 0 && (
+                <span style={{ position: "absolute", top: -5, right: -5, minWidth: 17, height: 17, borderRadius: 999, background: "#B23850", color: "#fff", fontSize: 9.5, fontWeight: 900, display: "grid", placeItems: "center", padding: "0 4px" }}>{t.badge}</span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Content */}
+      {tab === "apply" && <AppForm onSubmitted={() => setTab(isSuperAdmin ? "inbox" : "mine")} />}
+      {tab === "mine" && <MyApplicationsList />}
+      {tab === "inbox" && <AdminApplicationsInbox />}
+    </div>
+  );
+}
+
 function DeskMenu({ tab, setTab, pendingHandovers }) {
   return (
     <nav className="desk-menu" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(206px, 1fr))", gap: 12 }}>
@@ -10959,17 +11427,44 @@ function DeskMenu({ tab, setTab, pendingHandovers }) {
   );
 }
 
+
 function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
-  const u = window.FETS.user;
+  const u = window.FETS?.user || { name: "Staff Member", email: "" };
   const gap = "calc(24px * var(--density))";
 
-  // Determine if the user is a super admin (Mithun or Niyas)
-  const isSuperAdmin = ["mithun", "niyas"].includes((u.name || "").toLowerCase()) ||
-                       ["mithun@fets.in", "mithun@fets.live", "niyas@fets.in", "niyas@fets.live"].includes((u.email || "").toLowerCase());
+  // Determine if the user is a super admin
+  const isSuperAdmin = Boolean(
+    window.FETS.isAdmin ||
+    (u.role || "").toLowerCase().includes("super") ||
+    (u.role || "").toLowerCase().includes("admin") ||
+    ["mithun", "niyas"].includes((u.name || "").toLowerCase()) ||
+    ["mithun@fets.in", "mithun@fets.live", "niyas@fets.in", "niyas@fets.live"].includes((u.email || "").toLowerCase())
+  );
 
-  // Only Super Admins see the modules
+  // Sub-tab selection state
+  const [deskTab, setDeskTab] = React.useState("cockpit");
+
+  // Admin module filter states
   const [searchQuery, setSearchQuery] = React.useState("");
   const [selectedCat, setSelectedCat] = React.useState("all");
+
+  // Pending handovers count for badge
+  const [pendingHandovers, setPendingHandovers] = React.useState(0);
+
+  React.useEffect(() => {
+    const fetchHandovers = async () => {
+      try {
+        const items = await DB.dbFetchPendingHandovers(u.name);
+        setPendingHandovers(items ? items.length : 0);
+      } catch (e) {
+        console.error("Error fetching pending handovers for badge:", e);
+      }
+    };
+    fetchHandovers();
+    const handler = () => fetchHandovers();
+    window.addEventListener("fets-handover-pending", handler);
+    return () => window.removeEventListener("fets-handover-pending", handler);
+  }, [u.name]);
 
   const nativeIds = ["live", "calendar", "roster", "desk", "attn-admin", "business", "staff-requests", "staff-ot"];
 
@@ -11002,8 +11497,7 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
       "branch-delegation": { bg: "linear-gradient(135deg, #F3D250, #E0BE2B)", text: "#2c3e50", iconBg: "rgba(0,0,0,0.07)", iconColor: "#2c3e50" }
   };
 
-  // Filter NAV items and TOOLS
-  const allModules = isSuperAdmin ? [
+  const allAdminModules = isSuperAdmin ? [
     ...NAV.map((n) => ({ 
       ...n, 
       icon: n.id === "live" ? "globe" : n.id === "calendar" ? "calendar" : n.id === "roster" ? "layers" : "briefcase", 
@@ -11013,7 +11507,7 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
     ...TOOLS
   ] : [];
 
-  const filtered = allModules.filter(it => {
+  const filteredAdminModules = allAdminModules.filter(it => {
     const matchesSearch = it.label.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           (it.sub && it.sub.toLowerCase().includes(searchQuery.toLowerCase()));
     const status = getModuleStatus(it);
@@ -11023,10 +11517,24 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
     return matchesSearch && matchesCategory;
   });
 
+  const DESK_SUB_TABS = [
+    { id: "cockpit", label: "⚡ Cockpit", icon: "zap" },
+    { id: "handovers", label: "📥 Handovers", icon: "clipboard", badge: pendingHandovers },
+    { id: "actionables", label: "📌 Actionables", icon: "check" },
+    { id: "tasks", label: "📋 My Tasks", icon: "check" },
+    { id: "checklist", label: "✅ Checklist", icon: "list" },
+    { id: "leave", label: "⏱️ Attendance & Leaves", icon: "clock" },
+    { id: "living-board", label: "💬 Living Board", icon: "spark" },
+    { id: "certs", label: "🛡️ Certificates", icon: "shield" },
+    { id: "readiness", label: "📊 Readiness", icon: "trend" },
+    ...(isSuperAdmin ? [{ id: "admin", label: "⚙️ Admin Control", icon: "settings" }] : [])
+  ];
+
+  const branchLabel = (branch === "all" || !branch) ? "All centres" : branch.charAt(0).toUpperCase() + branch.slice(1);
+
   return (
     <div style={{ maxWidth: 1600, margin: "0 auto", padding: "clamp(22px,3.2vw,40px) clamp(14px,3vw,30px) 80px", display: "flex", flexDirection: "column", gap }}>
       <style>{`
-        /* Search Input – Elespacio palette */
         .desk-search-input {
           background: rgba(255,255,255,0.85) !important;
           border: 2px solid #90CCF4 !important;
@@ -11042,8 +11550,6 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
           color: #5DA2D5 !important;
           opacity: 0.55;
         }
-
-        /* Category pills – Elespacio */
         .desk-cat-btn {
           border: 2px solid #90CCF4 !important;
           background: rgba(255,255,255,0.7) !important;
@@ -11067,8 +11573,6 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
           border-color: #F3D250 !important;
           box-shadow: 0 3px 10px rgba(243,210,80,0.35) !important;
         }
-
-        /* Cards – Elespacio warm-sky gradient base */
         .desk-module-card {
           position: relative;
           border: none !important;
@@ -11082,212 +11586,231 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
           justify-content: space-between;
           min-height: 154px;
           overflow: hidden;
-          box-shadow:
-            0 6px 20px rgba(93,162,213,0.18),
-            inset 0 1px 0 rgba(255,255,255,0.3) !important;
+          box-shadow: 0 6px 20px rgba(93,162,213,0.18), inset 0 1px 0 rgba(255,255,255,0.3) !important;
         }
-
         .desk-module-card:hover {
           transform: translateY(-5px) !important;
-          box-shadow:
-            0 12px 32px rgba(93,162,213,0.28),
-            inset 0 1px 0 rgba(255,255,255,0.35) !important;
+          box-shadow: 0 12px 32px rgba(93,162,213,0.28), inset 0 1px 0 rgba(255,255,255,0.35) !important;
         }
-
-        /* Shine overlay */
         .desk-module-card::before {
-          content: "";
-          position: absolute;
-          top: 0; left: 0;
-          width: 100%; height: 100%;
-          background: linear-gradient(
-            120deg,
-            transparent,
-            rgba(255,255,255,0.06),
-            rgba(255,255,255,0.18),
-            rgba(255,255,255,0.06),
-            transparent
-          );
-          background-size: 200% 100%;
-          background-position: -200% 0;
-          transition: all 0.5s ease;
-          border-radius: 22px;
-          pointer-events: none;
+          content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+          background: linear-gradient(120deg, transparent, rgba(255,255,255,0.06), rgba(255,255,255,0.18), rgba(255,255,255,0.06), transparent);
+          background-size: 200% 100%; background-position: -200% 0; transition: all 0.5s ease; border-radius: 22px; pointer-events: none;
         }
-
-        .desk-module-card:hover::before {
-          animation: desk-shine 2s infinite ease-in-out;
-        }
-
-        @keyframes desk-shine {
-          0%   { background-position: -200% 0; }
-          100% { background-position:  200% 0; }
-        }
-
-        /* Icon wrap – white frosted pill base */
+        .desk-module-card:hover::before { animation: desk-shine 2s infinite ease-in-out; }
+        @keyframes desk-shine { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
         .desk-module-icon-wrap {
-          width: 44px;
-          height: 44px;
-          border-radius: 12px;
-          display: grid;
-          place-items: center;
-          border: 1px solid rgba(255,255,255,0.2);
-          transition: all 0.3s ease;
+          width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,0.2); transition: all 0.3s ease;
+        }
+        .subtab-pill {
+          padding: 10px 18px; border-radius: 14px; border: 1px solid rgba(93,162,213,0.3); background: rgba(255,255,255,0.65);
+          color: #2c3e50; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 8px; position: relative;
+        }
+        .subtab-pill:hover { background: rgba(144,204,244,0.4); }
+        .subtab-pill.active {
+          background: #5DA2D5; color: #ffffff; border-color: #5DA2D5; box-shadow: 0 4px 14px rgba(93,162,213,0.35);
+        }
+        .subtab-pill.admin-tab.active {
+          background: linear-gradient(135deg, #F3D250, #E0BE2B); color: #2c3e50; border-color: #F3D250; box-shadow: 0 4px 14px rgba(243,210,80,0.4);
         }
       `}</style>
 
-      {/* masthead — name + profile photo only */}
-      <header className="rise" style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
-        <ProfileAvatar name={u.name} size={66} />
-        <h1 style={{ margin: 0, fontFamily: '"Archivo Expanded", var(--font)', fontWeight: 800, whiteSpace: "nowrap",
-          fontSize: "clamp(30px,4vw,48px)", lineHeight: 1, letterSpacing: "-0.03em", color: "#2c3e50" }}>{u.name}</h1>
+      {/* masthead — name + branch pill */}
+      <header className="rise" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 18, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+          <ProfileAvatar name={u.name} size={66} />
+          <div>
+            <h1 style={{ margin: 0, fontFamily: '"Archivo Expanded", var(--font)', fontWeight: 800, whiteSpace: "nowrap",
+              fontSize: "clamp(26px,3.5vw,42px)", lineHeight: 1, letterSpacing: "-0.03em", color: "#2c3e50" }}>{u.name}</h1>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+              <span style={{ padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 800, background: "rgba(93,162,213,0.2)", color: "#2c3e50" }}>
+                📍 {branchLabel}
+              </span>
+              <span style={{ padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 800, background: isSuperAdmin ? "rgba(243,210,80,0.4)" : "rgba(93,162,213,0.15)", color: "#2c3e50" }}>
+                {isSuperAdmin ? "⭐ Super Admin" : "👤 Staff Workspace"}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Quick action bar for drawers */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button onClick={() => setDrawer("vault")} className="subtab-pill" style={{ fontSize: 12, padding: "8px 14px" }}>
+            <Icon name="key" size={14} /> Vault
+          </button>
+          <button onClick={() => setDrawer("help")} className="subtab-pill" style={{ fontSize: 12, padding: "8px 14px" }}>
+            <Icon name="headset" size={14} /> Help Desk
+          </button>
+          <button onClick={() => setDrawer("ai_live")} className="subtab-pill" style={{ fontSize: 12, padding: "8px 14px", background: "rgba(245,158,11,0.15)", color: "#d97706", borderColor: "rgba(245,158,11,0.3)" }}>
+            <Icon name="spark" size={14} /> Gemini 3.1 Live
+          </button>
+        </div>
       </header>
 
-      {isSuperAdmin ? (
-        <div className="rise" style={{ display: "flex", flexDirection: "column", gap: 20, marginTop: 10 }}>
-          {/* Section head & controls */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 20, flexWrap: "wrap", borderBottom: "1px solid rgba(93,162,213,0.2)", paddingBottom: 16 }}>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button 
-                onClick={() => setSelectedCat("all")}
-                className={`desk-cat-btn ${selectedCat === "all" ? "active" : ""}`}
-              >
-                All Modules
-              </button>
-              <button 
-                onClick={() => setSelectedCat("native")}
-                className={`desk-cat-btn ${selectedCat === "native" ? "active" : ""}`}
-              >
-                Native React
-              </button>
-              <button 
-                onClick={() => setSelectedCat("legacy")}
-                className={`desk-cat-btn ${selectedCat === "legacy" ? "active" : ""}`}
-              >
-                Legacy Bridged
-              </button>
-            </div>
+      {/* Sub-Feature Navigation Bar */}
+      <nav className="rise" style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: "12px 0", borderBottom: "1px solid rgba(93,162,213,0.25)" }}>
+        {DESK_SUB_TABS.map((st) => {
+          const isActive = deskTab === st.id;
+          const isAdminTab = st.id === "admin";
+          return (
+            <button
+              key={st.id}
+              onClick={() => setDeskTab(st.id)}
+              className={`subtab-pill ${isActive ? "active" : ""} ${isAdminTab ? "admin-tab" : ""}`}
+            >
+              {st.label}
+              {st.badge > 0 && (
+                <span style={{
+                  padding: "1px 6px", borderRadius: 999, fontSize: 10, fontWeight: 900,
+                  background: "#FF7675", color: "#fff", marginLeft: 4
+                }}>
+                  {st.badge}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </nav>
 
-            {/* Search Input */}
-            <div style={{ flex: 1, minWidth: 260, maxWidth: 400, position: "relative" }}>
-              <Icon name="search" size={16} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#5DA2D5" }} />
-              <input 
-                value={searchQuery} 
-                onChange={(e) => setSearchQuery(e.target.value)} 
-                placeholder="Search modules..." 
-                className="desk-search-input"
-                style={{ 
-                  padding: "8px 14px 8px 42px",
-                  width: "100%",
-                  outline: "none"
-                }} 
-              />
-            </div>
+      {/* Active Sub-Tab View Rendering */}
+      <div className="rise" style={{ marginTop: 12 }}>
+        {deskTab === "cockpit" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+            <AttendanceCard />
+            <PerformanceSnapshot />
           </div>
+        )}
 
-          {/* Grid of Modules - premium neomorphic dark style */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
-            {filtered.length === 0 ? (
-              <div style={{ gridColumn: "1 / -1", padding: 60, textAlign: "center", color: "rgba(255,255,255,0.3)", fontSize: 14 }}>
-                No modules match your query. Try searching for something else.
+        {deskTab === "handovers" && (
+          <HandoverInbox />
+        )}
+
+        {deskTab === "actionables" && (
+          <ActionablesView branch={branch} />
+        )}
+
+        {deskTab === "tasks" && (
+          <TasksModule />
+        )}
+
+        {deskTab === "checklist" && (
+          <ChecklistModule />
+        )}
+
+        {deskTab === "leave" && (
+          <LeaveModule />
+        )}
+
+        {deskTab === "living-board" && (
+          <MyDeskLivingBoard />
+        )}
+
+        {deskTab === "certs" && (
+          <CertsModule />
+        )}
+
+        {deskTab === "readiness" && (
+          <PerformanceSnapshot />
+        )}
+
+        {deskTab === "admin" && isSuperAdmin && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            {/* Admin section head & controls */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 20, flexWrap: "wrap", borderBottom: "1px solid rgba(93,162,213,0.2)", paddingBottom: 16 }}>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button 
+                  onClick={() => setSelectedCat("all")}
+                  className={`desk-cat-btn ${selectedCat === "all" ? "active" : ""}`}
+                >
+                  All Modules ({allAdminModules.length})
+                </button>
+                <button 
+                  onClick={() => setSelectedCat("native")}
+                  className={`desk-cat-btn ${selectedCat === "native" ? "active" : ""}`}
+                >
+                  Native React
+                </button>
+                <button 
+                  onClick={() => setSelectedCat("legacy")}
+                  className={`desk-cat-btn ${selectedCat === "legacy" ? "active" : ""}`}
+                >
+                  Legacy Bridged
+                </button>
               </div>
-            ) : (
-              filtered.map((it) => {
-                const status = getModuleStatus(it);
-                const cardTheme = MODULE_CARD_THEMES[it.id] || { bg: "linear-gradient(135deg, #5DA2D5, #90CCF4)", text: "#fff", iconBg: "rgba(255,255,255,0.22)", iconColor: "#fff" };
-                return (
-                  <button 
-                    key={it.id} 
-                    onClick={() => handlePick(it)} 
-                    className="desk-module-card"
-                    style={{ background: cardTheme.bg, border: "none" }}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", width: "100%" }}>
-                      <div className="desk-module-icon-wrap" style={{ background: cardTheme.iconBg, color: cardTheme.iconColor }}>
-                        <Icon name={it.icon} size={20} />
-                      </div>
-                      {/* Status badge */}
-                      <span style={{ 
-                        fontSize: 9, 
-                        fontWeight: 800, 
-                        textTransform: "uppercase", 
-                        letterSpacing: "0.5px",
-                        padding: "4px 10px", 
-                        borderRadius: 999, 
-                        color: "#fff", 
-                        background: status.isNative ? "rgba(93,162,213,0.45)" : "rgba(247,136,136,0.5)",
-                        border: "none"
-                      }}>
-                        {status.label}
-                      </span>
-                    </div>
 
-                    <div style={{ marginTop: 20 }}>
-                      <h3 style={{ fontSize: 16, fontWeight: 800, color: "#fff", margin: 0, letterSpacing: "-0.01em" }}>
-                        {it.label}
-                      </h3>
-                      <p style={{ fontSize: 12, color: "rgba(255,255,255,0.75)", marginTop: 6, lineHeight: 1.4, marginBlockEnd: 0 }}>
-                        {it.sub}
-                      </p>
-                    </div>
-                  </button>
-                );
-              })
-            )}
+              {/* Search Input */}
+              <div style={{ flex: 1, minWidth: 260, maxWidth: 400, position: "relative" }}>
+                <Icon name="search" size={16} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#5DA2D5" }} />
+                <input 
+                  value={searchQuery} 
+                  onChange={(e) => setSearchQuery(e.target.value)} 
+                  placeholder="Search admin modules..." 
+                  className="desk-search-input"
+                  style={{ 
+                    padding: "8px 14px 8px 42px",
+                    width: "100%",
+                    outline: "none"
+                  }} 
+                />
+              </div>
+            </div>
+
+            {/* Grid of Modules */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
+              {filteredAdminModules.length === 0 ? (
+                <div style={{ gridColumn: "1 / -1", padding: 60, textAlign: "center", color: "rgba(255,255,255,0.4)", fontSize: 14 }}>
+                  No modules match your query. Try searching for something else.
+                </div>
+              ) : (
+                filteredAdminModules.map((it) => {
+                  const status = getModuleStatus(it);
+                  const cardTheme = MODULE_CARD_THEMES[it.id] || { bg: "linear-gradient(135deg, #5DA2D5, #90CCF4)", text: "#fff", iconBg: "rgba(255,255,255,0.22)", iconColor: "#fff" };
+                  return (
+                    <button 
+                      key={it.id} 
+                      onClick={() => handlePick(it)} 
+                      className="desk-module-card"
+                      style={{ background: cardTheme.bg, border: "none" }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", width: "100%" }}>
+                        <div className="desk-module-icon-wrap" style={{ background: cardTheme.iconBg, color: cardTheme.iconColor }}>
+                          <Icon name={it.icon} size={20} />
+                        </div>
+                        <span style={{ 
+                          fontSize: 9, 
+                          fontWeight: 800, 
+                          textTransform: "uppercase", 
+                          letterSpacing: "0.5px",
+                          padding: "4px 10px", 
+                          borderRadius: 999, 
+                          color: "#fff", 
+                          background: status.isNative ? "rgba(93,162,213,0.45)" : "rgba(247,136,136,0.5)",
+                          border: "none"
+                        }}>
+                          {status.label}
+                        </span>
+                      </div>
+
+                      <div style={{ marginTop: 20 }}>
+                        <h3 style={{ fontSize: 16, fontWeight: 800, color: "#fff", margin: 0, letterSpacing: "-0.01em" }}>
+                          {it.label}
+                        </h3>
+                        <p style={{ fontSize: 12, color: "rgba(255,255,255,0.75)", marginTop: 6, lineHeight: 1.4, marginBlockEnd: 0 }}>
+                          {it.sub}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
           </div>
-        </div>
-      ) : (
-        /* Nice premium watch this space banner for non-superadmin staff */
-        <div className="rise" style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          textAlign: "center",
-          padding: "80px 40px",
-          background: "linear-gradient(135deg, #90CCF4, #5DA2D5)",
-          border: "none",
-          borderRadius: 24,
-          boxShadow: "0 8px 30px rgba(93,162,213,0.25)",
-          maxWidth: 600,
-          margin: "40px auto 0",
-        }}>
-          <div style={{
-            width: 80,
-            height: 80,
-            borderRadius: "50%",
-            background: "#F3D250",
-            display: "grid",
-            placeItems: "center",
-            marginBottom: 24,
-            boxShadow: "0 10px 25px rgba(243,210,80,0.35)",
-          }}>
-            <Icon name="spark" size={36} style={{ color: "#2c3e50" }} />
-          </div>
-          <h2 style={{
-            margin: "0 0 10px",
-            fontFamily: '"Archivo Expanded", var(--font)',
-            fontWeight: 800,
-            fontSize: 24,
-            letterSpacing: "-0.02em",
-            color: "#ffffff",
-          }}>
-            Watch This Space
-          </h2>
-          <p style={{
-            margin: 0,
-            fontSize: 14,
-            lineHeight: 1.5,
-            color: "rgba(255,255,255,0.85)",
-            maxWidth: 380,
-          }}>
-            We are upgrading your cockpit with powerful new productivity tools. Stay tuned!
-          </p>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
+
 
 Object.assign(window, { MyDeskPage, AttendanceCard, PerformanceSnapshot, DeskMenu, ProfileAvatar });
 
@@ -11361,7 +11884,7 @@ const TOOLS = [
   { id: "business", icon: "star", label: "Google Business", sub: "Reviews, ratings & reach", page: true },
   { id: "candidate-tracker", icon: "users", label: "Candidate Tracker", sub: "Registrations & sessions", legacy: true },
   { id: "access-hub", icon: "key", label: "F-Vault / Access Hub", sub: "Credentials & access", legacy: true },
-  { id: "staff-requests", icon: "user", label: "Roster Approvals Hub", sub: "Manage staff requests, leaves & swaps" },
+  /* staff-requests entry removed — admin inbox is exclusively in My Desk → ApplicationsHub */
   { id: "staff-ot", icon: "clock", label: "OT & TOIL Manager", sub: "Overtime logging & TOIL cash payouts" },
   { id: "dashboard", icon: "grid", label: "Dashboard", sub: "iCloud overview", legacy: true },
   { id: "news-manager", icon: "message", label: "News Manager", sub: "Announcements", legacy: true },
@@ -11431,25 +11954,6 @@ function TopNav({ active, onNavigate, branch, setBranch, t, setTweak, onTools, o
 
       <div style={{ flex: 1 }} />
 
-      {/* FETS AI — prominent, always-visible entry point (desktop + mobile) */}
-      <button
-        onClick={() => onNavigate({ id: "fets-intelligence" })}
-        title="Ask FETS AI — your operations copilot"
-        className="tap fets-ai-navbtn"
-        style={{
-          display: "inline-flex", alignItems: "center", gap: 8, height: 42, padding: "0 16px", borderRadius: 12,
-          border: "1px solid rgba(255,255,255,0.14)", cursor: "pointer", flexShrink: 0,
-          background: "linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)",
-          color: "#fff", fontFamily: "var(--font)", fontSize: 13.5, fontWeight: 750,
-          boxShadow: active === "fets-intelligence"
-            ? "0 0 0 2px rgba(124,58,237,0.45), 0 6px 18px rgba(79,70,229,0.45)"
-            : "0 6px 18px rgba(79,70,229,0.35)",
-        }}
-      >
-        <Icon name="spark" size={16} />
-        <span>FETS AI</span>
-      </button>
-
       {/* right controls */}
       {/* candidates today — compact, reacts to the branch toggle */}
       <span title={`${candToday} candidates booked today · ${BRANCH_NAME[branch]}`} className="tap glass-2 topnav-count" style={{
@@ -11507,11 +12011,11 @@ function Masthead({ branch }) {
           </div>
           <h1 style={{
             margin: 0, fontFamily: '"Archivo Expanded", var(--font)', fontWeight: 900,
-            fontSize: "clamp(56px,11vw,128px)", lineHeight: 0.86, letterSpacing: "-0.03em",
-            color: "var(--accent)", display: "flex", alignItems: "flex-end", gap: "0.1em", flexWrap: "wrap",
+            fontSize: "clamp(56px,11vw,128px)", lineHeight: 0.82, letterSpacing: "-0.045em",
+            display: "flex", alignItems: "flex-end", gap: 0, flexWrap: "wrap",
           }}>
-            <span>FETS</span>
-            <span style={{ display: "inline-flex", alignItems: "flex-end", gap: "0.18em" }}>
+            <span style={{ color: "var(--accent)" }}>FETS</span>
+            <span style={{ color: "var(--ink)", display: "inline-flex", alignItems: "flex-end", gap: "0.18em" }}>
               LIVE
               <span className="mono" style={{ fontSize: "clamp(11px,1.1vw,15px)", fontWeight: 700, letterSpacing: "0.1em",
                 color: "var(--ink-4)", paddingBottom: "0.7em" }}>V7.0</span>
@@ -11521,6 +12025,7 @@ function Masthead({ branch }) {
         <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 22 }}>
           <span style={{ width: 28, height: 1.5, background: "var(--ink-4)", borderRadius: 99 }} />
           <span className="serif-it" style={{ fontSize: "clamp(17px,2vw,23px)", color: "var(--accent)", fontWeight: 500 }}>{dateStr}</span>
+          <span className="mono" style={{ fontSize: 9, color: "var(--ink-4)", opacity: 0.5, marginLeft: 8 }}>v7.0.6</span>
         </div>
       </div>
       
@@ -11706,16 +12211,23 @@ function OutlookMiniPanel({ branch }) {
   );
 }
 
-/* ---------- LIVE page — outline-button menu ---------- */
+/* ---------- LIVE page — quick-action card grid ---------- */
 function MenuRow({ items }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "calc(16px * var(--density))" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 18 }}>
       {items.map((q) => (
-        <div key={q.label} className="glass" style={{ position: "relative", borderRadius: "var(--radius)", padding: "30px 22px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14, minHeight: 140, textAlign: "center" }}>
+        <button key={q.label} onClick={q.on} className="glass tap" style={{
+          position: "relative", borderRadius: 14, padding: "22px 22px 20px", display: "flex", flexDirection: "column",
+          gap: 0, border: "1px solid var(--hairline)", background: "var(--glass)", cursor: "pointer",
+          textAlign: "left", fontFamily: "var(--font)", transition: "border-color 0.2s, background 0.2s",
+        }}>
           {q.badge ? <span title={`${q.badge} new`} style={{ position: "absolute", top: 12, right: 12, minWidth: 22, height: 22, padding: "0 6px", borderRadius: 999, display: "grid", placeItems: "center", fontSize: 11, fontWeight: 800, color: "var(--accent-ink)", background: "var(--accent)", boxShadow: "0 0 12px color-mix(in oklch, var(--accent) 60%, transparent)" }}>{q.badge > 99 ? "99+" : q.badge}</span> : null}
-          <StartButton label={q.label} onClick={q.on} />
-          <span style={{ fontSize: 12.5, color: "var(--ink-3)", fontWeight: 500 }}>{q.sub}</span>
-        </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+            <span style={{ width: 3, height: 19, borderRadius: 2, background: "#FF7A5C", flexShrink: 0 }} />
+            <span style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.01em", color: "var(--ink)", whiteSpace: "nowrap" }}>{q.label.toUpperCase()}</span>
+          </div>
+          <div style={{ marginTop: 22, fontSize: 13, color: "var(--ink-3)" }}>{q.sub}</div>
+        </button>
       ))}
     </div>
   );
@@ -11723,9 +12235,6 @@ function MenuRow({ items }) {
 
 function LivePage({ branch, setDrawer, setActive, bridge }) {
   const gap = "calc(34px * var(--density))";
-  const [labUnread, setLabUnread] = React.useState(0);
-  React.useEffect(() => { LAB.labUnread().then(setLabUnread); }, []);
-
   const [stats, setStats] = React.useState({
     candidatesCount: 0,
     examSessionsCount: 0,
@@ -11896,15 +12405,11 @@ function LivePage({ branch, setDrawer, setActive, bridge }) {
     };
   }, [branch]);
 
-  const ops = [
+  const quickActions = [
     { label: "Raise a Case", sub: "Incident Manager", on: () => setActive("case") },
     { label: "Shift Handover", sub: "Log checklist, headcount & sign-off", on: () => setActive("handover") },
-    { label: "The Lab", sub: "Team wall — handovers, shoutouts, questions & notices", on: () => setActive("news"), badge: labUnread },
-  ];
-  const support = [
     { label: "Quick Access", sub: "Vendor credentials, portals & site codes", on: () => setDrawer("vault") },
     { label: "Help Desk", sub: "Live vendor support portals & helplines", on: () => setDrawer("help") },
-    { label: "Lost & Found", sub: "Items handed in, logged & waiting to be claimed", on: () => setDrawer("lostfound") },
   ];
 
   const branchLabel = branch === "global" ? "All centres" : branch.charAt(0).toUpperCase() + branch.slice(1);
@@ -11912,21 +12417,23 @@ function LivePage({ branch, setDrawer, setActive, bridge }) {
   return (
     <div style={{ maxWidth: 1600, margin: "0 auto", padding: "clamp(22px,3.2vw,40px) clamp(14px,3vw,30px) 80px", display: "flex", flexDirection: "column", gap }}>
       <Masthead branch={branch} />
-      
-      {/* Existing Menu Tabs (Operations) */}
-      <section style={{ display: "flex", flexDirection: "column", gap: "calc(16px * var(--density))" }}>
-        <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>operations</span>}>Operations</SectionLabel>
-        <MenuRow items={ops} />
+
+      {/* Quick Actions */}
+      <section>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <SectionLabel>Quick Actions</SectionLabel>
+          <span className="mono" style={{ fontSize: 11, letterSpacing: "0.12em", color: "var(--ink-4)" }}>operations &amp; support</span>
+        </div>
+        <MenuRow items={quickActions} />
       </section>
 
-      {/* Existing Menu Tabs (Support) */}
-      <section style={{ display: "flex", flexDirection: "column", gap: "calc(16px * var(--density))" }}>
-        <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>support</span>}>Quick access &amp; support</SectionLabel>
-        <MenuRow items={support} />
+      {/* Gemini 3.1 Flash Live Studio — below menu boxes */}
+      <section>
+        <EnhancedChatDeck
+          branch={branch}
+          onOpenDirectChat={(staff) => window.dispatchEvent(new CustomEvent("fets-open-chat", { detail: staff }))}
+        />
       </section>
-
-      {/* Unique Integrated Live Chat Command Deck (Placed below Quick access & support) */}
-      <LiveChatCommandDeck branch={branch} onOpenChat={(staff) => window.dispatchEvent(new CustomEvent("fets-open-chat", { detail: staff }))} />
     </div>
   );
 }
@@ -12061,840 +12568,10 @@ function LiveChatCommandDeck({ branch, onOpenChat }) {
   );
 }
 
-/* ---------- News page (redesigned to match the other pages) ---------- */
-/* ============================================================ THE LAB ============================================================ */
-const LAB_TYPES = {
-  announcement: { label: "Announcement", color: "var(--accent)", icon: "alert" },
-  handover: { label: "Handover", color: "var(--v-prometric)", icon: "clipboard" },
-  shoutout: { label: "Shoutout", color: "var(--v-cma)", icon: "star" },
-  question: { label: "Question", color: "var(--v-ielts)", icon: "message" },
-  general: { label: "General", color: "var(--ink-3)", icon: "users" },
-};
-const LAB_CENTERS = ["all", "calicut", "cochin"];
-const LAB_CLABEL = { all: "All centres", calicut: "Calicut", cochin: "Cochin", kannur: "Kannur" };
-function labCanAnnounce() {
-  const e = (window.FETS.user.email || "").toLowerCase();
-  return ["mithun@fets.in", "mithun@fets.live", "niyas@fets.in", "niyas@fets.live"].includes(e);
-}
-function timeAgo(d) {
-  const s = Math.floor((Date.now() - new Date(d).getTime()) / 1000);
-  if (s < 60) return "just now";
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  if (s < 604800) return `${Math.floor(s / 86400)}d ago`;
-  return new Date(d).toLocaleDateString();
-}
 
-function labRich(text) {
-  if (!text) return null;
-  const out = []; const re = /@([\w][\w'.\-]*(?:\s[\w'.\-]+)?)/g; let last = 0, m, k = 0;
-  while ((m = re.exec(text)) !== null) {
-    if (m.index > last) out.push(text.slice(last, m.index));
-    out.push(<span key={k++} style={{ color: "var(--accent)", fontWeight: 700 }}>{m[0]}</span>);
-    last = m.index + m[0].length;
-  }
-  if (last < text.length) out.push(text.slice(last));
-  return out;
-}
-function labMentionsMe(text) {
-  const fn = (window.FETS.user.name || "").split(" ")[0].toLowerCase();
-  return !!fn && (text || "").toLowerCase().includes("@" + fn);
-}
-
-function LabPostCard({ p, onChange, onDelete, canMod }) {
-  const [open, setOpen] = React.useState(false);
-  const [draft, setDraft] = React.useState("");
-  const me = window.FETS._meUserId;
-  const acked = (p.acks || []).includes(me);
-  const reacts = p.reactions || {};
-  const [picker, setPicker] = React.useState(false);
-  const react = (emoji) => {
-    const arr = reacts[emoji] || []; const mine = arr.includes(me);
-    LAB.labReact(p.id, emoji, mine);
-    const next = { ...reacts }; next[emoji] = mine ? arr.filter((x) => x !== me) : [...arr, me];
-    if (!next[emoji].length) delete next[emoji];
-    onChange({ ...p, reactions: next }); setPicker(false);
-  };
-  const comment = () => { const txt = draft.trim(); if (!txt) return; LAB.labAddComment(p.id, txt); onChange({ ...p, comments: [...p.comments, { id: "t" + Date.now(), text: txt, name: window.FETS.user.name, at: new Date().toISOString() }] }); setDraft(""); };
-  const ack = () => { const next = acked ? p.acks.filter((x) => x !== me) : [...p.acks, me]; const np = { ...p, acks: next }; LAB.labSaveMeta(np); onChange(np); };
-  const pin = () => { const np = { ...p, pinned: !p.pinned }; LAB.labSaveMeta(np); onChange(np); };
-  return (
-    <article className="glass rise" style={{ borderRadius: "var(--radius)", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14, border: "1px solid var(--hairline)", boxShadow: "var(--shadow)" }}>
-      {/* header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <Avatar name={p.authorName} size={36} />
-          <div style={{ display: "flex", flexDirection: "column" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ fontSize: 13.5, fontWeight: 750, color: "var(--ink)" }}>{p.authorName}</span>
-              {p.pinned && <span title="Pinned" style={{ color: "var(--accent)" }}><Icon name="pin" size={12} /></span>}
-            </div>
-            <span style={{ fontSize: 10.5, color: "var(--ink-4)", fontWeight: 550 }}>{timeAgo(p.when)}{p.role ? ` · ${p.role}` : ""}</span>
-          </div>
-        </div>
-        <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.05em", textTransform: "uppercase", padding: "4px 10px", borderRadius: 999, color: "var(--accent)", background: "var(--accent-soft)", border: "1px solid var(--accent-line)" }}>{LAB_CLABEL[p.center] || "All centres"}</span>
-      </div>
-      {/* body */}
-      {p.text && <div style={{ fontSize: 14, color: "var(--ink)", lineHeight: 1.6, whiteSpace: "pre-wrap", fontWeight: 550 }}>{labRich(p.text)}</div>}
-      {p.image && <div style={{ width: "100%", borderRadius: "var(--radius-sm)", overflow: "hidden", border: "1px solid var(--hairline)", background: "var(--inset)", display: "flex", justifyContent: "center", alignItems: "center" }}><a href={p.image} target="_blank" rel="noopener noreferrer" style={{ width: "100%" }}><img src={p.image} alt="" style={{ width: "100%", maxHeight: 420, objectFit: "contain", display: "block" }} /></a></div>}
-      {(p.attachments || []).map((a, i) => (
-        <a key={i} href={a.url} target="_blank" rel="noopener noreferrer" className="tap glass-2" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 10, textDecoration: "none", color: "var(--ink-2)", fontSize: 12, fontWeight: 650, border: "1px solid var(--hairline)" }}><Icon name="package" size={13} /> <span>{a.name || "Attachment"}</span></a>
-      ))}
-      {/* divider */}
-      <div style={{ height: 1, background: "var(--hairline)" }} />
-      {/* footer */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {Object.keys(reacts).filter((e) => reacts[e] && reacts[e].length).map((e) => { const mine = reacts[e].includes(me); return (
-            <button key={e} onClick={() => react(e)} className="tap" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 999, cursor: "pointer", border: `1px solid ${mine ? "var(--accent-line)" : "var(--hairline)"}`, background: mine ? "var(--accent-soft)" : "var(--glass-2)", color: mine ? "var(--accent)" : "var(--ink-2)", fontSize: 12, fontWeight: 700 }}><span>{e}</span> <span style={{ fontSize: 11, opacity: 0.9 }}>{reacts[e].length}</span></button>
-          ); })}
-          <div style={{ position: "relative" }}>
-            <button onClick={() => setPicker((v) => !v)} className="tap glass-2" title="React" style={{ display: "grid", placeItems: "center", width: 30, height: 30, borderRadius: 999, cursor: "pointer", border: "1px solid var(--hairline)", color: "var(--ink-3)", fontSize: 15 }}>＋</button>
-            {picker && <div className="glass" style={{ position: "absolute", bottom: 38, left: 0, zIndex: 8, display: "flex", gap: 6, padding: 8, borderRadius: 12, boxShadow: "var(--shadow-lift)", border: "1px solid var(--hairline)" }}>{LAB.LAB_EMOJIS.map((e) => <button key={e} onClick={() => react(e)} className="tap" style={{ fontSize: 18, border: "none", background: "transparent", cursor: "pointer", padding: 4, borderRadius: 8 }}>{e}</button>)}</div>}
-          </div>
-          <button onClick={() => setOpen((o) => !o)} className="tap glass-2" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 14px", borderRadius: 999, cursor: "pointer", border: "1px solid var(--hairline)", color: "var(--ink-2)", fontFamily: "var(--font)", fontSize: 12, fontWeight: 700 }}><Icon name="message" size={13} /> <span>Comments</span> <span style={{ opacity: 0.7, fontSize: 11 }}>{p.comments.length}</span></button>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {canMod && <button onClick={pin} title={p.pinned ? "Unpin" : "Pin"} className="tap glass-2" style={{ width: 32, height: 32, borderRadius: 10, display: "grid", placeItems: "center", cursor: "pointer", color: p.pinned ? "var(--accent)" : "var(--ink-3)", border: "1px solid var(--hairline)" }}><Icon name="pin" size={14} /></button>}
-          {(p.mine || canMod) && <button onClick={() => onDelete(p)} title="Delete" className="tap glass-2" style={{ width: 32, height: 32, borderRadius: 10, display: "grid", placeItems: "center", cursor: "pointer", color: "var(--bad)", border: "1px solid var(--hairline)" }}><Icon name="trash" size={14} /></button>}
-        </div>
-      </div>
-      {/* comments */}
-      {open && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingTop: 4, borderTop: "1px solid var(--hairline)" }}>
-          {p.comments.map((c) => (
-            <div key={c.id} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-              <Avatar name={c.name} size={28} />
-              <div className="inset" style={{ flex: 1, padding: "10px 14px", borderRadius: "var(--radius-sm)", border: "1px solid var(--hairline)" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                  <span style={{ fontSize: 11.5, fontWeight: 750, color: "var(--ink-2)" }}>{c.name}</span>
-                  <span style={{ fontSize: 9.5, color: "var(--ink-4)" }}>{timeAgo(c.at)}</span>
-                </div>
-                <div style={{ fontSize: 13, color: "var(--ink)", marginTop: 4, whiteSpace: "pre-wrap", fontWeight: 500, lineHeight: 1.5 }}>{labRich(c.text)}</div>
-              </div>
-            </div>
-          ))}
-          <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-            <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && comment()} placeholder="Write a comment…" style={{ flex: 1, background: "var(--inset)", border: "1px solid var(--hairline)", borderRadius: 10, color: "var(--ink)", fontFamily: "var(--font)", fontSize: 13, padding: "10px 14px", outline: "none" }} />
-            <button onClick={comment} className="tap" style={{ padding: "0 18px", borderRadius: 10, border: "none", cursor: "pointer", color: "var(--accent-ink)", background: "var(--accent)", fontWeight: 800, fontSize: 13 }}>Send</button>
-          </div>
-        </div>
-      )}
-    </article>
-  );
-}
-
-/* ========== Group Discussion Panel ========== */
-function LabDiscussionPanel() {
-  const F = window.FETS;
-  const profileId = F._meId;
-  const isAdmin = F.isAdmin || labCanAnnounce();
-  const [convId, setConvId] = React.useState(null);
-  const [messages, setMessages] = React.useState([]);
-  const [draft, setDraft] = React.useState("");
-  const [loading, setLoading] = React.useState(true);
-  const threadRef = React.useRef(null);
-
-  const initDiscussion = async () => {
-    try {
-      let { data: conv } = await supabase.from('conversations').select('id, name').eq('is_group', true).eq('name', 'Staff Discussion').maybeSingle();
-      if (!conv) {
-        const { data } = await supabase.from('conversations').insert({ name: 'Staff Discussion', is_group: true }).select('id, name').single();
-        conv = data;
-      }
-      if (conv) {
-        setConvId(conv.id);
-        const { data: msgs } = await supabase.from('messages')
-          .select('*, sender:staff_profiles(full_name)')
-          .eq('conversation_id', conv.id)
-          .order('created_at', { ascending: true });
-        setMessages(msgs || []);
-      }
-    } catch (e) {
-      console.error("initDiscussion error:", e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  React.useEffect(() => {
-    initDiscussion();
-  }, []);
-
-  React.useEffect(() => {
-    if (!convId) return;
-    const channel = supabase.channel(`lab_discussion:${convId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `conversation_id=eq.${convId}` },
-        async (payload) => {
-          if (payload.eventType === 'INSERT') {
-            const { data: profileData } = await supabase.from('staff_profiles').select('full_name').eq('id', payload.new.sender_id).single();
-            const newMsg = { ...payload.new, sender: profileData };
-            setMessages(prev => {
-              if (prev.some(m => m.id === payload.new.id)) return prev;
-              return [...prev, newMsg];
-            });
-          } else if (payload.eventType === 'UPDATE') {
-            setMessages(prev => prev.map(m => m.id === payload.new.id ? { ...m, ...payload.new } : m));
-          } else if (payload.eventType === 'DELETE') {
-            setMessages(prev => prev.filter(m => m.id !== payload.old.id));
-          }
-        })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [convId]);
-
-  React.useEffect(() => {
-    if (threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight;
-  }, [messages.length]);
-
-  const lastMsg = messages[messages.length - 1]?.content || "";
-  const isLocked = lastMsg.startsWith("🚫 Discussion has been stopped");
-
-  const send = async (textToSend?: string) => {
-    const msgText = textToSend || draft.trim();
-    if (!msgText || !profileId || !convId) return;
-    if (!textToSend) setDraft("");
-    
-    try {
-      await supabase.from('messages').insert({
-        conversation_id: convId,
-        sender_id: profileId,
-        content: msgText,
-        type: 'text'
-      });
-    } catch (err) {
-      toast("Message failed to send", "alert");
-    }
-  };
-
-  const toggleLock = () => {
-    if (isLocked) {
-      send("🔓 Discussion has been resumed by admin");
-    } else {
-      send("🚫 Discussion has been stopped by admin");
-    }
-  };
-
-  return (
-    <div className="glass" style={{ borderRadius: "var(--radius)", display: "flex", flexDirection: "column", overflow: "hidden", height: 340, border: "1px solid var(--hairline)" }}>
-      <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--hairline)", display: "flex", alignItems: "center", gap: 10, background: "var(--glass-2)" }}>
-        <Icon name="message" size={16} style={{ color: "var(--accent)" }} />
-        <span style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>Staff Discussion</span>
-        {isAdmin && convId && (
-          <button onClick={toggleLock} className="tap" style={{ marginLeft: "auto", fontSize: 9.5, fontWeight: 800, padding: "3px 8px", borderRadius: 6, border: "1px solid var(--hairline)", background: isLocked ? "var(--bad)" : "transparent", color: isLocked ? "#fff" : "var(--ink-3)" }}>
-            {isLocked ? "Resume Chat" : "Stop Chat"}
-          </button>
-        )}
-        <span style={{ fontSize: 10, color: "var(--ink-4)", marginLeft: !isAdmin ? "auto" : 0 }}>{messages.length} messages</span>
-      </div>
-      <div ref={threadRef} className="scroll-soft" style={{ flex: 1, overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 12, minHeight: 0 }}>
-        {loading ? (
-          <div style={{ textAlign: "center", color: "var(--ink-4)", fontSize: 13, padding: 20 }}>Loading messages…</div>
-        ) : messages.length === 0 ? (
-          <div style={{ textAlign: "center", color: "var(--ink-4)", fontSize: 13, padding: 30, fontStyle: "italic" }}>
-            No messages yet. Start a discussion with the team!
-          </div>
-        ) : (
-          messages.map((m) => {
-            const isMe = m.sender_id === profileId;
-            const senderName = isMe ? "You" : (m.sender?.full_name || "Admin");
-            const isSystem = m.content.startsWith("🚫 Discussion has been stopped") || m.content.startsWith("🔓 Discussion has been resumed");
-            const formattedTime = new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            
-            if (isSystem) {
-              return (
-                <div key={m.id} style={{ alignSelf: "center", margin: "6px 0", background: "var(--inset)", border: "1px solid var(--hairline)", padding: "4px 12px", borderRadius: 8, fontSize: 11, fontWeight: 700, color: "var(--ink-3)", display: "flex", alignItems: "center", gap: 6 }}>
-                  <span>{m.content}</span>
-                </div>
-              );
-            }
-
-            return (
-              <div key={m.id} style={{ display: "flex", flexDirection: "column", alignItems: isMe ? "flex-end" : "flex-start", gap: 3 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 4px" }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: isMe ? "var(--accent)" : "var(--ink-2)" }}>{senderName}</span>
-                  <span className="mono" style={{ fontSize: 9, color: "var(--ink-4)" }}>{formattedTime}</span>
-                </div>
-                <div style={{ maxWidth: "85%", padding: "9px 13px", borderRadius: 12, fontSize: 12.5, lineHeight: 1.45,
-                  borderTopRightRadius: isMe ? 3 : 12, borderTopLeftRadius: isMe ? 12 : 3,
-                  color: isMe ? "var(--accent-ink)" : "var(--ink)", background: isMe ? "var(--accent)" : "var(--glass-2)",
-                  border: isMe ? "none" : "1px solid var(--hairline)" }}>
-                  {m.content}
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-      <div style={{ borderTop: "1px solid var(--hairline)", padding: "10px 14px", flexShrink: 0, display: "flex", gap: 8, background: "var(--glass-2)", alignItems: "flex-end" }}>
-        <textarea
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          rows={1}
-          disabled={isLocked && !isAdmin}
-          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-          placeholder={isLocked ? "Discussion has been stopped." : "Send a message…"}
-          style={{ background: "var(--inset)", border: "1px solid var(--hairline)", borderRadius: 10, color: "var(--ink)",
-            fontFamily: "var(--font)", fontSize: 13, padding: "9px 12px", width: "100%", outline: "none",
-            resize: "none", lineHeight: 1.4, minHeight: 36, opacity: isLocked && !isAdmin ? 0.5 : 1 }}
-        />
-        <button onClick={() => send()} disabled={isLocked && !isAdmin} className="tap" style={{ width: 36, height: 36, borderRadius: 10, border: "none", cursor: (isLocked && !isAdmin) ? "not-allowed" : "pointer", flexShrink: 0,
-          display: "grid", placeItems: "center", color: "var(--accent-ink)", background: "var(--accent)", opacity: isLocked && !isAdmin ? 0.5 : 1 }}>
-          <Icon name="arrowR" size={16} stroke={2.4} />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-
-/* ========== Staff Panel (with chat trigger) ========== */
-function LabStaffPanel({ onChat }) {
-  const F = window.FETS;
-  const [version, setVersion] = React.useState(0);
-  
-  React.useEffect(() => {
-    const handler = () => setVersion(v => v + 1);
-    window.addEventListener("fets-data-loaded", handler);
-    window.addEventListener("fets-roster-changed", handler);
-    return () => {
-      window.removeEventListener("fets-data-loaded", handler);
-      window.removeEventListener("fets-roster-changed", handler);
-    };
-  }, []);
-
-  const allStaff = React.useMemo(() => {
-    const s = [];
-    const meId = F._meId;
-    ['calicut', 'cochin'].forEach(branch => {
-      (F.STAFF?.[branch] || []).forEach(person => {
-        const name = typeof person === 'string' ? person : (person.full_name || person.name);
-        if (name === F.user?.name) return;
-        
-        // Find their database profile info from F._staffRatesByName
-        const ratesInfo = F._staffRatesByName?.[name];
-        if (ratesInfo) {
-          s.push({
-            id: ratesInfo.id, // Profile UUID!
-            user_id: ratesInfo.user_id, // Auth User UUID!
-            full_name: name,
-            role: ratesInfo.role || 'Staff',
-            branch
-          });
-        } else {
-          // Fallback if not found in rates info
-          s.push({
-            id: name,
-            full_name: name,
-            role: 'Staff',
-            branch
-          });
-        }
-      });
-    });
-    (F.PEOPLE || []).forEach(name => {
-      if (name === F.user?.name) return;
-      if (!s.find(x => x.full_name === name || x.name === name)) {
-        const ratesInfo = F._staffRatesByName?.[name];
-        if (ratesInfo) {
-          s.push({
-            id: ratesInfo.id,
-            user_id: ratesInfo.user_id,
-            full_name: name,
-            role: ratesInfo.role || 'Staff',
-            branch: 'unknown'
-          });
-        }
-      }
-    });
-    return s;
-  }, [F, version]);
-
-  const [filterBranch, setFilterBranch] = React.useState("all");
-  const filtered = filterBranch === "all" ? allStaff : allStaff.filter(s => s.branch === filterBranch);
-
-  return (
-    <div className="glass" style={{ borderRadius: "var(--radius)", display: "flex", flexDirection: "column", overflow: "hidden", maxHeight: 300 }}>
-      <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--hairline)", display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--glass-2)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <Icon name="users" size={16} style={{ color: "var(--accent)" }} />
-          <span style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>Staff Online</span>
-        </div>
-        <div className="inset" style={{ display: "inline-flex", padding: 2, gap: 2, borderRadius: 999 }}>
-          {["all", "calicut", "cochin"].map(b => {
-            const on = filterBranch === b;
-            return (
-              <button key={b} onClick={() => setFilterBranch(b)} className="tap" style={{ border: "none", cursor: "pointer", padding: "4px 10px", borderRadius: 999,
-                fontFamily: "var(--font)", fontSize: 10, fontWeight: on ? 750 : 550, color: on ? "#1c1305" : "var(--ink-3)", background: on ? "var(--accent)" : "transparent" }}>
-                {b === "all" ? "All" : b === "calicut" ? "CLT" : "COK"}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-      <div className="scroll-soft" style={{ flex: 1, overflowY: "auto", padding: "12px 14px" }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {filtered.length === 0 ? (
-            <div style={{ textAlign: "center", color: "var(--ink-4)", fontSize: 12.5, padding: 20, fontStyle: "italic" }}>No staff found.</div>
-          ) : (
-            filtered.map((staff, i) => (
-              <div key={staff.id || i} onClick={() => onChat && onChat(staff)} className="tap" style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 10, cursor: "pointer",
-                border: "1px solid var(--hairline)", background: "var(--glass-2)" }}>
-                <div style={{ position: "relative" }}>
-                  <Avatar name={staff.full_name || staff.name} size={32} />
-                  <span style={{ position: "absolute", bottom: 0, right: 0, width: 8, height: 8, borderRadius: 999, background: "var(--ok)", border: "2px solid var(--glass)" }} />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{staff.full_name || staff.name}</div>
-                  <div style={{ fontSize: 10, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{staff.role || "Staff"} · {staff.branch === "calicut" ? "Calicut" : staff.branch === "cochin" ? "Cochin" : "Unknown"}</div>
-                </div>
-                <button className="tap" style={{ width: 28, height: 28, borderRadius: 8, border: "none", cursor: "pointer", display: "grid", placeItems: "center",
-                  background: "var(--accent-soft)", color: "var(--accent)" }}>
-                  <Icon name="message" size={13} />
-                </button>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ========== Main Lab Page ========== */
-/* ========== Lab Terminal & Diagnostics Panel ========== */
-function LabTerminalPanel() {
-  const [terminalLogs, setTerminalLogs] = React.useState([
-    "System Integrity Console initialized.",
-    "Connecting to Hostinger VPS (72.61.171.192)... OK",
-    "Supabase DB latency: 42ms. Health: EXCELLENT.",
-    "Roster engine: ACTIVE.",
-    "Type /help for a list of available commands."
-  ]);
-  const [cliInput, setCliInput] = React.useState("");
-  const [stats, setStats] = React.useState({ cltCpu: 12, cltRam: 48, cokCpu: 8, cokRam: 42, ping: 35 });
-  const logContainerRef = React.useRef(null);
-
-  // Simulated live stats jitter
-  React.useEffect(() => {
-    const timer = setInterval(() => {
-      setStats(prev => ({
-        cltCpu: Math.max(5, Math.min(95, prev.cltCpu + Math.floor(Math.random() * 9) - 4)),
-        cltRam: Math.max(30, Math.min(90, prev.cltRam + Math.floor(Math.random() * 3) - 1)),
-        cokCpu: Math.max(5, Math.min(95, prev.cokCpu + Math.floor(Math.random() * 7) - 3)),
-        cokRam: Math.max(30, Math.min(90, prev.cokRam + Math.floor(Math.random() * 3) - 1)),
-        ping: Math.max(15, Math.min(120, prev.ping + Math.floor(Math.random() * 11) - 5))
-      }));
-    }, 2000);
-    return () => clearInterval(timer);
-  }, []);
-
-  React.useEffect(() => {
-    if (logContainerRef.current) {
-      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
-    }
-  }, [terminalLogs.length]);
-
-  const handleCommand = (e) => {
-    if (e.key === "Enter") {
-      const cmd = cliInput.trim().toLowerCase();
-      if (!cmd) return;
-      setCliInput("");
-      
-      const newLogs = [...terminalLogs, `> ${cliInput}`];
-      
-      if (cmd === "/help") {
-        newLogs.push(
-          "Available Commands:",
-          "  /status      - Get current center diagnostics",
-          "  /ping        - Test FETS gateway response",
-          "  /compliance  - Run compliance check",
-          "  /clear       - Clear terminal history",
-          "  /joke        - Generate an administrative joke"
-        );
-      } else if (cmd === "/status") {
-        newLogs.push(
-          `Calicut Center: CPU ${stats.cltCpu}%, RAM ${stats.cltRam}%`,
-          `Cochin Center: CPU ${stats.cokCpu}%, RAM ${stats.cokRam}%`,
-          `Active Connections: ${Math.floor(Math.random() * 5) + 3}`
-        );
-      } else if (cmd === "/ping") {
-        newLogs.push(`Pong! Latency to Hostinger VPS: ${stats.ping}ms.`);
-      } else if (cmd === "/compliance") {
-        newLogs.push(
-          "Checking lab readiness...",
-          "  - CCTV streams active: YES",
-          "  - Internet redundancy status: PRIMARY (ACTIVE)",
-          "  - Power backup charged: 98%",
-          "  - Compliance status: 100% COMPLIANT (EXCELLENT)"
-        );
-      } else if (cmd === "/clear") {
-        setTerminalLogs([]);
-        return;
-      } else if (cmd === "/joke") {
-        const jokes = [
-          "Why did the roster creator go to therapy? Too many conflicts.",
-          "How many admins does it take to change a lightbulb? Five. One to do it, four to log it in the Lab handover feed.",
-          "An examiner walks into a bar and orders a double. The bartender asks, 'Tired?' The examiner replies, 'No, doing double shifts.'"
-        ];
-        newLogs.push(jokes[Math.floor(Math.random() * jokes.length)]);
-      } else {
-        newLogs.push(`Command not recognized: '${cmd}'. Type /help for assistance.`);
-      }
-      
-      setTerminalLogs(newLogs);
-    }
-  };
-
-  return (
-    <div className="glass" style={{ borderRadius: "var(--radius)", padding: 14, display: "flex", flexDirection: "column", gap: 12, height: 340, background: "#0c0f12", border: "1px solid #1a232c" }}>
-      {/* Mini Gauges */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 11, fontFamily: "monospace", color: "#648a9f" }}>
-        <div style={{ background: "#11161d", padding: "6px 8px", borderRadius: 6, border: "1px solid #232d3a" }}>
-          <div style={{ fontWeight: 800, color: "#a5e9dd", marginBottom: 3 }}>[ CLT CENTRE ]</div>
-          <div>CPU: <span style={{ color: stats.cltCpu > 80 ? "var(--bad)" : "#a5e9dd" }}>{stats.cltCpu}%</span></div>
-          <div>RAM: <span>{stats.cltRam}%</span></div>
-        </div>
-        <div style={{ background: "#11161d", padding: "6px 8px", borderRadius: 6, border: "1px solid #232d3a" }}>
-          <div style={{ fontWeight: 800, color: "#34908B", marginBottom: 3 }}>[ COK CENTRE ]</div>
-          <div>CPU: <span style={{ color: stats.cokCpu > 80 ? "var(--bad)" : "#34908B" }}>{stats.cokCpu}%</span></div>
-          <div>RAM: <span>{stats.cokRam}%</span></div>
-        </div>
-      </div>
-      
-      {/* Log Feed */}
-      <div ref={logContainerRef} className="scroll-soft" style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6, fontFamily: "monospace", fontSize: 11, color: "#39ff14", background: "#050709", borderRadius: 8, padding: 10, border: "1px solid #142010" }}>
-        {terminalLogs.map((log, idx) => (
-          <div key={idx} style={{ whiteSpace: "pre-wrap", opacity: log.startsWith(">") ? 0.6 : 1 }}>{log}</div>
-        ))}
-      </div>
-      
-      {/* CLI Input */}
-      <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#050709", borderRadius: 8, padding: "2px 8px", border: "1px solid #232d3a" }}>
-        <span style={{ color: "#39ff14", fontFamily: "monospace", fontSize: 13, fontWeight: "bold" }}>$</span>
-        <input 
-          value={cliInput}
-          onChange={(e) => setCliInput(e.target.value)}
-          onKeyDown={handleCommand}
-          placeholder="Type a command..."
-          style={{ width: "100%", background: "transparent", border: "none", outline: "none", color: "#39ff14", fontFamily: "monospace", fontSize: 11.5, padding: "6px 0" }}
-        />
-      </div>
-    </div>
-  );
-}
-
+/* ---------- Actionables / Standards & Rollout Page ---------- */
 function TheLabPage({ branch }) {
-  const canMod = labCanAnnounce();
-  const [posts, setPosts] = React.useState([]);
-  const [loading, setLoading] = React.useState(true);
-  const [text, setText] = React.useState("");
-  const [postType, setPostType] = React.useState("handover");
-  const [postTypeFilter, setPostTypeFilter] = React.useState("all");
-  const [attachments, setAttachments] = React.useState([]);
-  const [image, setImage] = React.useState(null);
-  const [busy, setBusy] = React.useState(false);
-  const [fCenter, setFCenter] = React.useState("all");
-  const [q, setQ] = React.useState("");
-  const fileRef = React.useRef(null);
-  const [activeRightTab, setActiveRightTab] = React.useState("discussion");
-
-  const reload = () => { LAB.labFetch().then((ps) => { setPosts(ps); setLoading(false); }); };
-  React.useEffect(() => { reload(); LAB.labMarkRead(); }, []);
-
-  const onFile = async (e) => {
-    const f = e.target.files && e.target.files[0]; if (!f) return;
-    setBusy(true);
-    const up = await LAB.labUpload(f);
-    setBusy(false);
-    if (!up || !up.url) { toast("Upload failed", "alert"); return; }
-    if ((f.type || "").startsWith("image/")) setImage(up.url);
-    else setAttachments((a) => [...a, up]);
-  };
-
-  const submit = async () => {
-    if (!text.trim() && !image && attachments.length === 0) return;
-    setBusy(true);
-    const created = await LAB.labCreate({ type: postType, text: text.trim(), center: "all", exam: null, compliance: postType === "compliance", image, attachments });
-    setBusy(false);
-    if (created) setPosts((ps) => [created, ...ps]);
-    else toast("Couldn't post — try again", "alert");
-    setText(""); setAttachments([]); setImage(null);
-  };
-
-  const updatePost = (np) => setPosts((ps) => ps.map((x) => x.id === np.id ? np : x));
-  const removePost = (p) => { if (!window.confirm("Delete this post?")) return; LAB.labDelete(p.id); setPosts((ps) => ps.filter((x) => x.id !== p.id)); };
-
-  const match = (p) => 
-    (fCenter === "all" || p.center === fCenter || p.center === "all") &&
-    (postTypeFilter === "all" || (p.type || "general") === postTypeFilter) &&
-    (!q.trim() || (p.text + " " + p.authorName).toLowerCase().includes(q.toLowerCase()));
-
-  const shown = posts.filter(match);
-  const pinned = shown.filter((p) => p.pinned);
-  const rest = shown.filter((p) => !p.pinned);
-
-  const totalReactions = posts.reduce((acc, p) => acc + (p.likeCount || 0), 0);
-
-  const inp = { background: "var(--inset)", border: "1px solid var(--hairline)", borderRadius: 11, color: "var(--ink)", fontFamily: "var(--font)", fontSize: 14, padding: "10px 14px" };
-
-  return (
-    <div style={{ maxWidth: 1300, margin: "0 auto", display: "flex", flexDirection: "column", gap: "calc(22px * var(--density))" }}>
-      
-      {/* Super Advanced Glass Hero Banner */}
-      <div className="glass rise" style={{ borderRadius: "var(--radius)", padding: "26px 30px", background: "linear-gradient(135deg, rgba(30,58,138,0.15) 0%, rgba(14,165,233,0.1) 50%, rgba(168,85,247,0.1) 100%)", border: "1px solid var(--accent-line)", boxShadow: "0 10px 30px rgba(0,0,0,0.08)", display: "flex", flexDirection: "column", gap: 20 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <div style={{ width: 52, height: 52, borderRadius: 16, background: "var(--accent-soft)", border: "1px solid var(--accent-line)", color: "var(--accent)", display: "grid", placeItems: "center", fontSize: 24, boxShadow: "0 0 20px var(--accent-soft)" }}>
-              ⚡
-            </div>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span className="eyebrow" style={{ color: "var(--accent)" }}>FETS LAB WORKSPACE</span>
-                <span style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", padding: "2px 8px", borderRadius: 999, background: "#10B98120", color: "#10B981", border: "1px solid #10B98140" }}>Realtime Sync</span>
-              </div>
-              <h1 style={{ margin: "4px 0 0", fontSize: 26, fontWeight: 850, color: "var(--ink)", letterSpacing: "-0.02em" }}>The Lab & Coordination Wall</h1>
-            </div>
-          </div>
-          <button onClick={reload} className="tap glass-2" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "9px 16px", borderRadius: 11, border: "1px solid var(--hairline)", cursor: "pointer", color: "var(--ink)", fontWeight: 700, fontSize: 13 }}>
-            <Icon name="refresh" size={15} /> Refresh Feed
-          </button>
-        </div>
-
-        {/* Live KPI Stat Strip */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
-          <div className="glass-2" style={{ padding: "12px 16px", borderRadius: 13, border: "1px solid var(--hairline)", display: "flex", alignItems: "center", gap: 12 }}>
-            <span style={{ fontSize: 20 }}>📌</span>
-            <div>
-              <div style={{ fontSize: 18, fontWeight: 850, color: "var(--ink)" }}>{posts.filter(p => p.pinned).length}</div>
-              <div style={{ fontSize: 11, color: "var(--ink-3)", fontWeight: 600 }}>Pinned Notices</div>
-            </div>
-          </div>
-          <div className="glass-2" style={{ padding: "12px 16px", borderRadius: 13, border: "1px solid var(--hairline)", display: "flex", alignItems: "center", gap: 12 }}>
-            <span style={{ fontSize: 20 }}>💬</span>
-            <div>
-              <div style={{ fontSize: 18, fontWeight: 850, color: "var(--ink)" }}>{posts.length}</div>
-              <div style={{ fontSize: 11, color: "var(--ink-3)", fontWeight: 600 }}>Total Posts</div>
-            </div>
-          </div>
-          <div className="glass-2" style={{ padding: "12px 16px", borderRadius: 13, border: "1px solid var(--hairline)", display: "flex", alignItems: "center", gap: 12 }}>
-            <span style={{ fontSize: 20 }}>👏</span>
-            <div>
-              <div style={{ fontSize: 18, fontWeight: 850, color: "var(--ink)" }}>{totalReactions}</div>
-              <div style={{ fontSize: 11, color: "var(--ink-3)", fontWeight: 600 }}>Reactions</div>
-            </div>
-          </div>
-          <div className="glass-2" style={{ padding: "12px 16px", borderRadius: 13, border: "1px solid var(--hairline)", display: "flex", alignItems: "center", gap: 12 }}>
-            <span style={{ fontSize: 20 }}>📋</span>
-            <div>
-              <div style={{ fontSize: 18, fontWeight: 850, color: "var(--ink)" }}>{posts.filter(p => p.type === 'handover').length}</div>
-              <div style={{ fontSize: 11, color: "var(--ink-3)", fontWeight: 600 }}>Handovers</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Top Filter Bar: Category Chips + Center + Search */}
-      <div className="glass" style={{ borderRadius: "var(--radius)", padding: 14, display: "flex", flexDirection: "column", gap: 12, border: "1px solid var(--hairline)" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-          {/* Post Type Category Chips */}
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {[
-              { id: "all", label: "All Posts", icon: "grid" },
-              { id: "handover", label: "Handovers", icon: "clipboard" },
-              { id: "announcement", label: "Notices", icon: "alert" },
-              { id: "shoutout", label: "Shoutouts", icon: "star" },
-              { id: "question", label: "Questions", icon: "message" },
-              { id: "compliance", label: "Compliance", icon: "check" }
-            ].map((cat) => {
-              const active = postTypeFilter === cat.id;
-              return (
-                <button
-                  key={cat.id}
-                  onClick={() => setPostTypeFilter(cat.id)}
-                  className="tap"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    padding: "7px 14px",
-                    borderRadius: 999,
-                    fontSize: 12,
-                    fontWeight: 750,
-                    cursor: "pointer",
-                    border: active ? "1px solid var(--accent-line)" : "1px solid var(--hairline)",
-                    background: active ? "var(--accent-soft)" : "var(--glass-2)",
-                    color: active ? "var(--accent)" : "var(--ink-2)",
-                    transition: "all 0.15s ease"
-                  }}
-                >
-                  <Icon name={cat.icon} size={13} /> {cat.label}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Centre Segmented */}
-          <Segmented value={fCenter} onChange={setFCenter} size="sm" options={LAB_CENTERS.map((c) => ({ value: c, label: c === "all" ? "All Centres" : LAB_CLABEL[c] }))} />
-        </div>
-
-        {/* Search Bar */}
-        <div style={{ position: "relative", width: "100%" }}>
-          <Icon name="search" size={15} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "var(--ink-4)" }} />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search wall posts, author, or handover keywords…" style={{ ...inp, width: "100%", paddingLeft: 38, fontSize: 13 }} />
-          {q && (
-            <button onClick={() => setQ("")} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", border: "none", background: "transparent", color: "var(--ink-4)", cursor: "pointer" }}>
-              <Icon name="x" size={14} />
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* 2-Column Main Layout */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 380px", gap: 22, alignItems: "start" }}>
-        
-        {/* Left: Composer + Feed */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          
-          {/* Super Rich Composer Card */}
-          <div className="glass rise" style={{ borderRadius: "var(--radius)", padding: 20, display: "flex", flexDirection: "column", gap: 14, border: "1px solid var(--accent-line)" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span style={{ fontSize: 13, fontWeight: 800, color: "var(--ink)", display: "inline-flex", alignItems: "center", gap: 6 }}>
-                <Icon name="edit" size={15} style={{ color: "var(--accent)" }} /> Create Wall Note
-              </span>
-              
-              {/* Type Picker Buttons */}
-              <div style={{ display: "flex", gap: 4 }}>
-                {[
-                  { id: "handover", label: "Handover" },
-                  { id: "announcement", label: "Notice" },
-                  { id: "shoutout", label: "Shoutout" },
-                  { id: "question", label: "Question" }
-                ].map((t) => (
-                  <button
-                    key={t.id}
-                    onClick={() => setPostType(t.id)}
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 700,
-                      padding: "4px 10px",
-                      borderRadius: 8,
-                      cursor: "pointer",
-                      border: postType === t.id ? "1px solid var(--accent-line)" : "1px solid transparent",
-                      background: postType === t.id ? "var(--accent-soft)" : "transparent",
-                      color: postType === t.id ? "var(--accent)" : "var(--ink-4)"
-                    }}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <textarea 
-              value={text} 
-              onChange={(e) => setText(e.target.value)} 
-              rows={3} 
-              placeholder={`Write a ${postType} note or update for the team…`} 
-              style={{ ...inp, resize: "vertical", lineHeight: 1.5, width: "100%", fontSize: 14 }} 
-            />
-
-            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-              <button onClick={() => fileRef.current && fileRef.current.click()} className="tap glass-2" style={{ display: "inline-flex", alignItems: "center", gap: 7, height: 36, padding: "0 14px", borderRadius: 10, cursor: "pointer", color: "var(--ink-2)", border: "1px solid var(--hairline)", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 650 }}>
-                <Icon name="camera" size={15} /> Attach File
-              </button>
-              <input ref={fileRef} type="file" accept="image/*,application/pdf" onChange={onFile} style={{ display: "none" }} />
-              
-              <select 
-                onChange={(e) => { if (e.target.value) { setText((tx) => tx + (tx && !tx.endsWith(" ") ? " " : "") + "@" + e.target.value + " "); e.target.value = ""; } }} 
-                defaultValue="" 
-                style={inp} 
-                title="Mention a teammate"
-              >
-                <option value="">@ Mention Teammate…</option>
-                {(window.FETS?.PEOPLE || [...(window.FETS?.STAFF?.calicut || []), ...(window.FETS?.STAFF?.cochin || [])]).map((n) => <option key={n} value={n}>{n}</option>)}
-              </select>
-              
-              <div style={{ flex: 1 }} />
-              
-              <button 
-                onClick={submit} 
-                disabled={busy} 
-                className="tap" 
-                style={{ 
-                  display: "inline-flex", 
-                  alignItems: "center", 
-                  gap: 8, 
-                  padding: "10px 22px", 
-                  borderRadius: 11, 
-                  border: "none", 
-                  cursor: busy ? "wait" : "pointer", 
-                  opacity: busy ? 0.6 : 1, 
-                  fontFamily: "var(--font)", 
-                  fontSize: 13.5, 
-                  fontWeight: 800, 
-                  color: "var(--accent-ink)", 
-                  background: "var(--accent)",
-                  boxShadow: "0 4px 12px var(--accent-soft)" 
-                }}
-              >
-                <Icon name="arrowR" size={16} /> Post to Wall
-              </button>
-            </div>
-
-            {(image || attachments.length > 0) && (
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {image && <span className="inset" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 12px", borderRadius: 9, fontSize: 11.5, color: "var(--ink-2)" }}><Icon name="camera" size={13} /> Image Attached <button onClick={() => setImage(null)} style={{ border: "none", background: "transparent", color: "var(--bad)", cursor: "pointer", fontWeight: 800 }}>×</button></span>}
-                {attachments.map((a, i) => <span key={i} className="inset" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 12px", borderRadius: 9, fontSize: 11.5, color: "var(--ink-2)" }}>{a.name} <button onClick={() => setAttachments((x) => x.filter((_, j) => j !== i))} style={{ border: "none", background: "transparent", color: "var(--bad)", cursor: "pointer", fontWeight: 800 }}>×</button></span>)}
-              </div>
-            )}
-          </div>
-
-          {/* Feed List */}
-          {loading ? (
-            <div className="glass" style={{ borderRadius: "var(--radius)", padding: 40, textAlign: "center", color: "var(--ink-4)" }}>
-              Loading Lab coordination feed…
-            </div>
-          ) : shown.length === 0 ? (
-            <div className="glass" style={{ borderRadius: "var(--radius)", padding: 40, textAlign: "center", color: "var(--ink-4)", fontSize: 14 }}>
-              No posts found matching the filter.
-            </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              {pinned.length > 0 && (
-                <React.Fragment>
-                  <SectionLabel right={<Icon name="pin" size={14} style={{ color: "var(--accent)" }} />}>Pinned Notices & Alerts</SectionLabel>
-                  {pinned.map((p) => <LabPostCard key={p.id} p={p} onChange={updatePost} onDelete={removePost} canMod={canMod} />)}
-                  <SectionLabel>Latest Activity</SectionLabel>
-                </React.Fragment>
-              )}
-              {rest.map((p) => <LabPostCard key={p.id} p={p} onChange={updatePost} onDelete={removePost} canMod={canMod} />)}
-            </div>
-          )}
-        </div>
-
-        {/* Right Side: Discussion / Online Staff / Terminal */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 14, position: "sticky", top: 20 }}>
-          <Segmented 
-            value={activeRightTab} 
-            onChange={setActiveRightTab} 
-            size="sm" 
-            options={[
-              { value: "discussion", label: "Discussion" },
-              { value: "online", label: "Online Staff" },
-              { value: "terminal", label: "Lab Terminal" }
-            ]} 
-          />
-          {activeRightTab === "discussion" && <LabDiscussionPanel />}
-          {activeRightTab === "online" && <LabStaffPanel onChat={(staff) => window.dispatchEvent(new CustomEvent("fets-open-chat", { detail: staff }))} />}
-          {activeRightTab === "terminal" && <LabTerminalPanel />}
-        </div>
-      </div>
-    </div>
-  );
+  return <ActionablesView branch={branch} />;
 }
 
 /* ---------- tools sheet (overflow) ---------- */
@@ -13318,15 +12995,9 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
   
   const [active, setActiveState] = React.useState(activeSubPage || "live");
 
-  // Sync only on first mount (deep links / external tab changes). After that,
-  // `setActive` is the single source of truth and updates both the local view
-  // and the parent tab, so we must NOT re-derive `active` from `activeSubPage`
-  // here — that would clobber remapped views like "case" (parent = incident-log).
-  const didInit = React.useRef(false);
   React.useEffect(() => {
-    if (!didInit.current && activeSubPage) {
-      didInit.current = true;
-      if (activeSubPage !== active) setActiveState(activeSubPage);
+    if (activeSubPage && activeSubPage !== active) {
+      setActiveState(activeSubPage);
     }
   }, [activeSubPage]);
 
@@ -13430,6 +13101,16 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
         async (payload) => {
           console.log("Realtime: leave_requests changed", payload);
           await loadLeaveRequests(window.FETS);
+          await loadApplications(window.FETS);
+          window.dispatchEvent(new Event("fets-roster-changed"));
+          window.dispatchEvent(new Event("fets-applications-changed"));
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "roster_schedules" },
+        async (payload) => {
+          console.log("Realtime: roster_schedules changed", payload);
           window.dispatchEvent(new Event("fets-roster-changed"));
         }
       )
@@ -13485,9 +13166,9 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
         {active === "handover" && <HandoverHub branch={branch} setActive={setActive} />}
         {active === "desk" && <MyDeskPage branch={branch} setActive={setActive} setDrawer={setDrawer} bridge={bridge} />}
         {active === "business" && <BusinessPage branch={branch} />}
-        {active === "news" && <TheLabPage branch={branch} />}
+        {(active === "news" || active === "actionables") && <ActionablesView branch={branch} />}
         {active === "attn-admin" && <AttendanceAdminPage branch={branch} />}
-        {active === "staff-requests" && <RosterApprovalsHub branch={branch} />}
+        {/* staff-requests route removed — exclusively handled in My Desk → ApplicationsHub */}
         {active === "staff-ot" && <OtToilClaimsHub branch={branch} />}
         {active === "candidate-tracker" && <CandidateTracker />}
         {active === "access-hub" && <AccessHubPage />}
@@ -13513,9 +13194,11 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
         icon="headset" title="Help Desk" sub="Live support portals" accentColor={V.cma.color}>
         <HelpDeskPanel />
       </Drawer>
-      <Drawer open={drawer === "lostfound"} onClose={() => setDrawer(null)}
-        icon="package" title="Lost & Found" sub={`${branchLabel} · items handed in & logged`} accentColor={V.ielts.color}>
-        <LostFoundPanel branch={branch} />
+      <Drawer open={drawer === "ai_live" || drawer === "lostfound"} onClose={() => setDrawer(null)}
+        icon="spark" title="Gemini 3.1 Flash Live Studio" sub={`${branchLabel} · real-time multimodal voice, vision & screen`} accentColor="var(--gold)">
+        <div style={{ padding: "16px 0", height: "100%" }}>
+          <GeminiLiveStudio branch={branch} onOpenTeamChat={() => { setDrawer(null); window.dispatchEvent(new CustomEvent("fets-open-chat")); }} />
+        </div>
       </Drawer>
 
       <ToolsSheet open={tools} onClose={() => setTools(false)} onPick={handlePick} />
@@ -13552,7 +13235,11 @@ function RedesignShell({ bridge, userName, userEmail, isAdmin, onLogout, activeB
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     let mounted = true;
-    Promise.resolve(loadLiveData(window.FETS)).catch(() => {}).finally(() => { if (mounted) setReady(true); });
+    Promise.resolve(loadLiveData(window.FETS)).catch(() => {}).finally(() => {
+      if (mounted) setReady(true);
+      // Load applications in background (non-blocking)
+      loadApplications(window.FETS).catch(() => {});
+    });
     return () => { mounted = false; document.body.style.overflow = prev; };
   }, []);
   return (
