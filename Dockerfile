@@ -6,8 +6,8 @@ FROM node:22-alpine AS builder
 # vips-dev             → sharp's libvips binding (avoids CDN binary download)
 RUN apk add --no-cache python3 make g++ vips-dev
 
-# Install pnpm (pinned for reproducibility)
-RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
+# Install pnpm (v10+ required for --dangerously-allow-all-builds flag)
+RUN corepack enable && corepack prepare pnpm@10.13.1 --activate
 
 # Force sharp to compile from source instead of downloading a prebuilt binary
 # (the VPS cannot reliably reach the sharp CDN)
