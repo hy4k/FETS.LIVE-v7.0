@@ -1,0 +1,504 @@
+// Header detection ported from hy4k/fets.tv lib/roster/parse.ts (2026-09-29).
+import { Buffer } from "buffer";
+import ExcelJS from "exceljs";
+import Papa from "papaparse";
+import { isLegacyXls, readLegacyXls } from "./xls";
+import type { RosterIssue, RosterPreview, RosterRow } from "./types";
+
+export const HEADER_ALIASES: Record<keyof ColumnMap, string[]> = {
+  roster_number: [
+    "roster no",
+    "roster number",
+    "roster",
+    "sl no",
+    "sl. no",
+    "serial",
+    "serial no",
+    "reg no",
+    "registration no",
+    "registration number",
+    "candidate id",
+    "candidate no",
+    "roll no",
+    "roll number",
+    "roll",
+    "appointment no",
+    "appointment number",
+    "confirmation no",
+    "confirmation number",
+    "booking ref",
+    "booking reference",
+    "reference no",
+    "ref no",
+    "candidate ref",
+    "confirmation",
+    "confirmation number",
+  ],
+  full_name: ["name", "candidate name", "student name", "full name", "candidate", "applicant", "applicant name", "name of candidate"],
+  first_name: ["first name", "firstname", "given name", "candidate first name"],
+  last_name: ["last name", "lastname", "surname", "family name", "candidate last name"],
+  part: ["part", "section", "module", "paper"],
+  exam_name: ["exam name", "exam", "programme", "program", "programme name", "program name"],
+  exam_start_time: ["exam start time", "start time", "exam time", "scheduled time", "appointment time", "test time", "time"],
+  phone: ["phone", "phone no", "phone number", "mobile", "mobile no", "mobile number", "contact", "contact no", "contact number", "telephone", "tel", "whatsapp", "daytime phone", "evening phone"],
+  place: ["place", "city", "town", "district", "location"],
+  roster_flag: ["flag", "status", "remark", "remarks", "note", "notes", "exception"],
+};
+
+export type ColumnMap = {
+  roster_number: number | null;
+  exam_name: number | null;
+  full_name: number | null;
+  first_name: number | null;
+  last_name: number | null;
+  part: number | null;
+  exam_start_time: number | null;
+  phone: number | null;
+  place: number | null;
+  roster_flag: number | null;
+};
+
+/**
+ * Column headings a centre has taught the importer, on top of the built-in
+ * list. A fourth board layout should not need a release to be readable.
+ */
+export type ExtraAliases = Partial<Record<keyof ColumnMap, string[]>>;
+
+// Preserve additional provider headings introduced in the other local workspace.
+const additionalProviderHeaders: ExtraAliases = {
+  roster_number: ['roster id', 'confirmation id', 'registration id', 'id', 'candidate number', 'applicant id', 'booking id', 'booking number', 'appointment id'],
+  full_name: ['participant name', 'examinee name'],
+  first_name: ['fname', 'first'], last_name: ['lname', 'last'],
+  exam_name: ['examination', 'test name', 'test', 'course', 'subject', 'exam title'],
+  part: ['exam part', 'level'], exam_start_time: ['session time'], phone: ['cell'],
+};
+for (const field of Object.keys(additionalProviderHeaders) as (keyof ColumnMap)[]) {
+  HEADER_ALIASES[field] = [...new Set([...HEADER_ALIASES[field], ...additionalProviderHeaders[field]!])];
+}
+
+/**
+ * Both lists, kept apart on purpose.
+ *
+ * A centre's own headings are matched in a pass of their own, before the
+ * built-in ones, because the clash they exist to settle is between columns
+ * rather than between spellings. A file with both "Name" (the exam) and
+ * "Candidate" (the person) would otherwise have "Name" claimed as the full
+ * name before "Candidate" was ever reached, however the field's own list was
+ * ordered.
+ */
+type AliasTable = { extra: ExtraAliases; builtin: Record<keyof ColumnMap, string[]> };
+
+const BUILTIN_TABLE: AliasTable = { extra: {}, builtin: HEADER_ALIASES };
+
+function aliasesFor(extra: ExtraAliases | undefined): AliasTable {
+  return extra ? { extra, builtin: HEADER_ALIASES } : BUILTIN_TABLE;
+}
+
+export async function parseRosterFile(
+  filename: string,
+  buffer: Buffer,
+  extra?: ExtraAliases,
+): Promise<RosterPreview> {
+  if (buffer.length > 20 * 1024 * 1024) throw new Error("Choose a roster smaller than 20 MB.");
+  // Boards export .xls, which is a different format from .xlsx entirely.
+  const sheets = isLegacyXls(buffer)
+    ? readLegacyXls(buffer)
+    : /\.csv$/i.test(filename)
+      ? [{ name: filename, grid: parseCsv(buffer) }]
+      : await parseXlsx(buffer);
+
+  // Centres send workbooks with a cover sheet, or the roster on the second tab,
+  // so take the first sheet that actually has a header rather than assuming.
+  let fallback: { name: string; grid: string[][] } | null = null;
+
+  const aliases = aliasesFor(extra);
+
+  for (const sheet of sheets) {
+    if (detectHeaderRow(sheet.grid, aliases).index !== -1) {
+      return buildPreview(filename, sheet.grid, sheet.name, undefined, aliases);
+    }
+    const size = sheet.grid.reduce((n, row) => n + row.filter(Boolean).length, 0);
+    const best = fallback ? fallback.grid.reduce((n, row) => n + row.filter(Boolean).length, 0) : -1;
+    if (size > best) fallback = sheet;
+  }
+
+  return buildPreview(
+    filename,
+    fallback?.grid ?? [],
+    fallback?.name ?? null,
+    sheets.map((s) => s.name),
+    aliases,
+  );
+}
+
+function parseCsv(buffer: Buffer): string[][] {
+  const result = Papa.parse<string[]>(buffer.toString("utf8"), { skipEmptyLines: false });
+  const malformed = result.errors.find(error => error.type === 'Quotes');
+  if (malformed) throw new Error(`CSV formatting error: ${malformed.message}. Correct the file and preview again.`);
+  return result.data.map((row) => (Array.isArray(row) ? row.map(clean) : []));
+}
+
+async function parseXlsx(buffer: Buffer): Promise<{ name: string; grid: string[][] }[]> {
+  const workbook = new ExcelJS.Workbook();
+  // ExcelJS types want an ArrayBuffer-backed view; a Buffer slice is exactly that.
+  await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
+
+  return workbook.worksheets.map((sheet) => ({ name: sheet.name, grid: readSheet(sheet) }));
+}
+
+function readSheet(sheet: ExcelJS.Worksheet): string[][] {
+  const grid: string[][] = [];
+  sheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+    const cells: string[] = [];
+    row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+      cells[colNumber - 1] = clean(cellText(cell.value));
+    });
+    grid[rowNumber - 1] = Array.from(cells, (c) => c ?? "");
+  });
+
+  return Array.from(grid, (row) => row ?? []);
+}
+
+function cellText(value: ExcelJS.CellValue): string {
+  if (value == null) return "";
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (value instanceof Date) return value.toISOString().replace("T", " ").slice(0, 19);
+  if (typeof value === "object") {
+    if ("text" in value && typeof value.text === "string") return value.text;
+    if ("richText" in value && Array.isArray(value.richText)) {
+      return value.richText.map((part) => part.text).join("");
+    }
+    if ("result" in value) return cellText(value.result as ExcelJS.CellValue);
+    if ("hyperlink" in value && typeof value.hyperlink === "string") return value.hyperlink;
+  }
+  return "";
+}
+
+function clean(value: unknown): string {
+  return String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Scan the first rows for the one that actually names the columns. */
+function detectHeaderRow(
+  grid: string[][],
+  table: AliasTable = BUILTIN_TABLE,
+): {
+  index: number;
+  columns: ColumnMap;
+  best: { index: number; score: number; columns: ColumnMap };
+} {
+  let best = { index: -1, score: 0, columns: emptyColumns() };
+
+  for (let i = 0; i < Math.min(grid.length, 20); i++) {
+    const columns = matchColumns(grid[i] ?? [], table);
+    const score = Object.values(columns).filter((v) => v !== null).length;
+    if (score > best.score) best = { index: i, score, columns };
+  }
+
+  return best.score >= 2
+    ? { index: best.index, columns: best.columns, best }
+    : { index: -1, columns: emptyColumns(), best };
+}
+
+function emptyColumns(): ColumnMap {
+  return {
+    roster_number: null,
+    exam_name: null,
+    full_name: null,
+    first_name: null,
+    last_name: null,
+    part: null,
+    exam_start_time: null,
+    phone: null,
+    place: null,
+    roster_flag: null,
+  };
+}
+
+/** Every column whose heading reads like a phone number, in order. */
+function phoneColumns(row: string[], table: AliasTable): number[] {
+  const known = [...(table.extra.phone ?? []), ...table.builtin.phone];
+  const out: number[] = [];
+  row.forEach((raw, index) => {
+    const cell = cleanHeader(raw);
+    if (!cell) return;
+    if (known.some((alias) => matchesAlias(cell, alias))) out.push(index);
+  });
+  return out;
+}
+
+/**
+ * A heading matches an alias outright, or begins with it — but only for
+ * aliases of two words or more. Letting the single word "candidate" match by
+ * prefix made "Candidate Last Name" read as the full name and silently threw
+ * the surname away.
+ */
+function matchesAlias(cell: string, alias: string): boolean {
+  if (cell === alias) return true;
+  return alias.includes(" ") && cell.startsWith(`${alias} `);
+}
+
+function cleanHeader(raw: string): string {
+  return raw.toLowerCase().replace(/[^a-z0-9 .]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function matchColumns(row: string[], table: AliasTable = BUILTIN_TABLE): ColumnMap {
+  const columns = emptyColumns();
+  const headers = row.map(cleanHeader);
+  const claimed = new Set<number>();
+
+  // Pass one: what this centre said. Pass two: what the importer already knew.
+  for (const list of [table.extra, table.builtin] as Partial<Record<keyof ColumnMap, string[]>>[]) {
+    headers.forEach((cell, index) => {
+      if (!cell || claimed.has(index)) return;
+
+      for (const [field, aliases] of Object.entries(list) as [keyof ColumnMap, string[]][]) {
+        if (columns[field] !== null) continue;
+        if (aliases.some((alias) => matchesAlias(cell, alias))) {
+          columns[field] = index;
+          claimed.add(index);
+          return;
+        }
+      }
+    });
+  }
+
+  return columns;
+}
+
+function buildPreview(
+  filename: string,
+  grid: string[][],
+  sheetName: string | null = null,
+  allSheets: string[] = [],
+  table: AliasTable = BUILTIN_TABLE,
+): RosterPreview {
+  const { index: headerIndex, columns, best } = detectHeaderRow(grid, table);
+  const phones = headerIndex === -1 ? [] : phoneColumns(grid[headerIndex] ?? [], table);
+
+  // Does this file carry the part inside its exam name? One row proving it
+  // makes a row that fails worth reporting.
+  const examNameCarriesPart =
+    headerIndex !== -1 &&
+    columns.exam_name !== null &&
+    grid
+      .slice(headerIndex + 1)
+      .some((row) => partFromExamName(row?.[columns.exam_name as number] ?? "") !== null);
+  const rows: RosterRow[] = [];
+  const issues: RosterIssue[] = [];
+  const seen = new Set<string>();
+  let skipped = 0;
+  let noShow = 0;
+  let warnings = 0;
+
+  if (headerIndex === -1) {
+    const matched = Object.entries(best.columns)
+      .filter(([, index]) => index !== null)
+      .map(([field]) => field);
+
+    // Rosters carry candidates' names and phone numbers, so the diagnostic
+    // reports structure only. The row's own text is echoed back just when at
+    // least one column name was recognised — which is what makes it a header
+    // row rather than somebody's personal details.
+    const headerCells =
+      matched.length > 0 ? (grid[best.index] ?? []).filter((cell) => cell !== "").slice(0, 25) : null;
+
+    return {
+      filename,
+      header_row: 0,
+      columns: {},
+      rows: [],
+      issues: [
+        {
+          source_row: 0,
+          level: "error",
+          message:
+            matched.length === 1
+              ? `Only one column was recognised (${matched[0].replace(/_/g, " ")}). The importer needs at least two.`
+              : "No column names were recognised in the first 20 rows.",
+        },
+      ],
+      counts: { valid: 0, warnings: 0, errors: 1, no_show: 0, skipped: 0 },
+      diagnostics: {
+        sheets: allSheets,
+        sheet_used: sheetName,
+        rows_found: grid.length,
+        columns_found: grid.reduce((n, row) => Math.max(n, row.length), 0),
+        best_row: best.index >= 0 ? best.index + 1 : 0,
+        matched_fields: matched,
+        header_cells: headerCells,
+        understood: HEADER_ALIASES,
+      },
+    };
+  }
+
+  for (let i = headerIndex + 1; i < grid.length; i++) {
+    const row = grid[i] ?? [];
+    const sourceRow = i + 1;
+    const at = (col: number | null) => (col === null ? "" : (row[col] ?? ""));
+    const filled = row.filter((cell) => cell !== "").length;
+
+    // Blank rows, and the one-cell separator bands real rosters are full of
+    // ("--- MORNING BATCH ---"). A lone cell carrying digits is a data row
+    // missing its name, so that still gets reported rather than dropped.
+    const loneCell = filled === 1 ? (row.find((cell) => cell !== "") ?? "") : null;
+    if (filled === 0 || (loneCell !== null && !/\d/.test(loneCell))) {
+      skipped++;
+      continue;
+    }
+
+    // A merged cell spanning the row — the date banners rosters are divided by —
+    // reaches us as the same value repeated in every cell it covers. Left alone
+    // it imports as a candidate named after the date, and that name reaches the
+    // hall TV.
+    const values = row.filter((cell) => cell !== "");
+    if (values.length > 1 && new Set(values).size === 1) {
+      skipped++;
+      continue;
+    }
+
+    const rosterNumber = at(columns.roster_number);
+    const fullName = combineName(at(columns.full_name), at(columns.first_name), at(columns.last_name));
+    const flag = at(columns.roster_flag) || null;
+
+    if (!rosterNumber) {
+      issues.push({ source_row: sourceRow, level: "error", message: "Missing roster number" });
+      continue;
+    }
+
+    if (!fullName) {
+      issues.push({ source_row: sourceRow, level: "error", message: `${rosterNumber}: missing name` });
+      continue;
+    }
+
+    if (seen.has(rosterNumber)) {
+      issues.push({ source_row: sourceRow, level: "error", message: `${rosterNumber}: duplicate roster number` });
+      continue;
+    }
+    seen.add(rosterNumber);
+
+    const part = normalisePart(at(columns.part)) || partFromExamName(at(columns.exam_name));
+    if ((columns.part !== null || examNameCarriesPart) && !part) {
+      issues.push({ source_row: sourceRow, level: "warning", message: `${rosterNumber}: no part recorded` });
+      warnings++;
+    }
+
+    if (flag && /no\s*show/i.test(flag)) noShow++;
+
+    const rawTime = at(columns.exam_start_time);
+    const startTime = normaliseRosterTime(rawTime);
+    if (rawTime && !startTime) {
+      issues.push({ source_row: sourceRow, level: "error", message: `${rosterNumber}: invalid start time (${rawTime})` });
+      continue;
+    }
+    rows.push({
+      source_row: sourceRow,
+      roster_number: rosterNumber,
+      full_name: fullName,
+      exam_name: at(columns.exam_name),
+      exam_part: part,
+      exam_start_time: startTime,
+      phone: normalisePhone(phones.map((column) => row[column] ?? "").find(Boolean) ?? at(columns.phone)),
+      place: at(columns.place) || null,
+      roster_flag: flag,
+    });
+  }
+
+  const errors = issues.filter((i) => i.level === "error").length;
+
+  return {
+    filename,
+    sheet_used: sheetName,
+    header_row: headerIndex + 1,
+    columns: Object.fromEntries(
+      Object.entries(columns).map(([field, index]) => [
+        field,
+        index === null ? null : ((grid[headerIndex] ?? [])[index] ?? null),
+      ]),
+    ),
+    rows,
+    issues: issues.slice(0, 50),
+    counts: { valid: rows.length - noShow, warnings, errors, no_show: noShow, skipped },
+  };
+}
+
+/**
+ * Boards fill an absent surname in with a placeholder rather than leaving it
+ * blank, and it would otherwise be announced as part of the person's name.
+ */
+const PLACEHOLDER_SURNAMES = [
+  "no last name",
+  "no lastname",
+  "no surname",
+  "nosurname",
+  "not available",
+  "na",
+  "n a",
+  "nil",
+  "none",
+  "-",
+  ".",
+];
+
+function isPlaceholderSurname(value: string): boolean {
+  const bare = value.toLowerCase().replace(/[^a-z]/g, " ").replace(/\s+/g, " ").trim();
+  return bare === "" || PLACEHOLDER_SURNAMES.includes(bare);
+}
+
+/**
+ * The given name only loses punctuation-only values. "Nil", "Na" and "None"
+ * are real given names somewhere, and clearing one would promote the surname
+ * into its place.
+ */
+function isEmptyGivenName(value: string): boolean {
+  return value.replace(/[^\p{L}\p{N}]/gu, "").trim() === "";
+}
+
+/** "PART 2 CMA EXAM- ESSAY" is the exam; the part inside it is what staff need. */
+function partFromExamName(examName: string): string | null {
+  const match = examName.match(/\bpart\s*([0-9]+|i{1,3})\b/i);
+  if (!match) return null;
+  const roman: Record<string, string> = { i: "1", ii: "2", iii: "3" };
+  const value = match[1].toLowerCase();
+  return `PART ${roman[value] ?? value}`;
+}
+
+function normalisePart(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return partFromExamName(trimmed) ?? trimmed;
+}
+
+function combineName(full: string, first: string, last: string): string {
+  // The database contract keeps the full name intact, including multi-part names.
+  if (full) return full;
+  if (isPlaceholderSurname(last)) last = "";
+  if (isEmptyGivenName(first)) first = "";
+  return [first, last].filter(Boolean).join(" ");
+}
+
+/** IST wall-clock values, never converted using the browser's timezone. */
+export function normaliseRosterTime(value: string): string | null {
+  const raw = value.trim();
+  if (!raw) return null;
+  if (/^0?\.\d+$/.test(raw)) {
+    const seconds = Math.round(Number(raw) * 86400) % 86400;
+    return [Math.floor(seconds / 3600), Math.floor(seconds / 60) % 60, seconds % 60].map(n => String(n).padStart(2, "0")).join(":");
+  }
+  const match = raw.match(/(?:^|[ T])(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i) || raw.match(/^(\d{1,2})\s*()()(AM|PM)$/i);
+  if (!match) return null;
+  let hour = Number(match[1]); const minute = Number(match[2] || 0), second = Number(match[3] || 0);
+  if (minute > 59 || second > 59 || (match[4] ? hour < 1 || hour > 12 : hour > 23)) return null;
+  if (match[4]) hour = hour % 12 + (match[4].toUpperCase() === "PM" ? 12 : 0);
+  return [hour, minute, second].map(n => String(n).padStart(2, "0")).join(":");
+}
+
+function normalisePhone(value: string): string | null {
+  if (!value) return null;
+  const digits = value.replace(/[^\d+]/g, "");
+  return digits || null;
+}

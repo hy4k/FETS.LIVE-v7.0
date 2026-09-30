@@ -2,12 +2,12 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/svg+xml" href="/fets-mark.svg" />
 
     <!-- Mobile Optimization - Prevent zoom and enable app-like behavior -->
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
 
     <title>FETS.LIVE - Advanced Workforce Management</title>
@@ -25,7 +25,7 @@
     <meta http-equiv="Expires" content="0" />
 
     <!-- PWA Meta Tags for App-Like Experience -->
-    <meta name="theme-color" content="#e7bb5a" />
+    <meta name="theme-color" content="#f6f5ef" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta
@@ -66,10 +66,13 @@
     />
 
     <!-- Preload Critical Resources -->
-    <link rel="preload" href="/fets-point-logo.png" as="image" />
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><div class="fets-boot" role="status"><span class="fets-boot-mark">f.</span><strong>fets<span>.</span>live</strong><p>Opening your workspace</p><i></i></div></div>
+    <style>
+      .fets-boot{min-height:100svh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,#e5eadf,#f6f5ef 65%);color:#345343;font-family:Arial,sans-serif;position:fixed;inset:0}.fets-boot-mark{display:grid;place-items:center;width:74px;height:78px;border:1px solid #fff;border-radius:24px;background:linear-gradient(140deg,#fff,#d5e1cf);box-shadow:inset 2px 2px 3px #fff,12px 16px 30px #6c82652a;font:italic 65px Georgia,serif;letter-spacing:-6px;padding-right:7px;transform:rotate(-8deg);margin-bottom:30px}.fets-boot strong{font-size:43px;letter-spacing:-3px}.fets-boot strong>span{color:#93a184}.fets-boot p{font-size:11px;color:#73836c;margin:20px 0}.fets-boot>i{width:90px;height:2px;background:#9baf8e;animation:boot-breathe 1.4s ease-in-out infinite alternate}@keyframes boot-breathe{to{opacity:.3;transform:scaleX(.5)}}@media(prefers-reduced-motion:reduce){.fets-boot>i{animation:none}}
+    </style>
+    <noscript><p style="position:fixed;bottom:20px;left:20px;right:20px;z-index:2;text-align:center;color:#345343;background:#f6f5ef;padding:16px">Please enable JavaScript to sign in to FETS LIVE.</p></noscript>
 
     <script type="module" src="/src/main.tsx"></script>
 

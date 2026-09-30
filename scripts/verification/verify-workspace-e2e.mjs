@@ -1,0 +1,103 @@
+// Executes the exact migration in isolated PostgreSQL. No production connections.
+import {readFileSync} from 'node:fs';
+import assert from 'node:assert/strict';
+const {PGlite}=await import(process.env.PGLITE_MODULE||'@electric-sql/pglite');
+const db=new PGlite();let checks=0;
+const ids=Array.from({length:6},(_,i)=>`00000000-0000-4000-8000-${String(i+1).padStart(12,'0')}`);
+const [admin,a,b,c,outsider,relief]=ids;
+const q=(sql,args=[])=>db.query(sql,args);
+const as=async id=>db.exec(`reset role;set role authenticated;set request.jwt.claim.sub='${id}';`);
+const denied=async(sql,args=[],pattern)=>{await assert.rejects(q(sql,args),pattern);checks++;};
+await db.exec(`create role anon;create role authenticated;create role service_role;create schema auth;
+create table auth.users(id uuid primary key);
+create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+grant usage on schema auth to authenticated,anon;grant execute on function auth.uid() to authenticated,anon;
+create table public.staff_profiles(id uuid primary key,user_id uuid,full_name text,branch_assigned text,role text,is_active boolean,permissions jsonb);
+create table public.roster_schedules(profile_id uuid,date date,shift_code text,branch_location text);
+grant select on public.staff_profiles,public.roster_schedules to authenticated;`);
+for(let i=0;i<ids.length;i++){await q('insert into auth.users values ($1)',[ids[i]]);await q('insert into staff_profiles values($1,$1,$2,$3,$4,true,\'{}\')',[ids[i],`Staff ${i}`,i===4?'calicut':'cochin',i===0?'super_admin':'staff']);}
+const local=(await q("select (clock_timestamp() at time zone 'Asia/Kolkata')::date::text as day,extract(hour from clock_timestamp() at time zone 'Asia/Kolkata')::int*60+extract(minute from clock_timestamp() at time zone 'Asia/Kolkata')::int as minute")).rows[0];
+const day=local.day;
+for (const id of [a,b,c,relief]) await q("insert into roster_schedules select $1,d::date,'D','cochin' from generate_series($2::date-7,$2::date+7,interval '1 day') d",[id,day]);
+const installer=readFileSync(new URL('../../fets-point/scripts/complete_workspace_setup.sql',import.meta.url),'utf8');
+await db.exec(installer);await db.exec(installer);checks+=2;
+await as(admin);
+const week=(await q("select ($1::date-(extract(isodow from $1::date)::int-1))::text as week",[day])).rows[0].week;
+await q('insert into centre_lead_weeks(branch,week_start,lead_id) values(\'cochin\',$1,$2)',[week,a]);
+await denied('insert into centre_lead_weeks(branch,week_start,lead_id) values(\'calicut\',$1,$2)',[week,b],/rostered/);
+const plan={actingLead:'',availability:[a,b,c,relief].map(staff=>({staff,start:480,end:1020,confirmed:true})),blocks:Array.from({length:6},(_,i)=>({start:480+i*90,end:570+i*90,owners:{front:[a,b,c][i%3],floor:[b,c,a][i%3],control:[c,a,b][i%3]},duties:{front:'Database',floor:'',control:''}})),breaks:[a,b,c].flatMap((staff,i)=>[600+i*30,840+i*30].map(start=>({staff,start,end:start+30,cover:relief,note:'Named relief covers this lane'})))};
+const insert='insert into centre_day_plans(branch,day,lead_id,plan,status) values(\'cochin\',$1,$2,$3,$4) returning *';
+const bad=structuredClone(plan);bad.breaks[0].cover='';
+await denied(insert,[day,a,bad,'published'],/Break needs/);
+const gap=structuredClone(plan);gap.availability[0].start=540;
+await denied(insert,[day,a,gap,'published'],/coverage/);
+const collision=structuredClone(plan);collision.blocks[0].owners.front=b;
+await denied(insert,[day,a,collision,'published'],/different owners/);
+const self=structuredClone(plan);self.breaks[0].cover=a;
+await denied(insert,[day,a,self,'published'],/Break needs/);
+const unconfirmed=structuredClone(plan);unconfirmed.availability[0].confirmed=false;
+await denied(insert,[day,a,unconfirmed,'published'],/Confirm/);
+const duplicate=structuredClone(plan);duplicate.availability.push(duplicate.availability[0]);
+await denied(insert,[day,a,duplicate,'published'],/Duplicate/);
+let result=await q(insert,[day,a,plan,'draft']);const record=result.rows[0];
+assert.equal(record.version,1);checks++;
+result=await q("update centre_day_plans set plan=$1 where id=$2 and version=1 returning version",[plan,record.id]);assert.equal(result.rows[0].version,2);checks++;
+assert.equal((await q('update centre_day_plans set plan=$1 where id=$2 and version=1 returning id',[plan,record.id])).rows.length,0);checks++;
+await as(outsider);assert.equal((await q('select * from centre_day_plans')).rows.length,0);checks++;
+await denied(insert,[day,outsider,plan,'draft'],/row-level security/);
+await denied('insert into centre_duty_members values($1,\'*\',$1,\'super_admin\')',[outsider],/permission denied/);
+await as(b);await denied('insert into centre_lead_weeks(branch,week_start,lead_id) values(\'cochin\',$1,$2)',[week,b],/row-level security/);
+assert.equal((await q("update centre_day_plans set status='published' where id=$1 returning id",[record.id])).rows.length,0);checks++;
+await as(a);await q("update centre_day_plans set status='published' where id=$1",[record.id]);
+await denied('update centre_day_plans set plan=$1 where id=$2',[plan,record.id],/immutable/);
+const event='insert into centre_duty_events(plan_id,block,lane,kind,due,note) values($1,$2,$3,$4,$5,$6) returning *';
+await as(b);await denied(event,[record.id,0,'front','verify',0,'Review'],/independent/);
+await as(a);await denied(event,[record.id,0,'front','verify',0,'Review own work'],/independent/);
+await as(admin);await denied(event,[record.id,0,'front','verify',0,'Review before submission'],/submit before/);
+await as(b);await denied(event,[record.id,0,'front','submit',570,'Wrong owner'],/Owner must/);
+// A support event always has a real actor and server timestamp; actor spoofing is overwritten.
+await as(a);result=await q(event,[record.id,0,'front','support',0,'Need relief cover']);assert.equal(result.rows[0].actor_id,a);checks++;
+await denied('update centre_duty_events set note=\'changed\' where id=$1',[result.rows[0].id],/permission denied/);
+await denied('delete from centre_duty_events where id=$1',[result.rows[0].id],/permission denied/);
+await denied(event,[record.id,0,'front','walk',490,'Wrong lane'],/not currently due/);
+await denied(event,[record.id,5,'control','dvr',1020,'Future or expired'],/not currently due/);
+if(local.minute>=570 && local.minute<1020){
+ await as(a);await q(event,[record.id,0,'front','submit',570,'Morning duties complete']);
+ await as(admin);await q(event,[record.id,0,'front','verify',0,'Independently reviewed']);checks++;
+ await as(a);await denied(event,[record.id,0,'front','submit',570,'Rewrite reviewed block'],/already reviewed/);
+ const block=Math.floor((local.minute-480)/90);const due=480+block*90+Math.floor((local.minute-(480+block*90))/6)*6;
+ if(due>480+block*90){const owner=plan.blocks[block].owners.control;const pause=plan.breaks.find(p=>p.staff===owner&&p.start<=due-1&&p.end>due-1);await as(pause?pause.cover:owner);await q(event,[record.id,block,'control','dvr',due,'DVR inspected']);checks++;await denied(event,[record.id,block,'control','dvr',due,'Duplicate'],/duplicate key/);}
+}
+// Audited changes: live ownership changes without rewriting the agreed plan.
+await as(admin);
+const future=(await q("select ($1::date+1)::text as d",[day])).rows[0].d;
+const futureWeek=(await q("select ($1::date-(extract(isodow from $1::date)::int-1))::text as w",[future])).rows[0].w;
+if(futureWeek!==week)await q("insert into centre_lead_weeks(branch,week_start,lead_id) values('cochin',$1,$2)",[futureWeek,a]);
+const nextPlan=(await q(insert,[future,a,plan,'published'])).rows[0];
+const change="insert into centre_duty_changes(plan_id,kind,block,lane,staff_id,starts,ends,shift_start,shift_end,reason,actor_id) values($1,'coverage',0,'front',$2,500,530,480,1020,'Relief agreed; front office covered',$3) returning *";
+await as(b);await denied(change,[nextPlan.id,relief,admin],/Only the current lead/);
+await as(a);const amendment=(await q(change,[nextPlan.id,relief,admin])).rows[0];assert.equal(amendment.actor_id,a);checks++;
+for(const [minute,expected] of [[499,a],[500,relief],[529,relief],[530,a]]){const row=(await q("select fets_duty_private.resolved_owner($1,0,'front',$2) as owner",[nextPlan.id,minute])).rows[0];assert.equal(row.owner,expected);checks++;}
+assert.equal((await q('select plan from centre_day_plans where id=$1',[nextPlan.id])).rows[0].plan.blocks[0].owners.front,a);checks++;
+await denied("update centre_duty_changes set reason='rewrite' where id=$1",[amendment.id],/permission denied/);
+await denied('delete from centre_duty_changes where id=$1',[amendment.id],/permission denied/);
+await denied(change,[nextPlan.id,outsider,a],/Replacement must be rostered/);
+await denied("insert into centre_duty_changes(plan_id,kind,block,lane,staff_id,starts,ends,shift_start,shift_end,reason) values($1,'coverage',1,'control',$2,600,630,480,1020,'Cannot cover during own break')",[nextPlan.id,a],/planned break/);
+await denied("insert into centre_duty_changes(plan_id,kind,block,lane,staff_id,starts,ends,shift_start,shift_end,reason) values($1,'coverage',0,'front',$2,500,630,480,1020,'Cannot exceed the block')",[nextPlan.id,relief],/fit the selected/);
+await denied(change,[record.id,relief,a],/future minute/);
+const cap=(await q('select public.fets_workspace_capabilities() as c')).rows[0].c;assert.deepEqual(cap,{version:2,desk:true,duties:true});checks++;
+// Yesterday's final report: lead can submit, other staff cannot; snapshot is server-produced.
+await as(admin);const yesterday=(await q("select ($1::date-1)::text as d",[day])).rows[0].d;
+const prevWeek=(await q("select ($1::date-(extract(isodow from $1::date)::int-1))::text as w",[yesterday])).rows[0].w;
+if(prevWeek!==week) await q('insert into centre_lead_weeks(branch,week_start,lead_id) values(\'cochin\',$1,$2)',[prevWeek,a]);
+const past=(await q(insert,[yesterday,a,plan,'published'])).rows[0];
+const report='insert into centre_duty_reports(plan_id,branch,day,summary,followups,recognition,snapshot,submitted_by) values($1,\'fake\',$2,\'Centre summary\',\'Owner: A; next shift; follow up RMA\',\'Thanks team\',\'{"forged":true}\',$3) returning *';
+await as(b);await denied(report,[past.id,yesterday,b],/Only the lead/);
+await as(a);const reported=(await q(report,[past.id,yesterday,b])).rows[0];assert.equal(reported.branch,'cochin');assert.equal(reported.submitted_by,a);assert.ok(reported.snapshot.plan);assert.equal(reported.snapshot.forged,undefined);checks+=4;
+await denied(event,[past.id,0,'front','support',0,'Late change'],/shift is closed/);
+await denied('update centre_duty_reports set summary=\'rewrite\' where id=$1',[reported.id],/permission denied/);
+assert.equal((await q('update centre_duty_reports set acknowledged_at=now() where id=$1 returning id',[reported.id])).rows.length,0);checks++;
+await as(admin);const ack=(await q('update centre_duty_reports set acknowledged_at=now() where id=$1 returning acknowledged_by',[reported.id])).rows[0];assert.equal(ack.acknowledged_by,admin);checks++;
+await as(outsider);assert.equal((await q('select * from centre_duty_reports')).rows.length,0);checks++;
+await db.exec('reset role;set role anon;');for(const table of ['centre_duty_members','centre_lead_weeks','centre_day_plans','centre_duty_events','centre_duty_reports','centre_duty_changes']) await denied(`select * from public.${table}`,[],/permission denied/);
+await db.close();console.log(`Passed ${checks} PostgreSQL end-to-end workspace checks: branch isolation, planning validation, immutable audit, ownership, lead review and report acknowledgement.`);

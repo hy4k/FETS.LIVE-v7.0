@@ -185,6 +185,8 @@ export const useUpdateCandidateStatus = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['candidates'] })
+      queryClient.invalidateQueries({ queryKey: ['sessions', 'calendar'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboardStats'] })
       toast.success('Candidate status updated successfully')
     },
     onError: (error: Error) => {
@@ -206,6 +208,8 @@ export const useCreateCandidate = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['candidates'] })
+      queryClient.invalidateQueries({ queryKey: ['sessions', 'calendar'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboardStats'] })
       toast.success('Candidate created successfully')
     },
     onError: (error: Error) => {
@@ -707,6 +711,8 @@ export const useDeleteCandidate = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['candidates'] })
+      queryClient.invalidateQueries({ queryKey: ['sessions', 'calendar'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboardStats'] })
       handleSuccess('Candidate deleted successfully')
     }
   })
@@ -726,6 +732,8 @@ export const useUpdateCandidate = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['candidates'] })
+      queryClient.invalidateQueries({ queryKey: ['sessions', 'calendar'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboardStats'] })
       handleSuccess('Candidate updated successfully')
     }
   })

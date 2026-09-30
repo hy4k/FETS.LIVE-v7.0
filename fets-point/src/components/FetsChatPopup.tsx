@@ -11,6 +11,7 @@ import { usePresence, useSendCallLog } from '../hooks/useChat'
 import { toast } from 'react-hot-toast'
 import MessageInput, { CalculatorSyncState, StandaloneCalculatorApp, StandaloneTimeCalendarDashboardApp } from './Chat/MessageInput'
 import Message from './Chat/Message'
+import { LiveKitGroupCall } from './Chat/LiveKitGroupCall'
 import { StaffProfile } from '../types/shared'
 
 interface FetsChatPopupProps {
@@ -51,6 +52,7 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
     const [currentName, setCurrentName] = useState('Chat')
     const [members, setMembers] = useState<any[]>([])
     const [isGroup, setIsGroup] = useState(false)
+    const [groupCall, setGroupCall] = useState<'audio'|'video'|null>(null)
 
     const [isRecording, setIsRecording] = useState<'audio' | 'video' | null>(null)
     const [recordingTime, setRecordingTime] = useState(0)
@@ -274,6 +276,7 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
     }
 
     const handleVoiceCall = () => {
+        if(isGroup&&currentConvId){setGroupCall('audio');return;}
         const targets = getTargetIds()
         if (!targets.length) { toast.error('No participants to call'); return }
         startCall(targets, 'audio')
@@ -282,6 +285,7 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
     }
 
     const handleVideoCall = () => {
+        if(isGroup&&currentConvId){setGroupCall('video');return;}
         const targets = getTargetIds()
         if (!targets.length) { toast.error('No participants to call'); return }
         startCall(targets, 'video')
@@ -292,6 +296,8 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
     const avatarLetter = currentName.charAt(0).toUpperCase()
 
     return (
+        <>
+        {groupCall&&currentConvId&&<LiveKitGroupCall conversationId={currentConvId} mode={groupCall} onClose={()=>setGroupCall(null)}/>}
         <motion.div
             drag
             dragMomentum={false}
@@ -464,5 +470,6 @@ export const FetsChatPopup: React.FC<FetsChatPopupProps> = ({
                 )}
             </div>
         </motion.div>
+        </>
     )
 }

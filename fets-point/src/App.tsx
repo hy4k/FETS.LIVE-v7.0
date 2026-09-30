@@ -17,6 +17,8 @@ import { LazyErrorBoundary } from './components/LazyErrorBoundary';
 
 import { PageLoadingFallback } from './components/LoadingFallback';
 import { Login } from './components/Login';
+import { BrandLoader } from './redesign/BrandExperience';
+import { FetsAIAgent } from './fets-ai/FetsAIAgent';
 import { Header } from './components/Header';
 import { BottomNav } from './components/BottomNav';
 import { UpdatePassword } from './components/UpdatePassword';
@@ -29,7 +31,6 @@ import { BranchIndicator } from './components/BranchIndicator';
 import { MobileHome } from './components/MobileHome';
 import { MobileCalendarView as MobileCalendar } from './components/MobileCalendarView';
 import { MobileRegisterView as MobileRegister } from './components/MobileRegisterView';
-import { MobileAiChat } from './components/MobileAiChat';
 import { MobileIncidentManager } from './components/MobileIncidentManager';
 
 import { supabase } from './lib/supabase';
@@ -59,7 +60,7 @@ const SystemManager = lazy(() => import('./components/SystemManager').then(modul
 
 const NewsManager = lazy(() => import('./components/NewsManager').then(module => ({ default: module.NewsManager })))
 const UserManagement = lazy(() => import('./components/UserManagement').then(module => ({ default: module.UserManagement })))
-const EnhancedChat = lazy(() => import('./components/Chat/EnhancedChatDeck').then(module => ({ default: module.EnhancedChatDeck })))
+const EnhancedChat = lazy(() => import('./components/Chat/TeamChatWorkspace').then(module => ({ default: module.TeamChatWorkspace })))
 const RaiseACasePage = lazy(() => import('./components/RaiseACasePage').then(module => ({ default: module.RaiseACasePage })))
 
 const FetsProfilePage = lazy(() => import('./components/FetsProfile').then(module => ({ default: module.FetsProfile })))
@@ -85,6 +86,7 @@ const getInitialTab = () => {
   if (target === 'roster' || target === 'fets-roster') return 'fets-roster';
   if (target === 'calendar' || target === 'fets-calendar') return 'fets-calendar';
   if (target === 'my-desk' || target === 'desk') return 'my-desk';
+  if (target === 'actionables') return 'actionables';
   if (target === 'handover' || target === 'shift-handover') return 'handover';
   if (target === 'candidate-tracker' || target === 'tracker') return 'candidate-tracker';
   if (target === 'fets-intelligence' || target === 'intelligence' || target === 'ai') return 'fets-intelligence';
@@ -204,7 +206,7 @@ function AppContent() {
 
 
 
-  if (loading) return null;
+  if (loading) return <BrandLoader fullScreen message="Getting your workspace ready" />;
   if (isRecovering) return <UpdatePassword onComplete={() => { setIsRecovering(false); window.location.hash = ''; }} />;
   if (!user) return <Login />;
 
@@ -243,7 +245,7 @@ function AppContent() {
  
       if (activeTab === 'system-manager') return <SystemManager />;
       if (activeTab === 'news-manager') return <NewsManager />;
-      if (activeTab === 'lost-and-found' || activeTab === 'fets-chat' || activeTab === 'chat') return <EnhancedChat branch={activeBranch} />;
+      if (activeTab === 'lost-and-found' || activeTab === 'fets-chat' || activeTab === 'chat') return <EnhancedChat />;
       if (activeTab === 'cma-availability' || activeTab === 'branch-delegation') return isMithun ? <BranchDelegationWidget /> : <MobileHome setActiveTab={setActiveTab} profile={profile} />;
       if (activeTab === 'gbp') return <GBPDashboard />;
       if (activeTab === 'expansion') return (
@@ -267,7 +269,7 @@ function AppContent() {
       'access-hub', 'dashboard', 'candidate-tracker', 'fets-intelligence',
       'incident-log', 'system-manager', 'news-manager', 'user-management',
       'branch-delegation', 'gbp', 'attn-admin', 'business', 'staff-requests', 'staff-ot',
-      'handover', 'news'
+      'handover', 'news', 'actionables'
     ].includes(activeTab);
 
     if (isRedesignPage) {
@@ -302,9 +304,9 @@ function AppContent() {
       'fets-calendar-demo': { component: isMithun ? <FetsCalendar /> : <CommandCentre onNavigate={setActiveTab} onAiQuery={(q: string) => { setAiQuery(q); setActiveTab('fets-intelligence'); }} />, name: 'CELPIP Calendar' },
       'client-portal': { component: isMithun ? <ClientPortal /> : <CommandCentre onNavigate={setActiveTab} onAiQuery={(q: string) => { setAiQuery(q); setActiveTab('fets-intelligence'); }} />, name: 'Client Portal' },
       'staff-management': { component: <StaffManagement />, name: 'Staff Management' },
-      'fets-chat': { component: <EnhancedChat branch={activeBranch} />, name: 'Live Chat & Gemini Studio' },
-      'chat': { component: <EnhancedChat branch={activeBranch} />, name: 'Live Chat & Gemini Studio' },
-      'lost-and-found': { component: <EnhancedChat branch={activeBranch} />, name: 'Live Chat & Gemini Studio' },
+      'fets-chat': { component: <EnhancedChat />, name: 'Live Chat & Gemini Studio' },
+      'chat': { component: <EnhancedChat />, name: 'Live Chat & Gemini Studio' },
+      'lost-and-found': { component: <EnhancedChat />, name: 'Live Chat & Gemini Studio' },
       'profile': { component: <FetsProfilePage />, name: 'Profile' },
     };
 
@@ -335,6 +337,7 @@ function AppContent() {
       </div>
 
       <BranchIndicator />
+      <FetsAIAgent userId={user!.id} branch={activeBranch} page={activeTab} navigate={setActiveTab} withMobileNav={isMobile&&!isFullscreenPage} />
 
 
       {isMobile && !isFullscreenPage && (

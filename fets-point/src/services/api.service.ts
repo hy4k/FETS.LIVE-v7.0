@@ -36,8 +36,8 @@ export const candidatesService = {
       let query = supabase.from('candidates').select('*')
 
       if (filters?.date) {
-        query = query.gte('exam_date', filters.date)
-          .lte('exam_date', `${filters.date}T23:59:59.999Z`)
+        query = query.gte('exam_date', `${filters.date}T00:00:00+05:30`)
+          .lte('exam_date', `${filters.date}T23:59:59.999+05:30`)
       }
 
       if (filters?.status) {

@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import '../redesign/planning-pages.css'
+import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react'
 import {
-  Calendar, Plus, ChevronLeft, ChevronRight, Edit, Trash2, X, Check,
+  Calendar, Upload, UserPlus, Plus, ChevronLeft, ChevronRight, Edit, Trash2, X, Check,
   Clock, Users, Eye, MapPin, Building, Filter, TrendingUp, Search,
   Columns, AlignJustify,
   AlertCircle, Loader2, User, ChevronDown, LayoutGrid
@@ -20,6 +21,8 @@ import { useCalendarSessions, useSessionMutations } from '../hooks/useCalendarSe
 import { useClients, useClientExams } from '../hooks/useClients'
 import { toast } from 'react-hot-toast'
 import '../styles/calendar-enhancements.css'
+
+const CalendarRosterDialog = lazy(() => import('../roster/CalendarRosterDialog'));
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface Session {
@@ -162,7 +165,7 @@ const groupSessionsByKind = (list: Session[]) => {
     byKind.get(k)!.push(s)
   })
   byKind.forEach((sess) => {
-    sess.sort((a, b) => a.start_time.localeCompare(b.start_time))
+    sess.sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''))
   })
   return Array.from(byKind.entries()).map(([k, sess]) => ({
     kind: k as ExamKind,
@@ -203,6 +206,7 @@ const normalizeClientName = (name: string): string => {
 }
 
 const formatTime = (time: string) => {
+  if (!time) return 'TBC'
   const [h, m] = time.split(':')
   const hour = parseInt(h)
   const ampm = hour >= 12 ? 'PM' : 'AM'
@@ -211,6 +215,7 @@ const formatTime = (time: string) => {
 }
 
 const timeToMinutes = (time: string): number => {
+  if (!time) return 0
   const [h, m] = time.split(':').map(Number)
   return h * 60 + m
 }
@@ -225,7 +230,7 @@ export function FetsCalendarPremium() {
 
   // Date/View state
   const [currentDate, setCurrentDate] = useState(new Date())
-  const [viewMode, setViewMode] = useState<CalendarViewMode>('month')
+  const [viewMode, setViewMode] = useState<CalendarViewMode>(() => window.innerWidth < 700 ? 'day' : 'month')
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
 
   // Filter/search state
@@ -234,6 +239,7 @@ export function FetsCalendarPremium() {
   const [showFilters, setShowFilters] = useState(false)
 
   // Modal state
+  const [rosterMode, setRosterMode] = useState<'upload' | 'manual' | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [showDetailsModal, setShowDetailsModal] = useState(false)
   const [showAnalysis, setShowAnalysis] = useState(false)
@@ -445,7 +451,7 @@ export function FetsCalendarPremium() {
 
   // ── Stats ─────────────────────────────────────────────────────────────────
   const stats = useMemo(() => ({
-    total: sessions.reduce((s, x) => s + x.candidate_count, 0),
+    total: sessions.filter(x => x.status !== 'cancelled').reduce((s, x) => s + x.candidate_count, 0),
     totalSessions: sessions.length,
     uniqueClients: new Set(sessions.map(s => getClient3LetterCode(s.client_name, s.exam_name))).size
   }), [sessions])
@@ -628,6 +634,10 @@ export function FetsCalendarPremium() {
           return (
             <div
               key={idx}
+              role="button"
+              tabIndex={0}
+              aria-label={`View sessions for ${date.toLocaleDateString('en-GB')}`}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetailsModal(date); } }}
               onClick={() => openDetailsModal(date)}
               className={`
                 month-day-cell-premium cursor-pointer relative group overflow-hidden flex flex-col justify-between
@@ -772,7 +782,7 @@ export function FetsCalendarPremium() {
               </div>
               {weekDays.map((d, i) => {
                 const ds = getSessionsForDate(d).filter(s => {
-                  const startH = parseInt(s.start_time.split(':')[0])
+                  const startH = parseInt((s.start_time || '00:00').split(':')[0])
                   return startH === hour
                 })
                 return (
@@ -843,7 +853,7 @@ export function FetsCalendarPremium() {
     const daySessions = filteredSessions
       .filter(s => s.date === dayStr)
       .sort((a, b) => {
-        const t = a.start_time.localeCompare(b.start_time)
+        const t = (a.start_time || '').localeCompare(b.start_time || '')
         if (t !== 0) return t
         const k = resolveExamKind(a).localeCompare(resolveExamKind(b))
         if (k !== 0) return k
@@ -870,6 +880,7 @@ export function FetsCalendarPremium() {
             </button>
           )}
         </div>
+        {daySessions.some(s => !s.start_time) && <div className="p-4 border-b border-[var(--border-color)]"><strong className="text-sm">Time to be confirmed</strong>{daySessions.filter(s => !s.start_time).map(s => <button key={s.id} onClick={() => { setSelectedDate(currentDate); setShowDetailsModal(true) }} className="block text-sm mt-2">{s.client_name} · {s.exam_name || 'Exam not specified'} · {s.candidate_count} candidates</button>)}</div>}
         {/* Timeline */}
         <div className="flex overflow-y-auto max-h-[600px] custom-scrollbar">
           {/* Hour labels */}
@@ -888,7 +899,7 @@ export function FetsCalendarPremium() {
               <div key={h} className="h-[70px] border-b border-[var(--border-color)]/20 hover:bg-[var(--recessed-bg)]/20 transition-colors duration-300" />
             ))}
             {/* Session blocks */}
-            {daySessions.map(s => {
+            {daySessions.filter(s => s.start_time).map(s => {
               const startMins = timeToMinutes(s.start_time)
               const endMins = timeToMinutes(s.end_time)
               const topOffset = (startMins - 6 * 60) * (70 / 60) // px per hour = 70
@@ -974,90 +985,23 @@ export function FetsCalendarPremium() {
   // MAIN RENDER
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div data-theme={isDarkMode ? 'dark' : 'light'} className="min-h-screen fets-calendar-standalone-mint sovereign-theme" style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}>
+    <div data-theme={isDarkMode ? 'dark' : 'light'} className="min-h-screen fets-calendar-standalone-mint sovereign-theme planning-calendar" style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}>
       <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-6">
 
-        {/* ── HEADER (aligned with FETS LIVE: title | centre selector | stats) ── */}
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-12 gap-8 mt-24">
-          <div className="relative">
-            <div className="flex items-center gap-4 mb-3">
-              <div className="h-[1px] w-12 bg-[var(--accent-mint)]" />
-              <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-[var(--accent-mint)]">
-                Calendar Operations {activeBranch !== 'global' && `// ${activeBranch.toUpperCase()}`}
-              </span>
-            </div>
-            <div className="text-6xl md:text-8xl font-black text-[var(--accent-mint)] tracking-tighter leading-none" role="heading" aria-level={1}>
-              FETS CALENDAR
-            </div>
-            <div className="mt-2 text-[var(--text-accent)] text-[10px] tracking-[0.3em] uppercase font-medium">
-              {getHeaderTitle()}
-            </div>
-          </div>
+        <header className="planning-header">
+          <div><span className="planning-eyebrow">FETS / THE CENTRE CALENDAR</span><h1>Make room for a good day<span>.</span></h1><p>Every session in view. A little more space to plan.</p></div>
+          <div className="planning-stamp"><Calendar size={22} /><span>{activeBranch === 'global' ? 'All centres' : activeBranch}<small>{getHeaderTitle()} · India time</small></span></div>
+        </header>
+        {isError && <div role="alert" className="planning-data-error">Calendar data could not be loaded. Refresh the page to try again; the totals are unavailable.</div>}
+        <section className="planning-summary" aria-label="Calendar summary">
+          <div><span>Scheduled candidates</span><strong>{isError ? '—' : stats.total.toLocaleString()}</strong><small>In the selected month</small></div>
+          <div><span>Exam sessions</span><strong>{isError ? '—' : stats.totalSessions}</strong><small>Plan the team around demand</small></div>
+          <div><span>Exam partners</span><strong>{isError ? '—' : stats.uniqueClients}</strong><small>{monthClientBreakdown.map(x => x.code3).join(' · ') || 'No sessions yet'}</small></div>
+          <aside><span>PLAN TOGETHER</span><h2>A session needs a team.</h2><p>Match busy days with the roster, then assign each person’s duties.</p><a href="/roster">Open the roster ↗</a></aside>
+        </section>
 
-          <div className="hidden lg:block lg:flex-1" />
-
-          {/* ── STRUCTURED SUMMARY DASHBOARD ── */}
-          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] p-3 rounded-2xl shadow-xl backdrop-blur-md flex flex-col md:flex-row items-stretch md:items-center gap-3.5 max-w-full">
-            {/* Primary Totals (Candidates & Sessions) */}
-            <div className="flex items-center gap-3 bg-[var(--recessed-bg)] border border-[var(--border-color)]/70 px-3.5 py-2 rounded-xl shrink-0">
-              {/* Total Candidates */}
-              <div className="flex items-center gap-2.5 pr-3.5 border-r border-[var(--border-color)]/60">
-                <div className="w-8 h-8 rounded-lg bg-[var(--accent-mint)]/10 text-[var(--accent-mint)] flex items-center justify-center shrink-0 border border-[var(--accent-mint)]/20">
-                  <Users size={15} />
-                </div>
-                <div>
-                  <div className="text-[9px] uppercase tracking-widest font-black text-[var(--text-secondary)]">Total PAX</div>
-                  <div className="text-base font-black tabular-nums text-[var(--accent-mint)] leading-none mt-0.5">
-                    {stats.total.toLocaleString()}
-                  </div>
-                </div>
-              </div>
-
-              {/* Total Sessions */}
-              <div className="flex items-center gap-2.5 pl-0.5">
-                <div className="w-8 h-8 rounded-lg bg-[var(--text-accent)]/10 text-[var(--text-accent)] flex items-center justify-center shrink-0 border border-[var(--text-accent)]/20">
-                  <Calendar size={15} />
-                </div>
-                <div>
-                  <div className="text-[9px] uppercase tracking-widest font-black text-[var(--text-secondary)]">Sessions</div>
-                  <div className="text-base font-black tabular-nums text-[var(--text-primary)] leading-none mt-0.5">
-                    {stats.totalSessions.toLocaleString()}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Client Breakdown Section */}
-            <div className="flex flex-col justify-center min-w-0">
-              <div className="text-[9px] uppercase tracking-widest font-black text-[var(--text-secondary)]/80 mb-1.5 flex items-center gap-1.5">
-                <span>Client Breakdown</span>
-                <span className="text-[8px] bg-[var(--recessed-bg)] text-[var(--text-secondary)] px-1.5 py-0.2 rounded border border-[var(--border-color)]/50 font-bold">
-                  {monthClientBreakdown.length} {monthClientBreakdown.length === 1 ? 'client' : 'clients'}
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {monthClientBreakdown.length > 0 ? (
-                  monthClientBreakdown.map((item) => (
-                    <div 
-                      key={item.code3} 
-                      className="flex items-center gap-1.5 px-2.5 py-1 bg-[var(--recessed-bg)] hover:bg-[var(--recessed-bg)]/80 border border-[var(--border-color)] hover:border-[var(--accent-mint)]/50 rounded-lg text-xs transition-all shadow-2xs group"
-                      title={`${item.clientName}: ${item.candidateCount} candidates across ${item.sessionCount} session${item.sessionCount > 1 ? 's' : ''}`}
-                    >
-                      <span className="w-2 h-2 rounded-full shrink-0 shadow-xs" style={{ backgroundColor: item.color }} />
-                      <span className="uppercase text-[var(--text-primary)] font-extrabold tracking-wider text-[11px]">{item.code3}</span>
-                      <span className="h-3 w-px bg-[var(--border-color)]/60" />
-                      <span className="font-black text-[var(--accent-mint)] text-[11px] tabular-nums">{item.candidateCount}</span>
-                      <span className="text-[9px] text-[var(--text-secondary)]/70 font-semibold hidden group-hover:inline">PAX</span>
-                    </div>
-                  ))
-                ) : (
-                  <span className="text-xs text-[var(--text-secondary)] font-semibold italic">No sessions in this month</span>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
+        {canEdit && <div className="flex flex-wrap items-center gap-3 mb-5"><button onClick={() => setRosterMode('upload')} className="flex items-center gap-2 rounded-xl bg-[#315e4f] text-white px-5 py-3 text-sm font-bold"><Upload size={17}/> Upload roster</button><button onClick={() => setRosterMode('manual')} className="flex items-center gap-2 rounded-xl border border-[#bfd4c3] bg-white text-[#315e4f] px-5 py-3 text-sm font-bold"><UserPlus size={17}/> Add by hand</button><span className="text-xs text-[var(--text-secondary)]">One candidate list. Calendar totals update automatically.</span></div>}
+        {rosterMode && <Suspense fallback={<p role="status">Opening candidate roster…</p>}><CalendarRosterDialog mode={rosterMode} day={formatDateForIST(selectedDate || currentDate)} branch={activeBranch} onClose={() => setRosterMode(null)} /></Suspense>}
         {/* ── TOOLBAR ── */}
         <div className="flex flex-wrap items-center justify-between gap-3 mb-5 bg-[var(--card-bg)] rounded-xl border border-[var(--border-color)] px-4 py-3">
           <div className="flex items-center gap-3 flex-wrap">
@@ -1080,11 +1024,11 @@ export function FetsCalendarPremium() {
 
             {/* Month/Week/Day Navigation */}
             <div className="flex items-center bg-[var(--recessed-bg)] rounded-lg border border-[var(--border-color)]">
-              <button onClick={() => navigate('prev')} className="p-2.5 hover:bg-[var(--card-bg)] rounded-l-lg transition-colors">
+              <button aria-label="Previous calendar period" onClick={() => navigate('prev')} className="p-2.5 hover:bg-[var(--card-bg)] rounded-l-lg transition-colors">
                 <ChevronLeft size={16} className="text-[var(--text-secondary)]" />
               </button>
               <span className="px-4 text-sm font-bold text-[var(--text-primary)] min-w-[160px] text-center">{getHeaderTitle()}</span>
-              <button onClick={() => navigate('next')} className="p-2.5 hover:bg-[var(--card-bg)] rounded-r-lg transition-colors">
+              <button aria-label="Next calendar period" onClick={() => navigate('next')} className="p-2.5 hover:bg-[var(--card-bg)] rounded-r-lg transition-colors">
                 <ChevronRight size={16} className="text-[var(--text-secondary)]" />
               </button>
             </div>
@@ -1094,7 +1038,7 @@ export function FetsCalendarPremium() {
             </button>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="planning-calendar-actions flex items-center gap-2">
             {/* Search */}
             <div className="relative">
               <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]" />

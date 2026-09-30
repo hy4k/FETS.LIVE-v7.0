@@ -13,12 +13,11 @@ export const useConversations = (userId: string) => {
     queryFn: async () => {
       const { data: memberData, error: memberError } = await supabase
         .from('conversation_members')
-        .select('conversation_id')
-        .eq('user_id', userId);
+        .select('conversation_id'); // RLS includes memberships stored as auth ID or staff-profile ID.
 
       if (memberError) throw new Error(memberError.message);
 
-      const conversationIds = memberData?.map(m => m.conversation_id) || [];
+      const conversationIds = [...new Set(memberData?.map(m => m.conversation_id) || [])];
 
       if (conversationIds.length === 0) {
         return [];

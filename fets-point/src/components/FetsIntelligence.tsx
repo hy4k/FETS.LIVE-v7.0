@@ -11,8 +11,9 @@ import {
   Bot, ArrowUp, Zap
 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
+import { useBranch } from '../hooks/useBranch'
 import { toast } from 'react-hot-toast'
-import { askFetsAgent, type AgentAction } from '../lib/fetsAgent'
+import { agentRequest, type AgentReply } from '../fets-ai/fets-ai-api'
 import { Markdown } from './fetsai/Markdown'
 import { NewsManager } from './NewsManager'
 import { TelemetryPanel } from './fetsai/TelemetryPanel'
@@ -25,7 +26,6 @@ interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   timestamp: Date
-  actions?: AgentAction[]
 }
 
 interface FetsAIProps {
@@ -42,6 +42,7 @@ const QUICK_PROMPTS = [
 
 export function FetsIntelligence({ initialTab = 'chat', initialQuery }: FetsAIProps) {
   const { profile } = useAuth()
+  const { activeBranch } = useBranch()
   const isAdmin = profile?.role === 'super_admin' || profile?.role === 'admin'
   const [activeTab, setActiveTab] = useState<string>(initialTab)
 
@@ -50,7 +51,6 @@ export function FetsIntelligence({ initialTab = 'chat', initialQuery }: FetsAIPr
   const [loading, setLoading] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const hasProcessedInitialQuery = useRef(false)
-  const conversationId = useRef<string | null>(null)
 
   useEffect(() => { if (initialTab) setActiveTab(initialTab) }, [initialTab])
 
@@ -71,14 +71,11 @@ export function FetsIntelligence({ initialTab = 'chat', initialQuery }: FetsAIPr
     setLoading(true)
     setQuery('')
     try {
-      const result = await askFetsAgent(userMsg.content, { conversationId: conversationId.current })
-      conversationId.current = result.conversationId
+      const result = await agentRequest<AgentReply>({action:'chat',branch:activeBranch,page:'fets-intelligence',message:userMsg.content,history:messages.slice(-8).map(m=>({role:m.role,text:m.content}))})
       setMessages((p) => [...p, {
-        id: (Date.now() + 1).toString(), role: 'assistant', content: result.response,
-        timestamp: new Date(), actions: result.actions?.filter((a) => a.ok) ?? [],
+        id: (Date.now() + 1).toString(), role: 'assistant', content: result.text,
+        timestamp: new Date(),
       }])
-      const writes = (result.actions ?? []).filter((a) => a.ok && !['read_table', 'aggregate', 'search_memory'].includes(a.name))
-      if (writes.length) toast.success(`FETS AI performed ${writes.length} action${writes.length > 1 ? 's' : ''}`)
     } catch (error: any) {
       toast.error(error?.message || 'AI connection failed')
       setMessages((p) => [...p, {
@@ -224,15 +221,6 @@ export function FetsIntelligence({ initialTab = 'chat', initialQuery }: FetsAIPr
                               ? <p className="text-[15px] leading-relaxed whitespace-pre-wrap font-medium">{msg.content}</p>
                               : <div className="text-[15px]"><Markdown content={msg.content} /></div>}
                           </div>
-                          {msg.role === 'assistant' && msg.actions && msg.actions.length > 0 && (
-                            <div className="flex flex-wrap gap-1.5 mt-2">
-                              {msg.actions.map((a, i) => (
-                                <span key={i} className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-100">
-                                  {a.name.replace(/_/g, ' ')}
-                                </span>
-                              ))}
-                            </div>
-                          )}
                           <div className={`text-[10px] mt-1.5 font-semibold ${msg.role === 'user' ? 'text-right text-slate-400' : 'text-slate-400'}`}>
                             {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </div>

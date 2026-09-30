@@ -7,10 +7,11 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../hooks/useAuth';
+import { useBranch } from '../hooks/useBranch';
 import { toast } from 'react-hot-toast';
 import { format } from 'date-fns';
 import { supabase } from '../lib/supabase';
-import { askFetsAgent } from '../lib/fetsAgent';
+import { agentRequest, type AgentReply } from '../fets-ai/fets-ai-api';
 
 interface Message {
    id: string;
@@ -21,6 +22,7 @@ interface Message {
 
 export function MobileAiChat() {
    const { profile } = useAuth();
+   const { activeBranch } = useBranch();
    const [messages, setMessages] = useState<Message[]>([
       { id: '1', text: "Hello! I am FETS AI. How can I assist with your operations today?", sender: 'ai', timestamp: new Date() }
    ]);
@@ -31,7 +33,6 @@ export function MobileAiChat() {
    const [isPairing, setIsPairing] = useState(false);
 
    const scrollRef = useRef<HTMLDivElement>(null);
-   const conversationId = useRef<string | null>(null);
 
    useEffect(() => {
       if (scrollRef.current) {
@@ -55,18 +56,15 @@ export function MobileAiChat() {
       setIsTyping(true);
 
       try {
-         const result = await askFetsAgent(outgoing, { conversationId: conversationId.current });
-         conversationId.current = result.conversationId;
+         const result = await agentRequest<AgentReply>({action:'chat',branch:activeBranch,page:'fets-intelligence',message:outgoing,history:messages.slice(-8).map(m=>({role:m.sender==='ai'?'assistant':'user',text:m.text}))});
          const aiMsg: Message = {
             id: (Date.now() + 1).toString(),
-            text: result.response,
+            text: result.text,
             sender: 'ai',
             timestamp: new Date()
          };
          setMessages(prev => [...prev, aiMsg]);
 
-         const writes = (result.actions ?? []).filter(a => a.ok && !['read_table', 'aggregate', 'search_memory'].includes(a.name));
-         if (writes.length > 0) toast.success(`Performed ${writes.length} action${writes.length > 1 ? 's' : ''}`);
       } catch (error: any) {
          toast.error(error?.message || 'AI connection failed');
          setMessages(prev => [...prev, {

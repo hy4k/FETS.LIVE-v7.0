@@ -4,7 +4,8 @@ import { Plus, Edit, Trash2, Bell, X, Calendar, MapPin, AlertCircle, Layout, Spa
 import { AnimatePresence, motion } from 'framer-motion'
 import { toast } from 'react-hot-toast'
 import { format } from 'date-fns'
-import { useAuth } from '../hooks/useAuth'
+import { useBranch } from '../hooks/useBranch'
+import { agentRequest, type AgentReply } from '../fets-ai/fets-ai-api'
 
 const NewsModal = ({ isOpen, onClose, newsItem, onSave }) => {
   const [formData, setFormData] = useState({
@@ -180,27 +181,25 @@ export function NewsManager() {
   }
 
   // --- AI INTEGRATION ---
-  const { profile } = useAuth()
+  const { activeBranch } = useBranch()
   const [aiAnalysis, setAiAnalysis] = useState<string>('')
   const [isAnalyzing, setIsAnalyzing] = useState(false)
 
   const handleAiAnalysis = async () => {
     setIsAnalyzing(true)
-    const activeNotices = newsItems.filter(n => n.is_active).map(n => 
+    const noticeText = newsItems.filter(n => n.is_active && (activeBranch==='global'||n.branch_location==='global'||String(n.branch_location).toLowerCase().includes(activeBranch))).map(n =>
       `- [${n.priority.toUpperCase()}] (${n.branch_location}): ${n.content}`
     ).join('\n')
+    const activeNotices=noticeText.slice(0,3500)
 
-    const prompt = `Analyze these active notices for a Quick Briefing. Highlight critical alerts first, then summarize global news. 
-    Keep it concise and professional.
+    const prompt = `Summarise these user-provided active notices for a quick briefing. Highlight critical alerts first. Keep it concise and professional. ${noticeText.length>3500?'The notice list was truncated; say this is a partial briefing.':'This is the complete list supplied by the page.'}
     
     NOTICES:
     ${activeNotices}`
 
     try {
-      // Direct import to avoid circular dependencies if any, or standard import
-       const { askGemini } = await import('../lib/gemini'); 
-       const response = await askGemini(prompt, profile);
-       setAiAnalysis(response);
+       const response = await agentRequest<AgentReply>({action:'chat',branch:activeBranch,page:'news-manager',message:prompt});
+       setAiAnalysis(response.text);
     } catch (e) {
       toast.error('AI Analysis failed');
     } finally {

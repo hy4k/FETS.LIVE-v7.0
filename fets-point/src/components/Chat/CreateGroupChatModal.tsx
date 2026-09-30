@@ -4,16 +4,15 @@ import { useCreateGroupConversation } from '../../hooks/useChat';
 import { useAuth } from '../../hooks/useAuth';
 
 const CreateGroupChatModal = ({ setIsModalOpen }) => {
-  const { user } = useAuth();
-  const { data: users, isLoading } = useAllStaff();
+  const { user, profile } = useAuth();
+  const { data: users = [], isLoading } = useAllStaff();
   const createGroupConversation = useCreateGroupConversation();
   const [groupName, setGroupName] = useState('');
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
 
-  const handleCreateGroup = () => {
+  const handleCreateGroup = async () => {
     if (groupName.trim() && selectedMembers.length > 0) {
-      createGroupConversation.mutate({ name: groupName, memberIds: [...selectedMembers, user.id], createdBy: user.id });
-      setIsModalOpen(false);
+      try { await createGroupConversation.mutateAsync({ name: groupName, memberIds: selectedMembers, createdBy: profile?.id || user.id });setIsModalOpen(false); } catch { /* Mutation displays the error and keeps selections. */ }
     }
   };
 
@@ -28,8 +27,8 @@ const CreateGroupChatModal = ({ setIsModalOpen }) => {
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-      <div className="bg-white rounded-lg p-6 w-1/3">
+    <div className="fixed inset-0 z-[9000] bg-black bg-opacity-50 flex items-center justify-center">
+      <div role="dialog" aria-modal="true" aria-label="Create group chat" className="bg-white text-slate-800 rounded-lg p-6 w-[min(500px,94vw)]">
         <h2 className="text-lg font-bold mb-4">Create Group Chat</h2>
         <input
           type="text"
@@ -40,7 +39,7 @@ const CreateGroupChatModal = ({ setIsModalOpen }) => {
         />
         <div className="flex flex-col gap-2 max-h-60 overflow-y-auto">
           {users
-            .filter((u) => u.id !== user.id)
+            .filter((u) => u.id !== profile?.id && u.user_id !== user?.id)
             .map((user) => (
               <div
                 key={user.id}
@@ -62,7 +61,7 @@ const CreateGroupChatModal = ({ setIsModalOpen }) => {
           <button className="p-2 bg-gray-300 rounded-md" onClick={() => setIsModalOpen(false)}>
             Cancel
           </button>
-          <button className="p-2 bg-blue-500 text-white rounded-md" onClick={handleCreateGroup}>
+          <button disabled={createGroupConversation.isPending || !groupName.trim() || !selectedMembers.length} className="p-2 bg-blue-500 text-white rounded-md" onClick={handleCreateGroup}>
             Create
           </button>
         </div>

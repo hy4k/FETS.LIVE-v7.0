@@ -5,6 +5,7 @@ import {
   Trash2, FileText, Download, ChevronLeft, ChevronRight,
   CheckCircle, Grid, List, FileSpreadsheet, MapPin, Activity, TrendingUp, RefreshCw
 } from 'lucide-react'
+import { formatDateForIST } from '../utils/dateUtils'
 import { CandidateAnalysis } from './CandidateAnalysis'
 import { useAuth } from '../hooks/useAuth'
 import { useBranch } from '../hooks/useBranch'
@@ -32,6 +33,9 @@ interface Candidate {
   examDate?: Date
   examName?: string
   status: 'registered' | 'completed' | 'no_show'
+  rosterNumber?: string
+  examPart?: string
+  examStartTime?: string
   confirmationNumber: string
   notes?: string
   createdAt: Date
@@ -105,7 +109,7 @@ export function CandidateTrackerPremium() {
   const [formData, setFormData] = useState({
     fullName: '', phone: '', address: '',
     examDate: new Date().toISOString().slice(0, 10),
-    examName: '', clientName: '', notes: ''
+    examName: '', clientName: '', notes: '', rosterNumber: '', examPart: '', examStartTime: ''
   })
 
   // Queries
@@ -130,10 +134,11 @@ export function CandidateTrackerPremium() {
   // Process data
   const candidates: Candidate[] = useMemo(() => rawCandidates?.map(c => ({
     id: c.id, fullName: c.full_name, address: c.address, phone: c.phone || '',
-    examDate: c.exam_date ? new Date(c.exam_date) : undefined,
+    examDate: c.exam_date ? new Date(`${formatDateForIST(c.exam_date)}T12:00:00`) : undefined,
     examName: c.exam_name || 'General Exam',
     status: (c.status as Candidate['status']) || 'registered',
-    confirmationNumber: c.confirmation_number || 'N/A',
+    confirmationNumber: c.roster_number || c.confirmation_number || 'N/A',
+    rosterNumber: c.roster_number || '', examPart: c.exam_part || '', examStartTime: c.exam_start_time || '',
     createdAt: new Date(c.created_at), clientName: c.client_name,
     branchLocation: c.branch_location, notes: c.notes || ''
   })) || [], [rawCandidates])
@@ -168,7 +173,7 @@ export function CandidateTrackerPremium() {
     setFormData({
       fullName: '', phone: '', address: '',
       examDate: new Date().toISOString().slice(0, 10),
-      examName: '', clientName: '', notes: ''
+      examName: '', clientName: '', notes: '', rosterNumber: '', examPart: '', examStartTime: ''
     })
     setShowModal(true)
   }
@@ -183,7 +188,7 @@ export function CandidateTrackerPremium() {
       examDate: c.examDate ? format(c.examDate, 'yyyy-MM-dd') : '',
       examName: c.examName || '',
       clientName: c.clientName || '',
-      notes: c.notes || ''
+      notes: c.notes || '', rosterNumber: c.rosterNumber || '', examPart: c.examPart || '', examStartTime: c.examStartTime || ''
     })
     setShowModal(true)
   }
@@ -199,15 +204,20 @@ export function CandidateTrackerPremium() {
       return toast.error("Please fill in Full Name and Client Name")
     }
 
+    const targetBranch = isEdit ? selectedCandidate.branchLocation : activeBranch;
+    if (!['calicut','cochin'].includes(targetBranch)) return toast.error('Choose Calicut or Cochin before adding a candidate');
     const payload: any = {
       full_name: formData.fullName,
       phone: formData.phone,
       address: formData.address,
-      exam_date: formData.examDate,
+      exam_date: formData.examDate ? `${formData.examDate}T00:00:00+05:30` : null,
+      roster_number: formData.rosterNumber.trim() || null,
+      exam_part: formData.examPart.trim() || null,
+      exam_start_time: formData.examStartTime || null,
       exam_name: formData.examName,
-      client_name: formData.clientName,
+      client_name: formData.clientName.trim().toUpperCase(),
       notes: formData.notes,
-      branch_location: activeBranch,
+      branch_location: targetBranch,
       user_id: user?.id
     }
 
@@ -712,6 +722,7 @@ export function CandidateTrackerPremium() {
                     />
                   </div>
 
+                  {([{key:'rosterNumber',label:'Provider roster / confirmation ID',type:'text'},{key:'examPart',label:'Exam part',type:'text'},{key:'examStartTime',label:'Exam start time · IST',type:'time'}] as const).map(field=><label key={field.key} className="block text-sm font-medium text-gray-700 mb-2">{field.label}<input type={field.type} value={formData[field.key]} onChange={e=>setFormData({...formData,[field.key]:e.target.value})} className="mt-2 w-full px-4 py-3 border border-gray-300 rounded-lg"/></label>)}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2 uppercase tracking-wide">
                       Client Name

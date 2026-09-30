@@ -1,4 +1,9 @@
 // @ts-nocheck
+import './planning-pages.css';
+import DutyWorkspace from './DutyWorkspace';
+import { shiftRepository } from './shift-repository';
+import { useWorkspaceCapabilities } from './useWorkspaceCapabilities';
+import { monday as dutyMonday } from './shift-plan';
 /* eslint-disable */
 /*
   FETS · LIVE redesign — ported from the Claude Design handoff bundle
@@ -35,8 +40,11 @@ import { ICloudDashboard as Dashboard } from "../components/iCloud/iCloudDashboa
 import { FetsIntelligence } from "../components/FetsIntelligence";
 import GBPDashboard from "../pages/GBPDashboard";
 import MyDeskLivingBoard from "../components/MyDeskLivingBoard";
-import { GeminiLiveStudio } from "../components/Chat/GeminiLiveStudio";
-import { EnhancedChatDeck } from "../components/Chat/EnhancedChatDeck";
+import MyDeskHome from "./MyDeskHome";
+import OperationsHome from "./OperationsHome";
+import { BrandLoader } from "./BrandExperience";
+import WorkspaceMenu from "./WorkspaceMenu";
+import { deskRepository } from "./desk-data";
 
 
 /* ============================================================
@@ -2801,7 +2809,7 @@ function RangeNav({ win, unit = "days" }) {
           style={{ display: "inline-flex", alignItems: "center", gap: 7, height: 38, padding: "0 14px", borderRadius: 11,
             cursor: "pointer", border: "1px solid var(--hairline)",
             fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 700, color: "var(--ink-2)", background: "transparent" }}>
-          Today
+          {win.monthName} {win.year}
         </button>
       ) : (
         <button onClick={win.next} disabled={!win.canNext} className="tap" title={nextTitle}
@@ -3320,6 +3328,7 @@ function CalendarPage({ branch }) {
    ===================================================================== */
 /* shift codes shown in every roster cell (OT is an add-on, not a base code) */
 const ROSTER_CODES = {
+  "—": { label: "Not planned", color: "var(--panel-3)", ink: "var(--ink-4)", solid: false },
   D:    { label: "Day shift",        color: "rgba(27, 181, 172, 0.25)",      ink: "#1BB5AC",            solid: true },
   E:    { label: "Evening shift",    color: "rgba(242, 153, 74, 0.25)",      ink: "#F2994A",            solid: true },
   HD:   { label: "Half day",         color: "rgba(252, 216, 114, 0.3)",      ink: "#FCD872",            solid: true },
@@ -3358,9 +3367,9 @@ function reflectOnRoster(r) {
   }
   window.dispatchEvent(new Event("fets-roster-changed"));
 }
-function initRosterCode(name, offset, onDuty) {
-  if (onDuty) return ((name.charCodeAt(0) + name.length * 3 + offset) % 4) === 0 ? "E" : "D";
-  return ((name.charCodeAt(0) + offset * 7) % 11) === 0 ? "L" : "RD";
+function initRosterCode(name, offset, _onDuty) {
+  const saved = F().rosterGet(name)?.[offset];
+  return saved ? (typeof saved === "string" ? saved : saved.code) || "—" : "—";
 }
 const cellCode = (c) => (typeof c === "string" ? c : (c && c.code) || "RD");
 const cellOT = (c) => (c && typeof c === "object" ? (+c.ot || 0) : 0);
@@ -4052,9 +4061,10 @@ function RosterRowAttendance({ branch }) {
 }
 
 function RosterGrid({ offsets, branch }) {
+  const { duties: dutyCloudEnabled } = useWorkspaceCapabilities();
   const rawPool = branch === "global"
-    ? [...F().STAFF.calicut.map((n) => ({ n, b: "calicut" })), ...F().STAFF.cochin.map((n) => ({ n, b: "cochin" }))]
-    : F().STAFF[branch].map((n) => ({ n, b: branch }));
+    ? Object.entries(F().STAFF || {}).flatMap(([b, names]) => names.map(n => ({ n, b })))
+    : (F().STAFF[branch] || []).map((n) => ({ n, b: branch }));
 
   // Exclude staff the Super Admin hid for the current month via User Management.
   // Fetched fresh from staff_profiles so a toggle applies on next visit / roster refresh.
@@ -4117,57 +4127,25 @@ function RosterGrid({ offsets, branch }) {
       const startD = ymdFormat(F().ISO(startOff));
       const endD = ymdFormat(F().ISO(endOff));
       
-      // 1. Check DB overrides in handover_assignments
-      let dbLeads: any[] = [];
-      try {
-        const { data: res } = await supabase
-          .from("handover_assignments")
-          .select("*")
-          .gte("date", startD)
-          .lte("date", endD);
-        dbLeads = res || [];
-      } catch (e) {}
-
-      const dbMap: Record<string, string> = {};
-      dbLeads.forEach((l: any) => {
-        if (l.date && l.staff_names && l.staff_names[0]) {
-          const br = (l.branch || "").toLowerCase();
-          dbMap[`${l.date}_${br}`] = l.staff_names[0];
-          dbMap[l.date] = l.staff_names[0];
-        }
-      });
-
-      // 2. Fetch roster schedules to resolve stretch leads
-      let roster: any[] = [];
-      try {
-        const { data } = await supabase
-          .from("roster_schedules")
-          .select("date, shift_code, branch_location, staff_profiles(full_name, branch_assigned)")
-          .gte("date", startD)
-          .lte("date", endD);
-        roster = data || [];
-      } catch (e) {}
-
+      if (!dutyCloudEnabled) { setLeadsMap({}); return; }
+      const branches = branch === "global" ? Object.keys(F().STAFF || {}) : [branch];
       const finalMap: Record<string, string> = {};
-      for (const off of offsets) {
-        const dstr = ymdFormat(F().ISO(off));
-        for (const b of ["calicut", "cochin"]) {
-          const key = `${dstr}_${b}`;
-          if (dbMap[key]) {
-            finalMap[key] = dbMap[key];
-          } else {
-            const stretch = await DD.getStretchAssignmentsForDate(dstr, b, roster);
-            if (stretch.lead) {
-              finalMap[key] = stretch.lead;
-            }
-          }
+      for (const centre of branches) {
+        const weeks = await shiftRepository.leads(centre, dutyMonday(startD), dutyMonday(endD));
+        const { data: plans, error } = await supabase.from("centre_day_plans").select("day,lead_id,status").eq("branch", centre).gte("day", startD).lte("day", endD).eq("status", "published");
+        if (error) throw error;
+        for (const off of offsets) {
+          const date = ymdFormat(F().ISO(off));
+          const leadId = (plans || []).find(p => p.day === date)?.lead_id || weeks.find(w => w.week_start === dutyMonday(date))?.lead_id;
+          const profile = (F()._staffProfiles || []).find(p => p.id === leadId);
+          if (profile) finalMap[`${date}_${centre}`] = profile.full_name;
         }
       }
       setLeadsMap(finalMap);
     } catch (err) {
       console.error("loadLeads error:", err);
     }
-  }, [offsets]);
+  }, [offsets, branch, dutyCloudEnabled]);
 
   React.useEffect(() => {
     loadLeads();
@@ -7413,7 +7391,7 @@ function RosterAttendanceControls({ branch }) {
   );
 }
 
-function RosterPage({ branch }) {
+export function RosterPage({ branch, setActive }) {
   const [activeRosterTab, setActiveRosterTab] = React.useState("duty"); // duty | time | shift | swap | review
   const [view, setView] = React.useState("days");   // days | analysis
   const win = useMonthWindow();
@@ -7439,8 +7417,8 @@ function RosterPage({ branch }) {
   const reqsAll = F().staffReqList().filter((r) => branch === "global" || r.branch === branch);
   const onDutyToday = window.branchRoster(0, branch).length;
   const poolSize = branch === "global"
-    ? F().STAFF.calicut.length + F().STAFF.cochin.length
-    : F().STAFF[branch].length;
+    ? Object.values(F().STAFF || {}).reduce((sum, names) => sum + names.length, 0)
+    : (F().STAFF[branch] || []).length;
   const offs = win.offsets;
   const avgCover = Math.round(offs.reduce((a, o) => a + window.branchRoster(o, branch).length, 0) / offs.length);
   const busy = windowStats(offs, branch).busiest;
@@ -7722,7 +7700,7 @@ function RosterPage({ branch }) {
   };
 
   return (
-    <div style={{
+    <div className="planning-roster" style={{
       maxWidth: 1600,
       margin: "0 auto",
       padding: "clamp(22px,3.2vw,40px) clamp(14px,3vw,30px) 80px",
@@ -7733,24 +7711,17 @@ function RosterPage({ branch }) {
     } as React.CSSProperties}>
       <RosterStyleBlock />
 
-      {/* Roster Header — FETS ROSTER hero matching the FETS CALENDAR title style */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 24 }}>
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
-            <span style={{ width: 48, height: 1, background: "var(--accent)", borderRadius: 99 }} />
-            <span className="eyebrow" style={{ color: "var(--accent)", letterSpacing: "0.2em" }}>{`Roster Operations // ${capBranch(branch)}`}</span>
-          </div>
-          <h1 style={{ margin: 0, fontFamily: '"Archivo Expanded", var(--font)', fontWeight: 900,
-            fontSize: "clamp(48px, 6.5vw, 96px)", lineHeight: 0.9, letterSpacing: "-0.03em", color: "var(--accent)" }}>
-            FETS ROSTER
-          </h1>
-        </div>
-
-        {/* Step Out / Check Out + shift clock — back in its original spot */}
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", position: "relative", zIndex: 110 }}>
-          <RosterAttendanceControls branch={branch} />
-        </div>
-      </div>
+      <header className="planning-header">
+        <div><span className="planning-eyebrow">FETS / PEOPLE & PLANNING</span><h1>A team in rhythm<span>.</span></h1><p>Plan ahead. Share responsibility. Make every shift count.</p></div>
+        <div className="planning-stamp"><Icon name="users" size={22} /><span>{capBranch(branch)}<small>Your people, in one place</small></span></div>
+      </header>
+      <section className="planning-summary" aria-label="Roster summary">
+        <div><span>On the roster today</span><strong>{onDutyToday}</strong><small>Scheduled, not attendance</small></div>
+        <div><span>People in the team</span><strong>{poolSize}</strong><small>Every person has a part to play</small></div>
+        <div><span>Average daily cover</span><strong>{avgCover}</strong><small>In the selected month</small></div>
+        <aside><span>PLAN ONE MONTH AHEAD</span><h2>One team. Clear ownership.</h2><p>Choose weekly leads, rotate duties and name break cover.</p><button onClick={() => setActive("handover")}>Plan centre duties ↗</button></aside>
+      </section>
+      <div className="planning-attendance"><span>Here for your shift? <small>Check in and manage your breaks.</small></span><RosterAttendanceControls branch={branch} /></div>
 
       {/* Resolution alerts removed — staff see application status in My Desk → ApplicationsHub */
       null}
@@ -11428,387 +11399,69 @@ function DeskMenu({ tab, setTab, pendingHandovers }) {
 }
 
 
+// Retained as independent modules for their future home outside My Desk.
+export const deskOperationsModules = {
+  Cockpit: () => <><AttendanceCard /><PerformanceSnapshot /></>,
+  Actionables: ActionablesView,
+  Tasks: TasksModule,
+  LivingBoard: MyDeskLivingBoard,
+  Readiness: PerformanceSnapshot,
+};
+
 function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
-  const u = window.FETS?.user || { name: "Staff Member", email: "" };
-  const gap = "calc(24px * var(--density))";
-
-  // Determine if the user is a super admin
-  const isSuperAdmin = Boolean(
-    window.FETS.isAdmin ||
-    (u.role || "").toLowerCase().includes("super") ||
-    (u.role || "").toLowerCase().includes("admin") ||
-    ["mithun", "niyas"].includes((u.name || "").toLowerCase()) ||
-    ["mithun@fets.in", "mithun@fets.live", "niyas@fets.in", "niyas@fets.live"].includes((u.email || "").toLowerCase())
-  );
-
-  // Sub-tab selection state
-  const [deskTab, setDeskTab] = React.useState("cockpit");
-
-  // Admin module filter states
-  const [searchQuery, setSearchQuery] = React.useState("");
-  const [selectedCat, setSelectedCat] = React.useState("all");
-
-  // Pending handovers count for badge
-  const [pendingHandovers, setPendingHandovers] = React.useState(0);
+  const { desk: deskCloudEnabled } = useWorkspaceCapabilities();
+  const [, refresh] = React.useReducer(n => n + 1, 0);
+  const F = window.FETS || {};
+  const u = F.user || { name: "Staff Member", email: "", role: "Staff" };
+  const [pendingHandovers, setPendingHandovers] = React.useState(null);
 
   React.useEffect(() => {
+    window.addEventListener("fets-data-loaded", refresh);
+    return () => window.removeEventListener("fets-data-loaded", refresh);
+  }, []);
+  React.useEffect(() => {
+    let cancelled = false;
     const fetchHandovers = async () => {
       try {
         const items = await DB.dbFetchPendingHandovers(u.name);
-        setPendingHandovers(items ? items.length : 0);
-      } catch (e) {
-        console.error("Error fetching pending handovers for badge:", e);
+        if (!cancelled) setPendingHandovers(Array.isArray(items) ? items.length : null);
+      } catch {
+        if (!cancelled) setPendingHandovers(null);
       }
     };
     fetchHandovers();
-    const handler = () => fetchHandovers();
-    window.addEventListener("fets-handover-pending", handler);
-    return () => window.removeEventListener("fets-handover-pending", handler);
+    window.addEventListener("fets-handover-pending", fetchHandovers);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("fets-handover-pending", fetchHandovers);
+    };
   }, [u.name]);
 
-  const nativeIds = ["live", "calendar", "roster", "desk", "attn-admin", "business", "staff-requests", "staff-ot"];
+  const ownProfile = (F._staffProfiles || []).find(p => (F._meId && p.id === F._meId) || (F._meUserId && p.user_id === F._meUserId));
+  const personalBranch = ownProfile?.branch_assigned || F._meBaseBranch || F._meBranch || branch;
+  const branchLabel = !personalBranch || ["all", "global"].includes(personalBranch)
+    ? "All centres" : personalBranch.charAt(0).toUpperCase() + personalBranch.slice(1);
+  const people = (F._staffProfiles || []).filter(p => p.is_active !== false && p.id && p.full_name &&
+    p.id !== F._meId && p.full_name !== u.name &&
+    (!branch || ["all", "global"].includes(branch) || (p.branch_assigned || "").toLowerCase() === branch));
 
-  const getModuleStatus = (it) => {
-    if (nativeIds.includes(it.id)) {
-      return { label: "Native React", color: "#5DA2D5", isNative: true };
-    } else {
-      return { label: "Legacy Bridged", color: "#F78888", isNative: false };
-    }
-  };
-
-  const handlePick = (it) => {
-    if (it.id === "vault") { setDrawer("vault"); return; }
-    setActive(it.id);
-  };
-
-  const MODULE_CARD_THEMES = {
-      live: { bg: "linear-gradient(135deg, #5DA2D5, #90CCF4)", text: "#fff", iconBg: "rgba(255,255,255,0.22)", iconColor: "#fff" },
-      "attn-admin": { bg: "linear-gradient(135deg, #F3D250, #E0BE2B)", text: "#2c3e50", iconBg: "rgba(0,0,0,0.07)", iconColor: "#2c3e50" },
-      business: { bg: "linear-gradient(135deg, #F78888, #E26D6D)", text: "#fff", iconBg: "rgba(255,255,255,0.22)", iconColor: "#fff" },
-      "fets-intelligence": { bg: "linear-gradient(135deg, #F3D250, #E0BE2B)", text: "#2c3e50", iconBg: "rgba(0,0,0,0.07)", iconColor: "#2c3e50" },
-      "candidate-tracker": { bg: "linear-gradient(135deg, #90CCF4, #73B5DF)", text: "#2c3e50", iconBg: "rgba(255,255,255,0.45)", iconColor: "#2c3e50" },
-      "access-hub": { bg: "linear-gradient(135deg, #5DA2D5, #4489BC)", text: "#fff", iconBg: "rgba(255,255,255,0.22)", iconColor: "#fff" },
-      "staff-requests": { bg: "linear-gradient(135deg, #F78888, #E26D6D)", text: "#fff", iconBg: "rgba(255,255,255,0.22)", iconColor: "#fff" },
-      "staff-ot": { bg: "linear-gradient(135deg, #F3D250, #E0BE2B)", text: "#2c3e50", iconBg: "rgba(0,0,0,0.07)", iconColor: "#2c3e50" },
-      dashboard: { bg: "linear-gradient(135deg, #5DA2D5, #4489BC)", text: "#fff", iconBg: "rgba(255,255,255,0.22)", iconColor: "#fff" },
-      "news-manager": { bg: "linear-gradient(135deg, #90CCF4, #73B5DF)", text: "#2c3e50", iconBg: "rgba(255,255,255,0.45)", iconColor: "#2c3e50" },
-      "system-manager": { bg: "linear-gradient(135deg, #F78888, #E26D6D)", text: "#fff", iconBg: "rgba(255,255,255,0.22)", iconColor: "#fff" },
-      "user-management": { bg: "linear-gradient(135deg, #5DA2D5, #4489BC)", text: "#fff", iconBg: "rgba(255,255,255,0.22)", iconColor: "#fff" },
-      "branch-delegation": { bg: "linear-gradient(135deg, #F3D250, #E0BE2B)", text: "#2c3e50", iconBg: "rgba(0,0,0,0.07)", iconColor: "#2c3e50" }
-  };
-
-  const allAdminModules = isSuperAdmin ? [
-    ...NAV.map((n) => ({ 
-      ...n, 
-      icon: n.id === "live" ? "globe" : n.id === "calendar" ? "calendar" : n.id === "roster" ? "layers" : "briefcase", 
-      nav: true,
-      sub: n.id === "live" ? "Operations monitor & live queue" : n.id === "calendar" ? "Centre booking calendar & sessions" : n.id === "roster" ? "Shift schedules, time desk & metrics" : "Personal tasks, checklists & leave"
-    })).filter(n => n.id !== "calendar" && n.id !== "roster" && n.id !== "desk"),
-    ...TOOLS
-  ] : [];
-
-  const filteredAdminModules = allAdminModules.filter(it => {
-    const matchesSearch = it.label.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          (it.sub && it.sub.toLowerCase().includes(searchQuery.toLowerCase()));
-    const status = getModuleStatus(it);
-    const matchesCategory = selectedCat === "all" || 
-                            (selectedCat === "native" && status.isNative) ||
-                            (selectedCat === "legacy" && !status.isNative);
-    return matchesSearch && matchesCategory;
-  });
-
-  const DESK_SUB_TABS = [
-    { id: "cockpit", label: "⚡ Cockpit", icon: "zap" },
-    { id: "handovers", label: "📥 Handovers", icon: "clipboard", badge: pendingHandovers },
-    { id: "actionables", label: "📌 Actionables", icon: "check" },
-    { id: "tasks", label: "📋 My Tasks", icon: "check" },
-    { id: "checklist", label: "✅ Checklist", icon: "list" },
-    { id: "leave", label: "⏱️ Attendance & Leaves", icon: "clock" },
-    { id: "living-board", label: "💬 Living Board", icon: "spark" },
-    { id: "certs", label: "🛡️ Certificates", icon: "shield" },
-    { id: "readiness", label: "📊 Readiness", icon: "trend" },
-    ...(isSuperAdmin ? [{ id: "admin", label: "⚙️ Admin Control", icon: "settings" }] : [])
-  ];
-
-  const branchLabel = (branch === "all" || !branch) ? "All centres" : branch.charAt(0).toUpperCase() + branch.slice(1);
-
-  return (
-    <div style={{ maxWidth: 1600, margin: "0 auto", padding: "clamp(22px,3.2vw,40px) clamp(14px,3vw,30px) 80px", display: "flex", flexDirection: "column", gap }}>
-      <style>{`
-        .desk-search-input {
-          background: rgba(255,255,255,0.85) !important;
-          border: 2px solid #90CCF4 !important;
-          border-radius: 99px !important;
-          color: #2c3e50 !important;
-          box-shadow: 0 2px 8px rgba(93,162,213,0.15) !important;
-        }
-        .desk-search-input:focus {
-          border-color: #5DA2D5 !important;
-          box-shadow: 0 0 0 3px rgba(93,162,213,0.18) !important;
-        }
-        .desk-search-input::placeholder {
-          color: #5DA2D5 !important;
-          opacity: 0.55;
-        }
-        .desk-cat-btn {
-          border: 2px solid #90CCF4 !important;
-          background: rgba(255,255,255,0.7) !important;
-          color: #5DA2D5 !important;
-          padding: 8px 16px !important;
-          border-radius: 20px !important;
-          font-size: 12px !important;
-          font-weight: 700 !important;
-          cursor: pointer;
-          box-shadow: 0 2px 6px rgba(93,162,213,0.1) !important;
-          transition: all 0.2s ease;
-        }
-        .desk-cat-btn:hover {
-          color: #fff !important;
-          background: #90CCF4 !important;
-          border-color: #90CCF4 !important;
-        }
-        .desk-cat-btn.active {
-          background: #F3D250 !important;
-          color: #2c3e50 !important;
-          border-color: #F3D250 !important;
-          box-shadow: 0 3px 10px rgba(243,210,80,0.35) !important;
-        }
-        .desk-module-card {
-          position: relative;
-          border: none !important;
-          border-radius: 22px !important;
-          padding: 24px !important;
-          cursor: pointer;
-          text-align: left;
-          transition: transform 0.3s ease, box-shadow 0.3s ease !important;
-          display: flex;
-          flex-direction: column;
-          justify-content: space-between;
-          min-height: 154px;
-          overflow: hidden;
-          box-shadow: 0 6px 20px rgba(93,162,213,0.18), inset 0 1px 0 rgba(255,255,255,0.3) !important;
-        }
-        .desk-module-card:hover {
-          transform: translateY(-5px) !important;
-          box-shadow: 0 12px 32px rgba(93,162,213,0.28), inset 0 1px 0 rgba(255,255,255,0.35) !important;
-        }
-        .desk-module-card::before {
-          content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-          background: linear-gradient(120deg, transparent, rgba(255,255,255,0.06), rgba(255,255,255,0.18), rgba(255,255,255,0.06), transparent);
-          background-size: 200% 100%; background-position: -200% 0; transition: all 0.5s ease; border-radius: 22px; pointer-events: none;
-        }
-        .desk-module-card:hover::before { animation: desk-shine 2s infinite ease-in-out; }
-        @keyframes desk-shine { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
-        .desk-module-icon-wrap {
-          width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; border: 1px solid rgba(255,255,255,0.2); transition: all 0.3s ease;
-        }
-        .subtab-pill {
-          padding: 10px 18px; border-radius: 14px; border: 1px solid rgba(93,162,213,0.3); background: rgba(255,255,255,0.65);
-          color: #2c3e50; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 8px; position: relative;
-        }
-        .subtab-pill:hover { background: rgba(144,204,244,0.4); }
-        .subtab-pill.active {
-          background: #5DA2D5; color: #ffffff; border-color: #5DA2D5; box-shadow: 0 4px 14px rgba(93,162,213,0.35);
-        }
-        .subtab-pill.admin-tab.active {
-          background: linear-gradient(135deg, #F3D250, #E0BE2B); color: #2c3e50; border-color: #F3D250; box-shadow: 0 4px 14px rgba(243,210,80,0.4);
-        }
-      `}</style>
-
-      {/* masthead — name + branch pill */}
-      <header className="rise" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 18, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-          <ProfileAvatar name={u.name} size={66} />
-          <div>
-            <h1 style={{ margin: 0, fontFamily: '"Archivo Expanded", var(--font)', fontWeight: 800, whiteSpace: "nowrap",
-              fontSize: "clamp(26px,3.5vw,42px)", lineHeight: 1, letterSpacing: "-0.03em", color: "#2c3e50" }}>{u.name}</h1>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
-              <span style={{ padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 800, background: "rgba(93,162,213,0.2)", color: "#2c3e50" }}>
-                📍 {branchLabel}
-              </span>
-              <span style={{ padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 800, background: isSuperAdmin ? "rgba(243,210,80,0.4)" : "rgba(93,162,213,0.15)", color: "#2c3e50" }}>
-                {isSuperAdmin ? "⭐ Super Admin" : "👤 Staff Workspace"}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Quick action bar for drawers */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <button onClick={() => setDrawer("vault")} className="subtab-pill" style={{ fontSize: 12, padding: "8px 14px" }}>
-            <Icon name="key" size={14} /> Vault
-          </button>
-          <button onClick={() => setDrawer("help")} className="subtab-pill" style={{ fontSize: 12, padding: "8px 14px" }}>
-            <Icon name="headset" size={14} /> Help Desk
-          </button>
-          <button onClick={() => setDrawer("ai_live")} className="subtab-pill" style={{ fontSize: 12, padding: "8px 14px", background: "rgba(245,158,11,0.15)", color: "#d97706", borderColor: "rgba(245,158,11,0.3)" }}>
-            <Icon name="spark" size={14} /> Gemini 3.1 Live
-          </button>
-        </div>
-      </header>
-
-      {/* Sub-Feature Navigation Bar */}
-      <nav className="rise" style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: "12px 0", borderBottom: "1px solid rgba(93,162,213,0.25)" }}>
-        {DESK_SUB_TABS.map((st) => {
-          const isActive = deskTab === st.id;
-          const isAdminTab = st.id === "admin";
-          return (
-            <button
-              key={st.id}
-              onClick={() => setDeskTab(st.id)}
-              className={`subtab-pill ${isActive ? "active" : ""} ${isAdminTab ? "admin-tab" : ""}`}
-            >
-              {st.label}
-              {st.badge > 0 && (
-                <span style={{
-                  padding: "1px 6px", borderRadius: 999, fontSize: 10, fontWeight: 900,
-                  background: "#FF7675", color: "#fff", marginLeft: 4
-                }}>
-                  {st.badge}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </nav>
-
-      {/* Active Sub-Tab View Rendering */}
-      <div className="rise" style={{ marginTop: 12 }}>
-        {deskTab === "cockpit" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-            <AttendanceCard />
-            <PerformanceSnapshot />
-          </div>
-        )}
-
-        {deskTab === "handovers" && (
-          <HandoverInbox />
-        )}
-
-        {deskTab === "actionables" && (
-          <ActionablesView branch={branch} />
-        )}
-
-        {deskTab === "tasks" && (
-          <TasksModule />
-        )}
-
-        {deskTab === "checklist" && (
-          <ChecklistModule />
-        )}
-
-        {deskTab === "leave" && (
-          <LeaveModule />
-        )}
-
-        {deskTab === "living-board" && (
-          <MyDeskLivingBoard />
-        )}
-
-        {deskTab === "certs" && (
-          <CertsModule />
-        )}
-
-        {deskTab === "readiness" && (
-          <PerformanceSnapshot />
-        )}
-
-        {deskTab === "admin" && isSuperAdmin && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-            {/* Admin section head & controls */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 20, flexWrap: "wrap", borderBottom: "1px solid rgba(93,162,213,0.2)", paddingBottom: 16 }}>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button 
-                  onClick={() => setSelectedCat("all")}
-                  className={`desk-cat-btn ${selectedCat === "all" ? "active" : ""}`}
-                >
-                  All Modules ({allAdminModules.length})
-                </button>
-                <button 
-                  onClick={() => setSelectedCat("native")}
-                  className={`desk-cat-btn ${selectedCat === "native" ? "active" : ""}`}
-                >
-                  Native React
-                </button>
-                <button 
-                  onClick={() => setSelectedCat("legacy")}
-                  className={`desk-cat-btn ${selectedCat === "legacy" ? "active" : ""}`}
-                >
-                  Legacy Bridged
-                </button>
-              </div>
-
-              {/* Search Input */}
-              <div style={{ flex: 1, minWidth: 260, maxWidth: 400, position: "relative" }}>
-                <Icon name="search" size={16} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#5DA2D5" }} />
-                <input 
-                  value={searchQuery} 
-                  onChange={(e) => setSearchQuery(e.target.value)} 
-                  placeholder="Search admin modules..." 
-                  className="desk-search-input"
-                  style={{ 
-                    padding: "8px 14px 8px 42px",
-                    width: "100%",
-                    outline: "none"
-                  }} 
-                />
-              </div>
-            </div>
-
-            {/* Grid of Modules */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
-              {filteredAdminModules.length === 0 ? (
-                <div style={{ gridColumn: "1 / -1", padding: 60, textAlign: "center", color: "rgba(255,255,255,0.4)", fontSize: 14 }}>
-                  No modules match your query. Try searching for something else.
-                </div>
-              ) : (
-                filteredAdminModules.map((it) => {
-                  const status = getModuleStatus(it);
-                  const cardTheme = MODULE_CARD_THEMES[it.id] || { bg: "linear-gradient(135deg, #5DA2D5, #90CCF4)", text: "#fff", iconBg: "rgba(255,255,255,0.22)", iconColor: "#fff" };
-                  return (
-                    <button 
-                      key={it.id} 
-                      onClick={() => handlePick(it)} 
-                      className="desk-module-card"
-                      style={{ background: cardTheme.bg, border: "none" }}
-                    >
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", width: "100%" }}>
-                        <div className="desk-module-icon-wrap" style={{ background: cardTheme.iconBg, color: cardTheme.iconColor }}>
-                          <Icon name={it.icon} size={20} />
-                        </div>
-                        <span style={{ 
-                          fontSize: 9, 
-                          fontWeight: 800, 
-                          textTransform: "uppercase", 
-                          letterSpacing: "0.5px",
-                          padding: "4px 10px", 
-                          borderRadius: 999, 
-                          color: "#fff", 
-                          background: status.isNative ? "rgba(93,162,213,0.45)" : "rgba(247,136,136,0.5)",
-                          border: "none"
-                        }}>
-                          {status.label}
-                        </span>
-                      </div>
-
-                      <div style={{ marginTop: 20 }}>
-                        <h3 style={{ fontSize: 16, fontWeight: 800, color: "#fff", margin: 0, letterSpacing: "-0.01em" }}>
-                          {it.label}
-                        </h3>
-                        <p style={{ fontSize: 12, color: "rgba(255,255,255,0.75)", marginTop: 6, lineHeight: 1.4, marginBlockEnd: 0 }}>
-                          {it.sub}
-                        </p>
-                      </div>
-                    </button>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+  return <MyDeskHome
+    repository={deskCloudEnabled ? deskRepository : undefined}
+    user={{ id: F._meUserId || u.email || u.name, name: u.name, role: u.role || "Staff", branch: branchLabel, avatar: ownProfile?.avatar_url }}
+    people={people}
+    pendingHandovers={pendingHandovers}
+    navigate={page => page === "profile" && bridge ? bridge("profile") : setActive(page)}
+    openDrawer={setDrawer}
+    openChat={person => window.dispatchEvent(new CustomEvent("fets-open-chat", { detail: person }))}
+    renderPanel={panel => {
+      if (panel === "time") return <LeaveModule />;
+      if (panel === "requests") return <ApplicationsHub isSuperAdmin={Boolean(F.isAdmin)} />;
+      if (panel === "handovers") return <HandoverInbox />;
+      if (panel === "checklist") return <ChecklistModule />;
+      if (panel === "growth") return <CertsModule />;
+      return null;
+    }}
+  />;
 }
 
 
@@ -11913,78 +11566,20 @@ function ordinal(n) {
 }
 
 /* ---------- top navigation ---------- */
-function TopNav({ active, onNavigate, branch, setBranch, t, setTweak, onTools, onBurger, onLogout, pendingHandoverBadge }) {
-  const candToday = branchSessions(0, branch).reduce((a, s) => a + s.count, 0);
-  return (
-    <header className="glass" style={{
-      position: "sticky", top: 0, zIndex: 60, flexShrink: 0,
-      maxWidth: 1720, width: "calc(100% - 2 * clamp(14px, 3vw, 30px))", margin: "20px auto 0", borderRadius: 20,
-      padding: "16px 20px 16px 24px", display: "flex", alignItems: "center", gap: "clamp(16px,2.8vw,36px)",
-      boxShadow: "var(--shadow)", "--branch": BRANCH_TINT[branch] || "var(--accent)",
-    }}>
-      {/* brand mark */}
-      <button onClick={() => onNavigate({ id: "live" })} className="tap" style={{
-        display: "flex", alignItems: "center", gap: 14, border: "none", background: "transparent",
-        cursor: "pointer", padding: 0, flexShrink: 0, fontFamily: "var(--font)",
-      }}>
-        <span style={{ width: 40, height: 40, borderRadius: 10, display: "grid", placeItems: "center",
-          background: "var(--accent)", color: "var(--accent-ink)", fontWeight: 900, fontSize: 22,
-          fontFamily: '"Archivo Expanded", var(--font)', letterSpacing: "-0.04em", lineHeight: 1 }}>F</span>
-        <span style={{ width: 1, height: 30, background: "var(--accent)" }} />
-      </button>
-
-      {/* primary links */}
-      <nav className="topnav-links" style={{ display: "flex", alignItems: "center", gap: "clamp(20px,2.8vw,36px)" }}>
-        {NAV.map((n) => {
-          const isActive = n.id === "desk"
-            ? ["desk", "attn-admin", "business", "staff-requests", "staff-ot", "candidate-tracker", "access-hub", "system-manager", "news-manager", "user-management", "branch-delegation", "dashboard", "fets-intelligence", "gbp"].includes(active)
-            : active === n.id;
-          return (
-            <button key={n.id} className={`topnav-item ${isActive ? "active" : ""}`} onClick={() => onNavigate(n)} style={{ position: "relative" }}>
-              {n.label}
-              {n.id === "desk" && pendingHandoverBadge > 0 && (
-                <span style={{ position: "absolute", top: -6, right: -10, minWidth: 16, height: 16, padding: "0 4px", borderRadius: 999, display: "grid", placeItems: "center", fontSize: 9, fontWeight: 800, color: "#fff", background: "#FF7675", boxShadow: "0 0 6px rgba(255,118,117,0.5)" }}>
-                  {pendingHandoverBadge > 9 ? "9+" : pendingHandoverBadge}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </nav>
-
-      <div style={{ flex: 1 }} />
-
-      {/* right controls */}
-      {/* candidates today — compact, reacts to the branch toggle */}
-      <span title={`${candToday} candidates booked today · ${BRANCH_NAME[branch]}`} className="tap glass-2 topnav-count" style={{
-        display: "inline-flex", alignItems: "center", gap: 8, height: 42, padding: "0 16px", borderRadius: 12, flexShrink: 0,
-        color: "var(--ink-2)", fontFamily: "var(--font)", fontSize: 13.5, fontWeight: 650 }}>
-        <Icon name="users" size={16} style={{ color: "var(--accent)" }} />
-        <span className="tabnum" style={{ fontSize: 14.5, fontWeight: 750, color: "var(--ink)" }}>{candToday}</span>
-        <span className="topnav-branch" style={{ fontSize: 11.5 }}>today</span>
-      </span>
-      {active !== "news" && (
-        <div className="topnav-seg">
-          <Segmented value={branch} onChange={setBranch} size="lg" 
-            options={[
-              { value: "calicut", label: "Calicut", color: BRANCH_TINT.calicut },
-              { value: "cochin", label: "Cochin", color: BRANCH_TINT.cochin },
-              { value: "global", label: "All", color: BRANCH_TINT.global },
-            ]} />
-        </div>
-      )}
-
-      <button onClick={onLogout} title="Log out" className="tap glass-2" style={{
-        display: "inline-flex", alignItems: "center", gap: 8, height: 42, padding: "0 16px", borderRadius: 12,
-        cursor: "pointer", color: "var(--ink-2)", fontFamily: "var(--font)", fontSize: 13.5, fontWeight: 650, flexShrink: 0 }}>
-        <Icon name="power" size={16} /> <span className="topnav-branch">Log out</span>
-      </button>
-      <button onClick={onBurger} className="tap glass-2 topnav-burger" title="Menu" style={{
-        display: "none", width: 42, height: 42, borderRadius: 12, placeItems: "center", cursor: "pointer", color: "var(--ink-2)" }}>
-        <Icon name="menu" size={20} />
-      </button>
-    </header>
-  );
+export function TopNav({ active, onNavigate, branch, setBranch, t, setTweak, onTools, onBurger, onLogout, pendingHandoverBadge }) {
+  return <header className="premium-nav">
+    <button className="nav-brand" onClick={() => onNavigate({ id: "live" })} aria-label="FETS LIVE home"><span className="nav-brand-symbol">f.</span><span className="nav-brand-type">fets<span>.</span>live</span></button>
+    <nav className="topnav-links" aria-label="Primary navigation">{NAV.map(n => {
+      const isActive = n.id === "desk" ? ["desk", "attn-admin", "business", "staff-requests", "staff-ot", "candidate-tracker", "access-hub", "system-manager", "news-manager", "user-management", "branch-delegation", "dashboard", "fets-intelligence", "gbp"].includes(active) : active === n.id;
+      return <button key={n.id} className={`topnav-item ${isActive ? "active" : ""}`} aria-current={isActive ? "page" : undefined} onClick={() => onNavigate(n)}>{n.label}{n.id === "desk" && pendingHandoverBadge > 0 && <span className="nav-unread">{pendingHandoverBadge > 9 ? "9+" : pendingHandoverBadge}</span>}</button>;
+    })}</nav>
+    <div className="nav-controls">
+      {active !== "news" && <select className="nav-centre-select" aria-label="Active centre" value={branch} onChange={e => setBranch(e.target.value)}><option value="calicut">Calicut</option><option value="cochin">Cochin</option><option value="global">All centres</option></select>}
+      <button className="nav-control" onClick={onTools} title="All tools" aria-label="All tools"><Icon name="grid" size={16} /></button>
+      <button className="nav-control" onClick={onLogout} title="Log out" aria-label="Log out"><Icon name="power" size={16} /></button>
+      <button className="nav-control topnav-burger" onClick={onBurger} title="Menu" aria-label="Open navigation menu"><Icon name="menu" size={19} /></button>
+    </div>
+  </header>;
 }
 
 /* ---------- LIVE masthead (ref image 1) ---------- */
@@ -12233,209 +11828,8 @@ function MenuRow({ items }) {
   );
 }
 
-function LivePage({ branch, setDrawer, setActive, bridge }) {
-  const gap = "calc(34px * var(--density))";
-  const [stats, setStats] = React.useState({
-    candidatesCount: 0,
-    examSessionsCount: 0,
-    completedSessions: 0,
-    upcomingSessions: 0,
-    staffCheckedIn: 0,
-    staffRostered: 0,
-    punctuality: 100,
-    sessionsList: []
-  });
-  const [loading, setLoading] = React.useState(true);
-
-  const ymdLocal = (d) => {
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const date = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${date}`;
-  };
-
-  const clientToSlug = (clientName, examName = "") => {
-    const c = (clientName || "").toLowerCase();
-    const e = (examName || "").toLowerCase();
-    if (c.includes("celpip") || e.includes("celpip") || c.includes("cel") || e.includes("cel")) return "celpip";
-    if (e.includes("cma") || e.includes("ima") || c.includes("cma") || c.includes("ima")) return "prometric";
-    if (c.includes("psi") || e.includes("psi")) return "psi";
-    return "pearson";
-  };
-
-  const subtractMinutes = (timeStr, mins) => {
-    if (!timeStr) return "00:00";
-    const [h, m] = timeStr.split(":").map(Number);
-    let totalMins = h * 60 + m - mins;
-    if (totalMins < 0) totalMins += 24 * 60;
-    const newH = Math.floor(totalMins / 60) % 24;
-    const newM = totalMins % 60;
-    return `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`;
-  };
-
-  const REST_CODES = new Set(["rd", "off", "wo", "l", "leave", "lv", "h", "holiday", "to", "toil", "tr", "tp"]);
-
-  const loadTodaySnapshot = async () => {
-    setLoading(true);
-    try {
-      const todayStr = ymdLocal(new Date());
-      const now = new Date();
-      const currentHour = now.getHours();
-      const currentMinute = now.getMinutes();
-      const currentTimeStr = `${String(currentHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}`;
-
-      // Fetch all three sources in parallel
-      const [sessRes, rosterRes, attnRes] = await Promise.all([
-        supabase.from("calendar_sessions").select("*").eq("date", todayStr),
-        supabase.from("roster_schedules").select("*, staff_profiles(full_name, branch_assigned)").eq("date", todayStr),
-        supabase.from("staff_attendance").select("*, staff_profiles(full_name, branch_assigned)").eq("date", todayStr)
-      ]);
-
-      let sessions = sessRes.data || [];
-      let roster = rosterRes.data || [];
-      let attendance = attnRes.data || [];
-
-      // Filter by active branch
-      if (branch !== "global") {
-        sessions = sessions.filter(s => {
-          const loc = (s.branch_location || s.branch || "").toLowerCase();
-          return loc.includes(branch) || (branch === "calicut" && !loc);
-        });
-        roster = roster.filter(r => {
-          const loc = (r.branch_location || (r.staff_profiles && r.staff_profiles.branch_assigned) || "").toLowerCase();
-          return loc.includes(branch);
-        });
-        attendance = attendance.filter(a => {
-          const loc = ((a.staff_profiles && a.staff_profiles.branch_assigned) || "").toLowerCase();
-          return loc.includes(branch);
-        });
-      }
-
-      // 1. Candidates Today
-      const candidatesCount = sessions.reduce((sum, s) => sum + (Number(s.candidate_count) || 0), 0);
-
-      // 2. Exam Sessions
-      const examSessionsCount = sessions.length;
-      let completedSessions = 0;
-      let upcomingSessions = 0;
-      sessions.forEach(s => {
-        const endTime = s.end_time || s.start_time || "18:00";
-        if (endTime < currentTimeStr) {
-          completedSessions++;
-        } else {
-          upcomingSessions++;
-        }
-      });
-
-      // 3. Staff Present & Rostered
-      const activeRoster = roster.filter(r => {
-        const code = (r.shift_code || "").toLowerCase();
-        return code && !REST_CODES.has(code);
-      });
-      const staffRostered = activeRoster.length;
-      const checkedInStaff = attendance.filter(a => a.check_in).length;
-
-      // 4. Punctuality
-      let onTimeCount = 0;
-      attendance.forEach(a => {
-        if (a.check_in && a.check_in <= "09:15") {
-          onTimeCount++;
-        }
-      });
-      const punctuality = attendance.length > 0 
-        ? Math.round((onTimeCount / attendance.length) * 100) 
-        : 100;
-
-      // Sessions List Mapping
-      const sessionsList = sessions.map(s => {
-        const clientName = s.client_name || '';
-        const examName = s.exam_name || '';
-        const clientSlug = clientToSlug(clientName, examName);
-        
-        let status = "Scheduled";
-        if (s.start_time && s.end_time) {
-          if (currentTimeStr >= s.start_time && currentTimeStr <= s.end_time) {
-            status = "In progress";
-          } else if (currentTimeStr > s.end_time) {
-            status = "Completed";
-          } else if (currentTimeStr >= subtractMinutes(s.start_time, 30) && currentTimeStr < s.start_time) {
-            status = "Ready";
-          }
-        }
-
-        return {
-          id: s.id,
-          time: s.start_time ? s.start_time.slice(0, 5) : "—",
-          endTime: s.end_time ? s.end_time.slice(0, 5) : "",
-          client: clientSlug.toUpperCase() === "PEARSON" ? "Pearson VUE" : clientSlug.toUpperCase() === "CELPIP" ? "CELPIP" : clientSlug.toUpperCase() === "PSI" ? "PSI" : clientName || "Exam Session",
-          examName: examName || "General Exam",
-          room: s.room || s.lab_name || "Lab A",
-          candidates: Number(s.candidate_count) || 0,
-          capacity: s.capacity ? Number(s.capacity) : (Number(s.candidate_count) || 0) + 4,
-          status
-        };
-      });
-
-      setStats({
-        candidatesCount,
-        examSessionsCount,
-        completedSessions,
-        upcomingSessions,
-        staffCheckedIn: checkedInStaff,
-        staffRostered: staffRostered || checkedInStaff,
-        punctuality,
-        sessionsList
-      });
-
-    } catch (err) {
-      console.error("Error loading today snapshot:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  React.useEffect(() => {
-    loadTodaySnapshot();
-    const handleRefresh = () => loadTodaySnapshot();
-    window.addEventListener("fets-roster-changed", handleRefresh);
-    window.addEventListener("fets-data-loaded", handleRefresh);
-    return () => {
-      window.removeEventListener("fets-roster-changed", handleRefresh);
-      window.removeEventListener("fets-data-loaded", handleRefresh);
-    };
-  }, [branch]);
-
-  const quickActions = [
-    { label: "Raise a Case", sub: "Incident Manager", on: () => setActive("case") },
-    { label: "Shift Handover", sub: "Log checklist, headcount & sign-off", on: () => setActive("handover") },
-    { label: "Quick Access", sub: "Vendor credentials, portals & site codes", on: () => setDrawer("vault") },
-    { label: "Help Desk", sub: "Live vendor support portals & helplines", on: () => setDrawer("help") },
-  ];
-
-  const branchLabel = branch === "global" ? "All centres" : branch.charAt(0).toUpperCase() + branch.slice(1);
-
-  return (
-    <div style={{ maxWidth: 1600, margin: "0 auto", padding: "clamp(22px,3.2vw,40px) clamp(14px,3vw,30px) 80px", display: "flex", flexDirection: "column", gap }}>
-      <Masthead branch={branch} />
-
-      {/* Quick Actions */}
-      <section>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-          <SectionLabel>Quick Actions</SectionLabel>
-          <span className="mono" style={{ fontSize: 11, letterSpacing: "0.12em", color: "var(--ink-4)" }}>operations &amp; support</span>
-        </div>
-        <MenuRow items={quickActions} />
-      </section>
-
-      {/* Gemini 3.1 Flash Live Studio — below menu boxes */}
-      <section>
-        <EnhancedChatDeck
-          branch={branch}
-          onOpenDirectChat={(staff) => window.dispatchEvent(new CustomEvent("fets-open-chat", { detail: staff }))}
-        />
-      </section>
-    </div>
-  );
+function LivePage({ branch, setDrawer, setActive }) {
+  return <OperationsHome userName={window.FETS?.user?.name || "Welcome"} branch={branch} navigate={setActive} openDrawer={setDrawer} />;
 }
 
 function LiveChatCommandDeck({ branch, onOpenChat }) {
@@ -12576,382 +11970,15 @@ function TheLabPage({ branch }) {
 
 /* ---------- tools sheet (overflow) ---------- */
 function ToolsSheet({ open, onClose, onPick, includeNav }) {
-  const isAdmin = !!window.FETS.isAdmin;
-  const tools = isAdmin ? TOOLS : [];
-
-  // If includeNav is true, render the sidebar drawer (ideal for mobile menu).
-  if (includeNav) {
-    const items = [...NAV.map((n) => ({ ...n, nav: true })).filter(n => n.id !== "calendar" && n.id !== "roster"), ...tools];
-    return (
-      <React.Fragment>
-        <div className={`drawer-backdrop ${open ? "open" : ""}`} onClick={onClose} />
-        <aside className={`drawer ${open ? "open" : ""}`} aria-hidden={!open} style={{ width: "min(420px, 92vw)" }}>
-          <div className="drawer-grip" />
-          <header style={{ display: "flex", alignItems: "center", gap: 13, padding: "18px 20px", borderBottom: "1px solid var(--hairline)", flexShrink: 0 }}>
-            <div style={{ flex: 1 }}>
-              <div className="eyebrow" style={{ color: "var(--accent)" }}>FETS · Live</div>
-              <h2 style={{ margin: "3px 0 0", fontSize: 19, fontWeight: 800, letterSpacing: "-0.02em", color: "var(--ink)" }}>All tools</h2>
-            </div>
-            <button onClick={onClose} className="tap glass-2" style={{ width: 36, height: 36, borderRadius: 999, display: "grid", placeItems: "center", cursor: "pointer", color: "var(--ink-2)" }}>
-              <Icon name="x" size={17} />
-            </button>
-          </header>
-          <div className="scroll-soft" style={{ flex: 1, overflowY: "auto", padding: 14, display: "flex", flexDirection: "column", gap: 8 }}>
-            {items.map((it) => (
-              <button key={it.id} onClick={() => { onPick(it); onClose(); }} className="tap glass-2"
-                style={{ display: "flex", alignItems: "center", gap: 14, padding: "13px 15px", borderRadius: 12, cursor: "pointer",
-                  border: "1px solid var(--hairline)", textAlign: "left", fontFamily: "var(--font)" }}>
-                <span style={{ width: 38, height: 38, borderRadius: 10, display: "grid", placeItems: "center", flexShrink: 0,
-                  color: "var(--accent)", background: "var(--accent-soft)", border: "1px solid var(--accent-line)" }}>
-                  <Icon name={it.nav ? "arrowR" : it.icon} size={18} />
-                </span>
-                <span style={{ flex: 1, minWidth: 0 }}>
-                  <span style={{ display: "block", fontSize: 14.5, fontWeight: 700, color: "var(--ink)" }}>{it.label}</span>
-                  {it.sub && <span style={{ display: "block", fontSize: 12, color: "var(--ink-3)", marginTop: 1 }}>{it.sub}</span>}
-                </span>
-                <Icon name="chevronR" size={16} style={{ color: "var(--ink-4)" }} />
-              </button>
-            ))}
-          </div>
-        </aside>
-      </React.Fragment>
-    );
-  }
-
-  // If includeNav is false, render the super premium grand pop-up modules console!
-  const allModules = [
-    ...NAV.map((n) => ({ 
-      ...n, 
-      icon: n.id === "live" ? "globe" : n.id === "calendar" ? "calendar" : n.id === "roster" ? "layers" : "briefcase", 
-      nav: true,
-      sub: n.id === "live" ? "Operations monitor & live queue" : n.id === "calendar" ? "Centre booking calendar & sessions" : n.id === "roster" ? "Shift schedules, time desk & metrics" : "Personal tasks, checklists & leave"
-    })).filter(n => n.id !== "calendar" && n.id !== "roster"), 
-    ...tools
+  const descriptions = { live: "Your centre, team and day ahead", calendar: "Exam sessions and centre bookings", roster: "Staff schedules and monthly planning", desk: "Your focus, notes and personal space" };
+  const items = [
+    ...NAV.map(n => ({ ...n, sub: descriptions[n.id] })),
+    { id: "handover", label: "Shift handover", sub: "Weekly leads, shared duties and centre reports" },
+    { id: "actionables", label: "Actionables", sub: "Standards, rollouts and follow-ups" },
+    { id: "case", label: "Raise a case", sub: "Record an incident or ask for support" },
+    ...(window.FETS.isAdmin ? TOOLS : []),
   ];
-
-  const [searchQuery, setSearchQuery] = React.useState("");
-  const [selectedCat, setSelectedCat] = React.useState("all");
-
-  const nativeIds = ["live", "calendar", "roster", "desk", "attn-admin", "business", "staff-requests", "staff-ot"];
-
-  const getModuleStatus = (it) => {
-    if (nativeIds.includes(it.id)) {
-      return { label: "Native React", color: "oklch(0.78 0.15 162)", isNative: true };
-    } else {
-      return { label: "Legacy Bridged", color: "oklch(0.86 0.16 92)", isNative: false };
-    }
-  };
-
-  const filtered = allModules.filter(it => {
-    const matchesSearch = it.label.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          (it.sub && it.sub.toLowerCase().includes(searchQuery.toLowerCase()));
-    const status = getModuleStatus(it);
-    const matchesCategory = selectedCat === "all" || 
-                            (selectedCat === "native" && status.isNative) ||
-                            (selectedCat === "legacy" && !status.isNative);
-    return matchesSearch && matchesCategory;
-  });
-
-  return (
-    <React.Fragment>
-      {/* Premium backdrop blur */}
-      <div className={`fets-console-backdrop ${open ? "open" : ""}`} onClick={onClose} />
-      
-      <div className={`fets-console-modal ${open ? "open" : ""}`} aria-hidden={!open}>
-        <style>{`
-          .fets-console-backdrop {
-            position: fixed;
-            inset: 0;
-            z-index: 1000;
-            background: rgba(0, 0, 0, 0.45);
-            backdrop-filter: blur(12px);
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-          }
-          .fets-console-backdrop.open {
-            opacity: 1;
-            pointer-events: auto;
-          }
-
-          .fets-console-modal {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -46%) scale(0.96);
-            width: min(1040px, 95vw);
-            height: min(720px, 86vh);
-            z-index: 1001;
-            background: linear-gradient(160deg, oklch(0.18 0.02 180) 0%, oklch(0.12 0.015 180) 100%);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 24px;
-            box-shadow: 0 30px 90px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-            display: flex;
-            flex-direction: column;
-            opacity: 0;
-            pointer-events: none;
-            overflow: hidden;
-            transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-          }
-          .fets-console-modal.open {
-            opacity: 1;
-            pointer-events: auto;
-            transform: translate(-50%, -50%) scale(1);
-          }
-
-          /* Ambient neon light inside the modal */
-          .fets-console-glow {
-            position: absolute;
-            top: -200px;
-            left: 20%;
-            width: 600px;
-            height: 400px;
-            background: radial-gradient(circle, rgba(168, 255, 57, 0.05) 0%, rgba(0,0,0,0) 70%);
-            pointer-events: none;
-            z-index: 0;
-          }
-
-          .fets-module-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 16px;
-            padding: 24px;
-            overflow-y: auto;
-            flex: 1;
-          }
-
-          .fets-module-card {
-            position: relative;
-            background: rgba(255, 255, 255, 0.02);
-            border: 1px solid rgba(255, 255, 255, 0.04);
-            border-radius: 18px;
-            padding: 20px;
-            cursor: pointer;
-            text-align: left;
-            font-family: var(--font);
-            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            min-height: 154px;
-            overflow: hidden;
-          }
-          .fets-module-card::before {
-            content: "";
-            position: absolute;
-            inset: 0;
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, transparent 100%);
-            opacity: 0;
-            transition: opacity 0.3s ease;
-          }
-          .fets-module-card:hover {
-            transform: translateY(-4px);
-            background: rgba(255, 255, 255, 0.05);
-            border-color: rgba(168, 255, 57, 0.2);
-            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3), 0 0 1px 1px rgba(168, 255, 57, 0.15);
-          }
-          .fets-module-card:hover::before {
-            opacity: 1;
-          }
-          
-          .fets-module-card-icon {
-            width: 44px;
-            height: 44px;
-            border-radius: 12px;
-            display: grid;
-            place-items: center;
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            color: var(--ink-2);
-            transition: all 0.3s ease;
-          }
-          .fets-module-card:hover .fets-module-card-icon {
-            background: rgba(168, 255, 57, 0.12);
-            border-color: rgba(168, 255, 57, 0.3);
-            color: #a8ff39;
-            box-shadow: 0 0 15px rgba(168, 255, 57, 0.25);
-          }
-
-          .fets-cat-tab {
-            font-size: 13px;
-            font-weight: 700;
-            color: var(--ink-3);
-            background: transparent;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 99px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-          }
-          .fets-cat-tab:hover {
-            color: var(--ink);
-            background: rgba(255, 255, 255, 0.04);
-          }
-          .fets-cat-tab.active {
-            color: #000;
-            background: #a8ff39;
-          }
-        `}</style>
-        
-        <div className="fets-console-glow" />
-
-        {/* Console Header */}
-        <header style={{ 
-          display: "flex", 
-          flexDirection: "column",
-          gap: 16,
-          padding: "24px 28px", 
-          borderBottom: "1px solid rgba(255, 255, 255, 0.06)", 
-          position: "relative",
-          zIndex: 1,
-          flexShrink: 0 
-        }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div>
-              <div className="eyebrow" style={{ color: "#a8ff39", letterSpacing: "2px" }}>OPERATIONS CONSOLE</div>
-              <h2 style={{ margin: "4px 0 0", fontSize: 24, fontWeight: 900, letterSpacing: "-0.02em", color: "var(--ink)" }}>All Modules</h2>
-            </div>
-            <button onClick={onClose} className="tap" style={{ 
-              width: 40, 
-              height: 40, 
-              borderRadius: "50%", 
-              display: "grid", 
-              placeItems: "center", 
-              cursor: "pointer", 
-              border: "1px solid rgba(255, 255, 255, 0.1)",
-              background: "rgba(255,255,255,0.03)", 
-              color: "var(--ink-2)",
-              transition: "all 0.2s"
-            }}>
-              <Icon name="x" size={20} />
-            </button>
-          </div>
-
-          {/* Filters and Search Bar */}
-          <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
-            {/* Category selection */}
-            <div style={{ 
-              display: "flex", 
-              background: "rgba(0,0,0,0.2)", 
-              padding: 4, 
-              borderRadius: 99, 
-              border: "1px solid rgba(255, 255, 255, 0.04)" 
-            }}>
-              <button 
-                onClick={() => setSelectedCat("all")}
-                className={`fets-cat-tab ${selectedCat === "all" ? "active" : ""}`}
-              >
-                All Modules
-              </button>
-              <button 
-                onClick={() => setSelectedCat("native")}
-                className={`fets-cat-tab ${selectedCat === "native" ? "active" : ""}`}
-              >
-                Native React
-              </button>
-              <button 
-                onClick={() => setSelectedCat("legacy")}
-                className={`fets-cat-tab ${selectedCat === "legacy" ? "active" : ""}`}
-              >
-                Legacy Bridged
-              </button>
-            </div>
-
-            {/* Search Input */}
-            <div style={{ flex: 1, minWidth: 260, position: "relative" }}>
-              <Icon name="search" size={16} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "var(--ink-4)" }} />
-              <input 
-                value={searchQuery} 
-                onChange={(e) => setSearchQuery(e.target.value)} 
-                placeholder="Search operations, analytics, settings..." 
-                style={{ 
-                  background: "rgba(0, 0, 0, 0.2)",
-                  border: "1px solid rgba(255, 255, 255, 0.08)",
-                  borderRadius: 99,
-                  color: "var(--ink)",
-                  fontFamily: "var(--font)",
-                  fontSize: 14,
-                  padding: "10px 14px 10px 42px",
-                  width: "100%",
-                  outline: "none"
-                }} 
-              />
-            </div>
-          </div>
-        </header>
-
-        {/* Modules Grid */}
-        <div className="scroll-soft fets-module-grid">
-          {filtered.length === 0 ? (
-            <div style={{ gridColumn: "1 / -1", padding: 60, textAlign: "center", color: "var(--ink-4)", fontSize: 15 }}>
-              No modules match your query. Try searching for something else.
-            </div>
-          ) : (
-            filtered.map((it) => {
-              const status = getModuleStatus(it);
-              return (
-                <button 
-                  key={it.id} 
-                  onClick={() => { onPick(it); onClose(); }} 
-                  className="fets-module-card"
-                  style={{ border: "1px solid rgba(255, 255, 255, 0.04)" }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", width: "100%" }}>
-                    <div className="fets-module-card-icon">
-                      <Icon name={it.icon} size={20} />
-                    </div>
-                    {/* Status badge */}
-                    <span style={{ 
-                      fontSize: 10, 
-                      fontWeight: 800, 
-                      textTransform: "uppercase", 
-                      letterSpacing: "0.5px",
-                      padding: "4px 10px", 
-                      borderRadius: 999, 
-                      color: status.color, 
-                      background: `color-mix(in oklch, ${status.color} 12%, transparent)`, 
-                      border: `1px solid color-mix(in oklch, ${status.color} 24%, transparent)`
-                    }}>
-                      {status.label}
-                    </span>
-                  </div>
-
-                  <div style={{ marginTop: 24, zIndex: 1 }}>
-                    <h3 style={{ fontSize: 16.5, fontWeight: 800, color: "var(--ink)", margin: 0 }}>
-                      {it.label}
-                    </h3>
-                    <p style={{ fontSize: 12.5, color: "var(--ink-3)", marginTop: 6, lineHeight: 1.4, marginBlockEnd: 0 }}>
-                      {it.sub}
-                    </p>
-                  </div>
-                </button>
-              );
-            })
-          )}
-        </div>
-
-        {/* Footer */}
-        <footer style={{ 
-          padding: "16px 28px", 
-          borderTop: "1px solid rgba(255, 255, 255, 0.06)", 
-          display: "flex", 
-          justifyContent: "space-between", 
-          alignItems: "center",
-          background: "rgba(0, 0, 0, 0.15)",
-          flexShrink: 0,
-          zIndex: 1
-        }}>
-          <span style={{ fontSize: 12.5, color: "var(--ink-4)" }}>
-            Showing {filtered.length} of {allModules.length} modules
-          </span>
-          <span style={{ fontSize: 12.5, color: "var(--ink-3)", display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#a8ff39", boxShadow: "0 0 8px #a8ff39" }} />
-            FETS · LIVE Ops Console
-          </span>
-        </footer>
-      </div>
-    </React.Fragment>
-  );
+  return <WorkspaceMenu open={open} onClose={onClose} onPick={onPick} items={items} />;
 }
 
 function AccentSwatches({ value, onChange }) {
@@ -13158,12 +12185,12 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
         {active === "live" && <LivePage branch={branch} setDrawer={setDrawer} setActive={setActive} bridge={bridge} />}
         {active === "calendar" && (
           <div style={{ width: "100%" }}>
-            {isMobile ? <MobileCalendar /> : <FetsCalendar />}
+            <FetsCalendar />
           </div>
         )}
-        {active === "roster" && <RosterPage branch={branch} />}
+        {active === "roster" && <RosterPage branch={branch} setActive={setActive} />}
         {active === "case" && <RaiseCasePage branch={branch} setActive={setActive} />}
-        {active === "handover" && <HandoverHub branch={branch} setActive={setActive} />}
+        {active === "handover" && <DutyWorkspace key={branch} branch={branch} navigate={setActive} legacy={<HandoverHub branch={branch} setActive={setActive} />} />}
         {active === "desk" && <MyDeskPage branch={branch} setActive={setActive} setDrawer={setDrawer} bridge={bridge} />}
         {active === "business" && <BusinessPage branch={branch} />}
         {(active === "news" || active === "actionables") && <ActionablesView branch={branch} />}
@@ -13194,13 +12221,6 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
         icon="headset" title="Help Desk" sub="Live support portals" accentColor={V.cma.color}>
         <HelpDeskPanel />
       </Drawer>
-      <Drawer open={drawer === "ai_live" || drawer === "lostfound"} onClose={() => setDrawer(null)}
-        icon="spark" title="Gemini 3.1 Flash Live Studio" sub={`${branchLabel} · real-time multimodal voice, vision & screen`} accentColor="var(--gold)">
-        <div style={{ padding: "16px 0", height: "100%" }}>
-          <GeminiLiveStudio branch={branch} onOpenTeamChat={() => { setDrawer(null); window.dispatchEvent(new CustomEvent("fets-open-chat")); }} />
-        </div>
-      </Drawer>
-
       <ToolsSheet open={tools} onClose={() => setTools(false)} onPick={handlePick} />
       <ToolsSheet open={burger} onClose={() => setBurger(false)} onPick={handlePick} includeNav />
 
@@ -13249,12 +12269,7 @@ function RedesignShell({ bridge, userName, userEmail, isAdmin, onLogout, activeB
       <div className="grain" />
       <div style={{ position: "relative", zIndex: 2, height: "100%" }}>
         {ready ? <App bridge={bridge} onLogout={onLogout} activeBranch={activeBranch} onBranchChange={onBranchChange} activeSubPage={activeSubPage} /> : (
-          <div style={{ height: "100%", display: "grid", placeItems: "center" }}>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
-              <span style={{ width: 54, height: 54, borderRadius: 14, display: "grid", placeItems: "center", background: "var(--accent)", color: "var(--accent-ink)", fontWeight: 900, fontSize: 30, fontFamily: '"Archivo Expanded", var(--font)' }}>F</span>
-              <span className="eyebrow" style={{ color: "var(--ink-3)" }}>Loading FETS · LIVE…</span>
-            </div>
-          </div>
+          <BrandLoader message="Bringing your centre together" />
         )}
       </div>
     </div>
@@ -13262,4 +12277,3 @@ function RedesignShell({ bridge, userName, userEmail, isAdmin, onLogout, activeB
 }
 
 export default RedesignShell;
-

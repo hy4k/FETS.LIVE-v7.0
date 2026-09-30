@@ -4,40 +4,6 @@
  * Supports real-time bidirectional audio (16kHz in / 24kHz out), video camera, screen sharing, and text turns.
  */
 
-import { supabase } from './supabase';
-import { buildLiveContext } from './geminiContextBuilder';
-import { getToolDeclarations, executeToolCall } from './geminiToolHandlers';
-
-/** Fetch Gemini API key from app_config table (cached in memory) */
-let _cachedGeminiKey: string | null = null;
-async function fetchGeminiApiKey(): Promise<string> {
-  if (_cachedGeminiKey) return _cachedGeminiKey;
-
-  // Try env vars first (dev mode)
-  const envKey = (import.meta.env.VITE_AI_API_KEY as string) || (import.meta.env.VITE_GEMINI_API_KEY as string) || (import.meta.env.VITE_GEMINI_LIVE_API_KEY as string);
-  if (envKey) {
-    _cachedGeminiKey = envKey;
-    return envKey;
-  }
-
-  // Fetch from app_config table
-  try {
-    const { data } = await supabase
-      .from('app_settings')
-      .select('value')
-      .eq('key', 'gemini_api_key')
-      .single();
-    if (data?.value) {
-      _cachedGeminiKey = data.value;
-      return data.value;
-    }
-  } catch (err) {
-    console.warn('[GeminiLive] Failed to fetch API key from app_config:', err);
-  }
-
-  return '';
-}
-
 export type GeminiLiveVoice = 'Zephyr' | 'Puck' | 'Charon' | 'Kore' | 'Fenrir' | 'Aoede';
 
 export interface LiveMessageTurn {
@@ -51,7 +17,9 @@ export interface LiveMessageTurn {
 }
 
 export interface LiveClientConfig {
-  apiKey?: string;
+  getSession: () => Promise<{token:string;setup:Record<string,unknown>}>;
+  executeTool: (name:string,args:Record<string,unknown>) => Promise<Record<string,unknown>>;
+  onMediaChange?: (media:{mic:boolean;camera:boolean;screen:boolean})=>void;
   voiceName?: GeminiLiveVoice;
   model?: string;
   systemPrompt?: string;
@@ -62,7 +30,17 @@ export interface LiveClientConfig {
 }
 
 export class GeminiLiveClient {
-  private apiKey: string;
+  private getSession: LiveClientConfig['getSession'];
+  private executeTool: LiveClientConfig['executeTool'];
+  private onMediaChange?: LiveClientConfig['onMediaChange'];
+  private setup: Record<string,unknown> = {};
+  private connectionReady=false;
+  private generation=0;
+  private sessionTimer: ReturnType<typeof setTimeout>|null=null;
+  private settleConnection: ((error?:Error)=>void)|null=null;
+  private userTranscriptId:string|null=null;
+  private userTranscript='';
+  private cancelledCalls=new Set<string>();
   private voiceName: GeminiLiveVoice;
   private model: string;
   private systemPrompt: string;
@@ -101,7 +79,7 @@ export class GeminiLiveClient {
   private currentGeminiTurnText = '';
 
   constructor(config: LiveClientConfig) {
-    this.apiKey = config.apiKey || '';
+    this.getSession=config.getSession;this.executeTool=config.executeTool;this.onMediaChange=config.onMediaChange;
     this.voiceName = config.voiceName || 'Zephyr';
     this.model = config.model || 'models/gemini-3.1-flash-live-preview';
     this.systemPrompt = config.systemPrompt || '';
@@ -109,10 +87,6 @@ export class GeminiLiveClient {
     this.onStatusChange = config.onStatusChange;
     this.onAudioVisualizerData = config.onAudioVisualizerData;
     this.onToolActivity = config.onToolActivity;
-  }
-
-  public setApiKey(key: string) {
-    this.apiKey = key;
   }
 
   public setVoice(voice: GeminiLiveVoice) {
@@ -124,7 +98,7 @@ export class GeminiLiveClient {
   }
 
   public isConnected(): boolean {
-    return this.ws !== null && this.ws.readyState === WebSocket.OPEN;
+    return this.connectionReady && this.ws !== null && this.ws.readyState === WebSocket.OPEN;
   }
 
   public getStatus() {
@@ -140,101 +114,38 @@ export class GeminiLiveClient {
    * Connects to the Gemini 3.1 Flash Live preview endpoint
    */
   public async connect(): Promise<void> {
-    const key = this.apiKey || await fetchGeminiApiKey();
-    if (!key) {
-      this.updateStatus('error', 'Gemini API Key is not configured. Add it to app_settings table or set VITE_AI_API_KEY.');
-      throw new Error('API Key missing');
-    }
-
-    this.disconnect();
-    this.updateStatus('connecting');
-
-    const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${key}`;
-
-    return new Promise((resolve, reject) => {
-      try {
-        this.ws = new WebSocket(wsUrl);
-
-        this.ws.onopen = () => {
-          this.sendSetupMessage();
-          this.initAudioPlayback();
-          this.startVisualizerLoop();
-          this.updateStatus('connected');
-          resolve();
-        };
-
-        this.ws.onmessage = (event) => {
-          this.handleServerMessage(event.data);
-        };
-
-        this.ws.onerror = (err) => {
-          console.error('[GeminiLive] WebSocket Error:', err);
-          this.updateStatus('error', 'WebSocket connection error. Check API key and network.');
-          reject(err);
-        };
-
-        this.ws.onclose = (event) => {
-          console.log('[GeminiLive] WebSocket Closed:', event.code, event.reason);
-          this.cleanupStreams();
-          this.updateStatus('disconnected');
-        };
-      } catch (err: any) {
-        this.updateStatus('error', err?.message || 'Connection failed');
-        reject(err);
-      }
-    });
+    this.disconnect();const generation=this.generation;this.updateStatus('connecting');
+    try {
+      const session=await this.getSession();if(generation!==this.generation)throw new Error('Session cancelled.');
+      this.setup=session.setup;
+      await new Promise<void>((resolve,reject)=>{
+        const ws=new WebSocket(`wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained?access_token=${encodeURIComponent(session.token)}`);
+        this.ws=ws;
+        const timer=setTimeout(()=>{if(this.ws===ws){this.disconnect();this.updateStatus('error','Gemini did not finish connecting. Try again.');}},20000);
+        this.settleConnection=(error)=>{clearTimeout(timer);this.settleConnection=null;error?reject(error):resolve();};
+        ws.onopen=()=>{if(this.ws===ws)ws.send(JSON.stringify({setup:this.setup}));};
+        ws.onmessage=event=>{if(this.ws===ws)this.handleServerMessage(event.data,ws);};
+        ws.onerror=()=>{if(this.ws!==ws)return;this.disconnect();this.updateStatus('error','The live connection failed. Try again.');};
+        ws.onclose=()=>{if(this.ws!==ws)return;this.disconnect();this.updateStatus('disconnected','Live session ended. Start again when you are ready.');};
+      });
+      if(generation!==this.generation)return;
+      // Stop before the short-lived token expires, including any shared media.
+      this.sessionTimer=setTimeout(()=>{this.disconnect();this.updateStatus('disconnected','The 9-minute session ended. Start a new session to continue.');},9*60000);
+    } catch(error) { if(generation===this.generation){this.disconnect();this.updateStatus('error',error instanceof Error?error.message:'Live setup is unavailable.');}throw error; }
   }
 
-  /**
-   * Sends the initial Setup message with Gemini 3.1 Flash Live parameters
-   */
-  private sendSetupMessage() {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-
-    const basePrompt = this.systemPrompt ||
-      `You are FETS LIVE OMNI, the real-time AI operational assistant for FETS (Frontline Examination & Testing Services).`;
-
-    // Inject live operational context from window.FETS
-    const liveContext = buildLiveContext();
-    const fullPrompt = basePrompt +
-      `\n\nIMPORTANT GROUNDING RULES:` +
-      `\n1. You have real-time operational data injected below. ALWAYS use this data to answer questions about today's exams, roster, incidents, tasks, news, and staff.` +
-      `\n2. When the user asks about today's schedule, sessions, who is on duty, open incidents, pending tasks — answer directly from the OPERATIONAL CONTEXT below. Do NOT say "I don't have access" or make up data.` +
-      `\n3. For HISTORICAL queries (past dates, specific candidate lookups, attendance history, old incidents) — use the available function tools (query_sessions, query_roster, query_attendance, etc.) to fetch from the database.` +
-      `\n4. Be concise, proactive, friendly, and authoritative. Use crisp voice and natural cadence.` +
-      `\n5. You know everything about FETS exam operations: Pearson VUE, Prometric, IELTS, CELPIP, PSI, CMA exams. Candidate verification, incident triage, staff rosters, centre health.` +
-      `\n6. When asked "what exams today" or "who is working today" — look at the data sections below and speak the answer directly.` +
-      liveContext;
-
-    const setupPayload: any = {
-      setup: {
-        model: this.model,
-        generationConfig: {
-          responseModalities: ['AUDIO'],
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: {
-                voiceName: this.voiceName,
-              },
-            },
-          },
-          mediaResolution: 'MEDIA_RESOLUTION_MEDIUM',
-        },
-        systemInstruction: {
-          parts: [{ text: fullPrompt }],
-        },
-        tools: getToolDeclarations(),
-      },
-    };
-
-    this.ws.send(JSON.stringify(setupPayload));
-    console.log('[GeminiLive] Setup sent with live context + 9 tools');
+  public updatePageContext(page:string) {
+    if(this.isConnected())this.ws!.send(JSON.stringify({clientContent:{turns:[{role:'user',parts:[{text:`Workspace navigation update: the user is now on ${page}. This updates page context only; do not respond until asked.`}]}],turnComplete:false}}));
   }
+  private mediaChanged(){this.onMediaChange?.({mic:Boolean(this.audioInputStream),camera:Boolean(this.cameraStream),screen:Boolean(this.screenStream)});}
 
   /**
    * Disconnects and cleans up all active streams and audio nodes
    */
   public disconnect() {
+    this.generation++;this.connectionReady=false;this.settleConnection?.(new Error('Live connection ended before setup completed.'));
+    if(this.sessionTimer)clearTimeout(this.sessionTimer);this.sessionTimer=null;
+    this.cancelledCalls.clear();this.currentGeminiTurnId=null;this.currentGeminiTurnText='';this.userTranscriptId=null;this.userTranscript='';
     this.stopAudioInput();
     this.stopCameraStream();
     this.stopScreenStream();
@@ -247,7 +158,8 @@ export class GeminiLiveClient {
       } catch {}
       this.ws = null;
     }
-    this.updateStatus('disconnected');
+    if(this.audioOutputContext){this.audioOutputContext.close().catch(()=>{});this.audioOutputContext=null;this.audioOutputAnalyser=null;}
+    this.mediaChanged();this.updateStatus('disconnected');
   }
 
   private cleanupStreams() {
@@ -263,8 +175,10 @@ export class GeminiLiveClient {
   /* -------------------------------------------------------------------------- */
 
   public async startAudioInput(): Promise<void> {
+    if(!this.isConnected())throw new Error('Start a live session first.');
+    this.stopAudioInput();const generation=this.generation;
     try {
-      this.audioInputStream = await navigator.mediaDevices.getUserMedia({
+      const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           sampleRate: 16000,
           channelCount: 1,
@@ -274,6 +188,9 @@ export class GeminiLiveClient {
         },
       });
 
+      if(generation!==this.generation||!this.isConnected()){stream.getTracks().forEach(t=>t.stop());throw new Error('Session ended while requesting the microphone.');}
+      this.audioInputStream=stream;this.mediaChanged();
+      stream.getTracks().forEach(t=>{t.onended=()=>this.stopAudioInput();});
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       this.audioInputContext = new AudioCtx({ sampleRate: 16000 });
       if (this.audioInputContext.state === 'suspended') {
@@ -308,12 +225,12 @@ export class GeminiLiveClient {
       this.audioInputProcessor.connect(this.audioInputContext.destination);
       this.updateStatus('listening');
     } catch (err: any) {
-      console.error('[GeminiLive] Mic error:', err);
-      this.updateStatus('error', `Microphone access error: ${err.message}`);
+      this.stopAudioInput();throw new Error('Microphone access was not granted. You can still type.');
     }
   }
 
   public stopAudioInput() {
+    if(this.audioInputStream&&this.isConnected())this.ws!.send(JSON.stringify({realtimeInput:{audioStreamEnd:true}}));
     if (this.audioInputProcessor) {
       this.audioInputProcessor.disconnect();
       this.audioInputProcessor = null;
@@ -332,7 +249,7 @@ export class GeminiLiveClient {
       } catch {}
       this.audioInputContext = null;
     }
-    this.currentInputLevel = 0;
+    this.currentInputLevel = 0;this.mediaChanged();
     if (this.status === 'listening') {
       this.updateStatus('connected');
     }
@@ -422,53 +339,29 @@ export class GeminiLiveClient {
   /* -------------------------------------------------------------------------- */
 
   public async startCameraStream(): Promise<MediaStream> {
-    this.stopCameraStream();
-    this.cameraStream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        width: { ideal: 640 },
-        height: { ideal: 480 },
-        frameRate: { ideal: 5, max: 10 },
-      },
-    });
-
-    this.ensureVideoStreaming();
-    return this.cameraStream;
+    if(!this.isConnected())throw new Error('Start a live session first.');
+    this.stopScreenStream();this.stopCameraStream();const generation=this.generation;
+    const stream=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:640},height:{ideal:480},frameRate:{ideal:5,max:10}}});
+    if(generation!==this.generation||!this.isConnected()){stream.getTracks().forEach(t=>t.stop());throw new Error('Session ended.');}
+    this.cameraStream=stream;stream.getVideoTracks().forEach(t=>{t.onended=()=>this.stopCameraStream();});
+    this.mediaChanged();this.ensureVideoStreaming();return stream;
   }
-
   public stopCameraStream() {
-    if (this.cameraStream) {
-      this.cameraStream.getTracks().forEach((t) => t.stop());
-      this.cameraStream = null;
-    }
-    if (!this.screenStream) {
-      this.stopVideoStreamingInterval();
-    }
+    this.cameraStream?.getTracks().forEach(t=>{t.onended=null;t.stop();});this.cameraStream=null;
+    if(!this.screenStream)this.stopVideoStreamingInterval();this.mediaChanged();
   }
-
   public async startScreenStream(): Promise<MediaStream> {
-    this.stopScreenStream();
-    this.screenStream = await navigator.mediaDevices.getDisplayMedia({
-      video: {
-        frameRate: { ideal: 5, max: 10 },
-      },
-    });
-
-    this.screenStream.getVideoTracks()[0].onended = () => {
-      this.stopScreenStream();
-    };
-
-    this.ensureVideoStreaming();
-    return this.screenStream;
+    if(!this.isConnected())throw new Error('Start a live session first.');
+    if(!navigator.mediaDevices?.getDisplayMedia)throw new Error('Screen sharing is unavailable in this browser. Try desktop Chrome or Edge.');
+    this.stopCameraStream();this.stopScreenStream();const generation=this.generation;
+    const stream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:5,max:10}},audio:false});
+    if(generation!==this.generation||!this.isConnected()){stream.getTracks().forEach(t=>t.stop());throw new Error('Session ended.');}
+    this.screenStream=stream;stream.getVideoTracks().forEach(t=>{t.onended=()=>this.stopScreenStream();});
+    this.mediaChanged();this.ensureVideoStreaming();return stream;
   }
-
   public stopScreenStream() {
-    if (this.screenStream) {
-      this.screenStream.getTracks().forEach((t) => t.stop());
-      this.screenStream = null;
-    }
-    if (!this.cameraStream) {
-      this.stopVideoStreamingInterval();
-    }
+    this.screenStream?.getTracks().forEach(t=>{t.onended=null;t.stop();});this.screenStream=null;
+    if(!this.cameraStream)this.stopVideoStreamingInterval();this.mediaChanged();
   }
 
   private ensureVideoStreaming() {
@@ -487,7 +380,7 @@ export class GeminiLiveClient {
 
     // Send 1 frame per second (1000ms)
     this.videoIntervalTimer = setInterval(() => {
-      if (!this.isConnected()) return;
+      if (!this.isConnected() || document.hidden) return;
 
       const activeStream = this.screenStream || this.cameraStream;
       if (!activeStream || activeStream.getVideoTracks().length === 0) return;
@@ -500,6 +393,7 @@ export class GeminiLiveClient {
       if (videoEl.readyState >= 2 && this.canvasElement) {
         const ctx = this.canvasElement.getContext('2d');
         if (ctx) {
+          this.canvasElement.width=640;this.canvasElement.height=Math.max(1,Math.round(640*(videoEl.videoHeight||480)/(videoEl.videoWidth||640)));
           ctx.drawImage(videoEl, 0, 0, this.canvasElement.width, this.canvasElement.height);
           const dataUrl = this.canvasElement.toDataURL('image/jpeg', 0.6);
           const base64Data = dataUrl.split(',')[1];
@@ -570,11 +464,12 @@ export class GeminiLiveClient {
   /**
    * Handles incoming WebSocket messages from the Gemini Live server
    */
-  private handleServerMessage(rawData: any) {
+  private handleServerMessage(rawData: any, socket=this.ws) {
+    if(socket!==this.ws)return;
     try {
       // Handle Blob data from WebSocket (convert to text first)
       if (rawData instanceof Blob) {
-        rawData.text().then((text: string) => this.handleServerMessage(text));
+        rawData.text().then((text: string) => this.handleServerMessage(text,socket));
         return;
       }
 
@@ -582,11 +477,13 @@ export class GeminiLiveClient {
 
       // Handle setupComplete — server confirmed our setup
       if (msg.setupComplete) {
-        console.log('[GeminiLive] Setup confirmed by server');
-        this.updateStatus('connected');
+        this.connectionReady=true;this.initAudioPlayback();this.startVisualizerLoop();
+        this.updateStatus('connected');this.settleConnection?.();
         return;
       }
 
+      if(msg.toolCallCancellation){for(const id of msg.toolCallCancellation.ids||[])this.cancelledCalls.add(id);return;}
+      if(msg.goAway){this.disconnect();this.updateStatus('disconnected','Gemini ended this live session. Start again to continue.');return;}
       // Handle toolCall from Gemini (function calling)
       if (msg.toolCall) {
         this.handleToolCalls(msg.toolCall);
@@ -596,6 +493,14 @@ export class GeminiLiveClient {
       // Handle serverContent
       if (msg.serverContent) {
         const sc = msg.serverContent;
+        if(sc.inputTranscription?.text){
+          this.userTranscriptId ||= `u-${crypto.randomUUID()}`;this.userTranscript+=sc.inputTranscription.text;
+          this.onTurnUpdate?.({id:this.userTranscriptId,sender:'user',text:this.userTranscript,timestamp:new Date(),isComplete:false});
+        }
+        if(sc.outputTranscription?.text){
+          this.currentGeminiTurnId ||= `g-${crypto.randomUUID()}`;this.currentGeminiTurnText+=sc.outputTranscription.text;
+          this.onTurnUpdate?.({id:this.currentGeminiTurnId,sender:'gemini',text:this.currentGeminiTurnText,timestamp:new Date(),isComplete:false});
+        }
 
         // User interruption: Model stopped producing speech because user interrupted
         if (sc.interrupted) {
@@ -659,6 +564,8 @@ export class GeminiLiveClient {
 
         // Turn complete
         if (sc.turnComplete) {
+          if(this.userTranscriptId)this.onTurnUpdate?.({id:this.userTranscriptId,sender:'user',text:this.userTranscript,timestamp:new Date(),isComplete:true});
+          this.userTranscriptId=null;this.userTranscript='';
           if (this.currentGeminiTurnId) {
             this.onTurnUpdate?.({
               id: this.currentGeminiTurnId,
@@ -683,38 +590,16 @@ export class GeminiLiveClient {
   /* -------------------------------------------------------------------------- */
 
   private async handleToolCalls(toolCall: any) {
-    const functionCalls = toolCall.functionCalls;
-    if (!functionCalls || !functionCalls.length) return;
-
-    const functionResponses: any[] = [];
-
-    for (const fc of functionCalls) {
-      const { name, args, id } = fc;
-      console.log(`[GeminiLive] Tool call: ${name}`, args);
-
-      // Notify UI of active tool
-      this.onToolActivity?.(name);
-
-      const result = await executeToolCall(name, args || {});
-
-      functionResponses.push({
-        id,
-        name,
-        response: result,
-      });
+    const socket=this.ws;const responses:any[]=[];
+    for(const fc of (toolCall.functionCalls||[]).slice(0,8)){
+      if(socket!==this.ws||this.cancelledCalls.has(fc.id))continue;
+      this.onToolActivity?.(fc.name);let response;
+      try{response=await this.executeTool(fc.name,fc.args||{});}catch{response={error:'The lookup failed. Do not assume there are no records.'};}
+      if(socket!==this.ws)return;
+      if(!this.cancelledCalls.has(fc.id))responses.push({id:fc.id,name:fc.name,response});
     }
-
-    // Clear tool activity indicator
     this.onToolActivity?.(null);
-
-    // Send tool responses back to Gemini
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      const response = {
-        toolResponse: { functionResponses },
-      };
-      this.ws.send(JSON.stringify(response));
-      console.log('[GeminiLive] Tool responses sent:', functionResponses.length);
-    }
+    if(socket===this.ws&&this.isConnected()&&responses.length)this.ws!.send(JSON.stringify({toolResponse:{functionResponses:responses}}));
   }
 
   /* -------------------------------------------------------------------------- */

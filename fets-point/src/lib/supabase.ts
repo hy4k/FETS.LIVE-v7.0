@@ -36,15 +36,15 @@ export const supabaseHelpers = {
     let query = supabase.from('candidates').select('*')
 
     if (filters?.date) {
-      query = query.gte('exam_date', filters.date)
-        .lte('exam_date', `${filters.date}T23:59:59.999Z`)
+      query = query.gte('exam_date', `${filters.date}T00:00:00+05:30`)
+        .lte('exam_date', `${filters.date}T23:59:59.999+05:30`)
     } else {
       // Range filtering
       if (filters?.startDate) {
-        query = query.gte('exam_date', filters.startDate)
+        query = query.gte('exam_date', `${filters.startDate}T00:00:00+05:30`)
       }
       if (filters?.endDate) {
-        query = query.lte('exam_date', `${filters.endDate}T23:59:59.999Z`)
+        query = query.lte('exam_date', `${filters.endDate}T23:59:59.999+05:30`)
       }
       // If no date filters are provided, and no specific date is selected, 
       // we DON'T filter by date, effectively fetching all history (up to default limit).
@@ -60,7 +60,14 @@ export const supabaseHelpers = {
       query = query.eq('branch_location', filters.branch_location)
     }
 
-    return query.order('exam_date', { ascending: true })
+    query = query.order('exam_date', { ascending: true }).order('id', { ascending: true })
+    const rows: any[] = []
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await query.range(from, from + 999)
+      if (error) return { data: null, error }
+      rows.push(...(data || []))
+      if (!data || data.length < 1000) return { data: rows, error: null }
+    }
   },
 
   // Incidents (Events Table)

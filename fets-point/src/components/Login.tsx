@@ -1,147 +1,66 @@
-import { useState } from 'react'
-import { useAuth } from '../hooks/useAuth'
-import { supabase } from '../lib/supabase'
-import { Mail, Lock, ArrowRight } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { useCallback, useState } from 'react';
+import { useAuth } from '../hooks/useAuth';
+import { supabase } from '../lib/supabase';
+import { ArrowRight, ArrowUpRight, Eye, EyeOff, LockKeyhole, Mail, Wind } from 'lucide-react';
+import { BrandSculpture, WelcomeIntro } from '../redesign/BrandExperience';
+import '../redesign/premium-experience.css';
 
-type Stage = 'credentials' | 'launching'
-
+function shouldShowIntro() {
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return false;
+  try { return sessionStorage.getItem('fets-welcome-seen') !== '1'; } catch { return true; }
+}
 export function Login() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const { signIn } = useAuth()
-
-  const [stage, setStage] = useState<Stage>('credentials')
-  const [resetEmail, setResetEmail] = useState('')
-  const [showForgot, setShowForgot] = useState(false)
-  const [resetMessage, setResetMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
-
-  const handleSignIn = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!email || !password) return
-    setLoading(true)
-    setError('')
-    setStage('launching')
+  const { signIn } = useAuth();
+  const [intro, setIntro] = useState(shouldShowIntro);
+  const [email, setEmail] = useState(''); const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false); const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false); const [showForgot, setShowForgot] = useState(false);
+  const [resetEmail, setResetEmail] = useState(''); const [resetMessage, setResetMessage] = useState('');
+  const [quiet, setQuiet] = useState(false);
+  const finishIntro = useCallback(() => { try { sessionStorage.setItem('fets-welcome-seen', '1'); } catch { /* Login also works without storage. */ } setIntro(false); }, []);
+  const handleSignIn = async (event: React.FormEvent) => {
+    event.preventDefault(); if (loading) return; setLoading(true); setError('');
+    try { const result = await signIn(email.trim(), password); if (result.error) setError(result.error.message); }
+    catch (err: unknown) { setError(err instanceof Error && err.message !== 'Failed to fetch' ? err.message : 'Unable to connect. Check your connection and try again.'); }
+    finally { setLoading(false); }
+  };
+  const handleRecovery = async (event: React.FormEvent) => {
+    event.preventDefault(); if (loading) return; setLoading(true); setError(''); setResetMessage('');
     try {
-      const { error } = await signIn(email, password)
-      if (error) { setError(error.message); setStage('credentials') }
-    } catch (err: any) {
-      setError(err.message === 'Failed to fetch' ? 'Network error — please check your connection.' : (err.message || 'Login failed'))
-      setStage('credentials')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleForgotPassword = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!resetEmail) return
-    setLoading(true)
-    setResetMessage(null)
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, { redirectTo: `${window.location.origin}/update-password` })
-      if (error) throw error
-      setResetMessage({ type: 'success', text: 'Recovery link sent — check your inbox.' })
-    } catch (err: any) {
-      setResetMessage({ type: 'error', text: err.message || 'Something went wrong' })
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const fade = {
-    initial: { opacity: 0, y: 22, filter: 'blur(8px)' },
-    animate: { opacity: 1, y: 0, filter: 'blur(0px)', transition: { duration: 0.55, ease: [0.22, 1, 0.36, 1] } },
-    exit: { opacity: 0, y: -16, filter: 'blur(6px)', transition: { duration: 0.35 } },
-  }
-
-  const inputClass =
-    'w-full pl-12 pr-4 py-3.5 bg-white/10 border border-white/25 rounded-2xl text-white text-sm font-semibold ' +
-    'placeholder-white/40 focus:outline-none focus:bg-white/20 focus:border-white/50 transition-all duration-300 ' +
-    'shadow-sm focus:ring-2 focus:ring-white/20'
-
-  return (
-    <div className="min-h-screen relative overflow-hidden flex items-center justify-center p-5" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
-      {/* warm gold ambient background */}
-      <motion.div className="absolute inset-0 z-0" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1.1 }}>
-        <div className="absolute inset-0 bg-gradient-to-br from-[#F7D046] via-[#F0C027] to-[#E2A80D]" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.22)_0%,transparent_60%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,rgba(180,120,0,0.2)_0%,transparent_50%)]" />
-        <motion.div animate={{ y: [-40, 40, -40], x: [-25, 25, -25], scale: [1, 1.08, 1] }} transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
-          className="absolute top-[8%] right-[12%] w-[340px] h-[340px] rounded-full bg-white/[0.09] blur-2xl" />
-        <motion.div animate={{ y: [30, -30, 30], x: [15, -25, 15], scale: [1, 1.12, 1] }} transition={{ duration: 20, repeat: Infinity, ease: 'easeInOut', delay: 2 }}
-          className="absolute bottom-[12%] left-[8%] w-[300px] h-[300px] rounded-full bg-white/[0.07] blur-xl" />
-        <div className="absolute inset-0 opacity-[0.035]" style={{ backgroundImage: 'radial-gradient(circle, rgba(0,0,0,0.4) 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
-      </motion.div>
-
-      {/* single centered card */}
-      <motion.div
-        initial={{ opacity: 0, y: 28, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1, transition: { duration: 0.7, ease: [0.22, 1, 0.36, 1] } }}
-        className="relative z-10 w-full max-w-[400px] rounded-[32px] border border-white/35 bg-white/12 px-8 py-12 backdrop-blur-2xl shadow-[0_32px_90px_rgba(120,80,0,0.28)]"
-      >
-        {/* logo + name */}
-        <div className="flex flex-col items-center gap-4 mb-9">
-          <div className="w-16 h-16 rounded-2xl bg-white flex items-center justify-center shadow-[0_12px_30px_rgba(0,0,0,0.18)]">
-            <span className="text-[#E2A80D]" style={{ fontFamily: '"Archivo Expanded", Inter, sans-serif', fontWeight: 900, fontSize: 38, lineHeight: 1, letterSpacing: '-0.04em' }}>F</span>
-          </div>
-          <h1 className="text-white font-black tracking-[-0.04em] leading-none" style={{ fontSize: 38 }}>
-            fets<span className="opacity-50">.</span>live
-          </h1>
-        </div>
-
-        <AnimatePresence mode="wait">
-          {stage === 'credentials' && !showForgot && (
-            <motion.form key="creds" onSubmit={handleSignIn} className="space-y-4" {...fade}>
-              {error && (
-                <div className="px-4 py-3 bg-red-600/30 border border-red-500/40 rounded-xl text-white text-xs font-bold leading-relaxed">{error}</div>
-              )}
-              <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-white/40" />
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} placeholder="User ID" autoComplete="username" required autoFocus />
-              </div>
-              <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-white/40" />
-                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className={inputClass} placeholder="Password" autoComplete="current-password" required />
-              </div>
-              <button type="submit" disabled={loading}
-                className="w-full mt-2 py-4 bg-white text-[#9A6A00] font-black uppercase tracking-wider text-xs rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.12)] hover:shadow-[0_20px_50px_rgba(0,0,0,0.2)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-60">
-                {loading ? <div className="w-5 h-5 border-2 border-amber-300 border-t-[#9A6A00] rounded-full animate-spin" /> : (<>Sign In <ArrowRight size={14} className="opacity-80" /></>)}
-              </button>
-              <button type="button" onClick={() => setShowForgot(true)} className="w-full pt-1 text-white/45 text-[11px] font-bold hover:text-white/80 transition-colors">
-                Forgot password?
-              </button>
-            </motion.form>
-          )}
-
-          {stage === 'credentials' && showForgot && (
-            <motion.form key="forgot" onSubmit={handleForgotPassword} className="space-y-4" {...fade}>
-              {resetMessage && (
-                <div className={`px-4 py-3 rounded-xl border text-xs font-bold leading-relaxed ${resetMessage.type === 'success' ? 'bg-green-600/30 border-green-500/40 text-white' : 'bg-red-600/30 border-red-500/40 text-white'}`}>{resetMessage.text}</div>
-              )}
-              <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-white/40" />
-                <input type="email" value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} className={inputClass} placeholder="User ID" required autoFocus />
-              </div>
-              <button type="submit" disabled={loading} className="w-full py-4 bg-white text-[#9A6A00] font-black uppercase tracking-wider text-xs rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.12)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 flex items-center justify-center">
-                {loading ? <div className="w-5 h-5 border-2 border-amber-300 border-t-[#9A6A00] rounded-full animate-spin" /> : 'Send Recovery Link'}
-              </button>
-              <button type="button" onClick={() => setShowForgot(false)} className="w-full py-1 text-white/55 text-[11px] font-bold hover:text-white/80 transition-colors">← Back</button>
-            </motion.form>
-          )}
-
-          {stage === 'launching' && (
-            <motion.div key="launching" className="flex flex-col items-center justify-center text-center py-12" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <div className="w-12 h-12 border-[3px] border-white/20 border-t-white rounded-full animate-spin mb-5" />
-              <p className="text-white/60 text-xs font-bold uppercase tracking-wider">Signing in…</p>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.div>
-
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');`}</style>
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(resetEmail.trim(), { redirectTo: `${window.location.origin}/update-password` });
+      if (resetError) throw resetError;
+      setResetMessage('If this email is registered, you’ll receive a recovery link. Check your inbox.');
+    } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Could not send the recovery link. Please try again.'); }
+    finally { setLoading(false); }
+  };
+  if (intro) return <WelcomeIntro onComplete={finishIntro} />;
+  return <main className={`premium-login${quiet ? ' premium-login--quiet' : ''}`}>
+    <div className="login-ambient login-ambient--one" /><div className="login-ambient login-ambient--two" />
+    <header className="login-masthead"><a href="/" className="login-brand" aria-label="FETS LIVE home">fets<span>.</span>live</a><span className="premium-eyebrow">YOUR PEOPLE. YOUR PLACE.</span></header>
+    <div className="login-layout">
+      <section className="login-story" aria-label="Welcome to your workspace">
+        <span className="premium-eyebrow"><i /> A LITTLE MORE HUMAN. A LOT MORE CONNECTED.</span>
+        <h1>Great days.<br /><em>Made together.</em></h1>
+        <p>Behind every confident candidate,<br className="login-desktop-break" /> there’s a team that cares. This is your space.</p>
+        <div className="login-sculpture-wrap"><BrandSculpture /><span className="login-art-note">People at the centre.<br /><em>Always.</em></span></div>
+        <div className="login-story-footer"><span className="login-centres">COCHIN <i /> CALICUT <span>ONE TEAM</span></span><button className="login-quiet" onClick={() => setQuiet(q => !q)} aria-pressed={quiet}><Wind size={15} />{quiet ? 'A little quieter' : 'A moment of calm'}</button></div>
+      </section>
+      <section className="login-card" aria-label={showForgot ? 'Account recovery' : 'Sign in'}>
+        <div className="login-card-top"><span className="login-monogram">f.</span><span className="premium-eyebrow">{showForgot ? 'FIND YOUR WAY BACK' : 'THE DAY IS YOURS'}</span><ArrowUpRight size={18} /></div>
+        <div className="login-card-heading"><h2>{showForgot ? 'A fresh start.' : 'Welcome back.'}</h2><p>{showForgot ? 'We’ll help you get back to your workspace.' : 'Come in. Find your rhythm. Make a difference.'}</p></div>
+        <form onSubmit={showForgot ? handleRecovery : handleSignIn} aria-busy={loading}>
+          {error && <div className="login-message login-message--error" role="alert">{error}</div>}
+          {resetMessage && <div className="login-message" role="status">{resetMessage}</div>}
+          <label className="login-label" htmlFor="login-email">Work email</label>
+          <div className="login-input-wrap"><Mail size={17} /><input id="login-email" type="email" name="email" autoComplete="username" placeholder="you@fets.in" value={showForgot ? resetEmail : email} onChange={e => showForgot ? setResetEmail(e.target.value) : setEmail(e.target.value)} required disabled={loading} autoCapitalize="none" spellCheck={false} /></div>
+          {!showForgot && <><div className="login-password-label"><label className="login-label" htmlFor="login-password">Password</label><button type="button" disabled={loading} onClick={() => { setResetEmail(email); setShowForgot(true); setError(''); }}>Forgot password?</button></div>
+            <div className="login-input-wrap"><LockKeyhole size={17} /><input id="login-password" name="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" placeholder="Your password" value={password} onChange={e => setPassword(e.target.value)} required disabled={loading} /><button type="button" className="login-reveal" aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword} onClick={() => setShowPassword(v => !v)}>{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button></div></>}
+          <button className="login-submit" disabled={loading} type="submit"><span>{loading ? (showForgot ? 'Sending recovery link…' : 'Opening your workspace…') : (showForgot ? 'Send recovery link' : 'Step inside')}</span>{loading ? <span className="login-spinner" aria-hidden="true" /> : <ArrowRight size={19} />}</button>
+          {showForgot && <button className="login-back" type="button" disabled={loading} onClick={() => { setShowForgot(false); setError(''); setResetMessage(''); }}>← Back to sign in</button>}
+        </form>
+        <div className="login-card-foot"><span className="login-foot-dot" /><p>A space for good work.<br /><strong>And the people who make it happen.</strong></p></div>
+      </section>
     </div>
-  )
+    <footer className="login-footer"><span>FETS LIVE <i> / </i> THE HUMAN SIDE OF OPERATIONS</span><span>Every detail. Every day. Together.</span></footer>
+  </main>;
 }
