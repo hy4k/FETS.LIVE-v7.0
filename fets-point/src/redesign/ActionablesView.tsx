@@ -1,6 +1,7 @@
 // @ts-nocheck
 /* eslint-disable */
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import MissionWorkspace from "./MissionWorkspace";
 import * as ACT from "./actionables-data";
 import { toast } from "react-hot-toast";
 
@@ -62,7 +63,7 @@ function linkify(t: string) {
   );
 }
 
-export function ActionablesView({ branch }: { branch?: string }) {
+function LegacyActionablesView({ branch }: { branch?: string }) {
   const [me, setMe] = useState<ACT.ActionableStaff | null>(null);
   const [staff, setStaff] = useState<ACT.ActionableStaff[]>([]);
   const [acts, setActs] = useState<ACT.Actionable[]>([]);
@@ -1110,45 +1111,6 @@ export function ActionablesView({ branch }: { branch?: string }) {
   // ==========================================
   return (
     <div style={{ maxWidth: 1180, margin: "0 auto", display: "flex", flexDirection: "column", gap: 28 }}>
-      {/* Top Banner / Masthead */}
-      <div
-        className="glass rise"
-        style={{
-          borderRadius: "var(--radius)",
-          padding: "24px 28px",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: 20,
-          flexWrap: "wrap",
-          boxShadow: "var(--shadow-lift)",
-        }}
-      >
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ width: 28, height: 3, background: "var(--accent)", borderRadius: 99 }} />
-            <span className="eyebrow" style={{ color: "var(--accent)" }}>FETS · Standardisation &amp; Tasks</span>
-          </div>
-          <h1 style={{ margin: 0, fontFamily: '"Archivo Expanded", var(--font)', fontSize: "clamp(26px, 3.4vw, 42px)", fontWeight: 900, color: "var(--ink)", letterSpacing: "-0.03em" }}>
-            Actionables
-          </h1>
-          <p style={{ margin: 0, fontSize: 13.5, color: "var(--ink-3)", fontWeight: 500 }}>
-            Standardise Cochin &amp; Calicut test centres and replicate approved standards for new centres.
-          </p>
-        </div>
-
-        {/* User Identity Chip */}
-        <div className="glass-2" style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 16px", borderRadius: 999, border: "1px solid var(--hairline)" }}>
-          <span style={{ width: 34, height: 34, borderRadius: "50%", background: colorFor(me?.name || "Staff"), color: "#fff", display: "grid", placeItems: "center", fontWeight: 800, fontSize: 13 }}>
-            {initials(me?.name || "Staff")}
-          </span>
-          <div>
-            <div style={{ fontSize: 13.5, fontWeight: 750, color: "var(--ink)" }}>{me?.name || "Staff"}</div>
-            <div style={{ fontSize: 10.5, color: "var(--accent)", fontWeight: 700 }}>{isAdmin ? "⚡ Admin" : "Team Member"}</div>
-          </div>
-        </div>
-      </div>
-
       {/* Sub-view Navigation Bar */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
         {[
@@ -1831,4 +1793,5 @@ export function ActionablesView({ branch }: { branch?: string }) {
   );
 }
 
+export function ActionablesView({ branch, navigate }: { branch?: string; navigate?: (page: string) => void }) { return <MissionWorkspace navigate={navigate} legacy={<LegacyActionablesView branch={branch} />} />; }
 export default ActionablesView;

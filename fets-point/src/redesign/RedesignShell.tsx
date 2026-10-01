@@ -19,12 +19,12 @@ import { loadLiveData, ensureMonth, loadLeaveRequests, loadOtClaims, loadApplica
 import { supabase } from "../lib/supabase";
 import * as DB from "./write-data";
 import * as ACT from "./actionables-data";
+import { TeamChatWorkspace } from "../components/Chat/TeamChatWorkspace";
 import { ActionablesView } from "./ActionablesView";
 import * as ATT from "./attendance-data";
 import { isStaffRosterVisible } from "../utils/rosterVisibility";
 import * as DD from "./dutyData";
 import html2canvas from "html2canvas";
-import { FetsChatPopup } from "../components/FetsChatPopup";
 import { FetsIncidentPremium } from "../components/FetsIncidentPremium";
 import FetsRoster from "../components/FetsRosterPremium";
 import { FetsCalendarPremium as FetsCalendar } from "../components/FetsCalendarPremium";
@@ -11974,7 +11974,8 @@ function ToolsSheet({ open, onClose, onPick, includeNav }) {
   const items = [
     ...NAV.map(n => ({ ...n, sub: descriptions[n.id] })),
     { id: "handover", label: "Shift handover", sub: "Weekly leads, shared duties and centre reports" },
-    { id: "actionables", label: "Actionables", sub: "Standards, rollouts and follow-ups" },
+    { id: "actionables", label: "Actionables", sub: "One team, seven Pearson VUE centres" },
+    { id: "fets-chat", label: "Team space", sub: "Conversations, decisions and follow-through" },
     { id: "case", label: "Raise a case", sub: "Record an incident or ask for support" },
     ...(window.FETS.isAdmin ? TOOLS : []),
   ];
@@ -12051,7 +12052,7 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
 
   // Open chat event listener
   React.useEffect(() => {
-    const handler = (e: any) => setChatTarget(e.detail);
+    const handler = (e: any) => { setChatTarget(e.detail); setActive("fets-chat"); };
     window.addEventListener("fets-open-chat", handler);
     return () => window.removeEventListener("fets-open-chat", handler);
   }, []);
@@ -12073,7 +12074,8 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
               <div style={{ fontWeight: 800 }}>Message from {senderName}</div>
               <div style={{ fontSize: 11, opacity: 0.8, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 180 }}>{payload.new.content}</div>
               <button onClick={() => {
-                setChatTarget({ id: senderId, full_name: senderName });
+                setChatTarget({ conversationId: payload.new.conversation_id });
+                setActive("fets-chat");
                 toast.dismiss();
               }} style={{ alignSelf: "flex-end", border: "none", background: "transparent", color: "var(--accent)", fontSize: 10, fontWeight: 900, cursor: "pointer", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 4 }}>
                 Reply
@@ -12178,7 +12180,7 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
         flex: 1,
         overflowY: "auto",
         background: isDeskActive ? "linear-gradient(160deg, #ECECEC 0%, #90CCF4 50%, #5DA2D5 100%)" : undefined,
-        padding: (active === "calendar" || active === "roster" || active === "live" || active === "desk")
+        padding: (active === "calendar" || active === "roster" || active === "live" || active === "desk" || active === "actionables" || active === "news" || active === "chat" || active === "fets-chat" || active === "lost-and-found")
           ? "0" 
           : (active === "handover" ? "0 0 80px" : "clamp(22px,3.2vw,40px) clamp(14px,3vw,30px) 80px")
       }}>
@@ -12193,7 +12195,8 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
         {active === "handover" && <DutyWorkspace key={branch} branch={branch} navigate={setActive} legacy={<HandoverHub branch={branch} setActive={setActive} />} />}
         {active === "desk" && <MyDeskPage branch={branch} setActive={setActive} setDrawer={setDrawer} bridge={bridge} />}
         {active === "business" && <BusinessPage branch={branch} />}
-        {(active === "news" || active === "actionables") && <ActionablesView branch={branch} />}
+        {(active === "chat" || active === "fets-chat" || active === "lost-and-found") && <TeamChatWorkspace navigate={setActive} initialConversationId={chatTarget?.conversationId} initialTargetUser={chatTarget?.id ? chatTarget : undefined} />}
+        {(active === "news" || active === "actionables") && <ActionablesView branch={branch} navigate={setActive} />}
         {active === "attn-admin" && <AttendanceAdminPage branch={branch} />}
         {/* staff-requests route removed — exclusively handled in My Desk → ApplicationsHub */}
         {active === "staff-ot" && <OtToilClaimsHub branch={branch} />}
@@ -12233,9 +12236,6 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
       </TweaksPanel>
 
       <ToastHost />
-      {chatTarget && (
-        <FetsChatPopup targetUser={chatTarget} onClose={() => setChatTarget(null)} zIndex={2000} />
-      )}
     </div>
   );
 }

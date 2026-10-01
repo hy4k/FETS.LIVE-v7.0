@@ -19,7 +19,7 @@ import { PageLoadingFallback } from './components/LoadingFallback';
 import { Login } from './components/Login';
 import { BrandLoader } from './redesign/BrandExperience';
 import { FetsAIAgent } from './fets-ai/FetsAIAgent';
-import { Header } from './components/Header';
+import WorkspaceNavigation from './redesign/WorkspaceNavigation';
 import { BottomNav } from './components/BottomNav';
 import { UpdatePassword } from './components/UpdatePassword';
 
@@ -245,7 +245,7 @@ function AppContent() {
  
       if (activeTab === 'system-manager') return <SystemManager />;
       if (activeTab === 'news-manager') return <NewsManager />;
-      if (activeTab === 'lost-and-found' || activeTab === 'fets-chat' || activeTab === 'chat') return <EnhancedChat />;
+
       if (activeTab === 'cma-availability' || activeTab === 'branch-delegation') return isMithun ? <BranchDelegationWidget /> : <MobileHome setActiveTab={setActiveTab} profile={profile} />;
       if (activeTab === 'gbp') return <GBPDashboard />;
       if (activeTab === 'expansion') return (
@@ -269,7 +269,7 @@ function AppContent() {
       'access-hub', 'dashboard', 'candidate-tracker', 'fets-intelligence',
       'incident-log', 'system-manager', 'news-manager', 'user-management',
       'branch-delegation', 'gbp', 'attn-admin', 'business', 'staff-requests', 'staff-ot',
-      'handover', 'news', 'actionables'
+      'handover', 'news', 'actionables', 'fets-chat', 'chat', 'lost-and-found'
     ].includes(activeTab);
 
     if (isRedesignPage) {
@@ -320,7 +320,7 @@ function AppContent() {
     );
   }
 
-  const isFullscreenPage = activeTab === 'my-desk' || activeTab === 'fets-intelligence' || activeTab === 'command-center' || activeTab === 'fets-roster' || activeTab === 'fets-calendar' || activeTab === 'access-hub' || activeTab === 'dashboard' || activeTab === 'candidate-tracker' || activeTab === 'incident-log' || activeTab === 'system-manager' || activeTab === 'news-manager' || activeTab === 'user-management' || activeTab === 'branch-delegation' || activeTab === 'gbp' || activeTab === 'attn-admin' || activeTab === 'business' || activeTab === 'staff-requests' || activeTab === 'staff-ot' || activeTab === 'handover' || activeTab === 'news' || activeTab === 'expansion';
+  const isFullscreenPage = ['fets-chat','chat','lost-and-found','actionables'].includes(activeTab) || activeTab === 'my-desk' || activeTab === 'fets-intelligence' || activeTab === 'command-center' || activeTab === 'fets-roster' || activeTab === 'fets-calendar' || activeTab === 'access-hub' || activeTab === 'dashboard' || activeTab === 'candidate-tracker' || activeTab === 'incident-log' || activeTab === 'system-manager' || activeTab === 'news-manager' || activeTab === 'user-management' || activeTab === 'branch-delegation' || activeTab === 'gbp' || activeTab === 'attn-admin' || activeTab === 'business' || activeTab === 'staff-requests' || activeTab === 'staff-ot' || activeTab === 'handover' || activeTab === 'news' || activeTab === 'expansion';
 
   return (
     <div className={`golden-theme min-h-screen h-screen flex flex-col overflow-hidden relative ${getBranchTheme(activeBranch)} ${(activeTab === 'fets-calendar' || activeTab === 'fets-calendar-demo') ? 'fets-calendar-active-page' : ''}`}>
@@ -328,7 +328,7 @@ function AppContent() {
 
       {!isFullscreenPage && !isMobile && (
         <div className="flex-none bg-[#e0e5ec] relative z-50">
-          <Header isMobile={isMobile} setActiveTab={setActiveTab} activeTab={activeTab} />
+          <WorkspaceNavigation navigate={setActiveTab} />
         </div>
       )}
 

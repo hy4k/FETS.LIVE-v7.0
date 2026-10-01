@@ -30,3 +30,9 @@ export function projectedGroups(rows:RosterRow[],candidates:CandidateRosterRecor
   for(const c of next)groups.get(key(c.exam_name,c.exam_start_time))!.after++;
   return [...groups.values()].sort((a,b)=>(a.time||'').localeCompare(b.time||''));
 }
+
+export function expectedProvider(exam: string): string | null {
+  if (/\b(Claude|Anthropic)\b/i.test(exam)) return 'PEARSON VUE';
+  if (/\bCMA\s*US\b/i.test(exam) || exam.toUpperCase() === 'INSTITUTE OF CERTIFIED MANAGEMENT ACCOUNTANTS') return 'PROMETRIC';
+  return null;
+}

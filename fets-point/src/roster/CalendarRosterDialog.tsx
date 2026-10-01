@@ -5,7 +5,7 @@ import { Upload, UserPlus, X, ArrowRight, CheckCircle2, FileSpreadsheet, Loader2
 import { useQueryClient } from '@tanstack/react-query';
 import { parseRosterFile, normaliseRosterTime, type ExtraAliases } from './parse';
 import { PROVIDERS, type RosterPreview, type RosterRow } from './types';
-import { loadRosterContext, possibleLegacyMatch, projectedGroups, rosterMatch, saveRoster } from './roster-api';
+import { expectedProvider, loadRosterContext, possibleLegacyMatch, projectedGroups, rosterMatch, saveRoster } from './roster-api';
 import './calendar-roster.css';
 
 type Props={mode:'upload'|'manual';day:string;branch:string;onClose:()=>void};
@@ -36,6 +36,7 @@ export default function CalendarRosterDialog({mode:initialMode,day:initialDay,br
       else result={filename:'By-hand entry',header_row:0,columns:{},issues:[],counts:{valid:1,warnings:0,errors:0,no_show:0,skipped:0},rows:[{...manual,full_name:manual.full_name.trim(),roster_number:manual.roster_number.trim(),source_row:1,exam_name:exam.trim(),exam_start_time:normaliseRosterTime(time)}]};
       result={...result,rows:result.rows.map(r=>({...r,exam_name:r.exam_name||exam.trim(),exam_start_time:r.exam_start_time||normaliseRosterTime(time)})),issues:[...result.issues]};
       for(const r of result.rows){if(!r.full_name||!r.roster_number||!r.exam_name||!r.exam_start_time)result.issues.push({source_row:r.source_row,level:'error',message:'Full name, provider roster number, exam name and IST start time are required. Set the missing defaults or correct the file.'});}
+      for (const r of result.rows) { const expected = expectedProvider(r.exam_name || ''); if (expected && provider !== expected) result.issues.push({source_row:r.source_row,level:'error',message:`${r.exam_name} is delivered through ${expected}. Choose that client and preview again.`}); }
       result.counts={...result.counts,errors:result.issues.filter(x=>x.level==='error').length};
       const current=await loadRosterContext(day,branch);
       if(request!==generation.current)return;

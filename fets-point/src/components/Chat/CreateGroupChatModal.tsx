@@ -1,73 +1,12 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
+import { Check, Users, X } from 'lucide-react';
 import { useAllStaff } from '../../hooks/useFetsConnect';
 import { useCreateGroupConversation } from '../../hooks/useChat';
 import { useAuth } from '../../hooks/useAuth';
-
-const CreateGroupChatModal = ({ setIsModalOpen }) => {
-  const { user, profile } = useAuth();
-  const { data: users = [], isLoading } = useAllStaff();
-  const createGroupConversation = useCreateGroupConversation();
-  const [groupName, setGroupName] = useState('');
-  const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
-
-  const handleCreateGroup = async () => {
-    if (groupName.trim() && selectedMembers.length > 0) {
-      try { await createGroupConversation.mutateAsync({ name: groupName, memberIds: selectedMembers, createdBy: profile?.id || user.id });setIsModalOpen(false); } catch { /* Mutation displays the error and keeps selections. */ }
-    }
-  };
-
-  const handleMemberSelection = (memberId: string) => {
-    setSelectedMembers((prev) =>
-      prev.includes(memberId) ? prev.filter((id) => id !== memberId) : [...prev, memberId]
-    );
-  };
-
-  if (isLoading) {
-    return <div>Loading users...</div>;
-  }
-
-  return (
-    <div className="fixed inset-0 z-[9000] bg-black bg-opacity-50 flex items-center justify-center">
-      <div role="dialog" aria-modal="true" aria-label="Create group chat" className="bg-white text-slate-800 rounded-lg p-6 w-[min(500px,94vw)]">
-        <h2 className="text-lg font-bold mb-4">Create Group Chat</h2>
-        <input
-          type="text"
-          placeholder="Group Name"
-          className="w-full p-2 border rounded-md mb-4"
-          value={groupName}
-          onChange={(e) => setGroupName(e.target.value)}
-        />
-        <div className="flex flex-col gap-2 max-h-60 overflow-y-auto">
-          {users
-            .filter((u) => u.id !== profile?.id && u.user_id !== user?.id)
-            .map((user) => (
-              <div
-                key={user.id}
-                className={`flex items-center gap-4 p-2 rounded-lg cursor-pointer ${
-                  selectedMembers.includes(user.id) ? 'bg-blue-200' : 'hover:bg-gray-200'
-                }`}
-                onClick={() => handleMemberSelection(user.id)}
-              >
-                <img
-                  src={user.avatar_url || `https://ui-avatars.com/api/?name=${user.full_name}&background=random`}
-                  alt={user.full_name}
-                  className="w-10 h-10 rounded-full"
-                />
-                <p className="font-semibold">{user.full_name}</p>
-              </div>
-            ))}
-        </div>
-        <div className="flex justify-end gap-4 mt-4">
-          <button className="p-2 bg-gray-300 rounded-md" onClick={() => setIsModalOpen(false)}>
-            Cancel
-          </button>
-          <button disabled={createGroupConversation.isPending || !groupName.trim() || !selectedMembers.length} className="p-2 bg-blue-500 text-white rounded-md" onClick={handleCreateGroup}>
-            Create
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+import './team-chat.css';
+const CreateGroupChatModal = ({ setIsModalOpen, onCreated }: { setIsModalOpen: (open: boolean) => void; onCreated?: (id: string) => void }) => {
+ const { user, profile } = useAuth();const { data: users = [], isLoading } = useAllStaff();const create = useCreateGroupConversation();const [name,setName] = useState('');const [selected,setSelected] = useState<string[]>([]);
+ async function save() { if (!name.trim() || !selected.length || !profile?.id) return;try { const result = await create.mutateAsync({ name:name.trim(), memberIds:selected, createdBy:profile.id });setIsModalOpen(false);onCreated?.(result.id); } catch { /* Keep the selections if creation fails. */ } }
+ return <div className="tr-modal-backdrop"><form className="tr-modal" role="dialog" aria-modal="true" aria-label="Create group chat" onSubmit={e=>{e.preventDefault();void save();}}><button type="button" className="tr-modal-close" aria-label="Close" onClick={()=>setIsModalOpen(false)}><X size={20}/></button><span className="tr-kicker">BRING THE RIGHT PEOPLE TOGETHER</span><h2>A space for your team.</h2><label>Group name<input required placeholder="What are we working on?" maxLength={100} value={name} onChange={e=>setName(e.target.value)}/></label><p className="tr-note">Choose the teammates who should be part of this conversation.</p><div className="tr-group-people">{isLoading?<p>Loading teammates…</p>:users.filter((p:any)=>p.id!==profile?.id&&p.user_id!==user?.id&&p.is_active!==false).map((p:any)=><label key={p.id}><input type="checkbox" checked={selected.includes(p.id)} onChange={()=>setSelected(prev=>prev.includes(p.id)?prev.filter(id=>id!==p.id):[...prev,p.id])}/><span className="tr-avatar small">{p.full_name.split(' ').map((s:string)=>s[0]).slice(0,2).join('')}</span><span>{p.full_name}<small>{p.branch_assigned||'FETS team'}</small></span>{selected.includes(p.id)&&<Check size={16}/>}</label>)}</div><button className="tr-primary" disabled={create.isPending||!name.trim()||!selected.length}><Users size={16}/>{create.isPending?'Creating…':`Create group · ${selected.length+1} people`}</button></form></div>;
 };
-
 export default CreateGroupChatModal;
