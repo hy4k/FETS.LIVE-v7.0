@@ -18,7 +18,7 @@ DEPLOY_RELEASE=$(date -u +%Y%m%dT%H%M%SZ)
 DEPLOY_HASH=$(sha256sum fets-point/dist/index.html | cut -d' ' -f1)
 DEPLOY_TMP=$(mktemp -d)
 trap 'rm -rf "$DEPLOY_TMP"' EXIT
-printf '{"release":"%s","index_sha256":"%s","features":["premium-arrival","my-desk","centre-handover","fets-ai","calendar-roster","team-space","mission-seven"]}\n' "$DEPLOY_RELEASE" "$DEPLOY_HASH" > fets-point/dist/release.json
+printf '{"release":"%s","index_sha256":"%s","features":["premium-arrival","my-desk","centre-handover","fets-ai","calendar-roster","team-space","mission-seven","shared-workplace"]}\n' "$DEPLOY_RELEASE" "$DEPLOY_HASH" > fets-point/dist/release.json
 tar -czf "$DEPLOY_TMP/dist.tar.gz" -C fets-point dist
 # Keep a reproducible source snapshot with the release; never include environment files or keys.
 tar -czf "$DEPLOY_TMP/source.tar.gz" fets-point/src fets-point/public fets-point/index.html fets-point/package.json fets-point/vite.config.ts fets-point/tsconfig.app.json pnpm-lock.yaml scripts/deploy-reviewed-vps.sh fets-point/deploy-vps.sh scripts/verification supabase/migrations docs/releases
