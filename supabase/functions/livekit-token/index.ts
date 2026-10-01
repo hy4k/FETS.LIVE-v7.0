@@ -13,7 +13,7 @@ Deno.serve(async req=>{
   const {conversationId}=await req.json();if(!/^[0-9a-f-]{36}$/i.test(conversationId||''))return reply({error:'Choose a conversation'},400);
   const {data:member,error}=await db.rpc('is_conversation_member',{p_conversation_id:conversationId,p_user_id:user.id});
   if(error||!member)return reply({error:'Only conversation members can join this call'},403);
-  const key=Deno.env.get('LIVEKIT_API_KEY'),secret=Deno.env.get('LIVEKIT_API_SECRET'),url=Deno.env.get('LIVEKIT_URL');
+  const key=Deno.env.get('LIVEKIT_API_KEY'),secret=Deno.env.get('LIVEKIT_API_SECRET'),url=Deno.env.get('LIVEKIT_URL')?.trim();
   if(!key||!secret||!url)return reply({error:'Team calling has not been configured'},503);
   const {data:profile}=await db.from('staff_profiles').select('full_name').eq('user_id',user.id).maybeSingle();
   const token=new AccessToken(key,secret,{identity:user.id,name:profile?.full_name||'FETS teammate',ttl:'1h'});
