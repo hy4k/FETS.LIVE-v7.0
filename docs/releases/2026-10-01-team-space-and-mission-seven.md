@@ -1,5 +1,7 @@
 # Team Space and Mission 7 — 1 October 2026
 
+Deployed to `https://fets.live` as release `20261001T102043Z`, source commit `314289f30c28e3007c75ae3970444b951a5ca4ad`. The public index SHA-256 matches the reviewed build: `8a715f5aa27efe6a1b9d983b95e251ebbffbf1456aa739ac0b288e6537641ef3`. The VPS retains the previous image and source snapshot for rollback. The canonical Windows workspace was synced after backing up its overwritten files to `C:\Projects\00_Inbox\FETS-LIVE-before-team-space-20261001T102045Z.tar.gz`.
+
 The full chat workspace now brings direct and group conversations, voice/video room controls, private file attachments, message search, personal saved messages, shared follow-ups with owners/dates, decisions and a copyable handover brief together. My Desk chat shortcuts and message notification replies use the same workspace, including the correct group conversation. Conversation lists refresh for new memberships and messages. The old page masthead is removed from active chat, Actionables and remaining legacy routes; those legacy routes have compact workspace navigation.
 
 At the owner's request, five old conversations and six old messages were cleared in a one-time guarded transaction, with their associated chat records. No sample conversations or institutions were seeded. Cleanup is deliberately not an installation migration, so future deployments never erase new staff messages.
