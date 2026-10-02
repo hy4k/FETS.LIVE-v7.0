@@ -11529,6 +11529,7 @@ const NAV = [
   { id: "calendar", label: "Calendar" },
   { id: "roster", label: "Roster" },
   { id: "desk", label: "My Desk" },
+  { id: "actionables", label: "Actionables" },
 ];
 
 /* secondary tools (Lost & Found now lives on the LIVE page under Help & support) */
@@ -11570,11 +11571,11 @@ export function TopNav({ active, onNavigate, branch, setBranch, t, setTweak, onT
   return <header className="premium-nav">
     <button className="nav-brand" onClick={() => onNavigate({ id: "live" })} aria-label="FETS LIVE home"><span className="nav-brand-symbol">f.</span><span className="nav-brand-type">fets<span>.</span>live</span></button>
     <nav className="topnav-links" aria-label="Primary navigation">{NAV.map(n => {
-      const isActive = n.id === "desk" ? ["desk", "attn-admin", "business", "staff-requests", "staff-ot", "candidate-tracker", "access-hub", "system-manager", "news-manager", "user-management", "branch-delegation", "dashboard", "fets-intelligence", "gbp"].includes(active) : active === n.id;
+      const isActive = n.id === "desk" ? ["desk", "attn-admin", "business", "staff-requests", "staff-ot", "candidate-tracker", "access-hub", "system-manager", "news-manager", "user-management", "branch-delegation", "dashboard", "fets-intelligence", "gbp"].includes(active) : n.id === "actionables" ? ["actionables", "news"].includes(active) : active === n.id;
       return <button key={n.id} className={`topnav-item ${isActive ? "active" : ""}`} aria-current={isActive ? "page" : undefined} onClick={() => onNavigate(n)}>{n.label}{n.id === "desk" && pendingHandoverBadge > 0 && <span className="nav-unread">{pendingHandoverBadge > 9 ? "9+" : pendingHandoverBadge}</span>}</button>;
     })}</nav>
     <div className="nav-controls">
-      {active !== "news" && <select className="nav-centre-select" aria-label="Active centre" value={branch} onChange={e => setBranch(e.target.value)}><option value="calicut">Calicut</option><option value="cochin">Cochin</option><option value="global">All centres</option></select>}
+      {!["news", "actionables"].includes(active) && <select className="nav-centre-select" aria-label="Active centre" value={branch} onChange={e => setBranch(e.target.value)}><option value="calicut">Calicut</option><option value="cochin">Cochin</option><option value="global">All centres</option></select>}
       <button className="nav-control" onClick={onTools} title="All tools" aria-label="All tools"><Icon name="grid" size={16} /></button>
       <button className="nav-control" onClick={onLogout} title="Log out" aria-label="Log out"><Icon name="power" size={16} /></button>
       <button className="nav-control topnav-burger" onClick={onBurger} title="Menu" aria-label="Open navigation menu"><Icon name="menu" size={19} /></button>
@@ -11970,11 +11971,10 @@ function TheLabPage({ branch }) {
 
 /* ---------- tools sheet (overflow) ---------- */
 function ToolsSheet({ open, onClose, onPick, includeNav }) {
-  const descriptions = { live: "Your centre, team and day ahead", calendar: "Exam sessions and centre bookings", roster: "Staff schedules and monthly planning", desk: "Your focus, notes and personal space" };
+  const descriptions = { live: "Your centre, team and day ahead", calendar: "Exam sessions and centre bookings", roster: "Staff schedules and monthly planning", desk: "Your focus, notes and personal space", actionables: "Institutions, assigned duties and follow-ups" };
   const items = [
     ...NAV.map(n => ({ ...n, sub: descriptions[n.id] })),
     { id: "handover", label: "Shift handover", sub: "Weekly leads, shared duties and centre reports" },
-    { id: "actionables", label: "Actionables", sub: "One team, seven Pearson VUE centres" },
     { id: "fets-chat", label: "Team space", sub: "Conversations, decisions and follow-through" },
     { id: "case", label: "Raise a case", sub: "Record an incident or ask for support" },
     ...(window.FETS.isAdmin ? TOOLS : []),
