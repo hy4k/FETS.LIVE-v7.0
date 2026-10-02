@@ -75,11 +75,16 @@ describe('personal My Desk', () => {
     expect(props.openDrawer).not.toHaveBeenCalled();
   });
 
-  it('does not invent colleagues or a pending handover count when data is unavailable', () => {
+  it('does not invent colleagues when data is unavailable', () => {
     render(<MyDeskHome {...makeProps()} people={[]} pendingHandovers={null} />);
     expect(screen.getByText('Your team will appear here when staff details are available.')).toBeInTheDocument();
-    expect(screen.getByText('Review your handovers')).toBeInTheDocument();
-    expect(screen.queryByText('No handovers waiting')).not.toBeInTheDocument();
+  });
+
+  it('keeps handovers and centre duties out of My Desk; they live in The Shift', () => {
+    render(<MyDeskHome {...makeProps()} />);
+    expect(screen.queryByRole('button', { name: /Handovers/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('My centre duties')).not.toBeInTheDocument();
+    expect(screen.queryByText('Pick up the thread')).not.toBeInTheDocument();
   });
 
   it('keeps controls usable and explains unsaved notes when browser storage is blocked', () => {

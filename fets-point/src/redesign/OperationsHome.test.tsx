@@ -14,7 +14,7 @@ describe('operations home', () => {
     const navigate = vi.fn();
     render(<OperationsHome branch="calicut" navigate={navigate} openDrawer={vi.fn()} load={vi.fn().mockResolvedValue(snapshot)} />);
     await screen.findByText(/Handovers could not be loaded/);
-    fireEvent.click(screen.getByRole('button', { name: 'Open shift handover' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open The Shift' }));
     expect(navigate).toHaveBeenCalledWith('handover');
   });
   it('ignores stale results from a previously selected branch', async () => {
