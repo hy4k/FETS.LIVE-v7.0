@@ -87,7 +87,7 @@ const getInitialTab = () => {
   if (target === 'calendar' || target === 'fets-calendar') return 'fets-calendar';
   if (target === 'my-desk' || target === 'desk') return 'my-desk';
   if (target === 'actionables') return 'actionables';
-  if (target === 'handover' || target === 'shift-handover') return 'handover';
+  if (target === 'shift' || target === 'the-shift' || target === 'handover' || target === 'shift-handover') return 'handover';
   if (target === 'candidate-tracker' || target === 'tracker') return 'candidate-tracker';
   if (target === 'fets-intelligence' || target === 'intelligence' || target === 'ai') return 'fets-intelligence';
   if (target === 'incident-log' || target === 'incidents' || target === 'cases') return 'incident-log';
@@ -110,7 +110,7 @@ function AppContent() {
                    newTab === 'fets-roster' ? '/roster' :
                    newTab === 'fets-calendar' ? '/calendar' :
                    newTab === 'my-desk' ? '/my-desk' :
-                   newTab === 'handover' ? '/handover' :
+                   newTab === 'handover' ? '/shift' :
                    newTab === 'expansion' ? '/expansion' : `/${newTab}`;
       if (window.location.pathname !== path) {
         window.history.pushState(null, '', path);

@@ -7719,7 +7719,7 @@ export function RosterPage({ branch, setActive }) {
         <div><span>On the roster today</span><strong>{onDutyToday}</strong><small>Scheduled, not attendance</small></div>
         <div><span>People in the team</span><strong>{poolSize}</strong><small>Every person has a part to play</small></div>
         <div><span>Average daily cover</span><strong>{avgCover}</strong><small>In the selected month</small></div>
-        <aside><span>PLAN ONE MONTH AHEAD</span><h2>One team. Clear ownership.</h2><p>Choose weekly leads, rotate duties and name break cover.</p><button onClick={() => setActive("handover")}>Plan centre duties ↗</button></aside>
+        <aside><span>PLAN ONE MONTH AHEAD</span><h2>One team. Clear ownership.</h2><p>Choose weekly leads, rotate duties and name break cover.</p><button onClick={() => setActive("handover")}>Open The Shift ↗</button></aside>
       </section>
       <div className="planning-attendance"><span>Here for your shift? <small>Check in and manage your breaks.</small></span><RosterAttendanceControls branch={branch} /></div>
 
@@ -11974,7 +11974,6 @@ function ToolsSheet({ open, onClose, onPick, includeNav }) {
   const descriptions = { live: "Your centre, team and day ahead", calendar: "Exam sessions and centre bookings", roster: "Staff schedules and monthly planning", desk: "Your focus, notes and personal space", actionables: "Institutions, assigned duties and follow-ups" };
   const items = [
     ...NAV.map(n => ({ ...n, sub: descriptions[n.id] })),
-    { id: "handover", label: "Shift handover", sub: "Weekly leads, shared duties and centre reports" },
     { id: "fets-chat", label: "Team space", sub: "Conversations, decisions and follow-through" },
     { id: "case", label: "Raise a case", sub: "Record an incident or ask for support" },
     ...(window.FETS.isAdmin ? TOOLS : []),
