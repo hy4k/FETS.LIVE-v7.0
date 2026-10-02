@@ -1,71 +1,36 @@
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-import { useVideoCall } from '../hooks/useVideoCall';
-import { IncomingCallModal } from '../components/Chat/IncomingCallModal';
-import { VideoCallOverlay } from '../components/Chat/VideoCallOverlay';
-import { AnimatePresence } from 'framer-motion';
+import { createContext, useContext, type ReactNode } from 'react';
+import { toast } from 'react-hot-toast';
+import { CallCenterProvider, useCallCenter } from '../components/Chat/calls/CallCenter';
+import { callApi } from '../components/Chat/calls/chat-calls';
 
+/**
+ * The app's calls. Every call button, old or new, goes through the call
+ * center: the conversation's members are rung, they answer or decline, and
+ * the media runs on LiveKit. (The earlier peer-to-peer calls never rang the
+ * other side; they only met if both pressed call at once.)
+ */
 interface CallContextType {
-    callState: any;
-    startCall: (targetUserIds: string | string[], type?: 'video' | 'audio') => Promise<void>;
-    endCall: () => void;
-    answerCall: () => void;
-    rejectCall: () => void;
-    isMinimized: boolean;
-    setIsMinimized: (val: boolean) => void;
+  /** Call a person (or the first of several) directly. */
+  startCall: (targetUserIds: string | string[], type?: 'video' | 'audio') => Promise<void>;
 }
-
 const CallContext = createContext<CallContextType | undefined>(undefined);
 
+function Bridge({ children }: { children: ReactNode }) {
+  const { call, me } = useCallCenter();
+  const startCall = async (targets: string | string[], type: 'video' | 'audio' = 'video') => {
+    const target = Array.isArray(targets) ? targets[0] : targets;
+    if (!target || !me) return;
+    try { await call(await callApi.directWith(me, target), type); } catch (e) { toast.error(e instanceof Error ? e.message : 'The call could not be placed'); }
+  };
+  return <CallContext.Provider value={{ startCall }}>{children}</CallContext.Provider>;
+}
+
 export function CallProvider({ children }: { children: ReactNode }) {
-    const { callState, startCall, endCall, answerCall, rejectCall } = useVideoCall();
-    const [isMinimized, setIsMinimized] = useState(false);
-
-    // Auto-minimize if small screen or navigation occurs (optional logic here)
-
-    return (
-        <CallContext.Provider value={{
-            callState,
-            startCall,
-            endCall,
-            answerCall,
-            rejectCall,
-            isMinimized,
-            setIsMinimized
-        }}>
-            {children}
-
-            <AnimatePresence>
-                {callState.isReceivingCall && (
-                    <IncomingCallModal
-                        callerName={callState.callerId!}
-                        callType={callState.callType}
-                        onAccept={answerCall}
-                        onDecline={rejectCall}
-                    />
-                )}
-            </AnimatePresence>
-
-            <AnimatePresence>
-                {(callState.isInCall || callState.isCalling) && (
-                    <VideoCallOverlay
-                        localStream={callState.localStream}
-                        remoteStreams={callState.remoteStreams}
-                        onEndCall={endCall}
-                        isMinimized={isMinimized}
-                        onToggleMinimize={() => setIsMinimized(!isMinimized)}
-                        callType={callState.callType}
-                        startTime={callState.startTime}
-                    />
-                )}
-            </AnimatePresence>
-        </CallContext.Provider>
-    );
+  return <CallCenterProvider><Bridge>{children}</Bridge></CallCenterProvider>;
 }
 
 export function useGlobalCall() {
-    const context = useContext(CallContext);
-    if (context === undefined) {
-        throw new Error('useGlobalCall must be used within a CallProvider');
-    }
-    return context;
+  const context = useContext(CallContext);
+  if (context === undefined) throw new Error('useGlobalCall must be used within a CallProvider');
+  return context;
 }
