@@ -16,6 +16,7 @@ import { getCurrentISTDateString } from '../utils/dateUtils'
 import { currentRosterMonthKey } from '../utils/rosterVisibility'
 import { ClientControl } from './ClientControl'
 import { useAppModules } from '../hooks/useAppModules'
+import { WORKSPACE_FEATURES, featureDefault, featureKey, hasFeature, usesAdminWorkspace } from '../redesign/workspace-features'
 
 const PERMISSION_KEYS = [
     { key: 'is_roster_active', label: 'Include in Roster (Current Month)', icon: Users, description: 'Keep enabled for active staff. Disable to hide staff from the duty roster for the rest of the current month — they automatically return next month.' },
@@ -84,6 +85,21 @@ export function UserManagement({ onNavigate }: UserManagementProps = {}) {
             return matchesSearch && matchesBranch
         })
     }, [staff, searchTerm, branchFilter])
+
+    // Switch one workspace tool on or off for every active staff member.
+    const setForAll = async (id: string, value: boolean) => {
+        const label = WORKSPACE_FEATURES.find(f => f.id === id)?.label || id
+        if (!window.confirm(`Turn ${label} ${value ? 'on' : 'off'} for all active staff?`)) return
+        try {
+            for (const s of staff.filter(x => x.is_active !== false)) {
+                await updateStaff({ id: s.id, permissions: { ...((s.permissions as any) || {}), [featureKey(id)]: value } } as any)
+            }
+            setPermissions(prev => ({ ...prev, [featureKey(id)]: value }))
+            toast.success(`${label} turned ${value ? 'on' : 'off'} for all staff`)
+        } catch (error: any) {
+            toast.error(`Could not update everyone: ${error.message}`)
+        }
+    }
 
     const handleSave = async () => {
         if (!selectedUser || !formData) return
@@ -365,6 +381,28 @@ export function UserManagement({ onNavigate }: UserManagementProps = {}) {
                                                         </button>
                                                     )
                                                 })}
+                                                <div className="pt-5 mt-2 border-t border-slate-700">
+                                                    <p className="text-sm font-bold text-white">Workspace menu</p>
+                                                    <p className="text-xs text-slate-400 mt-0.5 mb-3">Tools in the four-square menu, top right. Switch for this person, or for all staff at once.</p>
+                                                    {WORKSPACE_FEATURES.map(f => {
+                                                        const adminWs = usesAdminWorkspace(selectedUser.role === 'super_admin', selectedUser.email)
+                                                        const on = hasFeature(f, adminWs, permissions)
+                                                        const chosen = typeof (permissions as any)[featureKey(f.id)] === 'boolean'
+                                                        return (
+                                                            <div key={f.id} className="flex items-center gap-3 p-3 mb-2 rounded-xl bg-slate-800/80 border border-slate-700">
+                                                                <div className="flex-1 min-w-0">
+                                                                    <p className="font-semibold text-white text-sm">{f.label}</p>
+                                                                    <p className="text-[11px] text-slate-400">{chosen ? 'Set for this person' : `Default: ${featureDefault(f, adminWs) ? 'on' : 'off'}`}{chosen && <button type="button" className="ml-2 underline" onClick={() => setPermissions(prev => { const next: any = { ...prev }; delete next[featureKey(f.id)]; return next })}>use default</button>}</p>
+                                                                </div>
+                                                                <button type="button" title="Apply to every active staff member" onClick={() => void setForAll(f.id, !on)} className="text-[11px] px-2 py-1 rounded-lg border border-slate-600 text-slate-300 hover:text-white">All staff: {on ? 'off' : 'on'}</button>
+                                                                <button type="button" aria-label={`${f.label} for this person`} onClick={() => setPermissions(prev => ({ ...prev, [featureKey(f.id)]: !on }))} className={`w-11 h-6 rounded-full relative transition-colors ${on ? 'bg-amber-500' : 'bg-slate-700'}`}>
+                                                                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${on ? 'translate-x-5' : ''}`} />
+                                                                </button>
+                                                            </div>
+                                                        )
+                                                    })}
+                                                    <p className="text-[11px] text-slate-500 mt-1">Press Save to keep changes for this person. "All staff" saves at once.</p>
+                                                </div>
                                             </div>
                                         )}
                                     </div>

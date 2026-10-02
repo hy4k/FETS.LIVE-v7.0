@@ -21,6 +21,7 @@ import * as DB from "./write-data";
 import * as ACT from "./actionables-data";
 import { TeamChatWorkspace } from "../components/Chat/TeamChatWorkspace";
 import { ActionablesView } from "./ActionablesView";
+import { usesAdminWorkspace, workspaceFor } from "./workspace-features";
 import * as ATT from "./attendance-data";
 import { isStaffRosterVisible } from "../utils/rosterVisibility";
 import * as DD from "./dutyData";
@@ -11970,14 +11971,15 @@ function TheLabPage({ branch }) {
 }
 
 /* ---------- tools sheet (overflow) ---------- */
-function ToolsSheet({ open, onClose, onPick, includeNav }) {
-  const descriptions = { live: "Your centre, team and day ahead", calendar: "Exam sessions and centre bookings", roster: "Staff schedules and monthly planning", desk: "Your focus, notes and personal space", actionables: "Institutions, assigned duties and follow-ups" };
-  const items = [
-    ...NAV.map(n => ({ ...n, sub: descriptions[n.id] })),
-    { id: "fets-chat", label: "Team space", sub: "Conversations, decisions and follow-through" },
-    { id: "case", label: "Raise a case", sub: "Record an incident or ask for support" },
-    ...(window.FETS.isAdmin ? TOOLS : []),
-  ];
+function ToolsSheet({ open, onClose, onPick }) {
+  // Live, Calendar, Roster, My Desk and Actionables are on the main menu, so the
+  // workspace holds only tools. Who sees which tool: workspace-features.ts,
+  // with any per-person choice from User Management.
+  const F = window.FETS || {};
+  const me = (F._staffProfiles || []).find(p => (F._meId && p.id === F._meId) || (F._meUserId && p.user_id === F._meUserId));
+  const adminWorkspace = usesAdminWorkspace(Boolean(F.isAdmin), me?.email || F.user?.email);
+  const icons = Object.fromEntries(TOOLS.map(t => [t.id, t]));
+  const items = workspaceFor(adminWorkspace, me?.permissions).map(f => ({ ...(icons[f.id] || {}), id: f.id, label: f.label, sub: f.sub }));
   return <WorkspaceMenu open={open} onClose={onClose} onPick={onPick} items={items} />;
 }
 
@@ -12224,7 +12226,7 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
         <HelpDeskPanel />
       </Drawer>
       <ToolsSheet open={tools} onClose={() => setTools(false)} onPick={handlePick} />
-      <ToolsSheet open={burger} onClose={() => setBurger(false)} onPick={handlePick} includeNav />
+      <ToolsSheet open={burger} onClose={() => setBurger(false)} onPick={handlePick} />
 
       <TweaksPanel>
         <TweakSection label="Appearance" />
