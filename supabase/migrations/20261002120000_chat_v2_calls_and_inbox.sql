@@ -47,8 +47,9 @@ language sql stable security definer set search_path = '' as $$
                   where c.id = p_conversation and c.created_by = any (public.chat_ids_of(auth.uid())))
 $$;
 
--- The LiveKit token function and the send RPC call this two-argument form.
-create or replace function public.is_conversation_member(p_conversation_id uuid, p_user_id uuid) returns boolean
+-- The LiveKit token function and the send RPC call this two-argument form; older
+-- policies call it with one argument, so the live default (auth.uid()) stays.
+create or replace function public.is_conversation_member(p_conversation_id uuid, p_user_id uuid default auth.uid()) returns boolean
 language sql stable security definer set search_path = '' as $$
   select exists (select 1 from public.conversation_members m
                   where m.conversation_id = p_conversation_id
