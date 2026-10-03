@@ -10309,7 +10309,7 @@ function LeaveModule() {
       <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
         <SectionLabel right={<RadioTabs value={tab} onChange={setTab} tabs={[{ k: "hours", label: "Shift hours", icon: "clock" }, { k: "requests", label: "Requests", icon: "calendar" }, { k: "discussion", label: "Discussion", icon: "message" }]} />}>Attendance</SectionLabel>
       </div>
-      {tab === "hours" ? <WorkedHours /> : tab === "requests" ? <TimeOff /> : <RosterDiscussionChat />}
+      {tab === "hours" ? <WorkedHours /> : tab === "requests" ? <ApplicationsHub isSuperAdmin={Boolean(window.FETS?.isAdmin)} /> : <RosterDiscussionChat />}
     </section>
   );
 }
@@ -10963,6 +10963,7 @@ function PresetCard({ m, idx, on, onClick, badge }) {
    ============================================================ */
 const APP_KINDS = [
   { k: "leave",          icon: "calendar", label: "Leave",                 color: "#B23850",  desc: "Apply for a scheduled day off" },
+  { k: "toil",           icon: "clock",    label: "TOIL Day Off",          color: "#10B981",  desc: "Take time off in lieu of extra hours" },
   { k: "swap",           icon: "refresh",  label: "Shift Swap",            color: "#3B8BEB",  desc: "Propose a swap with a colleague" },
   { k: "emergency_duty", icon: "zap",      label: "Emergency Duty Change", color: "#B23850",  desc: "Request an urgent shift change" },
   { k: "reimbursement",  icon: "dollar",   label: "Reimbursement",         color: "#3B8BEB",  desc: "Claim work expenses" },
@@ -11054,6 +11055,7 @@ function AppForm({ onSubmitted }) {
     setSubmitting(true);
     let payload = { kind, reason };
     if (kind === "leave")          payload = { ...payload, request_date: date, leave_type: leaveType };
+    if (kind === "toil")           payload = { ...payload, request_date: date, leave_type: "TOIL" };
     if (kind === "swap")           payload = { ...payload, request_date: swapDate, swap_with_name: swapWith, swap_date: swapPartnerDate };
     if (kind === "emergency_duty") payload = { ...payload, request_date: emergDate, new_shift_code: newShift, leave_type: "Emergency" };
     if (kind === "reimbursement")  payload = { ...payload, amount: parseFloat(amount) || 0, expense_type: expenseType, receipt_note: receiptNote };
@@ -11092,6 +11094,14 @@ function AppForm({ onSubmitted }) {
                   {LEAVE_TYPES.map(lt => <option key={lt} value={lt}>{lt}</option>)}
                 </select>
               </label>
+            </div>
+          )}
+
+          {/* TOIL */}
+          {kind === "toil" && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              <label style={labelStyle}>Day off (TOIL)<input type="date" value={date} onChange={e => setDate(e.target.value)} required style={inpStyle} /></label>
+              <div style={{ ...labelStyle, justifyContent: "flex-end" }}><span style={{ fontWeight: 500 }}>On approval the roster marks this day <b>TR · TOIL Redeemed</b>.</span></div>
             </div>
           )}
 
@@ -11174,6 +11184,7 @@ function MyApplicationsList() {
         const km = APP_KINDS.find(a => a.k === app.kind);
         let detail = "";
         if (app.kind === "leave")          detail = `${app.leave_type || "Full-day"} · ${app.request_date || ""}`;
+        if (app.kind === "toil")           detail = `TOIL day off · ${app.request_date || ""}`;
         if (app.kind === "swap")           detail = `${app.request_date} ↔ ${app.swap_with_name} (${app.swap_date || ""})`;
         if (app.kind === "emergency_duty") detail = `${app.request_date} → ${app.new_shift_code} shift`;
         if (app.kind === "reimbursement")  detail = `₹${app.amount || 0} · ${app.expense_type || ""}`;
@@ -11260,6 +11271,7 @@ function AdminApplicationsInbox() {
             const km = APP_KINDS.find(a => a.k === app.kind);
             let detail = "";
             if (app.kind === "leave")          detail = `${app.leave_type || "Full-day"} · ${app.request_date || ""}`;
+            if (app.kind === "toil")           detail = `TOIL day off · ${app.request_date || ""}`;
             if (app.kind === "swap")           detail = `${app.request_date} ↔ ${app.swap_with_name} (${app.swap_date || ""})`;
             if (app.kind === "emergency_duty") detail = `${app.request_date} → ${app.new_shift_code} shift`;
             if (app.kind === "reimbursement")  detail = `₹${app.amount || 0} · ${app.expense_type || ""}`;
@@ -11971,6 +11983,50 @@ function TheLabPage({ branch }) {
 }
 
 /* ---------- tools sheet (overflow) ---------- */
+/* ---------- Daily attendance (admin): everyone's check-in and out for a day ---------- */
+function AttendanceAdminPage({ branch }) {
+  const [date, setDate] = React.useState(ATT.attDateStr());
+  const [rows, setRows] = React.useState(null);
+  React.useEffect(() => {
+    setRows(null);
+    ATT.attAllForDate(date)
+      .then(all => setRows((all || []).filter(r => !branch || branch === "global" || !r.branch || String(r.branch).toLowerCase() === branch)))
+      .catch(() => setRows([]));
+  }, [date, branch]);
+  const totalWorked = (rows || []).reduce((a, r) => a + (r.worked || 0), 0);
+  const SCOL = { present: "var(--ok)", late: "var(--warn)", half_day: "var(--v-ielts)", absent: "var(--bad)" };
+  return (
+    <div style={{ maxWidth: 1000, margin: "0 auto", display: "flex", flexDirection: "column", gap: "calc(24px * var(--density))" }}>
+      <PageHeader eyebrow="Admin // attendance" title="Daily Attendance" />
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ background: "var(--inset)", border: "1px solid var(--hairline)", borderRadius: 10, color: "var(--ink)", fontFamily: "var(--font)", fontSize: 14, padding: "10px 12px" }} />
+        <div style={{ flex: 1 }} />
+        <StatPill value={(rows || []).length} label="Records" />
+        <StatPill value={ATT.attFmtMins(totalWorked)} label="Total worked" tone="var(--accent)" />
+      </div>
+      <div className="glass" style={{ borderRadius: "var(--radius)", padding: "8px 4px", overflow: "auto" }}>
+        <div style={{ minWidth: 640 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr 0.9fr 0.9fr 0.8fr 1fr", gap: 8, padding: "8px 14px" }}>
+            {["Staff", "Branch", "In", "Out", "Break", "Worked"].map((h) => <div key={h} className="eyebrow" style={{ fontSize: 9, color: "var(--ink-4)" }}>{h}</div>)}
+          </div>
+          {!rows ? <div style={{ padding: 20, color: "var(--ink-4)" }}>Loading…</div>
+            : rows.length === 0 ? <div style={{ padding: 20, color: "var(--ink-4)" }}>No attendance recorded for this day.</div>
+            : rows.map((r, i) => (
+              <div key={i} style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr 0.9fr 0.9fr 0.8fr 1fr", gap: 8, padding: "11px 14px", borderTop: "1px solid var(--hairline)", alignItems: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 9 }}><Avatar name={r.name} size={26} /><span style={{ fontSize: 13, fontWeight: 650, color: "var(--ink)" }}>{r.name}</span></div>
+                <div style={{ fontSize: 12, color: "var(--ink-3)", textTransform: "capitalize" }}>{r.branch || "—"}</div>
+                <div className="mono" style={{ fontSize: 12.5 }}>{r.check_in || "—"}</div>
+                <div className="mono" style={{ fontSize: 12.5 }}>{r.check_out || "—"}</div>
+                <div className="mono" style={{ fontSize: 12, color: "var(--ink-3)" }}>{r.breakMins ? r.breakMins + "m" : "—"}</div>
+                <div className="mono" style={{ fontSize: 12.5, color: "var(--accent)", fontWeight: 700 }}>{r.worked ? ATT.attFmtMins(r.worked) : "—"}</div>
+              </div>
+            ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ToolsSheet({ open, onClose, onPick }) {
   // Live, Calendar, Roster, My Desk and Actionables are on the main menu, so the
   // workspace holds only tools. Who sees which tool: workspace-features.ts,

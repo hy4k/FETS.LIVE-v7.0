@@ -48,6 +48,14 @@ interface UserManagementProps {
     onNavigate?: (tab: string) => void;
 }
 
+/** "12 Mar 2024", from the joining date (or the older hire date). */
+function joinedOn(user: any) {
+    const raw = user?.joining_date || user?.hire_date
+    if (!raw) return ''
+    const d = new Date(`${String(raw).slice(0, 10)}T12:00:00Z`)
+    return Number.isFinite(d.getTime()) ? d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : ''
+}
+
 export function UserManagement({ onNavigate }: UserManagementProps = {}) {
     const { profile: currentUser } = useAuth()
     const { data: staff = [] } = useStaff()
@@ -228,6 +236,7 @@ export function UserManagement({ onNavigate }: UserManagementProps = {}) {
                                                 <span className="text-[10px] font-semibold px-2 py-0.5 rounded uppercase" style={{ background: THEME.bgCard, color: THEME.textSecondary }}>
                                                     {formatBranchName(user.branch_assigned || 'global')}
                                                 </span>
+                                                {joinedOn(user) && <span className="text-[10px]" style={{ color: THEME.textMuted }}>Joined {joinedOn(user)}</span>}
                                             </div>
                                         </div>
                                     </motion.button>
@@ -319,6 +328,11 @@ export function UserManagement({ onNavigate }: UserManagementProps = {}) {
                                                             <option value="global">Global</option>
                                                         </select>
                                                     </div>
+                                                </div>
+
+                                                <div className="grid grid-cols-2 gap-5">
+                                                    <InputField label="Joining Date" value={(formData as any).joining_date || (formData as any).hire_date || ''} onChange={(v: string) => setFormData({ ...formData, joining_date: v } as any)} type="date" />
+                                                    <InputField label="Position" value={(formData as any).position || ''} onChange={(v: string) => setFormData({ ...formData, position: v } as any)} placeholder="e.g. Senior Invigilator" />
                                                 </div>
 
                                                 {/* Temporary Monthly Roster Exclusion Toggle */}
@@ -414,6 +428,16 @@ export function UserManagement({ onNavigate }: UserManagementProps = {}) {
                     </div>
                 </div>
             </div>
+        </div>
+    )
+}
+
+function InputField({ label, value, onChange, placeholder, type = 'text', disabled = false }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string; disabled?: boolean }) {
+    return (
+        <div>
+            <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">{label}</label>
+            <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} disabled={disabled}
+                className="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 text-white text-sm focus:outline-none focus:border-amber-500 disabled:opacity-50" />
         </div>
     )
 }
