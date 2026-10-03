@@ -112,7 +112,7 @@ const breakIdeas = [
 const moods = [{ value: 'bright', label: 'Feeling bright', icon: Sun }, { value: 'steady', label: 'Taking it steady', icon: Leaf }, { value: 'focused', label: 'In the zone', icon: Headphones }, { value: 'slow', label: 'A slow day', icon: Cloud }];
 const tabs: { id: 'today' | DeskPanel; label: string; icon: typeof Sun }[] = [
   { id: 'today', label: 'My day', icon: Sun }, { id: 'time', label: 'My time', icon: Clock3 },
-  { id: 'checklist', label: 'Checklist', icon: CheckCheck },
+  { id: 'requests', label: 'Leave & TOIL', icon: Coffee }, { id: 'checklist', label: 'Checklist', icon: CheckCheck },
   { id: 'growth', label: 'My growth', icon: Leaf },
 ];
 

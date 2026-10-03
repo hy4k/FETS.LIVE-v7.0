@@ -1586,6 +1586,14 @@ export async function dbResolveApplication(appId: string, status: "approved" | "
       }
     }
 
+    // 1b. TOIL APPROVAL -> Set Roster Cell to 'TR' (TOIL Redeemed)
+    else if (app.kind === "toil") {
+      if (applicantId && date) {
+        await dbSetRosterById(applicantId, date, "TR", branch);
+        applyRosterChange(applicantName, date, "TR");
+      }
+    }
+
     // 2. EMERGENCY DUTY CHANGE APPROVAL -> Set Roster Cell to new_shift_code
     else if (app.kind === "emergency_duty") {
       const newShift = app.new_shift_code || "D";
