@@ -50,7 +50,6 @@ export function TeamChatWorkspace({ initialConversationId, initialTargetUser }: 
   const [emoji, setEmoji] = useState(false);
   const [panel, setPanel] = useState<'info' | 'work' | null>(null);
   const [newGroup, setNewGroup] = useState(false);
-  const [online, setOnline] = useState<Set<string>>(new Set());
   const [typing, setTyping] = useState<Record<string, number>>({});
   const [uploading, setUploading] = useState(false);
   const [alerts, setAlerts] = useState(callAlertsState());
@@ -71,13 +70,14 @@ export function TeamChatWorkspace({ initialConversationId, initialTargetUser }: 
   const savedIds = new Set((saved.data || []).map((s: any) => s.message_id));
 
   // Who is online, across the app.
+  const online = calls.online;
+  useEffect(() => { calls.setOpenChat(selected); return () => calls.setOpenChat(''); }, [selected, calls]);
   useEffect(() => {
-    if (!me) return;
-    const ch = supabase.channel('fets-chat-presence', { config: { presence: { key: me } } });
-    ch.on('presence', { event: 'sync' }, () => setOnline(new Set(Object.keys(ch.presenceState()))))
-      .subscribe(status => { if (status === 'SUBSCRIBED') void ch.track({ at: Date.now() }); });
-    return () => { void supabase.removeChannel(ch); };
-  }, [me]);
+    const open = (e: Event) => { const id = (e as CustomEvent<{ conversationId?: string }>).detail?.conversationId; if (id) select(id); };
+    window.addEventListener('fets-open-chat', open);
+    return () => window.removeEventListener('fets-open-chat', open);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // New messages and read receipts anywhere refresh the list; the open room updates in place.
   useEffect(() => {

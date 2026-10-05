@@ -89,6 +89,32 @@ export function ringer(kind: 'incoming' | 'outgoing') {
   };
 }
 
+/** A short two-note chime for a new message. */
+export function chime() {
+  try {
+    const Ctor = window.AudioContext || (window as any).webkitAudioContext;
+    const ctx = new Ctor();
+    const t = ctx.currentTime;
+    [[784, 0], [1047, 0.12]].forEach(([freq, at]) => {
+      const osc = ctx.createOscillator(); const gain = ctx.createGain();
+      osc.frequency.value = freq; osc.type = 'sine';
+      gain.gain.setValueAtTime(0, t + at); gain.gain.linearRampToValueAtTime(0.14, t + at + 0.02); gain.gain.linearRampToValueAtTime(0, t + at + 0.28);
+      osc.connect(gain).connect(ctx.destination); osc.start(t + at); osc.stop(t + at + 0.32);
+    });
+    window.setTimeout(() => void ctx.close().catch(() => undefined), 800);
+  } catch { /* Sound is a nicety. */ }
+}
+
+/** A system notification for a message, shown when the tab is hidden or minimised. */
+export function notifyMessage(from: string, text: string, onClick: () => void) {
+  try {
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted' || document.visibilityState === 'visible') return null;
+    const n = new Notification(from, { body: text, tag: `fets-msg-${from}` } as NotificationOptions);
+    n.onclick = () => { window.focus(); onClick(); n.close(); };
+    return n;
+  } catch { return null; }
+}
+
 /** A system notification when the tab is in the background. */
 export function notifyCall(title: string, body: string, onClick: () => void) {
   try {

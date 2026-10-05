@@ -22,6 +22,7 @@ import * as ACT from "./actionables-data";
 import { TeamChatWorkspace } from "../components/Chat/TeamChatWorkspace";
 import { ActionablesView } from "./ActionablesView";
 import { usesAdminWorkspace, workspaceFor } from "./workspace-features";
+import "./ot-manager.css";
 import * as ATT from "./attendance-data";
 import { isStaffRosterVisible } from "../utils/rosterVisibility";
 import * as DD from "./dutyData";
@@ -4459,18 +4460,11 @@ function RosterGrid({ offsets, branch }) {
  
                   const dstr = ymdFormat(F().ISO(o));
                   const pid = F()._staffIdByName?.[n];
-                  const hasClaim = F()._otClaims?.some(c => c.profile_id === pid && c.date === dstr);
  
-                  if (isSelf || (window.FETS.isAdmin && hasClaim)) {
-                    setOtDialog({
-                      name: n,
-                      off: o,
-                      date: d,
-                      cell,
-                      openAdminOverride: () => {
-                        setDialog({ name: n, off: o, date: d, cell, defaultCode: cell.dflt || "RD" });
-                      }
-                    });
+                  if (isSelf && !window.FETS.isAdmin) {
+                    // One place to apply: My Desk → Leave & TOIL.
+                    toast("Apply for overtime, TOIL or leave in My Desk → Leave & TOIL", "calendar");
+                    window.dispatchEvent(new CustomEvent("fets-go", { detail: { page: "desk", deskTab: "requests" } }));
                   } else if (window.FETS.isAdmin) {
                     setDialog({ name: n, off: o, date: d, cell, defaultCode: cell.dflt || "RD" });
                   }
@@ -5281,7 +5275,7 @@ function PersonalizedRosterOverview({ branch }) {
 function OtToilClaimsHub({ branch }) {
   const [claims, setClaims] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
-  const [tab, setTab] = React.useState("pending");
+  const [tab, setTab] = React.useState("payroll");
   const [refreshKey, setRefreshKey] = React.useState(0);
   
   // Selected month for payroll calculation and month-wise summaries (Format: 'YYYY-MM')
@@ -5905,552 +5899,175 @@ function OtToilClaimsHub({ branch }) {
     toast("Batch download complete", "check");
   };
 
-  const SCOL = { pending: "var(--warn)", approved: "var(--ok)", rejected: "var(--bad)" };
-  
+  // One row of the payroll: the same arithmetic the payslips use.
+  const payrollRow = (name, p) => {
+    const mp = F._monthlyPayroll?.[p.id]?.[selectedMonth];
+    const rates = F._staffRatesByProfileId?.[p.id] || { monthly_salary: 0, hourly_rate: 0, daily_rate: 0 };
+    const monthly_salary = editingPayroll[p.id]?.monthly_salary !== undefined
+      ? parseFloat(editingPayroll[p.id].monthly_salary) || 0
+      : (mp ? mp.monthly_salary : rates.monthly_salary);
+    const manualAddition = editingPayroll[p.id]?.manual_addition !== undefined
+      ? parseFloat(editingPayroll[p.id].manual_addition) || 0
+      : (mp ? mp.manual_addition : 0);
+    const manualDeduction = editingPayroll[p.id]?.manual_deduction !== undefined
+      ? parseFloat(editingPayroll[p.id].manual_deduction) || 0
+      : (mp ? mp.manual_deduction : 0);
+    const parsedNotes = mp ? parseNotes(mp.adjustment_notes) : { addition: "", deduction: "" };
+    const additionNote = editingPayroll[p.id]?.addition_note !== undefined ? editingPayroll[p.id].addition_note : parsedNotes.addition;
+    const deductionNote = editingPayroll[p.id]?.deduction_note !== undefined ? editingPayroll[p.id].deduction_note : parsedNotes.deduction;
+    const dailyRate = monthly_salary / 30;
+    const hourlyRate = dailyRate / 8 * 1.75;
+    const offsets = getOffsetsForMonth(selectedMonth);
+    const dbRoster = F._dbRoster?.[name] || {};
+    let otHours = 0;
+    let toilDays = 0;
+    let leaveDays = 0;
+    offsets.forEach(off => {
+      const cell = dbRoster[off];
+      if (cell) {
+        if (typeof cell === "object" && cell.ot) otHours += cell.ot;
+        const code = String(typeof cell === "string" ? cell : cell.code).toUpperCase();
+        if (code === "TP") toilDays++;
+        if (code === "L") leaveDays++;
+      }
+    });
+    const otSalary = otHours * hourlyRate;
+    const toilSalary = toilDays * dailyRate * 1.5;
+    const leaveDeduction = leaveDays * monthly_salary / 30;
+    const totalEarnings = monthly_salary + otSalary + toilSalary + manualAddition;
+    const totalDeductions = leaveDeduction + manualDeduction;
+    const netSalary = totalEarnings - totalDeductions;
+    const defaultSalary = editingRates[p.id]?.monthly_salary !== undefined ? editingRates[p.id].monthly_salary : (p.monthly_salary || 0);
+    return { mp, rates, monthly_salary, manualAddition, manualDeduction, additionNote, deductionNote, dailyRate, hourlyRate, otHours, toilDays, leaveDays, otSalary, toilSalary, leaveDeduction, totalEarnings, totalDeductions, netSalary, defaultSalary, isEdited: editingPayroll[p.id] !== undefined, rateEdited: editingRates[p.id] !== undefined };
+  };
+  const staffRows = Object.entries(F._staffRatesByName || {})
+    .filter(([name, p]: [string, any]) => filterNiyas(name) && (branch === "global" || (p.branch || "Calicut").toLowerCase() === branch.toLowerCase()));
+  const rows = staffRows.map(([name, p]: [string, any]) => ({ name, p, r: payrollRow(name, p) }));
+  const totalNet = rows.reduce((sum, x) => sum + x.r.netSalary, 0);
+  const pendingCount = claims.filter(c => c.status === "pending" && (branch === "global" || c.branch === branch) && filterNiyas(c.name)).length;
+  const inr = (v, d = 0) => `₹${Number(v || 0).toLocaleString("en-IN", { maximumFractionDigits: d })}`;
+
   return (
-    <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", flexDirection: "column", gap: 24 }}>
-      <PageHeader eyebrow="Modules // Admin" title="OT & TOIL Claims Manager" />
-      
-      {/* Selector Month for payroll and cost cards */}
-      {tab !== "history" && (
-        <div style={{ display: "flex", alignItems: "center", gap: 12, justifyContent: "flex-end", flexWrap: "wrap" }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-2)" }}>Target Payroll Month:</span>
-          <select 
-            value={selectedMonth} 
-            onChange={(e) => setSelectedMonth(e.target.value)} 
-            className="glass-2"
-            style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--hairline)", color: "var(--ink)", background: "transparent", fontSize: 13.5, fontWeight: 650, outline: "none", cursor: "pointer" }}
-          >
-            {monthsOptions.map(opt => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
+    <div className="otm">
+      <header className="otm-hero">
+        <div>
+          <span className="otm-kicker">FETS / PAY & TIME</span>
+          <h1>OT & TOIL<span>.</span></h1>
+          <p>Overtime, paid TOIL and leave come straight from the approved roster. Salaries, adjustments and slips live here.</p>
         </div>
-      )}
+        <div className="otm-hero-actions">
+          <label className="otm-month">
+            <span>Payroll month</span>
+            <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)}>
+              {monthsOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+            </select>
+          </label>
+          <button className="otm-icon" onClick={load} aria-label="Refresh"><Icon name="refresh" size={15} /></button>
+          <button className="otm-primary" onClick={handleBatchDownload}><Icon name="download" size={15} /> All payslips</button>
+        </div>
+      </header>
 
-      {tab !== "history" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
-          <div className="glass" style={{ padding: 20, borderRadius: 16, borderLeft: "4px solid var(--accent)", position: "relative" }}>
-            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--ink-4)", letterSpacing: "0.05em" }}>Month Approved Cost</div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: "var(--ink)", marginTop: 8 }}>₹{totalApprovedMonthCost.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</div>
-            <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 6 }}>For approved OT & TOIL in {formatMonthName(selectedMonth)}</div>
-          </div>
-          
-          <div className="glass" style={{ padding: 20, borderRadius: 16, borderLeft: "4px solid var(--warn)", position: "relative" }}>
-            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--ink-4)", letterSpacing: "0.05em" }}>Month Pending Cost</div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: "var(--warn)", marginTop: 8 }}>₹{totalPendingMonthCost.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</div>
-            <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 6 }}>Estimated payout for pending claims</div>
-          </div>
-          
-          <div className="glass" style={{ padding: 20, borderRadius: 16, borderLeft: "4px solid var(--v-ielts)", position: "relative" }}>
-            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--ink-4)", letterSpacing: "0.05em" }}>Month Approved OT</div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: "var(--v-ielts)", marginTop: 8 }}>{monthApprovedOt.toFixed(1)} hrs</div>
-            <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 6 }}>1.75x pay multiplier applied</div>
-          </div>
-          
-          <div className="glass" style={{ padding: 20, borderRadius: 16, borderLeft: "4px solid var(--v-pearson)", position: "relative" }}>
-            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--ink-4)", letterSpacing: "0.05em" }}>Month TOIL Payouts</div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: "var(--v-pearson)", marginTop: 8 }}>{monthApprovedToilDays} days</div>
-            <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 6 }}>1.5x daily rate paid out</div>
-          </div>
-        </div>
-      )}
-      
-      <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-        <Segmented value={tab} onChange={setTab} size="sm" options={[
-          { value: "pending", label: "Pending Claims" },
-          { value: "history", label: "Month-Wise Claims" },
-          { value: "payroll", label: "Payroll Calculation" },
-          { value: "rates", label: "Staff Rates Config" },
-          { value: "discussion", label: "Roster Discussions" }
-        ]} />
-        <div style={{ flex: 1 }} />
-        <button onClick={load} className="tap glass-2" style={{ width: 36, height: 36, borderRadius: 10, display: "grid", placeItems: "center", border: "1px solid var(--hairline)", cursor: "pointer", color: "var(--ink-2)" }}>
-          <Icon name="refresh" size={15} />
+      <section className="otm-kpis">
+        <div className="otm-kpi big"><span>Net payroll · {formatMonthName(selectedMonth)}</span><strong>{inr(totalNet)}</strong><small>{rows.length} people</small></div>
+        <div className="otm-kpi"><span>OT & paid TOIL cost</span><strong>{inr(totalApprovedMonthCost)}</strong><small>Approved, from the roster</small></div>
+        <div className="otm-kpi"><span>Overtime</span><strong>{monthApprovedOt.toFixed(1)}<em> h</em></strong><small>1.75× the hourly rate</small></div>
+        <div className="otm-kpi"><span>Paid TOIL</span><strong>{monthApprovedToilDays}<em> days</em></strong><small>1.5× the daily rate</small></div>
+        <button className={`otm-kpi link ${pendingCount ? "warn" : ""}`} onClick={() => window.dispatchEvent(new CustomEvent("fets-go", { detail: { page: "desk", deskTab: "requests" } }))}>
+          <span>Waiting for approval</span><strong>{pendingCount}</strong><small>Approve in My Desk → Leave & TOIL ↗</small>
         </button>
-      </div>
-      
-      {loading ? (
-        <div className="glass" style={{ padding: 40, borderRadius: "var(--radius)", textAlign: "center", color: "var(--ink-4)" }}>
-          Loading claims data…
-        </div>
-      ) : tab === "pending" ? (
-        pendingClaims.length === 0 ? (
-          <div className="glass" style={{ padding: 40, borderRadius: "var(--radius)", textAlign: "center", color: "var(--ink-4)" }}>
-            No pending claims found.
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {pendingClaims.map((c) => {
-              const isToil = c.toil_payout;
-              const payout = calcClaimPayout(c);
-              const kindColor = isToil ? "var(--v-pearson)" : "var(--v-ielts)";
-              
-              return (
-                <div key={c.id} className="glass rise" style={{ padding: 20, borderRadius: "var(--radius)", display: "flex", flexDirection: "column", gap: 14 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <Avatar name={c.name} size={36} />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 14.5, fontWeight: 700, color: "var(--ink)" }}>{c.name}</div>
-                      <div style={{ fontSize: 11.5, color: "var(--ink-4)", marginTop: 1 }}>
-                        {c.branch} Center · Submitted on {new Date(c.created_at).toLocaleDateString()}
-                      </div>
-                    </div>
-                    <span style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", padding: "4px 10px", borderRadius: 99,
-                      color: kindColor, background: `color-mix(in oklch, ${kindColor} 15%, transparent)` }}>
-                      {isToil ? "TOIL Payout" : "Overtime"}
-                    </span>
-                  </div>
-                  
-                  <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 14, padding: "10px 14px", borderRadius: 10, background: "var(--inset)", border: "1px solid var(--hairline)" }}>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                      <span style={{ fontSize: 11, color: "var(--ink-4)", fontWeight: 600 }}>Date of Work</span>
-                      <span style={{ fontSize: 13, fontWeight: 750, color: "var(--ink)" }}>{c.date}</span>
-                    </div>
-                    
-                    {!isToil && (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                        <span style={{ fontSize: 11, color: "var(--ink-4)", fontWeight: 600 }}>Submitted OT Hours</span>
-                        <span style={{ fontSize: 13, fontWeight: 750, color: "var(--ink)" }}>{c.ot_hours.toFixed(2)} hrs (${c.start_time} - ${c.end_time || "5:00 PM"})</span>
-                      </div>
-                    )}
-                    
-                    {isToil && (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                        <span style={{ fontSize: 11, color: "var(--ink-4)", fontWeight: 600 }}>TOIL Dates to Cash Out</span>
-                        <span style={{ fontSize: 12.5, fontWeight: 750, color: "var(--ink)" }}>
-                          {(() => {
-                            let dates = [];
-                            try { dates = typeof c.toil_dates === 'string' ? JSON.parse(c.toil_dates) : (c.toil_dates || []); } catch(e) {}
-                            return Array.isArray(dates) ? dates.join(", ") : "1 day";
-                          })()}
-                        </span>
-                      </div>
-                    )}
+      </section>
 
-                    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                      <span style={{ fontSize: 11, color: "var(--ink-4)", fontWeight: 600 }}>Base Rate</span>
-                      <span style={{ fontSize: 13, fontWeight: 750, color: "var(--ink)" }}>₹{isToil ? `${c.daily_rate}/d` : `${c.hourly_rate}/h`}</span>
-                    </div>
-                    
-                    <div style={{ display: "flex", flexDirection: "column", gap: 3, alignItems: "flex-end" }}>
-                      <span style={{ fontSize: 11, color: "var(--ink-4)", fontWeight: 600 }}>Estimated Payout</span>
-                      <span style={{ fontSize: 14, fontWeight: 800, color: "var(--ok)" }}>₹{payout.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
-                    </div>
-                  </div>
-                  
-                  {c.notes && (
-                    <p style={{ margin: 0, padding: "8px 12px", borderRadius: 8, background: "var(--inset)", fontSize: 12.5, color: "var(--ink-3)", fontStyle: "italic", fontFamily: "var(--font-serif)", lineHeight: 1.4 }}>
-                      “{c.notes}”
-                    </p>
-                  )}
-                  
-                  <div style={{ display: "flex", gap: 12, justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
-                    {/* OT Hour Adjustment Input Box */}
-                    {!isToil ? (
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--ink-2)" }}>Approved Hours:</span>
-                        <input 
-                          type="number"
-                          step="0.25"
-                          min="0"
-                          value={adjustedHours[c.id] !== undefined ? adjustedHours[c.id] : c.ot_hours}
-                          onChange={(e) => setAdjustedHours(prev => ({ ...prev, [c.id]: parseFloat(e.target.value) || 0 }))}
-                          className="glass-2 tabnum"
-                          style={{ width: 80, padding: "6px 8px", borderRadius: 7, border: "1px solid var(--hairline)", background: "transparent", color: "var(--ink)", textAlign: "center", fontSize: 13, fontWeight: 700 }}
-                        />
+      <nav className="otm-tabs" aria-label="OT & TOIL">
+        <button aria-pressed={tab !== "history"} onClick={() => setTab("payroll")}>Payroll & salaries</button>
+        <button aria-pressed={tab === "history"} onClick={() => setTab("history")}>Month-wise claims</button>
+      </nav>
+
+      {loading ? <div className="otm-card otm-empty">Loading the month…</div> : tab !== "history" ? (
+        <section className="otm-card">
+          <div className="otm-card-head">
+            <div><h2>Payroll for {formatMonthName(selectedMonth)}</h2><p>Default salary is each person's standing rate. This month's salary, additions and deductions apply to this month only. Daily = salary ÷ 30 · OT rate = daily ÷ 8 × 1.75.</p></div>
+          </div>
+          <div className="otm-table-wrap">
+            <table className="otm-table">
+              <thead>
+                <tr className="otm-groups"><th></th><th colSpan={2}>Salary</th><th colSpan={2}>Overtime</th><th colSpan={2}>Paid TOIL</th><th colSpan={2}>Leave</th><th colSpan={2}>Adjustments</th><th></th><th></th></tr>
+                <tr>
+                  <th className="left">Employee</th><th>Default</th><th>This month</th>
+                  <th>Hours</th><th>Pay</th><th>Days</th><th>Pay</th><th>Days</th><th>Deduction</th>
+                  <th className="left">Addition</th><th className="left">Deduction</th><th>Net pay</th><th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(({ name, p, r }) => (
+                  <tr key={p.id}>
+                    <td className="left otm-person"><Avatar name={name} size={30} /><span><strong>{name}</strong><small>{p.role || "Staff"} · {(p.branch || "Calicut")}</small></span></td>
+                    <td>
+                      <div className="otm-inline">
+                        <input type="number" value={r.defaultSalary || ""} onChange={(e) => handleRateChange(p.id, e.target.value)} aria-label={`Default salary for ${name}`} />
+                        {r.rateEdited && <button className="otm-save" onClick={() => handleSaveRates(p.id)}>Save</button>}
                       </div>
-                    ) : <div />}
-                    
-                    <div style={{ display: "flex", gap: 9 }}>
-                      <button 
-                        onClick={() => resolve(c.id, "Approved", isToil ? undefined : (adjustedHours[c.id] !== undefined ? adjustedHours[c.id] : c.ot_hours))} 
-                        className="tap" 
-                        style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 34, padding: "0 16px", borderRadius: 8, border: "none", cursor: "pointer", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 750, color: "var(--accent-ink)", background: "var(--accent)" }}
-                      >
-                        <Icon name="check" size={14} stroke={2.6} /> Approve
-                      </button>
-                      <button 
-                        onClick={() => resolve(c.id, "Rejected")} 
-                        className="tap glass-2" 
-                        style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 34, padding: "0 16px", borderRadius: 8, border: "1px solid var(--hairline)", cursor: "pointer", fontFamily: "var(--font)", fontSize: 12.5, fontWeight: 650, color: "var(--ink-2)" }}
-                      >
-                        <Icon name="x" size={14} stroke={2.6} /> Reject
-                      </button>
+                      <small className="otm-sub">Day {inr(r.defaultSalary / 30)} · OT {inr(r.defaultSalary / 30 / 8 * 1.75)}/h</small>
+                    </td>
+                    <td>
+                      <input type="number" value={r.monthly_salary || ""} onChange={(e) => handlePayrollEdit(p.id, "monthly_salary", e.target.value)} aria-label={`This month's salary for ${name}`} />
+                      <small className="otm-sub">Day {inr(r.dailyRate)} · OT {inr(r.hourlyRate)}/h</small>
+                    </td>
+                    <td className="num">{r.otHours.toFixed(1)}</td>
+                    <td className="num">{inr(r.otSalary)}</td>
+                    <td className="num">{r.toilDays}</td>
+                    <td className="num">{inr(r.toilSalary)}</td>
+                    <td className="num">{r.leaveDays}</td>
+                    <td className="num bad">{r.leaveDeduction ? `−${inr(r.leaveDeduction)}` : "—"}</td>
+                    <td className="left">
+                      <input type="number" className="good" placeholder="₹" value={r.manualAddition || ""} onChange={(e) => handlePayrollEdit(p.id, "manual_addition", e.target.value)} aria-label={`Addition for ${name}`} />
+                      <input type="text" className="note" placeholder="Reason" value={r.additionNote} onChange={(e) => handlePayrollEdit(p.id, "addition_note", e.target.value)} aria-label={`Addition reason for ${name}`} />
+                    </td>
+                    <td className="left">
+                      <input type="number" className="bad" placeholder="₹" value={r.manualDeduction || ""} onChange={(e) => handlePayrollEdit(p.id, "manual_deduction", e.target.value)} aria-label={`Deduction for ${name}`} />
+                      <input type="text" className="note" placeholder="Reason" value={r.deductionNote} onChange={(e) => handlePayrollEdit(p.id, "deduction_note", e.target.value)} aria-label={`Deduction reason for ${name}`} />
+                    </td>
+                    <td className="num net">{inr(r.netSalary)}</td>
+                    <td>
+                      <div className="otm-actions">
+                        <button className="otm-save" disabled={!r.isEdited} onClick={() => handleSavePayroll(p.id, r.rates.monthly_salary)}>Save</button>
+                        <button className="otm-ghost" onClick={() => setActivePayslipStaff({ id: p.id, name, role: p.role, branch: p.branch || "Calicut", monthly_salary: r.monthly_salary, dailyRate: r.dailyRate, hourlyRate: r.hourlyRate, otHours: r.otHours, otSalary: r.otSalary, toilDays: r.toilDays, toilSalary: r.toilSalary, leaveDays: r.leaveDays, leaveDeduction: r.leaveDeduction, manualAddition: r.manualAddition, additionNote: r.additionNote, manualDeduction: r.manualDeduction, deductionNote: r.deductionNote, totalEarnings: r.totalEarnings, totalDeductions: r.totalDeductions, netSalary: r.netSalary })}>Slip</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot><tr><td className="left" colSpan={11}>Total net pay</td><td className="num net">{inr(totalNet)}</td><td></td></tr></tfoot>
+            </table>
+          </div>
+        </section>
+      ) : (
+        <section className="otm-history">
+          {Object.keys(monthWiseClaims).length === 0 ? <div className="otm-card otm-empty">No approved or rejected claims yet.</div>
+            : Object.entries(monthWiseClaims).sort((a, b) => b[0].localeCompare(a[0])).map(([mStr, staffGroup]: [string, any]) => {
+              const open = expandedMonths[mStr] ?? mStr === selectedMonth;
+              const people = Object.entries(staffGroup);
+              const ot = people.reduce((s2, [, x]: [string, any]) => s2 + x.otHours, 0);
+              const toil = people.reduce((s2, [, x]: [string, any]) => s2 + x.toilDays, 0);
+              return (
+                <div key={mStr} className="otm-card otm-month">
+                  <button className="otm-month-head" onClick={() => setExpandedMonths(prev => ({ ...prev, [mStr]: !open }))} aria-expanded={open}>
+                    <Icon name={open ? "arrowD" : "arrowR"} size={15} />
+                    <h3>{formatMonthName(mStr)}</h3>
+                    <span>{people.length} people · {ot.toFixed(1)} h OT · {toil} TOIL days</span>
+                  </button>
+                  {open && <div className="otm-month-body">{people.map(([profileId, sInfo]: [string, any]) => (
+                    <div key={profileId} className="otm-claim-row">
+                      <span className="otm-person"><Avatar name={sInfo.name} size={26} /><span><strong>{sInfo.name}</strong><small>{sInfo.branch}</small></span></span>
+                      <span className="num">{sInfo.otHours.toFixed(1)} h OT</span>
+                      <span className="num">{sInfo.toilDays} TOIL</span>
+                      <span className="otm-chips">{sInfo.claims.map((cl) => <span key={cl.id} className={`otm-chip ${cl.status}`}>{cl.date} · {cl.toil_payout ? "TOIL" : `OT ${Number(cl.ot_hours || 0).toFixed(1)}h`} · {cl.status}</span>)}</span>
                     </div>
-                  </div>
+                  ))}</div>}
                 </div>
               );
             })}
-          </div>
-        )
-      ) : tab === "history" ? (
-        Object.keys(monthWiseClaims).length === 0 ? (
-          <div className="glass" style={{ padding: 40, borderRadius: "var(--radius)", textAlign: "center", color: "var(--ink-4)" }}>
-            No resolved claims history found.
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {Object.entries(monthWiseClaims)
-              .sort((a, b) => b[0].localeCompare(a[0])) // sort months descending
-              .map(([mStr, staffGroup]) => {
-                const isExpanded = expandedMonths[mStr];
-                return (
-                  <div key={mStr} className="glass" style={{ padding: 20, borderRadius: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-                    <div 
-                      onClick={() => setExpandedMonths(prev => ({ ...prev, [mStr]: !isExpanded }))}
-                      style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}
-                    >
-                      <h3 style={{ margin: 0, fontSize: 15.5, fontWeight: 800, color: "var(--ink)", display: "flex", alignItems: "center", gap: 8 }}>
-                        <Icon name={isExpanded ? "arrowD" : "arrowR"} size={16} />
-                        {formatMonthName(mStr)} History
-                      </h3>
-                      <span className="mono" style={{ fontSize: 12, color: "var(--ink-4)", fontWeight: 650 }}>
-                        {Object.keys(staffGroup).length} Staff Members
-                      </span>
-                    </div>
-
-                    {isExpanded && (
-                      <div className="scroll-soft" style={{ overflowX: "auto", borderTop: "1px solid var(--hairline)", paddingTop: 12 }}>
-                        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 600 }}>
-                          <thead>
-                            <tr style={{ borderBottom: "1px solid var(--hairline)" }}>
-                              <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 10.5, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>Employee</th>
-                              <th style={{ textAlign: "left", padding: "8px 12px", fontSize: 10.5, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>Center</th>
-                              <th style={{ textAlign: "right", padding: "8px 12px", fontSize: 10.5, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>Approved OT</th>
-                              <th style={{ textAlign: "right", padding: "8px 12px", fontSize: 10.5, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>Approved TOIL Payouts</th>
-                              <th style={{ textAlign: "center", padding: "8px 12px", fontSize: 10.5, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>Claims Details</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {Object.entries(staffGroup).map(([profileId, sInfo]: [string, any]) => (
-                              <tr key={profileId} style={{ borderBottom: "1px solid var(--hairline)" }}>
-                                <td style={{ padding: "10px 12px", fontSize: 13, fontWeight: 650, color: "var(--ink)" }}>{sInfo.name}</td>
-                                <td style={{ padding: "10px 12px", fontSize: 12.5, color: "var(--ink-3)" }}>{sInfo.branch}</td>
-                                <td style={{ padding: "10px 12px", textAlign: "right", fontSize: 13, fontWeight: 650 }} className="tabnum">{sInfo.otHours.toFixed(1)} hrs</td>
-                                <td style={{ padding: "10px 12px", textAlign: "right", fontSize: 13, fontWeight: 650 }} className="tabnum">{sInfo.toilDays} days</td>
-                                <td style={{ padding: "10px 12px", textAlign: "center" }}>
-                                  <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "center", fontSize: 11, color: "var(--ink-4)" }}>
-                                    {sInfo.claims.map((cl) => {
-                                      const isToil = cl.toil_payout;
-                                      return (
-                                        <div key={cl.id} style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                                          <span style={{ fontWeight: 600 }} className="mono">{cl.date}</span>
-                                          <span style={{ padding: "1px 6px", borderRadius: 4, background: "var(--inset)", fontSize: 9, fontWeight: 800, textTransform: "uppercase", color: cl.status === 'approved' ? "var(--ok)" : "var(--bad)" }}>
-                                            {isToil ? "TOIL" : "OT"} · {cl.status}
-                                          </span>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-          </div>
-        )
-      ) : tab === "payroll" ? (
-        <div className="glass" style={{ padding: 24, borderRadius: 16, display: "flex", flexDirection: "column", gap: 20 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 14 }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 750, color: "var(--ink)" }}>Monthly Payroll Calculation</h3>
-              <p style={{ margin: 0, fontSize: 12, color: "var(--ink-4)" }}>Payroll summary for {formatMonthName(selectedMonth)}. Save individual rows to apply manual additions/deductions.</p>
-            </div>
-            <button 
-              onClick={handleBatchDownload} 
-              className="tap btn-accent" 
-              style={{ display: "inline-flex", alignItems: "center", gap: 8, height: 38, padding: "0 18px", borderRadius: 10, border: "none", cursor: "pointer", fontFamily: "var(--font)", fontSize: 13, fontWeight: 750, background: "var(--accent)", color: "var(--accent-ink)" }}
-            >
-              <Icon name="download" size={15} /> Batch Download Slips
-            </button>
-          </div>
-
-          <div className="scroll-soft" style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1100 }}>
-              <thead>
-                <tr style={{ borderBottom: "1px solid var(--hairline)" }}>
-                  <th style={{ textAlign: "left", padding: "10px 8px", fontSize: 10, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>Employee</th>
-                  <th style={{ textAlign: "right", padding: "10px 8px", fontSize: 10, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>Monthly Sal.</th>
-                  <th style={{ textAlign: "right", padding: "10px 8px", fontSize: 10, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>Daily Sal.</th>
-                  <th style={{ textAlign: "right", padding: "10px 8px", fontSize: 10, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>OT Rate</th>
-                  <th style={{ textAlign: "right", padding: "10px 8px", fontSize: 10, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>Approved OT</th>
-                  <th style={{ textAlign: "right", padding: "10px 8px", fontSize: 10, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>OT Pay</th>
-                  <th style={{ textAlign: "right", padding: "10px 8px", fontSize: 10, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>TOIL Payouts</th>
-                  <th style={{ textAlign: "right", padding: "10px 8px", fontSize: 10, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>TOIL Pay</th>
-                  <th style={{ textAlign: "right", padding: "10px 8px", fontSize: 10, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>Leaves (L)</th>
-                  <th style={{ textAlign: "right", padding: "10px 8px", fontSize: 10, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>Leave Ded.</th>
-                  <th style={{ textAlign: "left", padding: "10px 8px", fontSize: 10, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>Additions / Notes</th>
-                  <th style={{ textAlign: "left", padding: "10px 8px", fontSize: 10, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>Deductions / Notes</th>
-                  <th style={{ textAlign: "right", padding: "10px 8px", fontSize: 10, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>Net Pay</th>
-                  <th style={{ textAlign: "center", padding: "10px 8px", fontSize: 10, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Object.entries(F._staffRatesByName || {})
-                  .filter(([name]) => filterNiyas(name))
-                  .map(([name, p]) => {
-                    const mp = F._monthlyPayroll?.[p.id]?.[selectedMonth];
-                    const rates = F._staffRatesByProfileId?.[p.id] || { monthly_salary: 0, hourly_rate: 0, daily_rate: 0 };
-                    
-                    const monthly_salary = editingPayroll[p.id]?.monthly_salary !== undefined 
-                      ? parseFloat(editingPayroll[p.id].monthly_salary) || 0 
-                      : (mp ? mp.monthly_salary : rates.monthly_salary);
-                      
-                    const manualAddition = editingPayroll[p.id]?.manual_addition !== undefined 
-                      ? parseFloat(editingPayroll[p.id].manual_addition) || 0 
-                      : (mp ? mp.manual_addition : 0);
-                      
-                    const manualDeduction = editingPayroll[p.id]?.manual_deduction !== undefined 
-                      ? parseFloat(editingPayroll[p.id].manual_deduction) || 0 
-                      : (mp ? mp.manual_deduction : 0);
-                      
-                    const parsedNotes = mp ? parseNotes(mp.adjustment_notes) : { addition: "", deduction: "" };
-                    const additionNote = editingPayroll[p.id]?.addition_note !== undefined 
-                      ? editingPayroll[p.id].addition_note 
-                      : parsedNotes.addition;
-                      
-                    const deductionNote = editingPayroll[p.id]?.deduction_note !== undefined 
-                      ? editingPayroll[p.id].deduction_note 
-                      : parsedNotes.deduction;
-
-                    const dailyRate = monthly_salary / 30;
-                    const hourlyRate = dailyRate / 8 * 1.75;
-                    
-                    const offsets = getOffsetsForMonth(selectedMonth);
-                    const dbRoster = F._dbRoster?.[name] || {};
-                    let otHours = 0;
-                    let toilDays = 0;
-                    offsets.forEach(off => {
-                      const cell = dbRoster[off];
-                      if (cell) {
-                        if (typeof cell === "object" && cell.ot) {
-                          otHours += cell.ot;
-                        }
-                        const code = typeof cell === "string" ? cell : cell.code;
-                        if (String(code).toUpperCase() === "TP") {
-                          toilDays++;
-                        }
-                      }
-                    });
-                    const otSalary = otHours * hourlyRate;
-                    const toilSalary = toilDays * dailyRate * 1.5;
-                    
-                    // Count leave days "L" in roster
-                    let leaveDays = 0;
-                    offsets.forEach(off => {
-                      const cell = dbRoster[off];
-                      const code = cell ? (typeof cell === "string" ? cell : cell.code) : "";
-                      if (String(code).toUpperCase() === "L") {
-                        leaveDays++;
-                      }
-                    });
-                    const leaveDeduction = leaveDays * monthly_salary / 30;
-                    
-                    const totalEarnings = monthly_salary + otSalary + toilSalary + manualAddition;
-                    const totalDeductions = leaveDeduction + manualDeduction;
-                    const netSalary = totalEarnings - totalDeductions;
-                    const isEdited = editingPayroll[p.id] !== undefined;
-
-                    return (
-                      <tr key={p.id} style={{ borderBottom: "1px solid var(--hairline)" }}>
-                        <td style={{ padding: "10px 8px", fontSize: 13, fontWeight: 700, color: "var(--ink)", whiteSpace: "nowrap" }}>
-                          {name}
-                          <div style={{ fontSize: 10, color: "var(--ink-4)", fontWeight: 500 }}>{p.role || "Staff"}</div>
-                        </td>
-                        <td style={{ padding: "8px" }}>
-                          <input 
-                            type="number"
-                            value={monthly_salary || ""}
-                            onChange={(e) => handlePayrollEdit(p.id, "monthly_salary", e.target.value)}
-                            className="glass-2 tabnum"
-                            style={{ width: 85, padding: "5px 7px", borderRadius: 6, border: "1px solid var(--hairline)", background: "transparent", color: "var(--ink)", textAlign: "right", fontSize: 12 }}
-                          />
-                        </td>
-                        <td style={{ padding: "8px", textAlign: "right", fontSize: 12 }} className="tabnum">₹{dailyRate.toFixed(0)}</td>
-                        <td style={{ padding: "8px", textAlign: "right", fontSize: 12 }} className="tabnum">₹{hourlyRate.toFixed(0)}</td>
-                        <td style={{ padding: "8px", textAlign: "right", fontSize: 12 }} className="tabnum">{otHours.toFixed(1)} h</td>
-                        <td style={{ padding: "8px", textAlign: "right", fontSize: 12 }} className="tabnum">₹{otSalary.toFixed(0)}</td>
-                        <td style={{ padding: "8px", textAlign: "right", fontSize: 12 }} className="tabnum">{toilDays} d</td>
-                        <td style={{ padding: "8px", textAlign: "right", fontSize: 12 }} className="tabnum">₹{toilSalary.toFixed(0)}</td>
-                        <td style={{ padding: "8px", textAlign: "right", fontSize: 12 }} className="tabnum">{leaveDays} d</td>
-                        <td style={{ padding: "8px", textAlign: "right", fontSize: 12, color: "var(--bad)" }} className="tabnum">-₹{leaveDeduction.toFixed(0)}</td>
-                        
-                        {/* Addition notes */}
-                        <td style={{ padding: "8px" }}>
-                          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                            <input 
-                              type="number"
-                              placeholder="₹ Add"
-                              value={manualAddition || ""}
-                              onChange={(e) => handlePayrollEdit(p.id, "manual_addition", e.target.value)}
-                              className="glass-2 tabnum"
-                              style={{ width: 75, padding: "4px 6px", borderRadius: 6, border: "1px solid var(--hairline)", background: "transparent", color: "var(--ok)", textAlign: "right", fontSize: 12 }}
-                            />
-                            <input 
-                              type="text"
-                              placeholder="Reason"
-                              value={additionNote}
-                              onChange={(e) => handlePayrollEdit(p.id, "addition_note", e.target.value)}
-                              className="glass-2"
-                              style={{ width: 85, padding: "4px 6px", borderRadius: 6, border: "1px solid var(--hairline)", background: "transparent", color: "var(--ink-2)", fontSize: 11 }}
-                            />
-                          </div>
-                        </td>
-
-                        {/* Deduction notes */}
-                        <td style={{ padding: "8px" }}>
-                          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                            <input 
-                              type="number"
-                              placeholder="₹ Ded"
-                              value={manualDeduction || ""}
-                              onChange={(e) => handlePayrollEdit(p.id, "manual_deduction", e.target.value)}
-                              className="glass-2 tabnum"
-                              style={{ width: 75, padding: "4px 6px", borderRadius: 6, border: "1px solid var(--hairline)", background: "transparent", color: "var(--bad)", textAlign: "right", fontSize: 12 }}
-                            />
-                            <input 
-                              type="text"
-                              placeholder="Reason"
-                              value={deductionNote}
-                              onChange={(e) => handlePayrollEdit(p.id, "deduction_note", e.target.value)}
-                              className="glass-2"
-                              style={{ width: 85, padding: "4px 6px", borderRadius: 6, border: "1px solid var(--hairline)", background: "transparent", color: "var(--ink-2)", fontSize: 11 }}
-                            />
-                          </div>
-                        </td>
-
-                        <td style={{ padding: "8px", textAlign: "right", fontSize: 13, fontWeight: 800, color: "var(--ok)" }} className="tabnum">
-                          ₹{netSalary.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                        </td>
-
-                        <td style={{ padding: "8px", textAlign: "center" }}>
-                          <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
-                            <button 
-                              onClick={() => handleSavePayroll(p.id, rates.monthly_salary)}
-                              disabled={!isEdited}
-                              className="tap"
-                              style={{ padding: "5px 10px", borderRadius: 6, border: "none", background: isEdited ? "var(--accent)" : "var(--inset)", color: isEdited ? "var(--accent-ink)" : "var(--ink-4)", fontWeight: 700, fontSize: 11, cursor: isEdited ? "pointer" : "default" }}
-                            >
-                              Save
-                            </button>
-                            <button 
-                              onClick={() => setActivePayslipStaff({
-                                id: p.id,
-                                name,
-                                role: p.role,
-                                branch: p.branch || "Calicut",
-                                monthly_salary,
-                                dailyRate,
-                                hourlyRate,
-                                otHours,
-                                otSalary,
-                                toilDays,
-                                toilSalary,
-                                leaveDays,
-                                leaveDeduction,
-                                manualAddition,
-                                additionNote,
-                                manualDeduction,
-                                deductionNote,
-                                totalEarnings,
-                                totalDeductions,
-                                netSalary
-                              })}
-                              className="tap glass-2"
-                              style={{ padding: "5px 8px", borderRadius: 6, border: "1px solid var(--hairline)", color: "var(--ink-2)", fontSize: 11, fontWeight: 600, cursor: "pointer" }}
-                            >
-                              Slip
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ) : tab === "rates" ? (
-        /* Rates Config Tab */
-        <div className="glass" style={{ padding: 24, borderRadius: "var(--radius)", display: "flex", flexDirection: "column", gap: 18 }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 750, color: "var(--ink)" }}>Staff Salaries Configuration</h3>
-            <p style={{ margin: 0, fontSize: 12, color: "var(--ink-4)" }}>Set default Monthly Salary for employees. Daily rate (Salary/30) and OT hourly rate (Daily/8 * 1.75) are automatically calculated.</p>
-          </div>
-          
-          <div className="scroll-soft" style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 600 }}>
-              <thead>
-                <tr style={{ borderBottom: "1px solid var(--hairline)" }}>
-                  <th style={{ textAlign: "left", padding: "10px 12px", fontSize: 11, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>Employee</th>
-                  <th style={{ textAlign: "left", padding: "10px 12px", fontSize: 11, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>Role</th>
-                  <th style={{ textAlign: "right", padding: "10px 12px", fontSize: 11, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>Monthly Salary (₹)</th>
-                  <th style={{ textAlign: "right", padding: "10px 12px", fontSize: 11, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>Daily Rate (₹)</th>
-                  <th style={{ textAlign: "right", padding: "10px 12px", fontSize: 11, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>OT Hourly Rate (₹)</th>
-                  <th style={{ textAlign: "center", padding: "10px 12px", fontSize: 11, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase" }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Object.entries(F._staffRatesByName || {})
-                  .filter(([name]) => filterNiyas(name))
-                  .map(([name, p]) => {
-                    const monthly_salary = editingRates[p.id]?.monthly_salary !== undefined 
-                      ? editingRates[p.id].monthly_salary 
-                      : (p.monthly_salary || 0);
-                    const daily_rate = monthly_salary / 30;
-                    const hourly_rate = daily_rate / 8 * 1.75;
-                    const isEdited = editingRates[p.id] !== undefined;
-
-                    return (
-                      <tr key={p.id} style={{ borderBottom: "1px solid var(--hairline)" }}>
-                        <td style={{ padding: "12px", fontSize: 13.5, fontWeight: 650, color: "var(--ink)", display: "flex", alignItems: "center", gap: 10 }}>
-                          <Avatar name={name} size={28} />
-                          {name}
-                        </td>
-                        <td style={{ padding: "12px", fontSize: 12.5, color: "var(--ink-3)", fontWeight: 550 }}>
-                          {p.role || "Staff"}
-                        </td>
-                        <td style={{ padding: "12px", textAlign: "right" }}>
-                          <input 
-                            type="number"
-                            value={monthly_salary || ""}
-                            onChange={(e) => handleRateChange(p.id, e.target.value)}
-                            className="glass-2 tabnum"
-                            style={{ width: 120, padding: "6px 8px", borderRadius: 6, border: "1px solid var(--hairline)", background: "transparent", color: "var(--ink)", textAlign: "right", fontSize: 13, outline: "none" }}
-                          />
-                        </td>
-                        <td style={{ padding: "12px", textAlign: "right", fontSize: 13 }} className="tabnum">
-                          ₹{daily_rate.toFixed(2)}
-                        </td>
-                        <td style={{ padding: "12px", textAlign: "right", fontSize: 13 }} className="tabnum">
-                          ₹{hourly_rate.toFixed(2)}
-                        </td>
-                        <td style={{ padding: "12px", textAlign: "center" }}>
-                          <button 
-                            onClick={() => handleSaveRates(p.id)}
-                            disabled={!isEdited}
-                            className="tap"
-                            style={{ padding: "6px 12px", borderRadius: 6, border: "none", background: isEdited ? "var(--accent)" : "var(--inset)", color: isEdited ? "var(--accent-ink)" : "var(--ink-4)", fontWeight: 700, fontSize: 11.5, cursor: isEdited ? "pointer" : "default", opacity: isEdited ? 1 : 0.6 }}
-                          >
-                            Save
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ) : tab === "discussion" ? (
-        <RosterDiscussionsAdmin />
-      ) : null}
+        </section>
+      )}
 
       {/* Salary Slip Modal Popup */}
       {activePayslipStaff && (
@@ -10964,6 +10581,7 @@ function PresetCard({ m, idx, on, onClick, badge }) {
 const APP_KINDS = [
   { k: "leave",          icon: "calendar", label: "Leave",                 color: "#B23850",  desc: "Apply for a scheduled day off" },
   { k: "toil",           icon: "clock",    label: "TOIL Day Off",          color: "#10B981",  desc: "Take time off in lieu of extra hours" },
+  { k: "ot",             icon: "plus",     label: "Overtime / TOIL Pay",   color: "#EAB308",  desc: "Claim overtime hours or a paid TOIL day" },
   { k: "swap",           icon: "refresh",  label: "Shift Swap",            color: "#3B8BEB",  desc: "Propose a swap with a colleague" },
   { k: "emergency_duty", icon: "zap",      label: "Emergency Duty Change", color: "#B23850",  desc: "Request an urgent shift change" },
   { k: "reimbursement",  icon: "dollar",   label: "Reimbursement",         color: "#3B8BEB",  desc: "Claim work expenses" },
@@ -11042,6 +10660,10 @@ function AppForm({ onSubmitted }) {
   const [receiptNote, setReceiptNote] = React.useState("");
 
   const staffList = (F().PEOPLE || []);
+  const [otType, setOtType] = React.useState("hours");
+  const [otDate, setOtDate] = React.useState("");
+  const [otStart, setOtStart] = React.useState("17:00");
+  const [otEnd, setOtEnd] = React.useState("19:00");
 
   const inpStyle = {
     padding: "10px 12px", borderRadius: 10, border: "1.5px solid #C4DBF6",
@@ -11053,6 +10675,14 @@ function AppForm({ onSubmitted }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
+    if (kind === "ot") {
+      // Overtime and paid TOIL go into the claims the payroll already reads.
+      const hours = otType === "hours" ? otHoursFrom(otStart, otEnd) : 0;
+      const res = await DB.dbAddOtClaim({ date: otDate, start_time: otType === "hours" ? otStart : undefined, end_time: otType === "hours" ? otEnd : undefined, ot_hours: hours, toil_payout: otType === "toil", notes: reason });
+      setSubmitting(false);
+      if (res) { setOtDate(""); setOtStart("17:00"); setOtEnd("19:00"); setReason(""); window.dispatchEvent(new Event("fets-ot-claims-changed")); onSubmitted?.(); }
+      return;
+    }
     let payload = { kind, reason };
     if (kind === "leave")          payload = { ...payload, request_date: date, leave_type: leaveType };
     if (kind === "toil")           payload = { ...payload, request_date: date, leave_type: "TOIL" };
@@ -11094,6 +10724,25 @@ function AppForm({ onSubmitted }) {
                   {LEAVE_TYPES.map(lt => <option key={lt} value={lt}>{lt}</option>)}
                 </select>
               </label>
+            </div>
+          )}
+
+          {/* Overtime / paid TOIL */}
+          {kind === "ot" && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              <label style={labelStyle}>What are you claiming?
+                <select value={otType} onChange={e => setOtType(e.target.value)} style={inpStyle}>
+                  <option value="hours">Overtime hours</option>
+                  <option value="toil">Paid TOIL day (worked a rest day / holiday)</option>
+                </select>
+              </label>
+              <label style={labelStyle}>Date worked<input type="date" value={otDate} onChange={e => setOtDate(e.target.value)} required style={inpStyle} /></label>
+              {otType === "hours" && <>
+                <label style={labelStyle}>From<input type="time" value={otStart} onChange={e => setOtStart(e.target.value)} required style={inpStyle} /></label>
+                <label style={labelStyle}>To<input type="time" value={otEnd} onChange={e => setOtEnd(e.target.value)} required style={inpStyle} /></label>
+                <div style={{ ...labelStyle, gridColumn: "1 / -1" }}><span style={{ fontWeight: 500 }}>{otHoursFrom(otStart, otEnd).toFixed(2)} hours · paid at the OT rate once approved. The roster shows the hours on that day.</span></div>
+              </>}
+              {otType === "toil" && <div style={{ ...labelStyle, gridColumn: "1 / -1" }}><span style={{ fontWeight: 500 }}>Paid at 1.5× the daily rate once approved. The roster marks the day <b>TP</b>.</span></div>}
             </div>
           )}
 
@@ -11352,7 +11001,15 @@ function AdminApplicationsInbox() {
 
 function ApplicationsHub({ isSuperAdmin }) {
   const [tab, setTab] = React.useState(isSuperAdmin ? "inbox" : "apply");
-  const pendingCount = (window.FETS._applications || []).filter(a => a.status === "pending").length;
+  const [, refreshHub] = React.useReducer(n => n + 1, 0);
+  React.useEffect(() => {
+    loadOtClaims(window.FETS).then(refreshHub).catch(() => undefined);
+    const h = () => refreshHub();
+    window.addEventListener("fets-ot-claims-changed", h);
+    return () => window.removeEventListener("fets-ot-claims-changed", h);
+  }, []);
+  const pendingCount = (window.FETS._applications || []).filter(a => a.status === "pending").length
+    + (isSuperAdmin ? (window.FETS._otClaims || []).filter(c => c.status === "pending").length : 0);
 
   const TABS = isSuperAdmin
     ? [
@@ -11397,8 +11054,68 @@ function ApplicationsHub({ isSuperAdmin }) {
 
       {/* Content */}
       {tab === "apply" && <AppForm onSubmitted={() => setTab(isSuperAdmin ? "inbox" : "mine")} />}
-      {tab === "mine" && <MyApplicationsList />}
-      {tab === "inbox" && <AdminApplicationsInbox />}
+      {tab === "mine" && <><MyApplicationsList /><OtClaimsPanel admin={false} /></>}
+      {tab === "inbox" && <><AdminApplicationsInbox /><OtClaimsPanel admin /></>}
+    </div>
+  );
+}
+
+/** Hours between two "HH:MM" times; past midnight counts into the next day. */
+function otHoursFrom(start, end) {
+  const toMin = (t) => { const [h, m] = String(t || "0:0").split(":").map(Number); return (h || 0) * 60 + (m || 0); };
+  let diff = toMin(end) - toMin(start);
+  if (diff < 0) diff += 24 * 60;
+  return Math.round((diff / 60) * 100) / 100;
+}
+
+/* ---------- Overtime & paid TOIL claims, inside Applications ----------
+   The one place to see and approve them. Approval writes the roster (OT
+   hours on the day, or TP for a paid TOIL day), and the payroll reads the
+   roster, so pay follows automatically. */
+function OtClaimsPanel({ admin }) {
+  const F = window.FETS;
+  const [, bump] = React.useReducer(n => n + 1, 0);
+  const [hours, setHours] = React.useState({});
+  const [busy, setBusy] = React.useState(null);
+  React.useEffect(() => {
+    const h = () => bump();
+    window.addEventListener("fets-ot-claims-changed", h);
+    return () => window.removeEventListener("fets-ot-claims-changed", h);
+  }, []);
+  const all = (F._otClaims || []).filter(c => admin ? c.status === "pending" : c.profile_id === F._meId);
+  const act = async (c, status) => {
+    setBusy(c.id);
+    const h = hours[c.id] !== undefined ? Number(hours[c.id]) : c.ot_hours;
+    await DB.dbResolveOtClaim(c.id, status, status === "Approved" && !c.toil_payout ? h : undefined);
+    await loadOtClaims(F);
+    setBusy(null);
+    window.dispatchEvent(new Event("fets-ot-claims-changed"));
+    window.dispatchEvent(new Event("fets-roster-changed"));
+  };
+  const SC = { pending: "#8590AA", approved: "#3B8BEB", rejected: "#B23850" };
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 6 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+        <div style={{ fontSize: 14.5, fontWeight: 800, color: "#2c3e50" }}>{admin ? "Overtime & paid TOIL to approve" : "My overtime & paid TOIL claims"}</div>
+        <div style={{ fontSize: 11.5, color: "#8590AA" }}>{admin ? "Approving updates the roster and the payroll." : "Approved claims appear on the roster and in your pay."}</div>
+      </div>
+      {all.length === 0 ? (
+        <div style={{ padding: "16px 18px", borderRadius: 14, background: "#E7E3D4", color: "#8590AA", fontSize: 12.5 }}>{admin ? "No overtime or TOIL pay claims waiting." : "No claims yet. Use New Application → Overtime / TOIL Pay."}</div>
+      ) : all.map(c => (
+        <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", padding: "14px 16px", borderRadius: 14, background: "#E7E3D4", boxShadow: "0 2px 10px rgba(0,0,0,0.05)" }}>
+          <div style={{ width: 34, height: 34, borderRadius: 10, display: "grid", placeItems: "center", background: c.toil_payout ? "#d6efe4" : "#f6ebc6", color: c.toil_payout ? "#10B981" : "#B48A06" }}><Icon name={c.toil_payout ? "clock" : "plus"} size={16} /></div>
+          <div style={{ flex: 1, minWidth: 180 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 750, color: "#2c3e50" }}>{admin ? `${c.name || "Staff"} · ` : ""}{c.toil_payout ? "Paid TOIL day" : `Overtime · ${Number(c.ot_hours || 0).toFixed(2)} h`}</div>
+            <div style={{ fontSize: 11.5, color: "#8590AA" }}>{c.date}{c.start_time && !c.toil_payout ? ` · ${String(c.start_time).slice(0, 5)}–${String(c.end_time || "").slice(0, 5)}` : ""}{c.branch ? ` · ${c.branch}` : ""}{c.notes ? ` · ${c.notes}` : ""}</div>
+          </div>
+          {admin ? <>
+            {!c.toil_payout && <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "#8590AA" }}>Approve
+              <input type="number" step="0.25" min="0" value={hours[c.id] ?? c.ot_hours ?? 0} onChange={e => setHours(h => ({ ...h, [c.id]: e.target.value }))} style={{ width: 70, padding: "6px 8px", borderRadius: 8, border: "1.5px solid #C4DBF6", background: "#fff", fontSize: 12.5 }} /> h</label>}
+            <button disabled={busy === c.id} onClick={() => act(c, "Approved")} className="tap" style={{ padding: "8px 14px", borderRadius: 10, border: "none", background: "#3B8BEB", color: "#fff", fontWeight: 750, fontSize: 12.5, cursor: "pointer" }}>Approve</button>
+            <button disabled={busy === c.id} onClick={() => act(c, "Rejected")} className="tap" style={{ padding: "8px 12px", borderRadius: 10, border: "none", background: "transparent", color: "#B23850", fontWeight: 700, fontSize: 12.5, cursor: "pointer" }}>Reject</button>
+          </> : <span style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".05em", color: SC[c.status] || "#8590AA" }}>{c.status}</span>}
+        </div>
+      ))}
     </div>
   );
 }
@@ -12107,6 +11824,18 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
   const [pendingHandoverBadge, setPendingHandoverBadge] = React.useState(0);
   const [chatTarget, setChatTarget] = React.useState(null);
 
+  // Go to a page from anywhere (e.g. roster → My Desk → Leave & TOIL)
+  React.useEffect(() => {
+    const go = (e: any) => {
+      const d = e.detail || {};
+      if (d.deskTab) window.FETS._deskTab = d.deskTab;
+      if (d.page) setActive(d.page);
+      if (d.deskTab) window.setTimeout(() => window.dispatchEvent(new CustomEvent("fets-desk-tab", { detail: d.deskTab })), 50);
+    };
+    window.addEventListener("fets-go", go);
+    return () => window.removeEventListener("fets-go", go);
+  }, []);
+
   // Open chat event listener
   React.useEffect(() => {
     const handler = (e: any) => { setChatTarget(e.detail); setActive("fets-chat"); };
@@ -12114,40 +11843,7 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
     return () => window.removeEventListener("fets-open-chat", handler);
   }, []);
 
-  // Global chat notification listener
-  React.useEffect(() => {
-    const myId = window.FETS?._meId;
-    if (!myId) return;
-    const channel = supabase.channel("global-chat-notifs")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, async (payload) => {
-        if (payload.new.sender_id !== myId) {
-          const senderId = payload.new.sender_id;
-          let senderName = "Teammate";
-          const { data } = await supabase.from('staff_profiles').select('full_name').eq('id', senderId).single();
-          if (data) senderName = data.full_name;
-
-          toast.success(
-            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-              <div style={{ fontWeight: 800 }}>Message from {senderName}</div>
-              <div style={{ fontSize: 11, opacity: 0.8, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 180 }}>{payload.new.content}</div>
-              <button onClick={() => {
-                setChatTarget({ conversationId: payload.new.conversation_id });
-                setActive("fets-chat");
-                toast.dismiss();
-              }} style={{ alignSelf: "flex-end", border: "none", background: "transparent", color: "var(--accent)", fontSize: 10, fontWeight: 900, cursor: "pointer", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 4 }}>
-                Reply
-              </button>
-            </div>,
-            { duration: 6000 }
-          );
-        }
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
+  // Message alerts (toast, sound, system notification) come from the call center in CallContext.
 
 
 

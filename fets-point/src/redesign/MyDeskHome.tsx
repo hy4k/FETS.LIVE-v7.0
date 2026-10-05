@@ -128,7 +128,15 @@ export default function MyDeskHome(props: Props) {
 }
 
 function PersonalDesk({ user, people, pendingHandovers, navigate, openDrawer, openChat, renderPanel, repository, day, date }: Props & { day: string; date: Date }) {
-  const [tab, setTab] = useState<'today' | DeskPanel>('today');
+  const [tab, setTab] = useState<'today' | DeskPanel>(() => {
+    const w = window as any; const asked = w.FETS?._deskTab; if (w.FETS) w.FETS._deskTab = undefined;
+    return asked || 'today';
+  });
+  useEffect(() => {
+    const open = (e: Event) => { const t = (e as CustomEvent<DeskPanel>).detail; if (t) setTab(t); };
+    window.addEventListener('fets-desk-tab', open);
+    return () => window.removeEventListener('fets-desk-tab', open);
+  }, []);
   const key = `fets-desk:${user.id}`;
   const [localMood, setLocalMood, moodSaved] = useSavedString(`${key}:mood:${day}`);
   const [localNote, setLocalNote, noteSaved] = useSavedString(`${key}:note:${day}`);
