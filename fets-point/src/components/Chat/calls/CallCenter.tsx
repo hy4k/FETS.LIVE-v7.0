@@ -5,7 +5,7 @@ import { Room, RoomEvent, Track, type Participant } from 'livekit-client';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../hooks/useAuth';
-import { RING_FOR, callApi, inCall, notifyCall, ringer, ringsFor, type CallKind, type CallPeer, type ChatCall } from './chat-calls';
+import { RING_FOR, callAlertsState, callApi, chime, enableCallAlerts, inCall, notifyCall, notifyMessage, ringer, ringsFor, type CallKind, type CallPeer, type ChatCall } from './chat-calls';
 import './calls.css';
 
 type CallCenterValue = {
@@ -18,6 +18,10 @@ type CallCenterValue = {
   /** The call I am in, if any. */
   current: ChatCall | null;
   me: string;
+  /** Everyone signed in to fets.live right now, by staff profile id. */
+  online: Set<string>;
+  /** The chat on screen, so its own messages don't pop an alert. */
+  setOpenChat: (conversationId: string) => void;
 };
 const Ctx = createContext<CallCenterValue | null>(null);
 export const useCallCenter = () => {
@@ -37,6 +41,43 @@ export function CallCenterProvider({ children }: { children: ReactNode }) {
   const [, tick] = useState(0);
 
   const upsert = useCallback((c: ChatCall) => setCalls(old => ({ ...old, [c.id]: c })), []);
+  const [online, setOnline] = useState<Set<string>>(new Set());
+  const openChat = useRef('');
+  const setOpenChat = useCallback((id: string) => { openChat.current = id; }, []);
+  const names = useRef<Record<string, string>>({});
+
+  // Presence: anyone signed in, on any page, shows as online in chat.
+  useEffect(() => {
+    if (!me) return;
+    const ch = supabase.channel('fets-chat-presence', { config: { presence: { key: me } } });
+    ch.on('presence', { event: 'sync' }, () => setOnline(new Set(Object.keys(ch.presenceState()))))
+      .subscribe(status => { if (status === 'SUBSCRIBED') void ch.track({ at: Date.now() }); });
+    return () => { void supabase.removeChannel(ch); };
+  }, [me]);
+
+  // A new message from someone else: sound and a visible alert, unless that chat is open in front of you.
+  useEffect(() => {
+    if (!me) return;
+    const ch = supabase.channel(`chat-alerts-${me}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, async (p: any) => {
+        const m = p.new;
+        if (!m || m.sender_id === me || m.type === 'call_log') return;
+        const watching = document.visibilityState === 'visible' && openChat.current === m.conversation_id;
+        if (watching) return;
+        if (!names.current[m.sender_id]) {
+          const { data } = await supabase.from('staff_profiles').select('full_name').eq('id', m.sender_id).maybeSingle();
+          names.current[m.sender_id] = (data as any)?.full_name || 'A teammate';
+        }
+        const who = names.current[m.sender_id];
+        const text = m.type === 'text' ? String(m.content || '').slice(0, 140) : m.type === 'image' ? '📷 Photo' : `📎 ${m.content || 'Attachment'}`;
+        chime();
+        const openIt = () => window.dispatchEvent(new CustomEvent('fets-open-chat', { detail: { conversationId: m.conversation_id } }));
+        if (document.visibilityState === 'visible') toast(t => <button className="cc-toast" onClick={() => { openIt(); toast.dismiss(t.id); }}><strong>{who}</strong><span>{text}</span><em>Open chat</em></button>, { icon: '💬', duration: 6000 });
+        notifyMessage(who, text, openIt);
+      })
+      .subscribe();
+    return () => { void supabase.removeChannel(ch); };
+  }, [me]);
 
   // Every call in my conversations, as it changes. A slow poll covers a dropped connection.
   useEffect(() => {
@@ -101,8 +142,9 @@ export function CallCenterProvider({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(t);
   }, [current, me, upsert]);
 
-  return <Ctx.Provider value={{ call, join, live, current, me }}>
+  return <Ctx.Provider value={{ call, join, live, current, me, online, setOpenChat }}>
     {children}
+    {me && <AlertsChip />}
     {incoming && <IncomingCall key={incoming.id} call={incoming} peer={peers[incoming.id]} onAccept={() => void join(incoming)} onDecline={() => void decline(incoming)} />}
     {current && <CallScreen key={current.id} call={current} peer={peers[current.id]} me={me} onLeave={() => void leave(current)} />}
   </Ctx.Provider>;
@@ -227,4 +269,16 @@ function CallScreen({ call, peer, me, onLeave }: { call: ChatCall; peer?: CallPe
       <button className="cc-round decline" onClick={onLeave} aria-label="Hang up"><PhoneOff size={22} /></button>
     </footer>
   </section>, document.body);
+}
+
+/** Asks once, app-wide, to allow notifications so calls and messages show when the tab is minimised. */
+function AlertsChip() {
+  const [state, setState] = useState(callAlertsState());
+  const [hidden, setHidden] = useState(() => { try { return localStorage.getItem('fets-alerts-chip') === 'later'; } catch { return false; } });
+  if (state !== 'default' || hidden) return null;
+  return createPortal(<div className="cc-alerts-chip" role="status">
+    <span>🔔 Get call and message alerts even when fets.live is minimised.</span>
+    <button onClick={async () => setState(await enableCallAlerts())}>Turn on</button>
+    <button className="later" onClick={() => { setHidden(true); try { localStorage.setItem('fets-alerts-chip', 'later'); } catch { /* fine */ } }}>Later</button>
+  </div>, document.body);
 }

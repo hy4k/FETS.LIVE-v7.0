@@ -55,3 +55,14 @@
   .cc-grid.n2, .cc-grid.n3, .cc-grid.n4, .cc-grid.n5, .cc-grid.n6 { grid-template-columns: 1fr; }
   .cc-screen.small { left: 12px; right: 12px; width: auto; bottom: 80px; }
 }
+
+/* Message toast */
+.cc-toast { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; border: 0; background: none; padding: 0; text-align: left; cursor: pointer; font-family: Inter, system-ui, sans-serif; max-width: 260px; }
+.cc-toast strong { font-size: 13px; color: #1f332c; }
+.cc-toast span { font-size: 12.5px; color: #4b5d55; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; }
+.cc-toast em { font-style: normal; font-size: 11px; font-weight: 700; color: #2f5e4a; margin-top: 2px; }
+
+.cc-alerts-chip { position: fixed; left: 18px; bottom: 18px; z-index: 9900; display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 16px; border-radius: 14px; background: #1f332c; color: #f3f1e8; font: 13px Inter, system-ui, sans-serif; box-shadow: 0 16px 40px -14px rgba(0,0,0,.5); max-width: calc(100vw - 36px); }
+.cc-alerts-chip button { border: 0; border-radius: 9px; padding: 7px 12px; background: #2fbf71; color: #fff; font-weight: 700; cursor: pointer; font-size: 12.5px; }
+.cc-alerts-chip button.later { background: transparent; color: #c9d3c6; padding: 7px 8px; }
+@media (max-width: 700px) { .cc-alerts-chip { left: 12px; right: 12px; bottom: 80px; flex-wrap: wrap; } }
