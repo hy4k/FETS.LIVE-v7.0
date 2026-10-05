@@ -27,6 +27,7 @@ import * as ATT from "./attendance-data";
 import { isStaffRosterVisible } from "../utils/rosterVisibility";
 import * as DD from "./dutyData";
 import html2canvas from "html2canvas";
+import { computePay, payslipHtml } from "./payroll";
 import { FetsIncidentPremium } from "../components/FetsIncidentPremium";
 import FetsRoster from "../components/FetsRosterPremium";
 import { FetsCalendarPremium as FetsCalendar } from "../components/FetsCalendarPremium";
@@ -5625,278 +5626,58 @@ function OtToilClaimsHub({ branch }) {
 
   const totalPendingMonthCost = pendingMonthClaims.reduce((sum, c) => sum + calcClaimPayout(c), 0);
 
-  // Print function
-  const printPayslip = (elementId) => {
-    const element = document.getElementById(elementId);
-    if (!element) return;
-    const printWindow = window.open("", "_blank", "width=850,height=800");
-    if (!printWindow) {
-      alert("Please allow popups to print payslips");
-      return;
-    }
-    
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Salary Slip</title>
-          <style>
-            body {
-              font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-              margin: 40px;
-              background: #fff;
-              color: #333;
-              -webkit-print-color-adjust: exact;
-              print-color-adjust: exact;
-            }
-            * {
-              box-sizing: border-box;
-            }
-          </style>
-        </head>
-        <body>
-          <div style="max-width: 650px; margin: 0 auto;">
-            ${element.innerHTML}
-          </div>
-          <script>
-            window.onload = function() {
-              window.print();
-              setTimeout(function() { window.close(); }, 500);
-            };
-          </script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
+  // The salary statement: one design for preview, PNG, print and the batch.
+  const slipPerson = (name, p) => ({ id: p.id, name, employeeId: p.employee_id, designation: p.designation, branch: p.branch || "Calicut" });
+  const slipHtmlFor = (name, p, r) => payslipHtml(slipPerson(name, p), selectedMonth, formatMonthName(selectedMonth), r, { additionNote: r.additionNote, deductionNote: r.deductionNote });
+  const slipFile = (name) => `Salary_Statement_${name.replace(/\s+/g, "_")}_${selectedMonth}.png`;
+
+  const printPayslip = (html) => {
+    const w = window.open("", "_blank", "width=900,height=1000");
+    if (!w) { alert("Please allow popups to print payslips"); return; }
+    w.document.write(`<!doctype html><html><head><title>Salary Statement</title><style>
+      @page { size: A4 portrait; margin: 10mm; }
+      html, body { margin: 0; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .sheet { width: 1100px; zoom: 0.66; margin: 0 auto; }
+      @media screen { body { padding: 24px; background: #2b2b2b; } .sheet { zoom: 0.8; } }
+    </style></head><body><div class="sheet">${html}</div>
+    <script>window.onload=function(){setTimeout(function(){window.print();setTimeout(function(){window.close();},500);},250);};<\/script></body></html>`);
+    w.document.close();
   };
 
-  const handleDownloadSinglePng = async (elementId, name) => {
-    const element = document.getElementById(elementId);
-    if (!element) return;
+  const slipToPng = async (html, fileName) => {
+    const host = document.createElement("div");
+    host.style.cssText = "position:fixed;left:-12000px;top:0;";
+    host.innerHTML = html;
+    document.body.appendChild(host);
     try {
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: "#ffffff"
-      });
-      const imgData = canvas.toDataURL("image/png");
+      const canvas = await html2canvas(host.firstElementChild as HTMLElement, { scale: 2, useCORS: true, logging: false, backgroundColor: "#000000" });
       const link = document.createElement("a");
-      link.download = `Payslip_${name.replace(/\s+/g, "_")}_${selectedMonth}.png`;
-      link.href = imgData;
+      link.download = fileName;
+      link.href = canvas.toDataURL("image/png");
       link.click();
-      toast("Payslip downloaded as PNG", "check");
+      return true;
     } catch (e) {
       console.error(e);
-      toast("Download failed", "alert");
+      return false;
+    } finally {
+      document.body.removeChild(host);
     }
+  };
+
+  const handleDownloadSinglePng = async (slip) => {
+    toast(await slipToPng(slip.html, slipFile(slip.name)) ? "Salary statement downloaded" : "Download failed", "download");
   };
 
   const handleBatchDownload = async () => {
-    const staffList = Object.entries(F._staffRatesByName || {})
-      .filter(([name]) => filterNiyas(name))
-      .map(([name, p]) => ({ name, id: p.id, branch: p.branch || "Calicut", role: p.role }));
-    
-    if (staffList.length === 0) return;
-    
-    toast("Starting batch download...", "download");
-    
-    for (const s of staffList) {
-      const mp = F._monthlyPayroll?.[s.id]?.[selectedMonth];
-      const rates = F._staffRatesByProfileId?.[s.id] || { monthly_salary: 0, hourly_rate: 0, daily_rate: 0 };
-      const monthly_salary = mp ? mp.monthly_salary : rates.monthly_salary;
-      const manualAddition = mp ? mp.manual_addition : 0;
-      const manualDeduction = mp ? mp.manual_deduction : 0;
-      
-      const parsedNotes = mp ? parseNotes(mp.adjustment_notes) : { addition: "", deduction: "" };
-      const addNotes = parsedNotes.addition;
-      const dedNotes = parsedNotes.deduction;
-      
-      const dailyRate = monthly_salary / 30;
-      const hourlyRate = dailyRate / 8 * 1.75;
-      
-      const offsets = getOffsetsForMonth(selectedMonth);
-      const dbRoster = F._dbRoster?.[s.name] || {};
-      let otHours = 0;
-      let toilDays = 0;
-      offsets.forEach(off => {
-        const cell = dbRoster[off];
-        if (cell) {
-          if (typeof cell === "object" && cell.ot) {
-            otHours += cell.ot;
-          }
-          const code = typeof cell === "string" ? cell : cell.code;
-          if (String(code).toUpperCase() === "TP") {
-            toilDays++;
-          }
-        }
-      });
-      const otSalary = otHours * hourlyRate;
-      const toilSalary = toilDays * dailyRate * 1.5;
-      
-      let leaveDays = 0;
-      offsets.forEach(off => {
-        const cell = dbRoster[off];
-        const code = cell ? (typeof cell === "string" ? cell : cell.code) : "";
-        if (String(code).toUpperCase() === "L") {
-          leaveDays++;
-        }
-      });
-      const leaveDeduction = leaveDays * monthly_salary / 30;
-      
-      const totalEarnings = monthly_salary + otSalary + toilSalary + manualAddition;
-      const totalDeductions = leaveDeduction + manualDeduction;
-      const netSalary = totalEarnings - totalDeductions;
-
-      // Create hidden rendering div
-      const div = document.createElement("div");
-      div.style.position = "fixed";
-      div.style.left = "-9999px";
-      div.style.top = "-9999px";
-      document.body.appendChild(div);
-      
-      div.innerHTML = `
-        <div style="width: 650px; padding: 36px; background: #ffffff; color: #2d3748; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; border: 1.5px solid #e2e8f0; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
-          <!-- Header and Logo -->
-          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2.5px solid #34908B; padding-bottom: 16px;">
-            <div style="display: flex; align-items: center; gap: 12px;">
-              <img src="/images/forun_logo.png" alt="Forun Logo" style="height: 52px; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.06));" />
-            </div>
-            <div style="text-align: right;">
-              <h2 style="margin: 0; font-size: 14px; font-weight: 800; color: #718096; letter-spacing: 1px; text-transform: uppercase;">SALARY SLIP</h2>
-              <p style="margin: 4px 0 0 0; font-size: 14px; color: #34908B; font-weight: 800; text-transform: uppercase;">${formatMonthName(selectedMonth)}</p>
-            </div>
-          </div>
-          
-          <!-- Staff and Gen Details -->
-          <div style="background: #f4f9f7; border: 1px solid #e6f2dd; border-radius: 8px; padding: 14px 18px; display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 16px; margin: 20px 0; font-size: 12.5px;">
-            <div style="display: flex; flexDirection: column; gap: 6px;">
-              <div><span style="color: #718096; font-weight: 500;">Employee Name:</span> <strong style="color: #2d3748;">${s.name}</strong></div>
-              <div><span style="color: #718096; font-weight: 500;">Role/Designation:</span> <strong style="color: #2d3748;">Test Centre Administrator</strong></div>
-            </div>
-            <div style="display: flex; flexDirection: column; gap: 6px; border-left: 1px solid #cbd5e0; padding-left: 16px;">
-              <div><span style="color: #718096; font-weight: 500;">Department:</span> <strong style="color: #2d3748;">${s.branch} Center</strong></div>
-              <div><span style="color: #718096; font-weight: 500;">Slip Issue Date:</span> <strong style="color: #2d3748;">${new Date().toLocaleDateString()}</strong></div>
-            </div>
-          </div>
-
-          <!-- Earnings vs Deductions Grid -->
-          <div style="display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 20px; margin: 24px 0;">
-            <!-- Earnings -->
-            <div style="border-right: 1px solid #edf2f7; padding-right: 10px;">
-              <h3 style="margin: 0 0 10px 0; font-size: 11.5px; font-weight: 800; color: #34908B; background: #e6f2dd; padding: 6px 10px; borderRadius: 4px; letter-spacing: 0.5px; text-transform: uppercase;">EARNINGS</h3>
-              <table style="width: 100%; font-size: 12px; border-collapse: collapse;">
-                <tbody>
-                  <tr style="border-bottom: 1px solid #edf2f7;">
-                    <td style="padding: 8px 0; color: #4a5568;">Basic Monthly Salary</td>
-                    <td style="text-align: right; font-weight: 650; color: #2d3748;">₹${monthly_salary.toFixed(2)}</td>
-                  </tr>
-                  ${otHours > 0 ? `
-                  <tr style="border-bottom: 1px solid #edf2f7;">
-                    <td style="padding: 8px 0; color: #4a5568;">Overtime Pay (${otHours.toFixed(1)} hrs)</td>
-                    <td style="text-align: right; font-weight: 650; color: #2d3748;">₹${otSalary.toFixed(2)}</td>
-                  </tr>
-                  ` : ''}
-                  ${toilDays > 0 ? `
-                  <tr style="border-bottom: 1px solid #edf2f7;">
-                    <td style="padding: 8px 0; color: #4a5568;">Monthly TOIL Approved (${toilDays} days)</td>
-                    <td style="text-align: right; font-weight: 650; color: #2d3748;">₹${toilSalary.toFixed(2)}</td>
-                  </tr>
-                  ` : ''}
-                  ${manualAddition > 0 ? `
-                  <tr style="border-bottom: 1px solid #edf2f7;">
-                    <td style="padding: 8px 0; color: #4a5568;">Additions ${addNotes ? `<span style="font-size: 9.5px; color: #a0aec0; display: block; font-weight: 500;">${addNotes}</span>` : ''}</td>
-                    <td style="text-align: right; font-weight: 650; color: #34908B;">₹${manualAddition.toFixed(2)}</td>
-                  </tr>
-                  ` : ''}
-                </tbody>
-              </table>
-            </div>
-
-            <!-- Deductions -->
-            <div>
-              <h3 style="margin: 0 0 10px 0; font-size: 11.5px; font-weight: 800; color: #e53e3e; background: #fff5f5; padding: 6px 10px; borderRadius: 4px; letter-spacing: 0.5px; text-transform: uppercase;">DEDUCTIONS</h3>
-              <table style="width: 100%; font-size: 12px; border-collapse: collapse;">
-                <tbody>
-                  ${leaveDays > 0 ? `
-                  <tr style="border-bottom: 1px solid #edf2f7;">
-                    <td style="padding: 8px 0; color: #4a5568;">Leave Deductions (${leaveDays} days)</td>
-                    <td style="text-align: right; font-weight: 650; color: #e53e3e;">-₹${leaveDeduction.toFixed(2)}</td>
-                  </tr>
-                  ` : ''}
-                  ${manualDeduction > 0 ? `
-                  <tr style="border-bottom: 1px solid #edf2f7;">
-                    <td style="padding: 8px 0; color: #4a5568;">Deductions ${dedNotes ? `<span style="font-size: 9.5px; color: #a0aec0; display: block; font-weight: 500;">${dedNotes}</span>` : ''}</td>
-                    <td style="text-align: right; font-weight: 650; color: #e53e3e;">-₹${manualDeduction.toFixed(2)}</td>
-                  </tr>
-                  ` : ''}
-                  ${leaveDays === 0 && manualDeduction === 0 ? `
-                  <tr>
-                    <td style="padding: 10px 0; color: #a0aec0; font-style: italic;">No deductions applied</td>
-                    <td style="text-align: right; color: #a0aec0;">—</td>
-                  </tr>
-                  ` : ''}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <!-- Total Gross Info and Net box -->
-          <div style="display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 20px; border-top: 1.5px solid #e2e8f0; padding-top: 16px; margin-bottom: 30px;">
-            <div style="display: flex; flex-direction: column; gap: 6px; justify-content: center;">
-              <div style="display: flex; justify-content: space-between; font-size: 12px; color: #4a5568;">
-                <span>Gross Earnings:</span>
-                <span style="font-weight: 600; color: #2d3748;">₹${totalEarnings.toFixed(2)}</span>
-              </div>
-              <div style="display: flex; justify-content: space-between; font-size: 12px; color: #4a5568; margin-top: 4px;">
-                <span>Gross Deductions:</span>
-                <span style="font-weight: 600; color: #2d3748;">₹${totalDeductions.toFixed(2)}</span>
-              </div>
-            </div>
-            <div style="background: linear-gradient(135deg, #a5e9dd 0%, #34908B 100%); color: #ffffff; padding: 12px 18px; border-radius: 8px; display: flex; flex-direction: column; justify-content: center; align-items: flex-end; box-shadow: 0 4px 10px rgba(52, 144, 139, 0.15);">
-              <div style="font-size: 10px; font-weight: 700; letter-spacing: 0.5px; opacity: 0.9;">NET PAYABLE SALARY</div>
-              <div style="font-size: 20px; font-weight: 950; margin-top: 2px;">₹${netSalary.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</div>
-            </div>
-          </div>
-
-          <!-- Signatures -->
-          <div style="display: flex; justify-content: space-between; margin-top: 36px; padding-top: 16px; border-top: 1px solid #edf2f7; font-size: 11px; color: #718096;">
-            <div style="position: relative;">
-              <div style="height: 35px; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; position: absolute; top: -20px; left: 0; right: 0; text-align: center;">
-                <span style="font-family: 'Brush Script MT', 'Dancing Script', 'Segoe Print', cursive; font-size: 19px; font-weight: bold; color: #34908B; line-height: 1; display: block;">Mithun</span>
-                <span style="font-size: 7.5px; color: #a0aec0; font-family: monospace; display: block; margin-top: 1px; white-space: nowrap;">Digitally Signed: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}</span>
-              </div>
-              <div style="border-top: 1px dashed #cbd5e0; width: 160px; text-align: center; padding-top: 6px; margin-top: 22px;">Prepared By (Mithun)</div>
-            </div>
-            <div>
-              <div style="height: 22px;"></div>
-              <div style="border-top: 1px dashed #cbd5e0; width: 160px; text-align: center; padding-top: 6px; margin-top: 22px;">Employee Signature</div>
-            </div>
-          </div>
-        </div>
-      `;
-
-      try {
-        const canvas = await html2canvas(div.firstElementChild, {
-          scale: 2,
-          useCORS: true,
-          logging: false,
-          backgroundColor: "#ffffff"
-        });
-        const imgData = canvas.toDataURL("image/png");
-        const link = document.createElement("a");
-        link.download = `Payslip_${s.name.replace(/\s+/g, "_")}_${selectedMonth}.png`;
-        link.href = imgData;
-        link.click();
-      } catch (err) {
-        console.error(err);
-      } finally {
-        document.body.removeChild(div);
-      }
-      
-      // Prevent browser throttling
-      await new Promise(r => setTimeout(r, 600));
+    const list = Object.entries(F._staffRatesByName || {}).filter(([name]) => filterNiyas(name));
+    if (list.length === 0) return;
+    toast("Preparing salary statements…", "download");
+    for (const [name, p] of list as [string, any][]) {
+      const r = payrollRow(name, p);
+      await slipToPng(slipHtmlFor(name, p, r), slipFile(name));
+      await new Promise(res => setTimeout(res, 600)); // keep the browser from throttling downloads
     }
-    toast("Batch download complete", "check");
+    toast("All salary statements downloaded", "check");
   };
 
   // One row of the payroll: the same arithmetic the payslips use.
@@ -5915,30 +5696,10 @@ function OtToilClaimsHub({ branch }) {
     const parsedNotes = mp ? parseNotes(mp.adjustment_notes) : { addition: "", deduction: "" };
     const additionNote = editingPayroll[p.id]?.addition_note !== undefined ? editingPayroll[p.id].addition_note : parsedNotes.addition;
     const deductionNote = editingPayroll[p.id]?.deduction_note !== undefined ? editingPayroll[p.id].deduction_note : parsedNotes.deduction;
-    const dailyRate = monthly_salary / 30;
-    const hourlyRate = dailyRate / 8 * 1.75;
-    const offsets = getOffsetsForMonth(selectedMonth);
     const dbRoster = F._dbRoster?.[name] || {};
-    let otHours = 0;
-    let toilDays = 0;
-    let leaveDays = 0;
-    offsets.forEach(off => {
-      const cell = dbRoster[off];
-      if (cell) {
-        if (typeof cell === "object" && cell.ot) otHours += cell.ot;
-        const code = String(typeof cell === "string" ? cell : cell.code).toUpperCase();
-        if (code === "TP") toilDays++;
-        if (code === "L") leaveDays++;
-      }
-    });
-    const otSalary = otHours * hourlyRate;
-    const toilSalary = toilDays * dailyRate * 1.5;
-    const leaveDeduction = leaveDays * monthly_salary / 30;
-    const totalEarnings = monthly_salary + otSalary + toilSalary + manualAddition;
-    const totalDeductions = leaveDeduction + manualDeduction;
-    const netSalary = totalEarnings - totalDeductions;
+    const pay = computePay({ monthlySalary: monthly_salary, manualAddition, manualDeduction, cells: getOffsetsForMonth(selectedMonth).map(off => dbRoster[off]) });
     const defaultSalary = editingRates[p.id]?.monthly_salary !== undefined ? editingRates[p.id].monthly_salary : (p.monthly_salary || 0);
-    return { mp, rates, monthly_salary, manualAddition, manualDeduction, additionNote, deductionNote, dailyRate, hourlyRate, otHours, toilDays, leaveDays, otSalary, toilSalary, leaveDeduction, totalEarnings, totalDeductions, netSalary, defaultSalary, isEdited: editingPayroll[p.id] !== undefined, rateEdited: editingRates[p.id] !== undefined };
+    return { ...pay, mp, rates, monthly_salary, additionNote, deductionNote, defaultSalary, isEdited: editingPayroll[p.id] !== undefined, rateEdited: editingRates[p.id] !== undefined };
   };
   const staffRows = Object.entries(F._staffRatesByName || {})
     .filter(([name, p]: [string, any]) => filterNiyas(name) && (branch === "global" || (p.branch || "Calicut").toLowerCase() === branch.toLowerCase()));
@@ -5985,12 +5746,12 @@ function OtToilClaimsHub({ branch }) {
       {loading ? <div className="otm-card otm-empty">Loading the month…</div> : tab !== "history" ? (
         <section className="otm-card">
           <div className="otm-card-head">
-            <div><h2>Payroll for {formatMonthName(selectedMonth)}</h2><p>Default salary is each person's standing rate. This month's salary, additions and deductions apply to this month only. Daily = salary ÷ 30 · OT rate = daily ÷ 8 × 1.75.</p></div>
+            <div><h2>Payroll for {formatMonthName(selectedMonth)}</h2><p>Default salary is each person's standing rate. This month's salary, additions and deductions apply to this month only. Daily = salary ÷ 30 · OT rate = daily ÷ 8 × 1.75 · L deducts a day, HD half a day.</p></div>
           </div>
           <div className="otm-table-wrap">
             <table className="otm-table">
               <thead>
-                <tr className="otm-groups"><th></th><th colSpan={2}>Salary</th><th colSpan={2}>Overtime</th><th colSpan={2}>Paid TOIL</th><th colSpan={2}>Leave</th><th colSpan={2}>Adjustments</th><th></th><th></th></tr>
+                <tr className="otm-groups"><th></th><th colSpan={2}>Salary</th><th colSpan={2}>Overtime</th><th colSpan={2}>Paid TOIL</th><th colSpan={2}>Leave · L / HD</th><th colSpan={2}>Adjustments</th><th></th><th></th></tr>
                 <tr>
                   <th className="left">Employee</th><th>Default</th><th>This month</th>
                   <th>Hours</th><th>Pay</th><th>Days</th><th>Pay</th><th>Days</th><th>Deduction</th>
@@ -6016,8 +5777,8 @@ function OtToilClaimsHub({ branch }) {
                     <td className="num">{inr(r.otSalary)}</td>
                     <td className="num">{r.toilDays}</td>
                     <td className="num">{inr(r.toilSalary)}</td>
-                    <td className="num">{r.leaveDays}</td>
-                    <td className="num bad">{r.leaveDeduction ? `−${inr(r.leaveDeduction)}` : "—"}</td>
+                    <td className="num">{r.leaveDays}{r.halfDays ? <small className="otm-sub">+ {r.halfDays} HD</small> : null}</td>
+                    <td className="num bad">{r.leaveDeduction + r.halfDayDeduction ? `−${inr(r.leaveDeduction + r.halfDayDeduction)}` : "—"}</td>
                     <td className="left">
                       <input type="number" className="good" placeholder="₹" value={r.manualAddition || ""} onChange={(e) => handlePayrollEdit(p.id, "manual_addition", e.target.value)} aria-label={`Addition for ${name}`} />
                       <input type="text" className="note" placeholder="Reason" value={r.additionNote} onChange={(e) => handlePayrollEdit(p.id, "addition_note", e.target.value)} aria-label={`Addition reason for ${name}`} />
@@ -6030,7 +5791,7 @@ function OtToilClaimsHub({ branch }) {
                     <td>
                       <div className="otm-actions">
                         <button className="otm-save" disabled={!r.isEdited} onClick={() => handleSavePayroll(p.id, r.rates.monthly_salary)}>Save</button>
-                        <button className="otm-ghost" onClick={() => setActivePayslipStaff({ id: p.id, name, role: p.role, branch: p.branch || "Calicut", monthly_salary: r.monthly_salary, dailyRate: r.dailyRate, hourlyRate: r.hourlyRate, otHours: r.otHours, otSalary: r.otSalary, toilDays: r.toilDays, toilSalary: r.toilSalary, leaveDays: r.leaveDays, leaveDeduction: r.leaveDeduction, manualAddition: r.manualAddition, additionNote: r.additionNote, manualDeduction: r.manualDeduction, deductionNote: r.deductionNote, totalEarnings: r.totalEarnings, totalDeductions: r.totalDeductions, netSalary: r.netSalary })}>Slip</button>
+                        <button className="otm-ghost" onClick={() => setActivePayslipStaff({ name, html: slipHtmlFor(name, p, r) })}>Slip</button>
                       </div>
                     </td>
                   </tr>
@@ -6069,171 +5830,19 @@ function OtToilClaimsHub({ branch }) {
         </section>
       )}
 
-      {/* Salary Slip Modal Popup */}
+      {/* Salary statement preview */}
       {activePayslipStaff && (
-        <React.Fragment>
-          <div onClick={() => setActivePayslipStaff(null)} style={{ position: "fixed", inset: 0, background: "color-mix(in oklch, var(--shadow-base, #000) 65%, transparent)", backdropFilter: "blur(3px)", zIndex: 998 }} />
-          <div role="dialog" className="glass rise" style={{ position: "fixed", zIndex: 999, top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "min(690px, 95vw)", maxHeight: "90vh", overflowY: "auto", borderRadius: "var(--radius)", padding: 24, boxShadow: "var(--shadow-lift)", display: "flex", flexDirection: "column", gap: 20 }}>
-            
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: "var(--ink)" }}>Payslip Preview</h3>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button 
-                  onClick={() => handleDownloadSinglePng("payslip-to-print", activePayslipStaff.name)}
-                  className="tap glass-2"
-                  style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 8, border: "1px solid var(--hairline)", fontSize: 12, fontWeight: 700, color: "var(--ink)", cursor: "pointer" }}
-                >
-                  <Icon name="download" size={13} /> PNG
-                </button>
-                <button 
-                  onClick={() => printPayslip("payslip-to-print")}
-                  className="tap glass-2"
-                  style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 8, border: "1px solid var(--hairline)", fontSize: 12, fontWeight: 700, color: "var(--ink)", cursor: "pointer" }}
-                >
-                  <Icon name="printer" size={13} /> Print / PDF
-                </button>
-                <button 
-                  onClick={() => setActivePayslipStaff(null)} 
-                  className="tap glass-2" 
-                  style={{ width: 28, height: 28, borderRadius: 999, display: "grid", placeItems: "center", cursor: "pointer", color: "var(--ink-2)", border: "1px solid var(--hairline)" }}
-                >
-                  <Icon name="x" size={14} />
-                </button>
-              </div>
+        <div className="otm-slip-back" onClick={() => setActivePayslipStaff(null)}>
+          <div role="dialog" aria-label={`Salary statement for ${activePayslipStaff.name}`} className="otm-slip" onClick={(e) => e.stopPropagation()}>
+            <div className="otm-slip-bar">
+              <strong>Salary statement · {activePayslipStaff.name}</strong>
+              <button className="otm-ghost" onClick={() => handleDownloadSinglePng(activePayslipStaff)}><Icon name="download" size={13} /> PNG</button>
+              <button className="otm-save" onClick={() => printPayslip(activePayslipStaff.html)}><Icon name="printer" size={13} /> Print / PDF</button>
+              <button className="otm-icon" onClick={() => setActivePayslipStaff(null)} aria-label="Close"><Icon name="x" size={14} /></button>
             </div>
-
-            {/* Payslip Design */}
-            <div style={{ display: "flex", justifyContent: "center", background: "#f1f5f9", padding: "20px 10px", borderRadius: 12 }}>
-              <div id="payslip-to-print" style={{ width: 610, padding: 36, background: "#ffffff", color: "#2d3748", fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", border: "1px solid #e2e8f0", borderRadius: 12, boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)" }}>
-                
-                {/* Logo & Header */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "2.5px solid #34908B", paddingBottom: 16 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <img src="/images/forun_logo.png" alt="Forun Logo" style={{ height: 52, objectFit: "contain", filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.06))" }} />
-                  </div>
-                  <div style={{ textAlign: "right" }}>
-                    <h2 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: "#718096", letterSpacing: "1px", textTransform: "uppercase" }}>SALARY SLIP</h2>
-                    <p style={{ margin: "4px 0 0 0", fontSize: 14, color: "#34908B", fontWeight: 800, textTransform: "uppercase" }}>{formatMonthName(selectedMonth)}</p>
-                  </div>
-                </div>
-                
-                {/* Employee Details Info block */}
-                <div style={{ background: "#f4f9f7", border: "1px solid #e6f2dd", borderRadius: 8, padding: "14px 18px", display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 16, margin: "20px 0", fontSize: 12.5, color: "#2d3748" }}>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    <div><span style={{ color: "#718096", fontWeight: 500 }}>Employee Name:</span> <strong>{activePayslipStaff.name}</strong></div>
-                    <div><span style={{ color: "#718096", fontWeight: 500 }}>Role/Designation:</span> <strong>Test Centre Administrator</strong></div>
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6, borderLeft: "1px solid #cbd5e0", paddingLeft: 16 }}>
-                    <div><span style={{ color: "#718096", fontWeight: 500 }}>Department:</span> <strong>{activePayslipStaff.branch} Center</strong></div>
-                    <div><span style={{ color: "#718096", fontWeight: 500 }}>Slip Issue Date:</span> <strong>{new Date().toLocaleDateString()}</strong></div>
-                  </div>
-                </div>
-
-                {/* Earnings & Deductions Tables */}
-                <div style={{ display: "grid", gridTemplateColumns: "1.1fr 0.9fr", gap: 20, margin: "24px 0" }}>
-                  {/* Earnings */}
-                  <div style={{ borderRight: "1px solid #edf2f7", paddingRight: 10 }}>
-                    <h3 style={{ margin: "0 0 10px 0", fontSize: 11.5, fontWeight: 800, color: "#34908B", background: "#e6f2dd", padding: "6px 10px", borderRadius: 4, letterSpacing: "0.5px", textTransform: "uppercase" }}>EARNINGS</h3>
-                    <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
-                      <tbody>
-                        <tr style={{ borderBottom: "1px solid #edf2f7" }}>
-                          <td style={{ padding: "8px 0", color: "#4a5568" }}>Basic Salary</td>
-                          <td style={{ textAlign: "right", fontWeight: 650, color: "#2d3748" }}>₹{activePayslipStaff.monthly_salary.toFixed(2)}</td>
-                        </tr>
-                        {activePayslipStaff.otHours > 0 && (
-                          <tr style={{ borderBottom: "1px solid #edf2f7" }}>
-                            <td style={{ padding: "8px 0", color: "#4a5568" }}>Overtime Pay ({activePayslipStaff.otHours.toFixed(1)} hrs)</td>
-                            <td style={{ textAlign: "right", fontWeight: 650, color: "#2d3748" }}>₹{activePayslipStaff.otSalary.toFixed(2)}</td>
-                          </tr>
-                        )}
-                        {activePayslipStaff.toilDays > 0 && (
-                          <tr style={{ borderBottom: "1px solid #edf2f7" }}>
-                            <td style={{ padding: "8px 0", color: "#4a5568" }}>Monthly TOIL Approved ({activePayslipStaff.toilDays} days)</td>
-                            <td style={{ textAlign: "right", fontWeight: 650, color: "#2d3748" }}>₹{activePayslipStaff.toilSalary.toFixed(2)}</td>
-                          </tr>
-                        )}
-                        {activePayslipStaff.manualAddition > 0 && (
-                          <tr style={{ borderBottom: "1px solid #edf2f7" }}>
-                            <td style={{ padding: "8px 0", color: "#4a5568" }}>
-                              Additions
-                              {activePayslipStaff.additionNote && <div style={{ fontSize: 9.5, color: "#a0aec0", fontWeight: 500 }}>{activePayslipStaff.additionNote}</div>}
-                            </td>
-                            <td style={{ textAlign: "right", fontWeight: 650, color: "#34908B" }}>₹{activePayslipStaff.manualAddition.toFixed(2)}</td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Deductions */}
-                  <div>
-                    <h3 style={{ margin: "0 0 10px 0", fontSize: 11.5, fontWeight: 800, color: "#e53e3e", background: "#fff5f5", padding: "6px 10px", borderRadius: 4, letterSpacing: "0.5px", textTransform: "uppercase" }}>DEDUCTIONS</h3>
-                    <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
-                      <tbody>
-                        {activePayslipStaff.leaveDays > 0 && (
-                          <tr style={{ borderBottom: "1px solid #edf2f7" }}>
-                            <td style={{ padding: "8px 0", color: "#4a5568" }}>Leave Deductions ({activePayslipStaff.leaveDays} days)</td>
-                            <td style={{ textAlign: "right", fontWeight: 650, color: "#e53e3e" }}>-₹{activePayslipStaff.leaveDeduction.toFixed(2)}</td>
-                          </tr>
-                        )}
-                        {activePayslipStaff.manualDeduction > 0 && (
-                          <tr style={{ borderBottom: "1px solid #edf2f7" }}>
-                            <td style={{ padding: "8px 0", color: "#4a5568" }}>
-                              Deductions
-                              {activePayslipStaff.deductionNote && <div style={{ fontSize: 9.5, color: "#a0aec0", fontWeight: 500 }}>{activePayslipStaff.deductionNote}</div>}
-                            </td>
-                            <td style={{ textAlign: "right", fontWeight: 650, color: "#e53e3e" }}>-₹{activePayslipStaff.manualDeduction.toFixed(2)}</td>
-                          </tr>
-                        )}
-                        {activePayslipStaff.leaveDays === 0 && activePayslipStaff.manualDeduction === 0 && (
-                          <tr>
-                            <td style={{ padding: "10px 0", color: "#a0aec0", fontStyle: "italic" }}>No deductions applied</td>
-                            <td style={{ textAlign: "right", color: "#a0aec0" }}>—</td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {/* Final Net Box */}
-                <div style={{ display: "grid", gridTemplateColumns: "1.1fr 0.9fr", gap: 20, borderTop: "1.5px solid #e2e8f0", paddingTop: 16, marginBottom: 30 }}>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6, justifyContent: "center" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#4a5568" }}>
-                      <span>Gross Earnings:</span>
-                      <span style={{ fontWeight: 600, color: "#2d3748" }}>₹{activePayslipStaff.totalEarnings.toFixed(2)}</span>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#4a5568", marginTop: 4 }}>
-                      <span>Gross Deductions:</span>
-                      <span style={{ fontWeight: 600, color: "#2d3748" }}>₹{activePayslipStaff.totalDeductions.toFixed(2)}</span>
-                    </div>
-                  </div>
-                  <div style={{ background: "linear-gradient(135deg, #a5e9dd 0%, #34908B 100%)", color: "#ffffff", padding: "12px 18px", borderRadius: 8, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "flex-end", boxShadow: "0 4px 10px rgba(52, 144, 139, 0.15)" }}>
-                    <div style={{ fontSize: 10, fontStyle: "normal", fontWeight: 700, letterSpacing: "0.5px", opacity: 0.9 }}>NET PAYABLE SALARY</div>
-                    <div style={{ fontSize: 20, fontWeight: 950, marginTop: 2 }}>₹{activePayslipStaff.netSalary.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</div>
-                  </div>
-                </div>
-
-                {/* Signatures */}
-                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 36, paddingTop: 16, borderTop: "1px solid #edf2f7", fontSize: 11, color: "#718096" }}>
-                  <div style={{ position: "relative" }}>
-                    <div style={{ height: 35, display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center", position: "absolute", top: -20, left: 0, right: 0, textAlign: "center" }}>
-                      <span style={{ fontFamily: "'Brush Script MT', 'Dancing Script', 'Segoe Print', cursive", fontSize: 19, fontWeight: "bold", color: "#34908B", lineHeight: 1, display: "block" }}>Mithun</span>
-                      <span style={{ fontSize: 7.5, color: "#a0aec0", fontFamily: "monospace", display: "block", marginTop: 1, whiteSpace: "nowrap" }}>Digitally Signed: {new Date().toLocaleDateString()} {new Date().toLocaleTimeString()}</span>
-                    </div>
-                    <div style={{ borderTop: "1px dashed #cbd5e0", width: 160, textAlign: "center", paddingTop: 6, marginTop: 22 }}>Prepared By (Mithun)</div>
-                  </div>
-                  <div>
-                    <div style={{ height: 22 }}></div>
-                    <div style={{ borderTop: "1px dashed #cbd5e0", width: 160, textAlign: "center", paddingTop: 6, marginTop: 22 }}>Employee Signature</div>
-                  </div>
-                </div>
-
-              </div>
-            </div>
-            
+            <div className="otm-slip-view"><div className="otm-slip-zoom" dangerouslySetInnerHTML={{ __html: activePayslipStaff.html }} /></div>
           </div>
-        </React.Fragment>
+        </div>
       )}
 
     </div>
@@ -10815,16 +10424,57 @@ function AppForm({ onSubmitted }) {
   );
 }
 
-function MyApplicationsList() {
-  const [apps, setApps] = React.useState(() => window.FETS._myApplications || []);
+/* ---------- history by date ----------
+   Pending items always show. Decided ones (approved / rejected) show when
+   their date falls inside the chosen range. */
+const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const histDefaultRange = () => { const d = new Date(); return { from: isoDay(new Date(d.getFullYear(), d.getMonth(), 1)), to: "" }; };
+const statusOf = (x) => String(x?.status || "pending").toLowerCase();
+const appDay = (a) => String(a.request_date || a.date || a.created_at || "").slice(0, 10);
+function inHistRange(item, range) {
+  if (statusOf(item) === "pending") return true;
+  const d = appDay(item);
+  if (!d) return !range.from && !range.to;
+  return (!range.from || d >= range.from) && (!range.to || d <= range.to);
+}
+function HistoryRange({ range, setRange }) {
+  const now = new Date();
+  const presets = [
+    { label: "This month", r: { from: isoDay(new Date(now.getFullYear(), now.getMonth(), 1)), to: "" } },
+    { label: "Last month", r: { from: isoDay(new Date(now.getFullYear(), now.getMonth() - 1, 1)), to: isoDay(new Date(now.getFullYear(), now.getMonth(), 0)) } },
+    { label: "Last 3 months", r: { from: isoDay(new Date(now.getFullYear(), now.getMonth() - 2, 1)), to: "" } },
+    { label: "All dates", r: { from: "", to: "" } },
+  ];
+  const inp = { padding: "7px 10px", borderRadius: 10, border: "1.5px solid #C4DBF6", background: "#fff", color: "#2c3e50", fontSize: 12.5, fontFamily: "var(--font)" };
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "10px 12px", borderRadius: 14, background: "#E7E3D4" }}>
+      <Icon name="calendar" size={14} />
+      <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, fontWeight: 700, color: "#8590AA" }}>From
+        <input type="date" value={range.from} onChange={e => setRange({ ...range, from: e.target.value })} style={inp} aria-label="History from date" /></label>
+      <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, fontWeight: 700, color: "#8590AA" }}>To
+        <input type="date" value={range.to} onChange={e => setRange({ ...range, to: e.target.value })} style={inp} aria-label="History to date" /></label>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginLeft: "auto" }}>
+        {presets.map(p => {
+          const on = p.r.from === range.from && p.r.to === range.to;
+          return <button key={p.label} type="button" onClick={() => setRange(p.r)} className="tap"
+            style={{ padding: "6px 12px", borderRadius: 999, border: "none", fontSize: 11.5, fontWeight: 700, fontFamily: "var(--font)", cursor: "pointer", background: on ? "#3B8BEB" : "#fff", color: on ? "#fff" : "#8590AA" }}>{p.label}</button>;
+        })}
+      </div>
+    </div>
+  );
+}
+
+function MyApplicationsList({ range }) {
+  const [allApps, setApps] = React.useState(() => window.FETS._myApplications || []);
   React.useEffect(() => {
     const refresh = () => setApps([...(window.FETS._myApplications || [])]);
     window.addEventListener("fets-applications-changed", refresh);
     return () => window.removeEventListener("fets-applications-changed", refresh);
   }, []);
 
+  const apps = allApps.filter(a => inHistRange(a, range));
   if (apps.length === 0) {
-    return <div style={{ padding: 30, borderRadius: 14, textAlign: "center", color: "#8590AA", fontSize: 13, background: "#E7E3D4" }}>No applications submitted yet. Use the form above to apply.</div>;
+    return <div style={{ padding: 30, borderRadius: 14, textAlign: "center", color: "#8590AA", fontSize: 13, background: "#E7E3D4" }}>{allApps.length ? "No applications in these dates. Change the dates above to see older ones." : "No applications submitted yet. Use New Application to apply."}</div>;
   }
 
   return (
@@ -10864,9 +10514,8 @@ function MyApplicationsList() {
   );
 }
 
-function AdminApplicationsInbox() {
+function AdminApplicationsInbox({ filter, setFilter, range, setRange }) {
   const [apps, setApps] = React.useState(() => window.FETS._applications || []);
-  const [filter, setFilter] = React.useState("pending");
   const [replyModal, setReplyModal] = React.useState(null); // { app, action }
   const [replyText, setReplyText] = React.useState("");
   const [resolving, setResolving] = React.useState(false);
@@ -10877,7 +10526,7 @@ function AdminApplicationsInbox() {
     return () => window.removeEventListener("fets-applications-changed", refresh);
   }, []);
 
-  const filtered = apps.filter(a => filter === "all" ? true : a.status === filter);
+  const filtered = apps.filter(a => (filter === "all" ? true : a.status === filter) && (filter === "pending" || inHistRange(a, range)));
   const pendingCount = apps.filter(a => a.status === "pending").length;
 
   const doResolve = async () => {
@@ -10909,10 +10558,12 @@ function AdminApplicationsInbox() {
         ))}
       </div>
 
+      {filter !== "pending" && <HistoryRange range={range} setRange={setRange} />}
+
       {/* Application cards */}
       {filtered.length === 0 ? (
         <div style={{ padding: 30, borderRadius: 14, textAlign: "center", color: "#8590AA", fontSize: 13, background: "#E7E3D4" }}>
-          No {filter === "all" ? "" : filter} applications.
+          No {filter === "all" ? "" : filter} applications{filter === "pending" ? "" : " in these dates"}.
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -11001,6 +10652,8 @@ function AdminApplicationsInbox() {
 
 function ApplicationsHub({ isSuperAdmin }) {
   const [tab, setTab] = React.useState(isSuperAdmin ? "inbox" : "apply");
+  const [filter, setFilter] = React.useState("pending");
+  const [range, setRange] = React.useState(histDefaultRange);
   const [, refreshHub] = React.useReducer(n => n + 1, 0);
   React.useEffect(() => {
     loadOtClaims(window.FETS).then(refreshHub).catch(() => undefined);
@@ -11054,8 +10707,8 @@ function ApplicationsHub({ isSuperAdmin }) {
 
       {/* Content */}
       {tab === "apply" && <AppForm onSubmitted={() => setTab(isSuperAdmin ? "inbox" : "mine")} />}
-      {tab === "mine" && <><MyApplicationsList /><OtClaimsPanel admin={false} /></>}
-      {tab === "inbox" && <><AdminApplicationsInbox /><OtClaimsPanel admin /></>}
+      {tab === "mine" && <><HistoryRange range={range} setRange={setRange} /><MyApplicationsList range={range} /><OtClaimsPanel admin={false} filter="all" range={range} /></>}
+      {tab === "inbox" && <><AdminApplicationsInbox filter={filter} setFilter={setFilter} range={range} setRange={setRange} /><OtClaimsPanel admin filter={filter} range={range} /></>}
     </div>
   );
 }
@@ -11072,7 +10725,7 @@ function otHoursFrom(start, end) {
    The one place to see and approve them. Approval writes the roster (OT
    hours on the day, or TP for a paid TOIL day), and the payroll reads the
    roster, so pay follows automatically. */
-function OtClaimsPanel({ admin }) {
+function OtClaimsPanel({ admin, filter = "pending", range }) {
   const F = window.FETS;
   const [, bump] = React.useReducer(n => n + 1, 0);
   const [hours, setHours] = React.useState({});
@@ -11082,7 +10735,9 @@ function OtClaimsPanel({ admin }) {
     window.addEventListener("fets-ot-claims-changed", h);
     return () => window.removeEventListener("fets-ot-claims-changed", h);
   }, []);
-  const all = (F._otClaims || []).filter(c => admin ? c.status === "pending" : c.profile_id === F._meId);
+  const all = (F._otClaims || []).filter(c => (admin || c.profile_id === F._meId)
+    && (filter === "all" || statusOf(c) === filter)
+    && (filter === "pending" || inHistRange(c, range)));
   const act = async (c, status) => {
     setBusy(c.id);
     const h = hours[c.id] !== undefined ? Number(hours[c.id]) : c.ot_hours;
@@ -11096,11 +10751,11 @@ function OtClaimsPanel({ admin }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 6 }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-        <div style={{ fontSize: 14.5, fontWeight: 800, color: "#2c3e50" }}>{admin ? "Overtime & paid TOIL to approve" : "My overtime & paid TOIL claims"}</div>
+        <div style={{ fontSize: 14.5, fontWeight: 800, color: "#2c3e50" }}>{admin ? (filter === "pending" ? "Overtime & paid TOIL to approve" : `Overtime & paid TOIL · ${filter}`) : "My overtime & paid TOIL claims"}</div>
         <div style={{ fontSize: 11.5, color: "#8590AA" }}>{admin ? "Approving updates the roster and the payroll." : "Approved claims appear on the roster and in your pay."}</div>
       </div>
       {all.length === 0 ? (
-        <div style={{ padding: "16px 18px", borderRadius: 14, background: "#E7E3D4", color: "#8590AA", fontSize: 12.5 }}>{admin ? "No overtime or TOIL pay claims waiting." : "No claims yet. Use New Application → Overtime / TOIL Pay."}</div>
+        <div style={{ padding: "16px 18px", borderRadius: 14, background: "#E7E3D4", color: "#8590AA", fontSize: 12.5 }}>{admin ? (filter === "pending" ? "No overtime or TOIL pay claims waiting." : "No overtime or TOIL pay claims in these dates.") : "No claims in these dates. Use New Application → Overtime / TOIL Pay to claim."}</div>
       ) : all.map(c => (
         <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", padding: "14px 16px", borderRadius: 14, background: "#E7E3D4", boxShadow: "0 2px 10px rgba(0,0,0,0.05)" }}>
           <div style={{ width: 34, height: 34, borderRadius: 10, display: "grid", placeItems: "center", background: c.toil_payout ? "#d6efe4" : "#f6ebc6", color: c.toil_payout ? "#10B981" : "#B48A06" }}><Icon name={c.toil_payout ? "clock" : "plus"} size={16} /></div>
@@ -11108,12 +10763,12 @@ function OtClaimsPanel({ admin }) {
             <div style={{ fontSize: 13.5, fontWeight: 750, color: "#2c3e50" }}>{admin ? `${c.name || "Staff"} · ` : ""}{c.toil_payout ? "Paid TOIL day" : `Overtime · ${Number(c.ot_hours || 0).toFixed(2)} h`}</div>
             <div style={{ fontSize: 11.5, color: "#8590AA" }}>{c.date}{c.start_time && !c.toil_payout ? ` · ${String(c.start_time).slice(0, 5)}–${String(c.end_time || "").slice(0, 5)}` : ""}{c.branch ? ` · ${c.branch}` : ""}{c.notes ? ` · ${c.notes}` : ""}</div>
           </div>
-          {admin ? <>
+          {admin && statusOf(c) === "pending" ? <>
             {!c.toil_payout && <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "#8590AA" }}>Approve
               <input type="number" step="0.25" min="0" value={hours[c.id] ?? c.ot_hours ?? 0} onChange={e => setHours(h => ({ ...h, [c.id]: e.target.value }))} style={{ width: 70, padding: "6px 8px", borderRadius: 8, border: "1.5px solid #C4DBF6", background: "#fff", fontSize: 12.5 }} /> h</label>}
             <button disabled={busy === c.id} onClick={() => act(c, "Approved")} className="tap" style={{ padding: "8px 14px", borderRadius: 10, border: "none", background: "#3B8BEB", color: "#fff", fontWeight: 750, fontSize: 12.5, cursor: "pointer" }}>Approve</button>
             <button disabled={busy === c.id} onClick={() => act(c, "Rejected")} className="tap" style={{ padding: "8px 12px", borderRadius: 10, border: "none", background: "transparent", color: "#B23850", fontWeight: 700, fontSize: 12.5, cursor: "pointer" }}>Reject</button>
-          </> : <span style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".05em", color: SC[c.status] || "#8590AA" }}>{c.status}</span>}
+          </> : <span style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".05em", color: SC[statusOf(c)] || "#8590AA" }}>{statusOf(c)}</span>}
         </div>
       ))}
     </div>

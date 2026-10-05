@@ -1398,6 +1398,7 @@ export async function dbSubmitApplication(app: {
   Object.keys(saRow).forEach(k => { if (saRow[k] === undefined) delete saRow[k]; });
 
   let dbResult: any = null;
+  let saveError = "";
   try {
     const { data: saData, error: saError } = await supabase
       .from("staff_applications")
@@ -1427,9 +1428,17 @@ export async function dbSubmitApplication(app: {
       };
     } else {
       console.warn("staff_applications insert error:", saError?.message);
+      saveError = saError?.message || "no response";
     }
   } catch (err) {
     console.warn("staff_applications insert threw:", err);
+    saveError = String((err as any)?.message || err);
+  }
+  // Never show an application as submitted when the database did not keep it:
+  // a copy only in this browser is invisible to admins and lingers as stale history.
+  if (!dbResult) {
+    rtoast(`Couldn't save the application (${saveError}). Please try again.`, "alert");
+    return null;
   }
 
   // ── 2. Also notify via leave_requests (best-effort, audit trail) ──────────
