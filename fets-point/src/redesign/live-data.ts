@@ -114,7 +114,7 @@ export async function loadLiveData(F: any) {
         }
         if (p.full_name && p.id) {
           idByName[p.full_name] = p.id;
-          F._staffRatesByName[p.full_name] = { id: p.id, user_id: p.user_id, role: p.role, branch: b, hourly_rate: Number(p.hourly_rate) || 0, daily_rate: Number(p.daily_rate) || 0, monthly_salary: calculatedSalary, is_active: p.is_active };
+          F._staffRatesByName[p.full_name] = { id: p.id, user_id: p.user_id, role: p.role, branch: b, hourly_rate: Number(p.hourly_rate) || 0, daily_rate: Number(p.daily_rate) || 0, monthly_salary: calculatedSalary, is_active: p.is_active, employee_id: p.permissions?.employee_id || '', designation: p.permissions?.designation || '' };
         }
         if (p.full_name && p.user_id) userIdByName[p.full_name] = p.user_id;
         if (p.id && p.user_id) {
@@ -724,18 +724,16 @@ export async function loadApplications(F: any) {
       }
     }
 
-    // ── Merge: localStorage loads first (lower priority), server overwrites ──
-    // DB status is always the source of truth after a page reload.
+    // When staff_applications answers, it is the only source: copies kept in
+    // this browser (never saved, or since changed) used to linger as old
+    // history. The browser copy is only a fallback while the table is unreachable.
     const map = new Map();
-    localStored.forEach((a: any) => map.set(String(a.id), a));
+    if (saError) localStored.forEach((a: any) => map.set(String(a.id), a));
     serverApps.forEach((a: any) => map.set(String(a.id), a));
-
-    // Sync DB status back into localStorage so it stays current
-    const updatedLocal = localStored.map((la: any) => {
-      const serverVer = serverApps.find((sa: any) => String(sa.id) === String(la.id));
-      return serverVer ? { ...la, status: serverVer.status, admin_reply: serverVer.admin_reply } : la;
-    });
-    try { localStorage.setItem("fets_staff_applications", JSON.stringify(updatedLocal.slice(0, 100))); } catch(e) {}
+    try {
+      if (saError) localStorage.setItem("fets_staff_applications", JSON.stringify(Array.from(map.values()).slice(0, 100)));
+      else localStorage.removeItem("fets_staff_applications");
+    } catch(e) {}
 
     const allApps = Array.from(map.values()).sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
 

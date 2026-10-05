@@ -335,6 +335,11 @@ export function UserManagement({ onNavigate }: UserManagementProps = {}) {
                                                     <InputField label="Position" value={(formData as any).position || ''} onChange={(v: string) => setFormData({ ...formData, position: v } as any)} placeholder="e.g. Senior Invigilator" />
                                                 </div>
 
+                                                <div className="grid grid-cols-2 gap-5">
+                                                    <InputField label="Employee ID (on payslip)" value={String((permissions as any).employee_id || '')} onChange={(v: string) => setPermissions({ ...permissions, employee_id: v } as any)} placeholder="e.g. FETS0016" />
+                                                    <InputField label="Designation (on payslip)" value={String((permissions as any).designation || '')} onChange={(v: string) => setPermissions({ ...permissions, designation: v } as any)} placeholder="Test Centre Administrator" />
+                                                </div>
+
                                                 {/* Temporary Monthly Roster Exclusion Toggle */}
                                                 <div className="p-4 rounded-xl border flex items-center justify-between bg-slate-800/80 border-slate-700">
                                                     <div>
