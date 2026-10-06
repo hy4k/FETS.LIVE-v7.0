@@ -181,13 +181,19 @@ export function CandidateTrackerPremium() {
   const handleOpenEdit = (c: Candidate) => {
     setIsEdit(true)
     setSelectedCandidate(c)
+    // Uploaded rosters store the client in capitals and exam names as written in
+    // the file, so match the lists without caring about case; a value with no
+    // match is still shown (it gets its own option below) rather than blanked.
+    const same = (a?: string, b?: string) => (a || '').trim().toUpperCase() === (b || '').trim().toUpperCase()
+    const client = dbClients.find(x => same(x.name, c.clientName))
+    const exam = client ? dbExams.find(e => e.client_id === client.id && same(e.name, c.examName)) : undefined
     setFormData({
       fullName: c.fullName,
       phone: c.phone || '',
       address: c.address || '',
       examDate: c.examDate ? format(c.examDate, 'yyyy-MM-dd') : '',
-      examName: c.examName || '',
-      clientName: c.clientName || '',
+      examName: exam?.name || (c.examName === 'General Exam' ? '' : c.examName || ''),
+      clientName: client?.name || c.clientName || '',
       notes: c.notes || '', rosterNumber: c.rosterNumber || '', examPart: c.examPart || '', examStartTime: c.examStartTime || ''
     })
     setShowModal(true)
@@ -673,7 +679,7 @@ export function CandidateTrackerPremium() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-[2rem] shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto border border-white/20"
+              className="bg-white text-slate-900 rounded-[2rem] shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto border border-white/20 [&_input]:bg-white [&_input]:text-slate-900 [&_select]:bg-white [&_select]:text-slate-900 [&_textarea]:bg-white [&_textarea]:text-slate-900 [&_input::placeholder]:text-slate-400 [&_textarea::placeholder]:text-slate-400"
             >
               <div className="p-10 border-b border-slate-100 bg-[#002147] text-white">
                 <div className="flex items-center justify-between">
@@ -722,7 +728,7 @@ export function CandidateTrackerPremium() {
                     />
                   </div>
 
-                  {([{key:'rosterNumber',label:'Provider roster / confirmation ID',type:'text'},{key:'examPart',label:'Exam part',type:'text'},{key:'examStartTime',label:'Exam start time · IST',type:'time'}] as const).map(field=><label key={field.key} className="block text-sm font-medium text-gray-700 mb-2">{field.label}<input type={field.type} value={formData[field.key]} onChange={e=>setFormData({...formData,[field.key]:e.target.value})} className="mt-2 w-full px-4 py-3 border border-gray-300 rounded-lg"/></label>)}
+                  {([{key:'rosterNumber',label:'Provider roster / confirmation ID',type:'text'},{key:'examPart',label:'Exam part',type:'text'},{key:'examStartTime',label:'Exam start time · IST',type:'time'}] as const).map(field=><label key={field.key} className="block text-sm font-medium text-gray-700 mb-2">{field.label}<input type={field.type} value={formData[field.key]} onChange={e=>setFormData({...formData,[field.key]:e.target.value})} className="mt-2 w-full px-4 py-3 border border-gray-300 rounded-lg font-normal focus:outline-none focus:ring-2 focus:ring-yellow-400"/></label>)}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2 uppercase tracking-wide">
                       Client Name
@@ -733,6 +739,9 @@ export function CandidateTrackerPremium() {
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400"
                     >
                       <option value="">Select client...</option>
+                      {formData.clientName && !(dbClients.length > 0 ? dbClients.map(c => c.name) : ['PROMETRIC', 'PSI', 'ITTS', 'PEARSON VUE']).includes(formData.clientName) && (
+                        <option value={formData.clientName}>{formData.clientName}</option>
+                      )}
                       {dbClients.length > 0 ? (
                         dbClients.map(client => (
                           <option key={client.id} value={client.name}>{client.name}</option>
@@ -763,6 +772,9 @@ export function CandidateTrackerPremium() {
                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400"
                         >
                           <option value="">Select exam...</option>
+                          {formData.examName && !clientExams.some(e => e.name === formData.examName) && (
+                            <option value={formData.examName}>{formData.examName}</option>
+                          )}
                           {clientExams.map(exam => (
                             <option key={exam.id} value={exam.name}>{exam.name}</option>
                           ))}
