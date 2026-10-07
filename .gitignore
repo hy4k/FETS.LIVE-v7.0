@@ -47,7 +47,17 @@ file_tree.txt
 out.js
 
 # Android build (Capacitor)
-fets-point/android/
+# Native Android source is retained; generated outputs and secrets stay local.
+fets-point/android/.gradle/
+fets-point/android/.idea/
+fets-point/android/local.properties
+fets-point/android/**/build/
+fets-point/android/app/src/main/assets/
+fets-point/android/capacitor-cordova-android-plugins/
+fets-point/android/app/google-services.json
+*.jks
+*.keystore
+keystore.properties
 
 # MCP config
 .mcp.json

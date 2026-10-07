@@ -14,6 +14,7 @@ import { monday as dutyMonday } from './shift-plan';
   into the legacy app. Exports <RedesignShell bridge={fn} />.
 */
 import React from "react";
+import { MobileHeader, MobileNavigation } from "../mobile/MobileWorkspace";
 import "./liquid-glass.css";
 import { loadLiveData, ensureMonth, loadLeaveRequests, loadOtClaims, loadApplications } from "./live-data";
 import { supabase } from "../lib/supabase";
@@ -11580,6 +11581,7 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
 
   return (
     <div style={{ position: "relative", zIndex: 2, height: "100%", display: "flex", flexDirection: "column", "--branch": BRANCH_TINT[branch] || "var(--accent)" }}>
+      {isMobile && <MobileHeader branch={branch} onBranchChange={handleBranchChange} navigate={setActive} />}
       <TopNav active={active} onNavigate={onNavigate} branch={branch} setBranch={handleBranchChange}
         t={t} setTweak={setTweak} onTools={() => setTools(true)} onBurger={() => setBurger(true)} onLogout={onLogout}
         pendingHandoverBadge={pendingHandoverBadge} />
@@ -11599,7 +11601,7 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
           </div>
         )}
         {active === "roster" && <RosterPage branch={branch} setActive={setActive} />}
-        {active === "case" && <RaiseCasePage branch={branch} setActive={setActive} />}
+        {(active === "case" || active === "incident-log") && <RaiseCasePage branch={branch} setActive={setActive} />}
         {active === "handover" && <DutyWorkspace key={branch} branch={branch} navigate={setActive} legacy={<HandoverHub branch={branch} setActive={setActive} />} />}
         {active === "desk" && <MyDeskPage branch={branch} setActive={setActive} setDrawer={setDrawer} bridge={bridge} />}
         {active === "business" && <BusinessPage branch={branch} />}
@@ -11618,6 +11620,8 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
         {active === "fets-intelligence" && <FetsIntelligence initialQuery="" />}
         {active === "gbp" && <GBPDashboard />}
       </main>
+
+      {isMobile && <MobileNavigation active={active} navigate={setActive} pending={pendingHandoverBadge} onLogout={onLogout} />}
 
       {/* drawers */}
       <Drawer open={drawer === "outlook"} onClose={() => setDrawer(null)}
