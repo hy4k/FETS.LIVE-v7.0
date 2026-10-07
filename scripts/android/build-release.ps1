@@ -13,26 +13,21 @@ $appDir = Join-Path $repoDir 'fets-point'
 $firebasePath = Join-Path $appDir 'android/app/google-services.json'
 if ($VersionCode -le $PreviousVersionCode) { throw 'Version code must exceed the highest uploaded Play Console code.' }
 if (-not (Test-Path -LiteralPath $KeystorePath -PathType Leaf)) { throw "Existing upload keystore not found: $KeystorePath" }
-if (-not (Test-Path -LiteralPath $firebasePath -PathType Leaf)) {
-    if (-not $FirebaseConfigPath -and [Environment]::OSVersion.Platform -eq 'Win32NT') {
-        Add-Type -AssemblyName System.Windows.Forms
-        $picker = New-Object System.Windows.Forms.OpenFileDialog
-        $picker.Title = 'Select google-services.json from the existing FETS Android project'
-        $picker.Filter = 'Firebase Android configuration (google-services.json)|google-services.json'
-        try {
-            if ($picker.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { $FirebaseConfigPath = $picker.FileName }
-        } finally { $picker.Dispose() }
-    }
-    if (-not $FirebaseConfigPath) { throw "Restore the existing Firebase google-services.json to $firebasePath before building." }
+# Firebase is optional. Only import a configuration when explicitly supplied.
+if ($FirebaseConfigPath -and -not (Test-Path -LiteralPath $firebasePath -PathType Leaf)) {
     $selectedFirebase = Get-Content -LiteralPath $FirebaseConfigPath -Raw | ConvertFrom-Json
     if (-not @($selectedFirebase.client | Where-Object { $_.client_info.android_client_info.package_name -eq 'com.fets.staffapp' }).Count) {
         throw 'The selected Firebase file does not contain com.fets.staffapp.'
     }
     Copy-Item -LiteralPath $FirebaseConfigPath -Destination $firebasePath
 }
-$firebase = Get-Content -LiteralPath $firebasePath -Raw | ConvertFrom-Json
-$matchingClient = @($firebase.client | Where-Object { $_.client_info.android_client_info.package_name -eq 'com.fets.staffapp' })
-if ($matchingClient.Count -eq 0) { throw 'Firebase configuration does not contain com.fets.staffapp.' }
+if (Test-Path -LiteralPath $firebasePath -PathType Leaf) {
+    $firebase = Get-Content -LiteralPath $firebasePath -Raw | ConvertFrom-Json
+    $matchingClient = @($firebase.client | Where-Object { $_.client_info.android_client_info.package_name -eq 'com.fets.staffapp' })
+    if ($matchingClient.Count -eq 0) { throw 'Firebase configuration does not contain com.fets.staffapp.' }
+} else {
+    Write-Host 'Building without Firebase. Android remote push is not enabled.'
+}
 foreach ($tool in @('node', 'pnpm', 'java', 'javac')) {
     if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) { throw "Missing $tool. Install Node.js, pnpm and JDK 21 (including javac) and reopen PowerShell." }
 }

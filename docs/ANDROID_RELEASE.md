@@ -55,9 +55,12 @@ keytool -list -v -keystore /path/to/existing-upload-key.jks
    any other release is uploaded before this one.
 2. Restore the matching upload keystore and its alias/passwords through secure
    build settings. Never commit these files or passwords.
-3. Restore the existing Firebase Android `google-services.json` into
-   `fets-point/android/app/`, matching `com.fets.staffapp`. This file is ignored.
-   Release builds require it to preserve push notification integration.
+3. Firebase is optional. The owner reports that the existing setup did not use
+   `google-services.json`, and none was found in the available repository history.
+   Build without it. If Android remote push is configured later, place a matching
+   `google-services.json` in `fets-point/android/app/` before building. Without
+   that configuration, the app skips Android push permission and registration;
+   app startup and signing do not depend on Firebase.
 4. Install JDK 21 (including javac), Android SDK platform 36 and build-tools 36.0.0.
    The generated Gradle wrapper uses 8.14.3 with a verified distribution checksum.
    Capacitor 8 requires Android 7/API 24 or newer; compare device support with
@@ -70,8 +73,8 @@ keytool -list -v -keystore /path/to/existing-upload-key.jks
 On Windows, extract the prepared project and double-click
 `BUILD-ANDROID-RELEASE.cmd`. The helper uses the owner's verified keystore at
 `C:\Users\mithu\fets-upload-key\upload-keystore.jks`, alias `upload`, and prompts
-locally for passwords. If Firebase configuration is absent, it opens a file
-picker for the existing app's `google-services.json`. Node.js, pnpm, JDK 21 and
+locally for passwords. It does not require or prompt for Firebase configuration.
+Node.js, pnpm, JDK 21 and
 Android SDK 36 must be installed first. The helper builds locally and does not
 publish. Its PowerShell syntax is checked in the cloud; execution on the
 owner's Windows computer and signed-release validation remain pending.
@@ -156,6 +159,10 @@ FETS_PLAYWRIGHT_MODULE=/tmp/fets-preview-tools/node_modules/playwright \
 The cloud build used workspace-local SDK, JDK and Gradle caches; these are not
 repository files. The existing runtime's proxy certificate was retained for
 Java HTTPS verification. TLS, package integrity and distribution checksums
-were not disabled. Signing credentials and Firebase configuration were absent
-from this cloud machine. The signed AAB, production device validation, Console
+were not disabled. Signing credentials were absent from this cloud machine. Firebase configuration
+is optional. The signed AAB, production device validation, Console
 review and rollout remain pending.
+
+The optional-Firebase correction is covered by four native initialization tests;
+all 20 mobile/navigation tests pass. Both release helpers permit a missing
+Firebase file, validate an explicitly supplied file, and retain signing checks.

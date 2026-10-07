@@ -17,8 +17,11 @@ if (( FETS_VERSION_CODE <= FETS_PREVIOUS_VERSION_CODE )); then
   echo 'The new version code must exceed the highest code in Play Console.' >&2; exit 1
 fi
 [[ -f "$FETS_UPLOAD_KEYSTORE" ]] || { echo 'Upload keystore not found.' >&2; exit 1; }
-[[ -f android/app/google-services.json ]] || { echo 'Restore the existing Firebase Android configuration to preserve push notifications.' >&2; exit 1; }
-node -e "const fs=require('fs');const g=JSON.parse(fs.readFileSync('android/app/google-services.json'));if(!g.client?.some(c=>c.client_info?.android_client_info?.package_name==='com.fets.staffapp'))throw new Error('Firebase configuration must include com.fets.staffapp')"
+if [[ -f android/app/google-services.json ]]; then
+  node -e "const fs=require('fs');const g=JSON.parse(fs.readFileSync('android/app/google-services.json'));if(!g.client?.some(c=>c.client_info?.android_client_info?.package_name==='com.fets.staffapp'))throw new Error('Firebase configuration must include com.fets.staffapp')"
+else
+  echo 'Building without Firebase. Android remote push is not enabled.'
+fi
 
 cd "$repo_dir"
 pnpm --filter fets-point build

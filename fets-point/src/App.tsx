@@ -32,12 +32,7 @@ import { supabase } from './lib/supabase';
 import { useIsMobile, useScreenSize } from './hooks/use-mobile';
 import { isMithunEmail } from './utils/authUtils';
 
-// Capacitor Imports
-import { App as CapacitorApp } from '@capacitor/app';
-import { PushNotifications } from '@capacitor/push-notifications';
-import { Device } from '@capacitor/device';
-import { Haptics, ImpactStyle } from '@capacitor/haptics';
-import { StatusBar, Style } from '@capacitor/status-bar';
+import { initializeNative } from './mobile/initializeNative';
 
 // Lazy load Desktop components
 const Dashboard = lazy(() => import('./components/iCloud/iCloudDashboard').then(module => ({ default: module.ICloudDashboard })))
@@ -193,20 +188,9 @@ function AppContent() {
 
 
   useEffect(() => {
-    const setupPush = async () => {
-      try {
-        const info = await Device.getInfo();
-        if (info.platform === 'web') return;
-        await StatusBar.setStyle({ style: Style.Dark });
-        await StatusBar.setBackgroundColor({ color: '#f8f9f4' });
-        let perm = await PushNotifications.checkPermissions();
-        if (perm.receive !== 'granted') perm = await PushNotifications.requestPermissions();
-        if (perm.receive === 'granted') await PushNotifications.register();
-      } catch (err) {
-        console.error('❌ Capacitor init error:', err);
-      }
-    };
-    setupPush();
+    initializeNative(__FETS_ANDROID_PUSH_CONFIGURED__).catch(err => {
+      console.error('Capacitor initialization failed:', err);
+    });
   }, []);
 
 
