@@ -1,0 +1,86 @@
+.mobile-workspace-header,.mobile-workspace-nav { display:none; }
+@media(max-width:767px) {
+  .mobile-workspace-header { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-shrink:0; background:#f8f9f4; color:#253e33; padding:calc(12px + env(safe-area-inset-top,0px)) 18px 12px; border-bottom:1px solid #dfe5da; }
+  .mobile-brand { display:flex; gap:10px; align-items:center; text-align:left; background:none; border:0; color:inherit; min-height:48px; padding:0; }
+  .mobile-brand img { width:40px; height:40px; border-radius:12px; }
+  .mobile-brand>span { font-size:22px; font-weight:700; letter-spacing:-1.1px; line-height:1.1; }
+  .mobile-brand-dot { color:#6b8369; }
+  .mobile-brand small { display:block; color:#657461; font-size:11px; font-weight:400; letter-spacing:0; margin-top:5px; }
+  .mobile-centre { position:relative; display:flex; align-items:center; }
+  .mobile-centre select { appearance:none; border:1px solid #dce3d6; border-radius:100px; background:#edf0e7; color:#3e543e; font-size:12px; font-weight:600; min-height:44px; max-width:125px; padding:10px 28px 10px 12px; }
+  .mobile-centre>svg { position:absolute; right:10px; pointer-events:none; }
+  .mobile-workspace-nav { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); flex-shrink:0; padding:7px 8px calc(7px + env(safe-area-inset-bottom,0px)); background:#f8f9f4; color:#5d6e5b; border-top:1px solid #dce3d6; z-index:60; }
+  .mobile-workspace-nav button { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; min-height:56px; border:0; border-radius:14px; background:transparent; color:inherit; font-size:11px; font-weight:500; padding:5px 0; }
+  .mobile-workspace-nav button[aria-current=page] { color:#264e37; background:#e3eadb; font-weight:700; }
+  .mobile-tab-icon { position:relative; display:grid; place-items:center; height:26px; }
+  .mobile-tab-badge { position:absolute; top:-4px; right:-14px; background:#904629; color:white; border:2px solid #f8f9f4; border-radius:20px; min-width:18px; padding:1px 3px; font-size:9px; }
+  .mobile-offline { display:flex; align-items:center; gap:8px; background:#fff0d9; color:#725226; padding:9px 16px; font-size:12px; flex-shrink:0; }
+  .mobile-workspace-header button:focus-visible,.mobile-workspace-nav button:focus-visible { outline:3px solid #587849; outline-offset:2px; }
+  #fets-redesign-root { height:100dvh!important; }
+  #fets-redesign-root .premium-nav { display:none!important; }
+  #fets-redesign-root .main-scroll { min-height:0; overscroll-behavior-y:contain; scroll-padding-bottom:24px; }
+  #fets-redesign-root .main-scroll>div { min-width:0; max-width:100%; }
+  #fets-redesign-root .operations-home { padding:18px 16px 24px; background:#f5f6ef; }
+  #fets-redesign-root .personal-hero { border-radius:24px; padding:24px 20px; }
+  #fets-redesign-root .personal-hero h1 { font-size:36px; }
+  #fets-redesign-root .personal-hero .hero-greeting { font-size:15px; }
+  #fets-redesign-root .personal-hero .hero-note { font-size:13px; line-height:1.6; }
+  #fets-redesign-root .hero-desk-button { min-height:46px; font-size:13px; }
+  #fets-redesign-root .oh-metric { border-radius:18px; padding:18px 14px; }
+  #fets-redesign-root .oh-metric>div { font-size:12px; }
+  #fets-redesign-root .oh-metric>small { font-size:11px; }
+  #fets-redesign-root .oh-card,#fets-redesign-root .oh-handover,#fets-redesign-root .oh-desk-link { border-radius:20px; }
+  #fets-redesign-root .oh-action-grid>button { min-height:130px; border-radius:18px; }
+  #fets-redesign-root .oh-link { min-height:44px; font-size:12px!important; }
+  #fets-redesign-root .oh-session-name strong { font-size:14px; }
+  #fets-redesign-root .oh-session-name>span { font-size:12px; }
+  .workspace-menu { margin:auto 0 0; width:100%; max-width:100%; max-height:calc(100dvh - 24px - env(safe-area-inset-top,0px)); border-radius:28px 28px 0 0; padding:24px 18px calc(24px + env(safe-area-inset-bottom,0px)); }
+  .workspace-menu::before { content:''; display:block; width:36px; height:4px; border-radius:10px; background:#ccd5c3; margin:0 auto 20px; }
+  .workspace-menu header button { min-width:44px; min-height:44px; }
+  .workspace-menu-grid>button { min-height:104px; }
+  .workspace-menu-grid strong { font-size:14px; }
+  .workspace-menu-grid small { font-size:12px; line-height:1.5; }
+  .workspace-menu-search input { font-size:16px; min-height:44px; }
+  .mobile-page-frame { position:fixed; inset:0; height:100dvh; display:flex; flex-direction:column; background:#f5f6ef; z-index:3; }
+  .mobile-page-content { flex:1; min-height:0; overflow:auto; padding:16px; }
+  .mobile-page-content>div { max-width:100%; }
+  input,select,textarea { font-size:16px; }
+  #fets-redesign-root .wallpaper,#fets-redesign-root .grain { display:none; }
+  #fets-redesign-root .personal-hero { padding:20px; }
+  #fets-redesign-root .personal-hero .hero-wordmark { display:none; }
+  #fets-redesign-root .personal-hero-art { width:85px; height:110px; opacity:.35; }
+  #fets-redesign-root .personal-hero-top { margin-bottom:18px; }
+  #fets-redesign-root .personal-hero { min-height:0; }
+  #fets-redesign-root .personal-hero-copy { padding-top:0; }
+  #fets-redesign-root .personal-hero .hero-greeting { margin-top:0; }
+  #fets-redesign-root .personal-hero-top,#fets-redesign-root .personal-hero-art,#fets-redesign-root .personal-hero .hero-note { display:none; }
+  #fets-redesign-root .personal-hero h1 { font-size:32px; }
+  #fets-redesign-root .hero-desk-button { margin-top:12px; padding:10px 16px; }
+  #fets-redesign-root .centre-clock { display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-radius:12px; gap:10px; margin-top:12px; }
+  #fets-redesign-root .centre-clock-caption { display:none; }
+  #fets-redesign-root .centre-clock time>span { font-size:22px; }
+  #fets-redesign-root .centre-clock time>small { font-size:11px; }
+  #fets-redesign-root .centre-clock-date { font-size:10px; max-width:150px; }
+  #fets-redesign-root .drawer:not(.open) { visibility:hidden; }
+  #fets-redesign-root .personal-hero .hero-note { max-width:250px; }
+  #fets-redesign-root .centre-clock { margin-top:16px; }
+  #fets-redesign-root .planning-header { gap:12px; margin-bottom:16px; }
+  #fets-redesign-root .planning-header h1 { font-size:29px; margin:8px 0; }
+  #fets-redesign-root .planning-stamp { display:none; }
+  #fets-redesign-root .planning-summary>aside { padding:14px; }
+  #fets-redesign-root .planning-summary aside>span,#fets-redesign-root .planning-summary aside>p { display:none; }
+  #fets-redesign-root .planning-summary aside h2 { font-size:19px; }
+  #fets-redesign-root .planning-summary>div { padding:12px 10px; border-radius:16px; }
+  #fets-redesign-root .planning-summary strong { margin:8px 0; font-size:29px; }
+  #fets-redesign-root .planning-summary small { font-size:10px; }
+  #fets-redesign-root .planning-summary>div>span { font-size:11px; }
+  #fets-redesign-root .my-desk { padding:20px 16px; border-radius:0; }
+  #fets-redesign-root .md-cover-art { height:145px; }
+  #fets-redesign-root .md-cover-copy { padding:20px; width:78%; }
+  #fets-redesign-root .md-cover-copy h2 { font-size:32px; }
+  #fets-redesign-root .md-artwork { opacity:.35; }
+  .fets-ai-with-nav .fets-ai-orb { min-height:48px; padding:4px; }
+  .fets-ai-with-nav .fets-ai-orb-label { display:none; }
+  .fets-ai-with-nav .fets-ai-orb-core { width:42px; height:42px; }
+  .fets-ai-root.fets-ai-with-nav { bottom:calc(84px + env(safe-area-inset-bottom,0px)); }
+}

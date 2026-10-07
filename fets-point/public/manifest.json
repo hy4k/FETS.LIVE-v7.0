@@ -1,24 +1,27 @@
 {
-  "name": "FETS.LIVE",
-  "short_name": "FETS.LIVE",
+  "name": "FETS LIVE",
+  "short_name": "FETS LIVE",
   "description": "FETS.LIVE - Advanced workforce management system with real-time operational insights",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f0fdfa",
-  "theme_color": "#14b8a6",
+  "background_color": "#f5f6ef",
+  "theme_color": "#294538",
   "orientation": "portrait-primary",
   "scope": "/",
   "lang": "en",
-  "categories": ["productivity", "business"],
+  "categories": [
+    "productivity",
+    "business"
+  ],
   "icons": [
     {
-      "src": "/fets-point-logo.png",
+      "src": "/brand/app-icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/fets-point-logo-512.png",
+      "src": "/brand/app-icon.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
@@ -29,10 +32,10 @@
       "name": "Dashboard",
       "short_name": "Dashboard",
       "description": "View the command center dashboard",
-      "url": "/?shortcut=dashboard",
+      "url": "/",
       "icons": [
         {
-          "src": "/fets-point-logo.png",
+          "src": "/brand/app-icon-192.png",
           "sizes": "192x192"
         }
       ]
@@ -41,10 +44,10 @@
       "name": "Roster",
       "short_name": "Roster",
       "description": "Manage staff roster and schedules",
-      "url": "/?shortcut=roster",
+      "url": "/roster",
       "icons": [
         {
-          "src": "/fets-point-logo.png",
+          "src": "/brand/app-icon-192.png",
           "sizes": "192x192"
         }
       ]
@@ -53,10 +56,10 @@
       "name": "Calendar",
       "short_name": "Calendar",
       "description": "View FETS calendar and sessions",
-      "url": "/?shortcut=calendar",
+      "url": "/calendar",
       "icons": [
         {
-          "src": "/fets-point-logo.png",
+          "src": "/brand/app-icon-192.png",
           "sizes": "192x192"
         }
       ]

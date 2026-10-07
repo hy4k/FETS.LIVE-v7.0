@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="500" viewBox="0 0 1024 500">
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#203d30"/><stop offset="1" stop-color="#49644b"/></linearGradient>
+    <radialGradient id="glow"><stop stop-color="#b9c9a8" stop-opacity=".18"/><stop offset="1" stop-color="#b9c9a8" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="1024" height="500" fill="url(#bg)"/>
+  <circle cx="850" cy="250" r="350" fill="url(#glow)"/>
+  <g fill="none" stroke="#b8c5aa" stroke-opacity=".2">
+    <circle cx="850" cy="250" r="240"/><circle cx="850" cy="250" r="190"/><circle cx="850" cy="250" r="140"/>
+  </g>
+  <text x="64" y="78" font-family="sans-serif" font-size="13" font-weight="600" letter-spacing="3" fill="#c5d2b9">YOUR CENTRE. CONNECTED.</text>
+  <text x="60" y="184" font-family="sans-serif" font-size="80" font-weight="700" letter-spacing="-5" fill="#f6f5eb">fets<tspan fill="#b3c5a0">.</tspan>live</text>
+  <text x="64" y="258" font-family="Georgia,serif" font-size="43" fill="#f6f5eb">A little more connected.</text>
+  <text x="64" y="315" font-family="Georgia,serif" font-size="43" fill="#f6f5eb">A lot more possible.</text>
+  <rect x="64" y="376" width="424" height="47" rx="23" fill="#f0f2e5" fill-opacity=".1" stroke="#becdb0" stroke-opacity=".3"/>
+  <text x="86" y="406" font-family="sans-serif" font-size="16" fill="#e8eddd">People · Planning · Your working day</text>
+  <rect x="716" y="141" width="185" height="185" rx="48" fill="#f5f5ea"/>
+  <text x="751" y="275" font-family="Georgia,serif" font-size="130" font-weight="700" fill="#294538">f<tspan fill="#7d966d">.</tspan></text>
+</svg>

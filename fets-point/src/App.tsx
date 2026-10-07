@@ -20,29 +20,19 @@ import { Login } from './components/Login';
 import { BrandLoader } from './redesign/BrandExperience';
 import { FetsAIAgent } from './fets-ai/FetsAIAgent';
 import WorkspaceNavigation from './redesign/WorkspaceNavigation';
-import { BottomNav } from './components/BottomNav';
+import { MobileHeader, MobileNavigation, appToMobile, mobileToApp } from './mobile/MobileWorkspace';
+import { useNativeNavigation } from './mobile/useNativeNavigation';
 import { UpdatePassword } from './components/UpdatePassword';
 
 
 import { BranchIndicator } from './components/BranchIndicator';
 
 
-// DIRECT IMPORTS FOR MOBILE STABILITY (No Lazy Loading for Mobile)
-import { MobileHome } from './components/MobileHome';
-import { MobileCalendarView as MobileCalendar } from './components/MobileCalendarView';
-import { MobileRegisterView as MobileRegister } from './components/MobileRegisterView';
-import { MobileIncidentManager } from './components/MobileIncidentManager';
-
 import { supabase } from './lib/supabase';
 import { useIsMobile, useScreenSize } from './hooks/use-mobile';
 import { isMithunEmail } from './utils/authUtils';
 
-// Capacitor Imports
-import { App as CapacitorApp } from '@capacitor/app';
-import { PushNotifications } from '@capacitor/push-notifications';
-import { Device } from '@capacitor/device';
-import { Haptics, ImpactStyle } from '@capacitor/haptics';
-import { StatusBar, Style } from '@capacitor/status-bar';
+import { initializeNative } from './mobile/initializeNative';
 
 // Lazy load Desktop components
 const Dashboard = lazy(() => import('./components/iCloud/iCloudDashboard').then(module => ({ default: module.ICloudDashboard })))
@@ -95,8 +85,17 @@ const getInitialTab = () => {
   if (target === 'system-manager' || target === 'systems') return 'system-manager';
   if (target === 'news-manager' || target === 'news') return 'news-manager';
   if (target === 'expansion' || target === 'pearson-expansion') return 'expansion';
-  return 'command-center';
+  const known = ['profile', 'access-hub', 'dashboard', 'staff-management', 'fets-chat', 'chat', 'lost-and-found', 'branch-delegation', 'gbp', 'attn-admin', 'business', 'staff-ot', 'client-portal', 'news'];
+  return known.includes(target) ? target : 'command-center';
 };
+
+const SHARED_WORKSPACE_PAGES = [
+  'command-center', 'fets-calendar', 'fets-roster', 'my-desk', 'access-hub',
+  'dashboard', 'candidate-tracker', 'fets-intelligence', 'incident-log',
+  'system-manager', 'news-manager', 'user-management', 'branch-delegation',
+  'gbp', 'attn-admin', 'business', 'staff-requests', 'staff-ot', 'handover',
+  'news', 'actionables', 'fets-chat', 'chat', 'lost-and-found',
+];
 
 function AppContent() {
   const { user, loading, profile, signOut } = useAuth()
@@ -128,6 +127,7 @@ function AppContent() {
   }, []);
 
   const isMobile = useIsMobile()
+  useNativeNavigation(activeTab, setActiveTab)
   const [isRecovering, setIsRecovering] = useState(false)
   const [aiQuery, setAiQuery] = useState<string | undefined>(undefined)
   const isMithun = isMithunEmail(profile?.email)
@@ -188,20 +188,9 @@ function AppContent() {
 
 
   useEffect(() => {
-    const setupPush = async () => {
-      try {
-        const info = await Device.getInfo();
-        if (info.platform === 'web') return;
-        await StatusBar.setStyle({ style: Style.Light });
-        await StatusBar.setBackgroundColor({ color: '#FACC15' });
-        let perm = await PushNotifications.checkPermissions();
-        if (perm.receive !== 'granted') perm = await PushNotifications.requestPermissions();
-        if (perm.receive === 'granted') await PushNotifications.register();
-      } catch (err) {
-        console.error('❌ Capacitor init error:', err);
-      }
-    };
-    setupPush();
+    initializeNative(__FETS_ANDROID_PUSH_CONFIGURED__).catch(err => {
+      console.error('Capacitor initialization failed:', err);
+    });
   }, []);
 
 
@@ -211,50 +200,6 @@ function AppContent() {
   if (!user) return <Login />;
 
   const renderContent = () => {
-    if (isMobile) {      if (activeTab === 'command-center' || activeTab === 'fets-calendar' || activeTab === 'fets-roster' || activeTab === 'my-desk') return (
-        <Suspense fallback={<PageLoadingFallback pageName="FETS · LIVE" />}>
-          <RedesignShell 
-            bridge={setActiveTab} 
-            userName={userName} 
-            userEmail={userEmail} 
-            isAdmin={isAdmin} 
-            onLogout={handleLogout} 
-            activeBranch={activeBranch} 
-            onBranchChange={setActiveBranch} 
-            profileBranch={profile?.branch_assigned}
-            activeSubPage={
-              activeTab === 'command-center' ? 'live' :
-              activeTab === 'fets-calendar' ? 'calendar' :
-              activeTab === 'fets-roster' ? 'roster' : 'desk'
-            }
-          />
-        </Suspense>
-      );
-      if (activeTab === 'fets-calendar-demo') return isMithun ? <FetsCalendar /> : <MobileHome setActiveTab={setActiveTab} profile={profile} />;
-      if (activeTab === 'client-portal') return isMithun ? <ClientPortal /> : <MobileHome setActiveTab={setActiveTab} profile={profile} />;
-      if (activeTab === 'candidate-tracker') return <MobileRegister />;
-      if (activeTab === 'fets-intelligence') return (
-        <Suspense fallback={<PageLoadingFallback pageName="FETS AI" />}>
-          <FetsIntelligence initialQuery={aiQuery} />
-        </Suspense>
-      );
-      if (activeTab === 'incident-log') return <MobileIncidentManager />;
-      if (activeTab === 'access-hub') return <AccessHubPage />;
-      if (activeTab === 'user-management') return <UserManagement onNavigate={setActiveTab} />;
-      if (activeTab === 'profile') return <FetsProfilePage />;
- 
-      if (activeTab === 'system-manager') return <SystemManager />;
-      if (activeTab === 'news-manager') return <NewsManager />;
-
-      if (activeTab === 'cma-availability' || activeTab === 'branch-delegation') return isMithun ? <BranchDelegationWidget /> : <MobileHome setActiveTab={setActiveTab} profile={profile} />;
-      if (activeTab === 'gbp') return <GBPDashboard />;
-      if (activeTab === 'expansion') return (
-        <Suspense fallback={<PageLoadingFallback pageName="Mission 7 · Expansion" />}>
-          <PearsonExpansionMission staffName={userName} isAdmin={isAdmin} />
-        </Suspense>
-      );
-    }
-
     // expansion has its own standalone render — exempt from RedesignShell
     if (activeTab === 'expansion') return (
       <LazyErrorBoundary routeName="Mission 7 · Pearson Expansion" onGoBack={() => setActiveTab('command-center')}>
@@ -264,13 +209,7 @@ function AppContent() {
       </LazyErrorBoundary>
     );
 
-    const isRedesignPage = [
-      'command-center', 'fets-calendar', 'fets-roster', 'my-desk',
-      'access-hub', 'dashboard', 'candidate-tracker', 'fets-intelligence',
-      'incident-log', 'system-manager', 'news-manager', 'user-management',
-      'branch-delegation', 'gbp', 'attn-admin', 'business', 'staff-requests', 'staff-ot',
-      'handover', 'news', 'actionables', 'fets-chat', 'chat', 'lost-and-found'
-    ].includes(activeTab);
+    const isRedesignPage = SHARED_WORKSPACE_PAGES.includes(activeTab);
 
     if (isRedesignPage) {
       let subPage = "live";
@@ -283,14 +222,14 @@ function AppContent() {
       return (
         <LazyErrorBoundary routeName="FETS · LIVE" onGoBack={() => setActiveTab('command-center')}>
           <Suspense fallback={<PageLoadingFallback pageName="FETS · LIVE" />}>
-            <RedesignShell 
-              bridge={setActiveTab} 
-              userName={userName} 
-              userEmail={userEmail} 
-              isAdmin={isAdmin} 
-              onLogout={handleLogout} 
-              activeBranch={activeBranch} 
-              onBranchChange={setActiveBranch} 
+            <RedesignShell
+              bridge={setActiveTab}
+              userName={userName}
+              userEmail={userEmail}
+              isAdmin={isAdmin}
+              onLogout={handleLogout}
+              activeBranch={activeBranch}
+              onBranchChange={setActiveBranch}
               profileBranch={profile?.branch_assigned}
               activeSubPage={subPage}
             />
@@ -333,16 +272,20 @@ function AppContent() {
       )}
 
       <div className={`flex-1 overflow-y-auto mobile-hide-scrollbar relative ${isFullscreenPage ? '' : (isMobile ? 'pt-0' : 'pt-4 px-4 md:px-8 pb-8')}`}>
-        {renderContent()}
+        {isMobile && !SHARED_WORKSPACE_PAGES.includes(activeTab) ? (
+          <div className="mobile-page-frame">
+            <MobileHeader branch={activeBranch} onBranchChange={value => setActiveBranch(value as any)} navigate={id => setActiveTab(mobileToApp(id))} />
+            <div className="mobile-page-content">{renderContent()}</div>
+            <MobileNavigation onLogout={handleLogout} active={appToMobile(activeTab)} navigate={id => setActiveTab(mobileToApp(id))} />
+          </div>
+        ) : renderContent()}
       </div>
 
       <BranchIndicator />
-      <FetsAIAgent userId={user!.id} branch={activeBranch} page={activeTab} navigate={setActiveTab} withMobileNav={isMobile&&!isFullscreenPage} />
+      <FetsAIAgent userId={user!.id} branch={activeBranch} page={activeTab} navigate={setActiveTab} withMobileNav={isMobile} />
 
 
-      {isMobile && !isFullscreenPage && (
-        <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
-      )}
+
 
 
     </div>

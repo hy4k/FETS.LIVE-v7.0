@@ -2,7 +2,7 @@ import * as React from "react"
 
 // Mobile-first responsive breakpoints
 const BREAKPOINTS = {
-  mobile: 640,    // sm
+  mobile: 768,    // sm
   tablet: 768,    // md  
   desktop: 1024,  // lg
   wide: 1280      // xl
