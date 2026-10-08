@@ -8,6 +8,11 @@ import {useWorkspaceCapabilities} from './useWorkspaceCapabilities';
 afterEach(()=>{cleanup();vi.resetAllMocks();});
 const wrapper=({children}:{children:React.ReactNode})=><AuthContext.Provider value={{user:{id:'user'}} as any}>{children}</AuthContext.Provider>;
 describe('workspace activation',()=>{
+ it('enables independent review only after the server advertises it',async()=>{
+  rpc.mockResolvedValueOnce({data:{version:3,desk:true,duties:true,blueprint:true}}).mockResolvedValue({data:{version:4,desk:true,duties:true,blueprint:true,dutyReview:true}});
+  const {result}=renderHook(()=>useWorkspaceCapabilities(),{wrapper});await waitFor(()=>expect(result.current.blueprint).toBe(true));expect(result.current.dutyReview).toBe(false);
+  act(()=>result.current.refresh());await waitFor(()=>expect(result.current.dutyReview).toBe(true));
+ });
  it('stays private until the versioned database probe succeeds, then activates on retry',async()=>{
   rpc.mockResolvedValueOnce({error:{message:'function missing'}}).mockResolvedValue({data:{version:2,desk:true,duties:true}});
   const {result}=renderHook(()=>useWorkspaceCapabilities(),{wrapper});await waitFor(()=>expect(result.current.ready).toBe(true));expect(result.current.duties).toBe(false);
