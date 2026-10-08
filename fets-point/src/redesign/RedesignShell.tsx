@@ -10910,11 +10910,11 @@ const MODULE_COLORS = {
 
 /* primary nav */
 const NAV = [
-  { id: "live", label: "Live" },
   { id: "calendar", label: "Calendar" },
   { id: "roster", label: "Roster" },
   { id: "desk", label: "My Desk" },
   { id: "actionables", label: "Actionables" },
+  { id: "handover", label: "The Shift" },
 ];
 
 /* secondary tools (Lost & Found now lives on the LIVE page under Help & support) */
@@ -11400,7 +11400,7 @@ function AttendanceAdminPage({ branch }) {
 }
 
 function ToolsSheet({ open, onClose, onPick }) {
-  // Live, Calendar, Roster, My Desk and Actionables are on the main menu, so the
+  // Calendar, Roster, My Desk, Actionables and The Shift are on the main menu, so the
   // workspace holds only tools. Who sees which tool: workspace-features.ts,
   // with any per-person choice from User Management.
   const F = window.FETS || {};
