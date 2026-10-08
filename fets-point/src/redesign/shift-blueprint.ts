@@ -29,6 +29,7 @@ export type Responsibility = {
   id: string; branch: string; area: AreaKey; title: string; details: string;
   frequency: Frequency; weekday: number | null; monthday: number | null;
   owner_id: string | null; backup_id: string | null; position: number; active: boolean;
+  expected_result?: string; due_minute?: number | null; priority?: 'normal' | 'important';
 };
 export type TaskStatus = 'open' | 'done' | 'blocked' | 'carried' | 'skipped';
 export type DayTask = {
@@ -36,6 +37,9 @@ export type DayTask = {
   assigned_to: string | null; status: TaskStatus; note: string; carried_from: string | null;
   done_by: string | null; done_at: string | null; created_at?: string;
   verified_by?: string | null; verified_at?: string | null;
+  instructions?: string; expected_result?: string; due_minute?: number | null; priority?: 'normal' | 'important';
+  started_at?: string | null; completion_note?: string; support_category?: string;
+  review_note?: string; rework_count?: number; version?: number;
 };
 /** A task on the day's list: saved, or due from the blueprint and not yet touched. */
 export type ListItem = {

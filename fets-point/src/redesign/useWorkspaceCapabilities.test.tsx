@@ -8,6 +8,10 @@ import {useWorkspaceCapabilities} from './useWorkspaceCapabilities';
 afterEach(()=>{cleanup();vi.resetAllMocks();});
 const wrapper=({children}:{children:React.ReactNode})=><AuthContext.Provider value={{user:{id:'user'}} as any}>{children}</AuthContext.Provider>;
 describe('workspace activation',()=>{
+ it('gates result and personnel writes on the version 5 capability',async()=>{
+  rpc.mockResolvedValueOnce({data:{version:4,desk:true,duties:true,blueprint:true,dutyReview:true,dutyWorkflow:true}}).mockResolvedValue({data:{version:5,desk:true,duties:true,blueprint:true,dutyReview:true,dutyWorkflow:true}});
+  const {result}=renderHook(()=>useWorkspaceCapabilities(),{wrapper});await waitFor(()=>expect(result.current.ready).toBe(true));expect(result.current.dutyWorkflow).toBe(false);act(()=>result.current.refresh());await waitFor(()=>expect(result.current.dutyWorkflow).toBe(true));
+ });
  it('enables independent review only after the server advertises it',async()=>{
   rpc.mockResolvedValueOnce({data:{version:3,desk:true,duties:true,blueprint:true}}).mockResolvedValue({data:{version:4,desk:true,duties:true,blueprint:true,dutyReview:true}});
   const {result}=renderHook(()=>useWorkspaceCapabilities(),{wrapper});await waitFor(()=>expect(result.current.blueprint).toBe(true));expect(result.current.dutyReview).toBe(false);
