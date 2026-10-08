@@ -111,6 +111,7 @@ let tasks: any[] = [
     version: 1,
   },
 ];
+let events: any[] = [];
 const repository: any = {
   roster: async () => team,
   load: async () => ({
@@ -124,7 +125,7 @@ const repository: any = {
       version: 1,
     },
     lead: { lead_id: "p0" },
-    events: [],
+    events,
     changes: [],
     closed: false,
   }),
@@ -155,6 +156,7 @@ const note: any = {
   created_by: "p0",
   evidence_snapshot: [],
 };
+let feedback: any[] = [note];
 function Preview() {
   const [role, setRole] = useState("staff");
   const me = role === "staff" ? "p1" : "p0";
@@ -188,20 +190,93 @@ function Preview() {
         verified_at: a === "verify" ? new Date().toISOString() : null,
       };
       if (a === "verify") next.status = "done";
+      if (a === "return")
+        Object.assign(next, {
+          review_note: n,
+          rework_count: (t.rework_count || 0) + 1,
+          done_by: null,
+          done_at: null,
+        });
+      if (a === "skip") next.status = "skipped";
+      if (a === "reopen") Object.assign(next, { done_by: null, done_at: null });
       tasks = [...tasks.filter((x) => x.id !== t.id), next];
       return next;
     },
+    assign: async (
+      t: any,
+      owner: string,
+      due: number,
+      priority: string,
+      result: string,
+      instructions: string,
+    ) => {
+      const saved = {
+        ...t,
+        assigned_to: owner,
+        due_minute: due,
+        priority,
+        expected_result: result,
+        instructions,
+        version: t.version + 1,
+      };
+      if (t.status === "done")
+        Object.assign(saved, {
+          status: "open",
+          done_by: null,
+          done_at: null,
+          completion_note: "",
+          verified_at: null,
+          verified_by: null,
+        });
+      tasks = [...tasks.filter((x) => x.id !== t.id), saved];
+      return saved;
+    },
+    add: async (i: any) => {
+      const saved = {
+        ...i,
+        id: `local-task-${tasks.length}`,
+        responsibility_id: null,
+        status: "open",
+        note: "",
+        version: 1,
+      };
+      tasks.push(saved);
+      return saved;
+    },
+    closeNote: async (id: string, result: string) => {
+      const saved = {
+        ...feedback.find((n) => n.id === id),
+        status: "closed",
+        followup_result: result,
+        closed_by: me,
+      };
+      feedback = feedback.map((n) => (n.id === id ? saved : n));
+      return saved;
+    },
+    respond: async (id: string, response: string) => {
+      const saved = {
+        ...feedback.find((n) => n.id === id),
+        staff_response: response,
+      };
+      feedback = feedback.map((n) => (n.id === id ? saved : n));
+      return saved;
+    },
     activity: async () => [],
     history: async () => tasks,
-    notes: async () => [note],
-    saveNote: async (i: any) => ({
-      ...i,
-      id: "local-note",
-      created_by: me,
-      evidence_snapshot: [],
-      status: "open",
-      staff_response: "",
-    }),
+    notes: async () =>
+      feedback.filter((n) => role === "manager" || n.profile_id === me),
+    saveNote: async (i: any) => {
+      const saved = {
+        ...i,
+        id: `local-note-${feedback.length}`,
+        created_by: me,
+        evidence_snapshot: tasks.filter((t) => i.task_ids.includes(t.id)),
+        status: "open",
+        staff_response: "",
+      };
+      feedback = [saved, ...feedback];
+      return saved;
+    },
   };
   return (
     <>
@@ -237,7 +312,19 @@ function Preview() {
           name: team.find((p) => p.id === me)!.name,
           admin: role === "manager",
         }}
-        repository={repository}
+        repository={{
+          ...repository,
+          event: async (i: any) => {
+            const event = {
+              ...i,
+              id: `local-event-${events.length}`,
+              actor_id: me,
+              created_at: new Date().toISOString(),
+            };
+            events.push(event);
+            return event;
+          },
+        }}
         blueprint={blueprint}
         work={work}
         workflowReady
