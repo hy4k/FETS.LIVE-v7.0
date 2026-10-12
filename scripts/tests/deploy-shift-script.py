@@ -4,7 +4,7 @@ import json,re,subprocess,sys,tempfile,copy
 script=Path(__file__).parents[1]/'releases/deploy-shift-outcomes.sh'
 blocks=re.findall(r"<<'PY'\n([\s\S]*?)\nPY",script.read_text())
 app='/opt/apps/fets-live'
-container={'Config':{'Image':'fets-live-app','Cmd':['nginx','-g','daemon off;'],'Entrypoint':['/docker-entrypoint.sh'],'Env':['TZ=Asia/Kolkata'],'Labels':{'com.docker.compose.project':'fets-live','com.docker.compose.service':'app','com.docker.compose.project.working_dir':app}},'Mounts':[{'Type':'bind','Source':'/example/nginx','Destination':'/etc/nginx','RW':False,'Propagation':'rprivate'}],'HostConfig':{'PortBindings':{'80/tcp':[{'HostIp':'127.0.0.1','HostPort':'8080'}]},'NetworkMode':'fets-live_default','RestartPolicy':{'Name':'unless-stopped'}}}
+container={'Config':{'Image':'fets-live-app','Cmd':['nginx','-g','daemon off;'],'Entrypoint':['/docker-entrypoint.sh'],'Env':['TZ=Asia/Kolkata','NGINX_VERSION=test'],'Labels':{'com.docker.compose.project':'fets-live','com.docker.compose.service':'app','com.docker.compose.project.working_dir':app}},'Mounts':[{'Type':'bind','Source':'/example/nginx','Destination':'/etc/nginx','RW':False,'Propagation':'rprivate'}],'HostConfig':{'PortBindings':{'80/tcp':[{'HostIp':'127.0.0.1','HostPort':'8080'}]},'NetworkMode':'fets-live_default','RestartPolicy':{'Name':'unless-stopped'}}}
 checks=0
 with tempfile.TemporaryDirectory() as tmp:
  r=Path(tmp)
@@ -18,6 +18,8 @@ with tempfile.TemporaryDirectory() as tmp:
  for name in ['nginx.before','nginx.after']:
   (r/name).mkdir();(r/name/'default.conf').write_text('server { listen 80; }')
  assert run(blocks[-1]).returncode==0;checks+=1
- changed=copy.deepcopy(container);changed['Config']['Env']=['TZ=UTC'];write('container.after.json',[changed]);assert run(blocks[-1]).returncode!=0;checks+=1
+ changed=copy.deepcopy(container);changed['Config']['Env']=list(reversed(container['Config']['Env']));write('container.after.json',[changed]);assert run(blocks[-1]).returncode==0;checks+=1
+ changed=copy.deepcopy(container);changed['Config']['Env']=['TZ=UTC','NGINX_VERSION=test'];write('container.after.json',[changed]);assert run(blocks[-1]).returncode!=0;checks+=1
+ changed=copy.deepcopy(container);changed['Config']['Env']=['TZ=UTC','TZ=Asia/Kolkata'];write('container.after.json',[changed]);assert run(blocks[-1]).returncode!=0;checks+=1
  write('container.after.json',[container]);(r/'nginx.after/default.conf').write_text('server { listen 81; }');assert run(blocks[-1]).returncode!=0;checks+=1
 print(f'{checks} deployment guard checks passed; no server was contacted.')

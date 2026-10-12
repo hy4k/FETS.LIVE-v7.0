@@ -178,7 +178,13 @@ import json,pathlib,sys,hashlib
 r=pathlib.Path(sys.argv[1])
 b=json.loads((r/'container.before.json').read_text())[0]
 a=json.loads((r/'container.after.json').read_text())[0]
-for k in ['Env','Cmd','Entrypoint','User','WorkingDir','ExposedPorts']:
+def envmap(c):
+    entries=c['Config'].get('Env') or []
+    values=dict(item.split('=',1) for item in entries)
+    assert len(values)==len(entries), 'Duplicate environment variable names require inspection'
+    return values
+assert envmap(a)==envmap(b), 'Runtime environment names or values changed'
+for k in ['Cmd','Entrypoint','User','WorkingDir','ExposedPorts']:
     assert a['Config'].get(k)==b['Config'].get(k), 'Runtime configuration changed: '+k
 for k in ['PortBindings','NetworkMode','RestartPolicy','ReadonlyRootfs','Privileged','CapAdd','CapDrop','Memory','MemorySwap','NanoCpus','SecurityOpt','ExtraHosts']:
     assert a['HostConfig'].get(k)==b['HostConfig'].get(k), 'Host configuration changed: '+k
