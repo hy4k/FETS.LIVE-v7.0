@@ -43,8 +43,19 @@ try {
   await as(2);
   const legacy = (await db.query("insert into centre_day_tasks(branch,day,responsibility_id,title,assigned_to,status) values('cochin',$1,$2,'Prepare lab',$3,'done') returning *",[day,resp,uid(2)])).rows[0];
   await as(null, 'postgres');
+  // Reproduce Supabase's broad default grants on newly created tables.
+  await db.exec('alter default privileges in schema public grant all on tables to authenticated');
   await db.exec(await readFile(new URL('../../supabase/migrations/20261008140311_shift_outcomes_and_development.sql',import.meta.url),'utf8'));
+  await db.exec(await readFile(new URL('../../supabase/migrations/20261012163514_shift_development_least_privilege.sql',import.meta.url),'utf8'));
   const action = async(t, op, note='', category='') => (await db.query('select * from fets_shift_task_action($1,$2,$3,$4,$5)',[t.id,t.version,op,note,category])).rows[0];
+  await check('Supabase default grants cannot let clients truncate or delete personnel decisions', async()=> {
+    await as(2);
+    for (const privilege of ['DELETE','TRUNCATE','REFERENCES','TRIGGER']) {
+      assert.equal((await db.query("select has_table_privilege('authenticated','public.centre_staff_development',$1) as allowed",[privilege])).rows[0].allowed,false);
+    }
+    await rejected('truncate public.centre_staff_development',[],/permission denied/);
+    await rejected('delete from public.centre_staff_development',[],/permission denied/);
+  });
   await check('migration preserves prior completion identity and timestamp', async()=> { await as(2); const saved=await getTask(legacy.id); for(const key of Object.keys(legacy)) assert.deepEqual(saved[key],legacy[key]); });
   await as(5);
   await db.query('update centre_responsibilities set expected_result=$2,due_minute=600 where id=$1',[resp,'Every station passes a readiness check']);
