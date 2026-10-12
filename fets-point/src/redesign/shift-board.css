@@ -1,0 +1,52 @@
+.sb-summary, .sb-rotation-bar, .sb-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 20px; margin-bottom: 20px; }
+.sb-summary h2 { margin: 6px 0; font-size: 28px; color: var(--ts-ink); }
+.sb-summary p { display: flex; align-items: center; gap: 6px; margin: 8px 0; }
+.sb-counts { display: flex; flex-wrap: wrap; gap: 20px; }
+.sb-counts span { display: grid; gap: 4px; font-size: 12px; color: var(--ts-soft); }
+.sb-counts strong { font-size: 26px; color: var(--ts-ink); }
+.sb-rotation-bar { border: 1px solid var(--ts-line); background: var(--ts-sage-soft); padding: 16px 20px; border-radius: 14px; }
+.sb-rotation-bar small { display: block; margin-top: 6px; color: var(--ts-soft); }
+.sb-rotation-bar a { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ts-sage); white-space: nowrap; }
+.sb-staff-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.sb-staff-grid.sb-mine { grid-template-columns: minmax(0, 720px); }
+.sb-person { min-width: 0; padding: 18px; }
+.sb-person h3 { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 5px; font-size: 17px; }
+.sb-person header small { color: var(--ts-soft); }
+.sb-current-post { display: grid; gap: 7px; border-radius: 10px; background: var(--ts-sage-soft); padding: 14px; margin: 16px 0; }
+.sb-current-post > span { font-size: 11px; color: var(--ts-soft); }
+.sb-current-post strong { font-size: 15px; }
+.sb-current-post small, .sb-current-post p { font-size: 12px; margin: 0; }
+.sb-check-due { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 0; border-top: 1px solid #c9d6bc; }
+.sb-warning { color: #925125; }
+.sb-jobs { list-style: none; padding: 0; margin: 0; }
+.sb-job { padding: 14px 0; border-top: 1px solid var(--ts-line); overflow-wrap: anywhere; }
+.sb-board .sb-job { margin: 0; padding: 12px 0; }
+.sb-board .sb-job-details { margin: 4px 0 0; }
+.sb-job-heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; align-items: start; }
+.sb-job-heading strong { font-size: 14px; font-weight: 600; }
+.sb-status { font-size: 10px; padding: 3px 6px; border-radius: 5px; background: #f1eee4; color: #605839; white-space: nowrap; }
+.sb-status.is-verified { background: var(--ts-sage-soft); color: var(--ts-sage); }
+.sb-job-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 10px; }
+.sb-board .dw-link { border: 0; background: transparent; color: var(--ts-sage); cursor: pointer; padding: 8px 0; }
+.sb-board button:disabled { cursor: default; opacity: .5; }
+.sb-board button[aria-pressed="true"] { background: var(--ts-sage-soft); border-color: var(--ts-sage); color: var(--ts-ink); }
+.sb-job-actions button, .sb-check-due button { min-height: 40px; }
+.sb-job-details { margin-top: 10px; font-size: 12px; color: var(--ts-soft); }
+.sb-job-details summary, .sb-finished summary, .sb-full-rota > summary { cursor: pointer; padding: 8px 0; }
+.sb-job-options { display: grid; gap: 10px; }
+.sb-job-options label { display: grid; gap: 6px; }
+.sb-job-options select { max-width: 100%; background: white; border: 1px solid var(--ts-line); border-radius: 6px; padding: 8px; }
+.sb-finished { border-top: 1px solid var(--ts-line); font-size: 12px; margin-top: 12px; }
+.sb-full-rota { margin: 20px 0; border: 1px solid var(--ts-line); border-radius: 14px; padding: 12px 18px; }
+.sb-full-rota > summary { font-weight: 600; }
+.sb-add-job { margin: 16px 0; }
+.sb-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+@media (max-width: 1100px) { .sb-staff-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 700px) {
+  .sb-staff-grid, .sb-staff-grid.sb-mine { grid-template-columns: minmax(0, 1fr); }
+  .sb-summary, .sb-rotation-bar { align-items: stretch; flex-direction: column; gap: 12px; }
+  .sb-toolbar { flex-wrap: wrap; gap: 8px; }
+  .sb-counts { justify-content: space-between; gap: 8px; }
+  .sb-board .ts-inline-form { flex-wrap: wrap; }
+  .sb-board .ts-inline-form input { flex-basis: 100%; }
+}

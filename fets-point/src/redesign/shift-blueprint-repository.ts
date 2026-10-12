@@ -45,6 +45,9 @@ export const blueprintRepository = {
     }).select().single());
   },
   async removeTask(id: string) { checked(await db.from('centre_day_tasks').delete().eq('id', id)); },
+  async verifyTask(task: DayTask): Promise<DayTask> {
+    return checked(await db.rpc('fets_verify_day_task', { task_id: task.id, expected_done_at: task.done_at }));
+  },
   /** Open Actionables duties for these people. */
   async actionables(people: string[]): Promise<ActionableDuty[]> {
     if (!people.length) return [];

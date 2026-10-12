@@ -1,160 +1,1037 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowUpRight, ArrowRight, CalendarDays, Check, Clock, Coffee, Crown, Download, Flag, RefreshCw, ShieldCheck, Users } from 'lucide-react';
-import { useAuth } from '../hooks/useAuth';
-import { centreDate } from './operations-data';
-import { LANES, laneInfo, createDayPlan, validatePlan, clock, minutes, monday, monthWeeks, checkpoints, ownerAt, blockReview, type DayPlan, type TeamMember, type PlanRecord, type DutyEvent, type LeadWeek, type DutyReport, type CoverageChange, resolvedOwner, ownedBlock, validateRemainingCoverage } from './shift-plan';
-import { shiftRepository, type ShiftRepository } from './shift-repository';
-import './duty-workspace.css';
-import { useWorkspaceCapabilities } from './useWorkspaceCapabilities';
-import CoverageEditor from './CoverageEditor';
-import { pendingHandoverDay } from '../fets-ai/handover-draft';
-import { blueprintRepository, type BlueprintRepository } from './shift-blueprint-repository';
-import { Blueprint, DayReport, TodayBoard, reportAsText, shareOnWhatsApp } from './TheShift';
+import WorkDetail from "./ShiftDuty";
+import DevelopmentReview from "./ShiftDevelopment";
+import { LiveResponsibility, ShiftTimetable } from "./ShiftCoverage";
+import type { DayData } from "./shift-work-types";
+import React, { useEffect, useState } from "react";
+import {ArrowUpRight, CheckCheck, ChevronRight, Plus, RefreshCw, ShieldCheck, Users} from 'lucide-react';
+import { useAuth } from "../hooks/useAuth";
+import { centreDate } from "./operations-data";
+import {clock, minutes, type TeamMember} from './shift-plan';
+import {shortDutyTitle} from './shift-board';
+import {dayList, actionablesDue, type DayTask, type ListItem, type ActionableDuty} from './shift-blueprint';
+import { shiftRepository, type ShiftRepository } from "./shift-repository";
+import {
+  blueprintRepository,
+  type BlueprintRepository,
+} from "./shift-blueprint-repository";
+import { workRepository, type WorkRepository } from "./shift-work-repository";
+import {
+  contract,
+  orderedWork,
+  overdue,
+  workState,
+  WORK_LABELS,
+  type WorkAction,
+} from "./shift-work";
+import { Blueprint, DayReport, dayLead, type ShiftIdentity } from "./TheShift";
+import { DayWorkspace, MonthPlanner, Reports } from "./DutyPlanning";
+import { useWorkspaceCapabilities } from "./useWorkspaceCapabilities";
+import "./duty-workspace.css";
+import "./shift-workspace.css";
 
-type Identity = { id:string; profileId:string; name:string; admin:boolean };
-const message = (e:unknown) => e instanceof Error ? e.message : 'Could not save. Please try again.';
-const read = <T,>(key:string,fallback:T):T => { try { return JSON.parse(localStorage.getItem(key)||'null') ?? fallback; } catch { return fallback; } };
-const write = (key:string,value:unknown) => { localStorage.setItem(key,JSON.stringify(value)); };
-const draftKey = (id:string,branch:string,day:string) => `fets-duty-draft:${id}:${branch}:${day}`;
-const leadKey = (id:string,branch:string,week:string) => `fets-duty-lead:${id}:${branch}:${week}`;
-const nameOf = (team:TeamMember[],id:string) => team.find(p=>p.id===id)?.name || (id ? 'Assigned colleague' : 'Not assigned');
-const indiaMinute = (date:Date) => { const t=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit',hour12:false}).format(date);return minutes(t); };
-function PersonSelect({value,team,onChange,label,disabled=false}:{value:string;team:TeamMember[];onChange:(value:string)=>void;label:string;disabled?:boolean}) {
-  return <select aria-label={label} value={value} onChange={e=>onChange(e.target.value)} disabled={disabled}><option value="">Choose a colleague</option>{value && !team.some(p=>p.id===value) && <option value={value}>Assigned colleague · not rostered today</option>}{team.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>;
-}
-export default function DutyWorkspace({branch,navigate,legacy,repository=shiftRepository,blueprint=blueprintRepository,cloud:cloudOverride,blueprintReady}:{branch:string;navigate:(page:string)=>void;legacy?:React.ReactNode;repository?:ShiftRepository;blueprint?:BlueprintRepository;cloud?:boolean;blueprintReady?:boolean}) {
-  const {user,profile}=useAuth();
-  const capabilities=useWorkspaceCapabilities(cloudOverride===undefined);
-  const cloud=cloudOverride ?? capabilities.duties;
-  const hasBlueprint=cloud&&(blueprintReady ?? capabilities.blueprint);
-  const identity:Identity={id:user?.id||'',profileId:profile?.id||'',name:profile?.full_name||'Your team',admin:['super_admin','Super Admin'].includes(profile?.role)};
-  const [tab,setTab]=useState<'today'|'blueprint'|'planning'|'report'>(branch==='global'?'report':'today');
-  const [day,setDay]=useState(()=>pendingHandoverDay(branch)||centreDate()); const [month,setMonth]=useState(day.slice(0,7));
-  const [draftRevision,setDraftRevision]=useState(0);
-  const [archive,setArchive]=useState(false);
-  useEffect(()=>{const onDraft=(event:Event)=>{const detail=(event as CustomEvent<{branch:string;day:string}>).detail;if(detail?.branch===branch){setDay(detail.day);setTab('report');setDraftRevision(x=>x+1);}};window.addEventListener('fets-handover-draft',onDraft);return()=>window.removeEventListener('fets-handover-draft',onDraft);},[branch]);
-  useEffect(()=>{const go=(event:Event)=>{const t=(event as CustomEvent<string>).detail;if(t==='blueprint'||t==='today'||t==='planning'||t==='report')setTab(t);};document.addEventListener('the-shift-tab',go);return()=>document.removeEventListener('the-shift-tab',go);},[]);
-  const rota=<DayWorkspace key={`${identity.id}:${branch}:${day}:${cloud}:${draftRevision}`} {...{branch,day,identity,repository,cloud}} embedded={hasBlueprint}/>;
-  const dayPicker=(label:string)=><div className="dw-toolbar"><label>{label}<input type="date" value={day} onChange={e=>{if(e.target.value)setDay(e.target.value);}}/></label><span>All times are India time.</span></div>;
-  return <div className="duty-workspace">
-    <header className="planning-header"><div><span className="planning-eyebrow">FETS / THE SHIFT</span><h1>The Shift<span>.</span></h1><p>Who does what, today and every day. One lead a week, a blueprint for every job, and a report at the end of each day.</p></div><div className="planning-stamp"><Crown size={22}/><span>{branch==='global'?'All centres':branch}<small>Weekly lead · 90-minute exam floor turns</small></span></div></header>
-    <nav className="dw-tabs" aria-label="The Shift"><div>{([['today','Today'],['blueprint','Blueprint'],['planning','Plan ahead'],['report','Day report']] as const).map(([id,label])=><button key={id} aria-pressed={tab===id} onClick={()=>setTab(id)}>{label}</button>)}</div><button className="dw-link" onClick={()=>navigate('roster')}>Open roster <ArrowUpRight size={14}/></button></nav>
-    {!cloud && <div className="dw-notice" role="status">Shared duty planning is awaiting activation. You can prepare a private planning draft here; assignments, checks and reports are not yet shared with the team. <button onClick={capabilities.refresh}>Check database setup</button></div>}
-    {cloud && !hasBlueprint && (tab==='today'||tab==='blueprint'||tab==='report') && <div className="dw-notice" role="status">The blueprint and daily job lists need one database update (<code>20261002090000_the_shift_blueprint.sql</code>). The exam floor rota and reports keep working meanwhile. <button onClick={capabilities.refresh}>Check again</button></div>}
-    {branch==='global' && tab!=='report' ? <section className="dw-empty"><Users size={32}/><h2>One centre, one clear plan.</h2><p>Select a centre from the app’s centre selector to see its day. Day reports bring the centres together.</p></section> : <>
-      {tab==='today' && <>{dayPicker('Day')}{hasBlueprint?<TodayBoard key={`${branch}:${day}`} {...{branch,day,identity,repository,blueprint,navigate}}>{rota}</TodayBoard>:rota}</>}
-      {tab==='blueprint' && (hasBlueprint?<Blueprint key={branch} {...{branch,identity,repository,blueprint}}/>:<section className="dw-empty"><Crown size={30}/><h2>The blueprint is one update away.</h2><p>Once the database update is in, every job in the centre gets an owner and a backup here.</p></section>)}
-      {tab==='planning' && <><div className="dw-toolbar"><label>Planning month<input type="month" value={month} onChange={e=>{if(e.target.value)setMonth(e.target.value);}}/></label><span>Set the roster first, then choose leads and prepare daily duties.</span></div><MonthPlanner key={`${identity.id}:${branch}:${month}:${cloud}`} {...{branch,month,identity,repository,cloud}} openDay={d=>{setDay(d);setTab('today');}}/></>}
-    </>}
-    {tab==='report' && <>
-      {branch!=='global' && hasBlueprint && <>{dayPicker('Report for')}<DayReport key={`${branch}:${day}:${draftRevision}`} {...{branch,day,identity,repository,blueprint}}/></>}
-      <div className="dw-toolbar"><label>Earlier reports<input type="month" value={month} onChange={e=>{if(e.target.value)setMonth(e.target.value);}}/></label><span>Sent by the lead. Acknowledged by the super admin.</span></div>
-      <Reports key={`${branch}:${month}:${cloud}`} {...{branch,month,identity,repository,cloud}}/>
-      {legacy && <details className="dw-legacy" onToggle={e=>setArchive((e.target as HTMLDetailsElement).open)}><summary>Earlier handover records</summary>{archive&&legacy}</details>}
-    </>}
-  </div>;
-}
-function DayWorkspace({branch,day,identity,repository,cloud,embedded=false}:{branch:string;day:string;identity:Identity;repository:ShiftRepository;cloud:boolean;embedded?:boolean}) {
-  const [team,setTeam]=useState<TeamMember[]>([]); const [plan,setPlan]=useState<DayPlan|null>(null); const [record,setRecord]=useState<PlanRecord|null>(null);
-  const [lead,setLead]=useState(''); const [events,setEvents]=useState<DutyEvent[]>([]); const [loading,setLoading]=useState(true); const [error,setError]=useState(''); const [status,setStatus]=useState(''); const [busy,setBusy]=useState(false);
-  const [now,setNow]=useState(new Date()); const [note,setNote]=useState('');
-  const [changes,setChanges]=useState<CoverageChange[]>([]);const [closed,setClosed]=useState(false);
-  const [focus,setFocus]=useState<'mine'|'team'>('mine'); const [reload,setReload]=useState(0);
-  useEffect(()=>{const timer=setInterval(()=>setNow(new Date()),15000);return()=>clearInterval(timer);},[]);
-  useEffect(()=>{let live=true;setLoading(true);setError('');
-    (async()=>{
-      const roster=await repository.roster(branch,day);
-      const shared=cloud?await repository.load(branch,day):{record:null,lead:null,events:[]};
-      if (!live)return;
-      setTeam(roster);setRecord(shared.record);setEvents(shared.events);setChanges((shared as any).changes||[]);setClosed(Boolean((shared as any).closed));
-      setLead(shared.record?.lead_id||shared.lead?.lead_id||read(leadKey(identity.id,branch,monday(day)),''));
-      setPlan(shared.record?.plan || read<DayPlan|null>(draftKey(identity.id,branch,day),null) || createDayPlan(roster));
-    })().catch(e=>{if(live)setError(message(e));}).finally(()=>{if(live)setLoading(false);});return()=>{live=false;};
-  },[branch,day,identity.id,repository,cloud,reload]);
-  const published=record?.status==='published';
-  const leadChanges=changes.filter(c=>c.kind==='lead'&&(day<centreDate(now)||(day===centreDate(now)&&c.starts<=indiaMinute(now))));
-  const effectiveLead=leadChanges[leadChanges.length-1]?.staff_id||plan?.actingLead||lead;
-  useEffect(()=>{
-    if(!cloud||!published)return;
-    let live=true;
-    const timer=setInterval(()=>{if(document.visibilityState==='visible')repository.load(branch,day).then(data=>{if(live){setEvents(data.events);setChanges(data.changes||[]);setClosed(Boolean(data.closed));}}).catch(()=>{if(live)setError('Team updates could not refresh. Your last loaded updates are still shown.');});},30000);
-    return()=>{live=false;clearInterval(timer);};
-  },[cloud,published,repository,branch,day]);
-  const canManage=identity.admin || Boolean(effectiveLead && identity.profileId===effectiveLead);
-  const time=indiaMinute(now);const isToday=day===centreDate(now);
-  const issues=plan?(published?validateRemainingCoverage(plan,team,changes,effectiveLead,day<centreDate(now)?1020:isToday?time:480):validatePlan(plan,team,effectiveLead)):[];
-  const active=plan?.blocks.findIndex(b=>time>=b.start&&time<b.end)??-1;
-  const change=(next:DayPlan)=>{setPlan(next);setStatus('Unsaved planning changes');};
-  const act=async(fn:()=>Promise<void>)=>{setBusy(true);setError('');setStatus('');try{await fn();}catch(e){setError(message(e));}finally{setBusy(false);}};
-  const save=(publish=false)=>act(async()=>{
-    if (!plan)return;
-    if(publish && issues.length)throw new Error('Resolve the planning gaps before publishing.');
-    if(!cloud){write(draftKey(identity.id,branch,day),plan);setStatus('Private draft saved in this browser. Nothing has been published.');return;}
-    const saved=await repository.savePlan(branch,day,effectiveLead,plan,record,publish);setRecord(saved);setPlan(saved.plan);setStatus(publish?'Published to the centre team.':'Shared draft saved.');
+const errorText = (e: unknown) =>
+  e instanceof Error ? e.message : "Could not save. Please try again.";
+const localMinute = (d: Date) =>
+  minutes(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Kolkata",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(d),
+  );
+const dateLabel = (d: string) =>
+  new Date(`${d}T12:00:00Z`).toLocaleDateString("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    timeZone: "Asia/Kolkata",
   });
-  const log=(block:number,lane:typeof LANES[number],kind:DutyEvent['kind'],due:number,noteValue=note)=>act(async()=>{
-    if(!record)return;
-    const event=await repository.event({plan_id:record.id,block,lane,kind,due,note:noteValue});
-    setEvents(old=>[...old,event]);setNote('');setStatus(kind==='verify'?'Reviewed.':kind==='return'?'Returned to the owner with your note.':'Recorded with your name and the current time.');
-  });
-  if(loading)return <div className="dw-empty">Loading the roster and duty plan…</div>;
-  if(!plan)return <div className="dw-notice" role="alert">{error||'The plan could not be loaded.'}<button onClick={()=>setReload(n=>n+1)}>Try again</button></div>;
-  const points=checkpoints(plan,changes);
-  const completed=points.filter(p=>events.some(e=>e.block===p.block&&e.lane===p.lane&&e.kind===p.kind&&e.due===p.due));
-  const late=points.filter(p=>((day<centreDate(now))||(isToday&&p.due<time))&&!completed.includes(p));
-  const nextCheck=points.find(p=>p.owner===identity.profileId && isToday && p.due>=time && !completed.includes(p));
-  return <>
-    {error&&<div className="dw-notice dw-error" role="alert">{error}</div>}{status&&<div className="dw-notice" role="status">{status}</div>}
-    {!embedded&&<div className="dw-shift-intro"><section><span className="planning-eyebrow">{published?'PUBLISHED SHIFT PLAN':'PLANNING DRAFT'}</span><h2>{published?'Know your part. Own your day.':'Build the day around your people.'}</h2><p>{published?'Your updates carry your name. Ask for support early, and pass on anything still open.':'Confirm shift hours, review the rotation and agree break cover before sharing with the team.'}</p><div className="dw-team-faces">{team.map(p=><span key={p.id} title={`${p.name} · ${p.code}`}><b>{p.name.split(' ').map(n=>n[0]).slice(0,2).join('')}</b>{p.name.split(' ')[0]}</span>)}{!team.length&&<span>No working staff found in this date’s roster.</span>}</div></section><aside><Crown size={24}/><span>{plan.actingLead?'ACTING LEAD TODAY':'THIS WEEK’S LEAD'}</span><h3>{nameOf(team,effectiveLead)}</h3><p>The lead owns duties too, supports colleagues, reviews updates and sends the day report.</p></aside></div>}
-    {!published && <>
-      <section className="dw-card"><div className="dw-section-head"><div><span className="planning-eyebrow">01 / CONFIRM THE TEAM</span><h2>Who is here, and when?</h2></div><span className="dw-pill">{team.length} rostered</span></div><p className="dw-muted">Shift codes alone do not prove working hours. Confirm each person’s start and finish before publishing. A gap at opening needs relief cover or a revised roster.</p>
-        <div className="dw-availability">{plan.availability.map((a,i)=><div key={a.staff}><strong>{nameOf(team,a.staff)}<small>Roster: {team.find(p=>p.id===a.staff)?.code||'No longer rostered'}</small></strong><label>Starts<input type="time" value={clock(a.start)} disabled={!canManage} onChange={e=>change({...plan,availability:plan.availability.map((x,j)=>j===i?{...x,start:minutes(e.target.value),confirmed:false}:x)})}/></label><label>Finishes<input type="time" value={clock(a.end)} disabled={!canManage} onChange={e=>change({...plan,availability:plan.availability.map((x,j)=>j===i?{...x,end:minutes(e.target.value),confirmed:false}:x)})}/></label><label className="dw-checkbox"><input type="checkbox" checked={a.confirmed} disabled={!canManage} onChange={e=>change({...plan,availability:plan.availability.map((x,j)=>j===i?{...x,confirmed:e.target.checked}:x)})}/>Hours confirmed</label></div>)}</div>
-        {canManage&&<><label className="dw-field">Acting lead for this day <PersonSelect value={plan.actingLead} team={team} label="Acting lead" onChange={v=>change({...plan,actingLead:v})}/><small>Use when the weekly lead is off. This does not change the weekly assignment.</small></label><button className="dw-secondary" onClick={()=>change(createDayPlan(team))}>Rebuild draft from current roster</button></>}
-      </section>
-      <section className="dw-card"><div className="dw-section-head"><div><span className="planning-eyebrow">02 / SHARE THE RESPONSIBILITY</span><h2>The 90-minute rhythm</h2></div><span className="dw-pill">08:00–17:00</span></div><p className="dw-muted">Each lane has a named owner. Regular duties travel with the lane; edit the additional work for this date.</p><div className="dw-table-wrap"><table className="dw-rotation"><thead><tr><th>India time</th>{LANES.map(l=><th key={l}><span className={`dw-dot ${laneInfo[l].color}`}/>{laneInfo[l].title}<small>{l==='floor'?'Walk every 10 min':l==='control'?'DVR every 6 min':'Candidate care & administration'}</small></th>)}</tr></thead><tbody>{plan.blocks.map((b,i)=><tr key={i}><th>{clock(b.start)}<small>to {clock(b.end)}</small><span>Block {i+1}</span></th>{LANES.map(l=><td key={l} className={laneInfo[l].color}><PersonSelect value={b.owners[l]} team={team} disabled={!canManage} label={`Block ${i+1} ${laneInfo[l].title} owner`} onChange={v=>change({...plan,blocks:plan.blocks.map((x,j)=>i===j?{...x,owners:{...x.owners,[l]:v}}:x)})}/><input aria-label={`Block ${i+1} ${laneInfo[l].title} additional duties`} value={b.duties[l]} disabled={!canManage} placeholder="Additional duties, if any" maxLength={400} onChange={e=>change({...plan,blocks:plan.blocks.map((x,j)=>i===j?{...x,duties:{...x.duties,[l]:e.target.value}}:x)})}/></td>)}</tr>)}</tbody></table></div></section>
-      <section className="dw-card"><div className="dw-section-head"><div><span className="planning-eyebrow">03 / PROTECT THE BREAKS</span><h2>Someone has your back.</h2></div><Coffee size={25}/></div><p className="dw-muted">The lead names cover before every break. With three staff, cover combines responsibilities: record the arrangement and request relief if both duties cannot be handled safely.</p><div className="dw-break-grid">{plan.breaks.map((b,i)=><div key={i}><div><Coffee size={16}/><strong>{nameOf(team,b.staff)}</strong></div><span>{clock(b.start)}–{clock(b.end)}</span><PersonSelect value={b.cover} team={team.filter(p=>p.id!==b.staff)} disabled={!canManage} label={`Cover for ${nameOf(team,b.staff)} at ${clock(b.start)}`} onChange={v=>change({...plan,breaks:plan.breaks.map((x,j)=>j===i?{...x,cover:v}:x)})}/><input aria-label={`Coverage arrangement at ${clock(b.start)}`} placeholder="How will both duties be covered?" value={b.note} disabled={!canManage} maxLength={500} onChange={e=>change({...plan,breaks:plan.breaks.map((x,j)=>i===j?{...x,note:e.target.value}:x)})}/></div>)}</div></section>
-      <section className="dw-card dw-publish"><div><h2>{issues.length?'A few things need a decision.':'Ready to share with the team.'}</h2><p className="dw-muted">Publishing locks the agreed plan and enables named updates. Resolve roster changes before publication.</p>{issues.length>0&&<details><summary>{issues.length} planning gaps</summary><ul>{issues.map(issue=><li key={issue}>{issue}</li>)}</ul></details>}</div>{canManage?<div className="dw-actions"><button className="dw-secondary" onClick={()=>save()} disabled={busy}>Save {cloud?'shared':'private'} draft</button><button className="dw-primary" disabled={busy||!cloud||issues.length>0} onClick={()=>save(true)}>Publish shift plan <ArrowRight size={16}/></button></div>:<p className="dw-muted">The super admin or assigned lead prepares and publishes the plan.</p>}</section>
-    </>}
-    {published && <>
-      {closed&&<div className="dw-notice" role="status">The day report has been sent. This shift’s records are closed; view the snapshot in Day report.</div>}
-      <CoverageEditor {...{record:record!,plan,team,changes,repository}} canManage={canManage&&!closed} onSaved={change=>{setChanges(old=>[...old,change]);setStatus('Coverage change saved with its author, reason and effective time.');}}/>
-      <div className="dw-live-stats"><div><span>Recorded checks</span><strong>{completed.length}<small> / {points.length}</small></strong></div><div><span>Past due, unrecorded</span><strong>{late.length}</strong></div><div><span>Your next check</span><strong>{nextCheck?clock(nextCheck.due):'—'}</strong><small>{nextCheck?.kind==='walk'?'Lab walk':nextCheck?'DVR check':'No upcoming check in today’s plan'}</small></div><button className="dw-secondary" onClick={()=>setReload(x=>x+1)} disabled={busy}><RefreshCw size={16}/>Refresh team updates</button></div>
-      {issues.length>0&&<div className="dw-notice dw-error"><strong>The current roster no longer matches this published plan.</strong><p>Ask the lead to resolve coverage before relying on these assignments.</p><details><summary>View gaps</summary><ul>{issues.map(x=><li key={x}>{x}</li>)}</ul></details></div>}
-      <section className="dw-card"><div className="dw-section-head"><div><span className="planning-eyebrow">{isToday&&active>=0?'HAPPENING NOW':'THE AGREED DAY PLAN'}</span><h2>{isToday&&active>=0?`${clock(plan.blocks[active].start)}–${clock(plan.blocks[active].end)}`:'Your rotation'}</h2></div><div className="dw-actions"><button className="dw-secondary" aria-pressed={focus==='mine'} onClick={()=>setFocus('mine')}>My part</button><button className="dw-secondary" aria-pressed={focus==='team'} onClick={()=>setFocus('team')}>Whole team</button></div></div>
-        <label className="dw-field">Update or support note<textarea value={note} maxLength={2000} onChange={e=>setNote(e.target.value)} placeholder="What was done? What needs attention? Avoid candidate ID numbers or personal documents."/></label>
-        <div className="dw-duty-cards">{plan.blocks.flatMap((b,block)=>LANES.filter(l=>focus==='team'||ownedBlock(plan,block,l,identity.profileId,changes)).map(l=>{
-          const owns=ownedBlock(plan,block,l,identity.profileId,changes);const review=blockReview(events,block,l);const due=points.filter(p=>p.block===block&&p.lane===l&&p.owner===identity.profileId&&isToday&&p.due<=time&&time<p.due+(p.kind==='walk'?10:6)&&!completed.includes(p));
-          return <article className={`dw-duty-card ${laneInfo[l].color} ${isToday&&block===active?'is-now':''}`} key={`${block}:${l}`}><div className="dw-section-head"><span>{clock(b.start)}–{clock(b.end)}</span><span className="dw-pill">{review==='verify'?'Reviewed':review==='submit'?'Awaiting review':review==='return'?'Needs follow-up':'Not submitted'}</span></div><h3>{laneInfo[l].title}</h3><strong>{nameOf(team,b.owners[l])}{b.owners[l]===effectiveLead?' · Lead':''}</strong><p>{laneInfo[l].tasks}</p>{b.duties[l]&&<p className="dw-extra">{b.duties[l]}</p>}{changes.filter(c=>c.kind==='coverage'&&c.block===block&&c.lane===l).map(c=><small key={c.id}>Updated cover: {nameOf(team,c.staff_id)} · {clock(c.starts)}–{clock(c.ends)}<br/>{c.reason}</small>)}
-            {plan.breaks.filter(p=>p.staff===b.owners[l]&&p.start<b.end&&p.end>b.start).map(p=><small key={p.start}>Break {clock(p.start)}–{clock(p.end)} · cover: {nameOf(team,p.cover)}<br/>{p.note}</small>)}
-            {due.length>0&&<div className="dw-check-due"><span>{due.length} unrecorded {l==='floor'?'walks':'DVR checks'}</span><button className="dw-primary" disabled={busy||closed} onClick={()=>log(block,l,l==='floor'?'walk':'dvr',due[due.length-1].due)}><Check size={15}/>Record {clock(due[due.length-1].due)} check</button><small>Records the latest due check now. Earlier missed checks remain visible; no backfilling.</small></div>}
-            <div className="dw-actions">{owns&&isToday&&time>=b.end&&review!=='verify'&&<button className="dw-secondary" disabled={busy||closed||!note.trim()} onClick={()=>log(block,l,'submit',b.end)}>Submit block update</button>}{(owns||resolvedOwner(plan,block,l,time,changes)===identity.profileId)&&isToday&&<button className="dw-secondary" disabled={busy||closed||!note.trim()} onClick={()=>log(block,l,'support',0)}><Flag size={13}/>Need support</button>}{canManage&&review==='submit'&&!ownedBlock(plan,block,l,identity.profileId,changes)&&<><button className="dw-primary" disabled={busy||closed} onClick={()=>log(block,l,'verify',0,'Reviewed block update')}>Review complete</button><button className="dw-secondary" disabled={busy||closed||!note.trim()} onClick={()=>log(block,l,'return',0)}>Return with note</button></>}</div>
-            {events.filter(e=>e.block===block&&e.lane===l&&['submit','support','return'].includes(e.kind)).slice(-2).map(e=><p className="dw-event-note" key={e.id}><b>{nameOf(team,e.actor_id)}</b> · {e.note}</p>)}
-          </article>;
-        }))}</div>
-        <a className="dw-external" href="https://fets.online/t" target="_blank" rel="noreferrer">Open candidate calling screen <ArrowUpRight size={14}/></a>
-      </section>
-    </>}
-  </>;
+type Props = {
+  branch: string;
+  navigate: (page: string) => void;
+  legacy?: React.ReactNode;
+  repository?: ShiftRepository;
+  blueprint?: BlueprintRepository;
+  work?: WorkRepository;
+  cloud?: boolean;
+  blueprintReady?: boolean;
+  workflowReady?: boolean;
+};
+export default function DutyWorkspace(props: Props) {
+  const { user, profile } = useAuth();
+  const caps = useWorkspaceCapabilities(props.cloud === undefined);
+  const identity = {
+    id: user?.id || "",
+    profileId: profile?.id || "",
+    name: profile?.full_name || "Colleague",
+    admin: ["super_admin", "Super Admin"].includes(profile?.role),
+  };
+  return (
+    <ShiftWorkplace
+      key={`${props.branch}:${identity.id}`}
+      {...props}
+      identity={identity}
+      cloud={props.cloud ?? caps.duties}
+      workflowReady={props.workflowReady ?? caps.dutyWorkflow}
+      refreshSetup={caps.refresh}
+    />
+  );
 }
-function MonthPlanner({branch,month,identity,repository,cloud,openDay}:{branch:string;month:string;identity:Identity;repository:ShiftRepository;cloud:boolean;openDay:(day:string)=>void}) {
-  const [roster,setRoster]=useState<Record<string,TeamMember[]>>({}); const [leads,setLeads]=useState<LeadWeek[]>([]); const [choices,setChoices]=useState<Record<string,string>>({});const [loading,setLoading]=useState(true);const [error,setError]=useState('');const [status,setStatus]=useState('');const [busy,setBusy]=useState(false);
-  const weeks=useMemo(()=>monthWeeks(month),[month]);
-  useEffect(()=>{let live=true;(async()=>{const r=await repository.monthRoster(branch,month);const saved=cloud?await repository.leads(branch,weeks[0],weeks[weeks.length-1]):[];if(!live)return;setRoster(r);setLeads(saved);setChoices(Object.fromEntries(weeks.map(w=>[w,saved.find(x=>x.week_start===w)?.lead_id||read(leadKey(identity.id,branch,w),'')])));})().catch(e=>{if(live)setError(message(e));}).finally(()=>{if(live)setLoading(false);});return()=>{live=false;};},[branch,month,identity.id,cloud,repository,weeks]);
-  const candidates=(week:string)=>Array.from(new Map(Object.entries(roster).filter(([day])=>monday(day)===week).flatMap(([,people])=>people.map(p=>[p.id,p] as const))).values()).sort((a,b)=>a.name.localeCompare(b.name));
-  const save=async(week:string)=>{setBusy(true);setError('');try{if(cloud){const result=await repository.saveLead(branch,week,choices[week],leads.find(w=>w.week_start===week));setLeads(old=>[...old.filter(w=>w.week_start!==week),result]);setStatus('Weekly lead saved for the centre.');}else{write(leadKey(identity.id,branch,week),choices[week]);setStatus('Lead choice saved privately in this browser.');}}catch(e){setError(message(e));}finally{setBusy(false);}};
-  if(loading)return <div className="dw-empty">Reading the month’s roster…</div>;
-  return <>{error&&<div className="dw-notice dw-error" role="alert">{error}</div>}{status&&<div className="dw-notice" role="status">{status}</div>}
-    <section className="dw-card"><div className="dw-section-head"><div><span className="planning-eyebrow">A CHANCE TO LEAD</span><h2>One week. One accountable lead.</h2></div><Crown size={26}/></div><p className="dw-muted">Choose from people rostered that week. Keep the same lead Monday–Sunday; use a named acting lead on their rest day. Spread opportunities fairly and account for experience and exam requirements.</p><div className="dw-week-grid">{weeks.map((week,i)=>{const team=candidates(week);return <article key={week}><span>WEEK {i+1}</span><h3>From {new Date(`${week}T12:00Z`).toLocaleDateString('en-GB',{day:'numeric',month:'short',timeZone:'UTC'})}</h3><PersonSelect value={choices[week]||''} team={team} label={`Lead for week ${week}`} disabled={!identity.admin||busy} onChange={v=>setChoices(old=>({...old,[week]:v}))}/><small>{team.length} people rostered this week in the selected month</small>{identity.admin&&<button className="dw-secondary" disabled={busy||!choices[week]} onClick={()=>save(week)}>Save {cloud?'lead':'private choice'}</button>}</article>;})}</div></section>
-    <section className="dw-card"><div className="dw-section-head"><div><span className="planning-eyebrow">FROM ROSTER TO RESPONSIBILITY</span><h2>Prepare each working day.</h2></div><CalendarDays size={24}/></div><p className="dw-muted">The draft starts from that day’s roster, never from a fixed list of names. Days with fewer than three staff need a coverage decision. Opening a day does not publish assignments.</p><div className="dw-day-grid">{Object.entries(roster).sort(([a],[b])=>a.localeCompare(b)).map(([date,people])=><button key={date} onClick={()=>openDay(date)}><span>{new Date(`${date}T12:00Z`).toLocaleDateString('en-GB',{weekday:'short',timeZone:'UTC'})}</span><strong>{Number(date.slice(-2))}</strong><small className={people.length<3?'dw-gap':''}>{people.length} rostered{people.length<3?' · coverage gap':''}</small><ArrowUpRight size={14}/></button>)}</div>{!Object.keys(roster).length&&<p className="dw-empty">No working shifts found. Create the month’s roster first.</p>}</section>
-    <section className="dw-card dw-growth"><Crown size={27}/><div><h2>Responsibility is recognition.</h2><p>Everyone keeps a meaningful role, including the lead. Use the daily report to recognise good judgement, teamwork and timely support—not a leaderboard of clicks.</p></div></section>
-  </>;
+
+/** One destination for work. Planning and personnel decisions never sit underneath staff's task list. */
+export function ShiftWorkplace({
+  branch,
+  navigate,
+  identity,
+  legacy,
+  repository = shiftRepository,
+  blueprint = blueprintRepository,
+  work = workRepository,
+  cloud = true,
+  workflowReady = false,
+  refreshSetup = () => {},
+}: Props & { identity: ShiftIdentity; refreshSetup?: () => void }) {
+  const [day, setDay] = useState(centreDate());
+  const [view, setView] = useState<
+    "mine" | "team" | "planning" | "development" | "report"
+  >(identity.admin ? "team" : "mine");
+  const [planning, setPlanning] = useState<"contracts" | "rota" | "leads">(
+    "contracts",
+  );
+  const [data, setData] = useState<DayData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [reload, setReload] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [now, setNow] = useState(new Date());
+  const [selected, setSelected] = useState("");
+  const [person, setPerson] = useState("all");
+  const [filter, setFilter] = useState("active");
+  const [adding, setAdding] = useState(false);
+  const [showSchedule, setShowSchedule] = useState(false);
+  useEffect(() => {
+    const tick = () => {
+      setNow(new Date());
+      if (!busy && document.visibilityState === "visible")
+        setReload((n) => n + 1);
+    };
+    const timer = window.setInterval(tick, 30000);
+    window.addEventListener("focus", tick);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", tick);
+    };
+  }, [busy]);
+  useEffect(() => {
+    setData(null);
+    setLoading(true);
+    setSelected("");
+    setPerson("all");
+    setError("");
+  }, [branch, day]);
+  useEffect(() => {
+    if (branch === "global" || !cloud || busy) {
+      if (!cloud || branch === "global") setLoading(false);
+      return;
+    }
+    let live = true;
+    Promise.all([
+      repository.roster(branch, day),
+      blueprint.staff(branch),
+      repository.load(branch, day),
+      blueprint.responsibilities(branch),
+      blueprint.tasks(branch, day),
+      workflowReady
+        ? work.access(branch, day)
+        : Promise.resolve({ lead: identity.admin, manager: identity.admin }),
+    ])
+      .then(async ([team, people, shared, jobs, tasks, access]) => {
+        let actionables: ActionableDuty[] = [];
+        let actionablesFailed = false;
+        try {
+          actionables = await blueprint.actionables([
+            ...new Set([...people, ...team].map((p) => p.id)),
+          ]);
+        } catch {
+          actionablesFailed = true;
+        }
+        if (live) {
+          setData({
+            team,
+            people,
+            ...shared,
+            weekLead: shared.lead?.lead_id ?? null,
+            changes: shared.changes || [],
+            closed: Boolean(shared.closed),
+            jobs,
+            tasks,
+            actionables,
+            actionablesFailed,
+            lead: access.lead,
+            manager: access.manager,
+          });
+          setError("");
+        }
+      })
+      .catch((e) => {
+        if (live) setError(errorText(e));
+      })
+      .finally(() => {
+        if (live) setLoading(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [
+    branch,
+    day,
+    cloud,
+    repository,
+    blueprint,
+    work,
+    workflowReady,
+    reload,
+    busy,
+    identity.admin,
+  ]);
+  useEffect(() => {
+    const onTab = (event: Event) => {
+      const tab = (event as CustomEvent<string>).detail;
+      if (tab === "report") setView("report");
+      else if (tab === "planning") {
+        setView("planning");
+        setPlanning("leads");
+      } else if (tab === "blueprint") {
+        setView("planning");
+        setPlanning("contracts");
+      }
+    };
+    const draft = (event: Event) => {
+      const detail = (event as CustomEvent<{ branch: string; day: string }>)
+        .detail;
+      if (detail?.branch === branch) {
+        setDay(detail.day);
+        setView("report");
+      }
+    };
+    document.addEventListener("the-shift-tab", onTab);
+    window.addEventListener("fets-handover-draft", draft);
+    return () => {
+      document.removeEventListener("the-shift-tab", onTab);
+      window.removeEventListener("fets-handover-draft", draft);
+    };
+  }, [branch]);
+  const today = centreDate(now);
+  const time = localMinute(now);
+  const items = data
+    ? dayList(data.jobs, data.tasks, day, new Set(data.team.map((p) => p.id)))
+    : [];
+  const leadId = data
+    ? dayLead(data.record, data.weekLead, data.changes, now)
+    : "";
+  const canLead = Boolean(
+    data && (data.lead || leadId === identity.profileId || identity.admin),
+  );
+  const manager = Boolean(data?.manager || identity.admin);
+  const names = (id: string | null) =>
+    [...(data?.people || []), ...(data?.team || [])].find((p) => p.id === id)
+      ?.name || (id ? "Assigned colleague" : "Not assigned");
+  const act = async (fn: () => Promise<void>, success?: string) => {
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      await fn();
+      if (success) setNotice(success);
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const replace = (saved: DayTask) =>
+    setData(
+      (d) =>
+        d && {
+          ...d,
+          tasks: [...d.tasks.filter((t) => t.id !== saved.id), saved],
+        },
+    );
+  const transition = (
+    item: ListItem,
+    action: WorkAction,
+    note = "",
+    category = "",
+  ) =>
+    act(
+      async () => {
+        const task = await work.ensure(item, branch, day);
+        replace(await work.action(task, action, note, category));
+      },
+      action === "complete"
+        ? "Result submitted. An independent reviewer will check it."
+        : action === "verify"
+          ? "Work verified."
+          : "Duty updated.",
+    );
+  const myItems = items.filter((i) => i.assignee === identity.profileId);
+  const base =
+    view === "mine"
+      ? myItems
+      : items.filter(
+          (i) =>
+            person === "all" ||
+            i.assignee === person ||
+            (person === "none" && !i.assignee),
+        );
+  const list = orderedWork(base).filter(
+    (i) =>
+      filter === "all" ||
+      (filter === "active"
+        ? !["verified", "carried", "skipped"].includes(workState(i))
+        : filter === "overdue"
+          ? overdue(i, day, today, time)
+          : workState(i) === filter),
+  );
+  const chosen = list.find((i) => i.key === selected) || list[0];
+  const sharedProps = { branch, day, identity, repository, blueprint };
+  const showView = (next: typeof view) => {
+    setView(next);
+    setFilter("active");
+    setSelected("");
+    setNotice("");
+  };
+  return (
+    <main className="shift-workplace">
+      <header className="sw-header">
+        <div>
+          <span className="sw-eyebrow">FETS / DAILY WORK</span>
+          <h1>
+            The Shift<span>.</span>
+          </h1>
+          <p>Know your part. Do it well. Get the support you need.</p>
+        </div>
+        <label className="sw-date">
+          Working day
+          <input
+            type="date"
+            aria-label="Working day"
+            value={day}
+            onChange={(e) => {
+              if (e.target.value) setDay(e.target.value);
+            }}
+          />
+          <small>
+            India time · {branch === "global" ? "Choose a centre" : branch}
+          </small>
+        </label>
+      </header>
+      {branch === "global" ? (
+        <section className="sw-empty">
+          <Users />
+          <h2>Start with one centre.</h2>
+          <p>
+            Select Calicut or Cochin from the top menu. Each has its own people,
+            responsibilities and work records.
+          </p>
+        </section>
+      ) : (
+        <>
+          <nav className="sw-nav" aria-label="Shift workspace">
+            <button
+              aria-current={view === "mine" ? "page" : undefined}
+              onClick={() => showView("mine")}
+            >
+              My day
+            </button>
+            <button
+              aria-current={view === "team" ? "page" : undefined}
+              onClick={() => showView("team")}
+            >
+              Team day
+            </button>
+            {canLead && (
+              <button
+                aria-current={view === "planning" ? "page" : undefined}
+                onClick={() => showView("planning")}
+              >
+                Plan & responsibilities
+              </button>
+            )}
+            <button
+              aria-current={view === "development" ? "page" : undefined}
+              onClick={() => showView("development")}
+            >
+              {manager ? "Review & development" : "My feedback"}
+            </button>
+            {canLead && (
+              <button
+                aria-current={view === "report" ? "page" : undefined}
+                onClick={() => showView("report")}
+              >
+                Day report
+              </button>
+            )}
+          </nav>
+          {!cloud && (
+            <section className="sw-empty">
+              <h2>Your shared duties could not be opened.</h2>
+              <p>Check your connection and centre access, then try again.</p>
+              <button onClick={refreshSetup}>Try again</button>
+            </section>
+          )}
+          {cloud && !workflowReady && (
+            <div className="sw-notice" role="status">
+              Your existing duties are shown below. The new work and feedback
+              actions are awaiting activation.
+              <button onClick={refreshSetup}>Check again</button>
+            </div>
+          )}
+          {error && (
+            <div role="alert" className="sw-error">
+              {error}
+              <button onClick={() => setReload((n) => n + 1)}>
+                Refresh records
+              </button>
+            </div>
+          )}
+          {notice && (
+            <div role="status" className="sw-notice">
+              {notice}
+            </div>
+          )}
+          {loading && !data && (
+            <div className="sw-empty">Loading the centre’s agreed work…</div>
+          )}
+          {data && (
+            <>
+              {(view === "mine" || view === "team") && (
+                <>
+                  <div className="sw-day-heading">
+                    <div>
+                      <span className="sw-eyebrow">
+                        {dateLabel(day)} ·{" "}
+                        {view === "mine" ? identity.name : "THE CENTRE TEAM"}
+                      </span>
+                      <h2>
+                        {view === "mine"
+                          ? "Your work, clearly laid out."
+                          : "Make the day work for everyone."}
+                      </h2>
+                      <p>
+                        Lead:{" "}
+                        <strong>
+                          {leadId ? names(leadId) : "Not assigned yet"}
+                        </strong>
+                        {leadId === identity.profileId
+                          ? " · You also own your regular duties."
+                          : " · Your first contact for priorities and support."}
+                      </p>
+                    </div>
+                    <button
+                      className="sw-icon"
+                      aria-label="Refresh duties"
+                      onClick={() => setReload((n) => n + 1)}
+                      disabled={busy}
+                    >
+                      <RefreshCw size={18} />
+                    </button>
+                  </div>
+                  {data.closed && (
+                    <div className="sw-notice">
+                      This day is closed. Its work and evidence are kept for
+                      reference.
+                    </div>
+                  )}
+                  {view === "mine" && (
+                    <LiveResponsibility
+                      data={data}
+                      day={day}
+                      today={today}
+                      time={time}
+                      identity={identity}
+                      names={names}
+                      busy={busy}
+                      onCheck={(point) =>
+                        void act(async () => {
+                          if (data.record) {
+                            const saved = await repository.event({
+                              plan_id: data.record.id,
+                              block: point.block,
+                              lane: point.lane,
+                              kind: point.kind,
+                              due: point.due,
+                              note: "",
+                            });
+                            setData(
+                              (d) =>
+                                d && { ...d, events: [...d.events, saved] },
+                            );
+                          }
+                        }, "Check recorded at the current time.")
+                      }
+                    />
+                  )}
+                  {view === "team" && (
+                    <div className="sw-metrics" aria-label="Team work status">
+                      {(
+                        [
+                          ["unassigned", "Need an owner"],
+                          ["help", "Need support"],
+                          ["review", "Ready for review"],
+                          ["verified", "Verified"],
+                        ] as const
+                      ).map(([key, label]) => (
+                        <button
+                          key={key}
+                          aria-pressed={filter === key}
+                          onClick={() => {
+                            setFilter(key);
+                            setPerson("all");
+                          }}
+                        >
+                          <strong>
+                            {items.filter((i) => workState(i) === key).length}
+                          </strong>
+                          <span>{label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="sw-list-toolbar">
+                    <div className="sw-filters" aria-label="Filter duties">
+                      {[
+                        ["active", "Active work"],
+                        ["review", "Review"],
+                        ["verified", "Verified"],
+                        ["overdue", "Past target"],
+                        ["all", "All"],
+                      ].map(([id, label]) => (
+                        <button
+                          key={id}
+                          aria-pressed={filter === id}
+                          onClick={() => setFilter(id)}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    {view === "team" && (
+                      <label className="sw-person-filter">
+                        <span>Owner</span>
+                        <select
+                          aria-label="Filter by owner"
+                          value={person}
+                          onChange={(e) => setPerson(e.target.value)}
+                        >
+                          <option value="all">Everyone</option>
+                          <option value="none">Not assigned</option>
+                          {[
+                            ...new Map(
+                              [...data.team, ...data.people].map((p) => [
+                                p.id,
+                                p,
+                              ]),
+                            ).values(),
+                          ].map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                  </div>
+                  <div className="sw-work-grid">
+                    <section
+                      className="sw-work-list"
+                      aria-label={view === "mine" ? "My duties" : "Team duties"}
+                    >
+                      <header>
+                        <h3>
+                          {view === "mine" ? "My duties" : "Daily assignments"}
+                        </h3>
+                        <span>{list.length}</span>
+                      </header>
+                      {list.length ? (
+                        list.map((item) => (
+                          <button
+                            className={`sw-work-item ${chosen?.key === item.key ? "is-selected" : ""}`}
+                            key={item.key}
+                            aria-pressed={chosen?.key === item.key}
+                            onClick={() => {
+                              setSelected(item.key);
+                              if (
+                                window.matchMedia?.("(max-width: 800px)")
+                                  ?.matches
+                              )
+                                requestAnimationFrame(() =>
+                                  document
+                                    .querySelector(".sw-detail")
+                                    ?.scrollIntoView?.({
+                                      behavior: "smooth",
+                                      block: "start",
+                                    }),
+                                );
+                            }}
+                          >
+                            <span
+                              className={`sw-state-dot is-${workState(item)}`}
+                            />
+                            <span>
+                              <strong>{shortDutyTitle(item.title)}</strong>
+                              <small>
+                                {view === "team"
+                                  ? `${names(item.assignee)} · `
+                                  : ""}
+                                {contract(item).due !== null
+                                  ? `By ${clock(contract(item).due!)}`
+                                  : "Today · time not set"}
+                                {overdue(item, day, today, time)
+                                  ? " · Past target"
+                                  : ""}
+                              </small>
+                              <span
+                                className={`sw-state is-${workState(item)}`}
+                              >
+                                {WORK_LABELS[workState(item)]}
+                              </span>
+                            </span>
+                            <ChevronRight size={16} />
+                          </button>
+                        ))
+                      ) : (
+                        <div className="sw-empty">
+                          <CheckCheck size={26} />
+                          <h3>
+                            {base.length
+                              ? "Nothing in this view."
+                              : "No duties assigned yet."}
+                          </h3>
+                          <p>
+                            {base.length
+                              ? "Use All to see the complete list."
+                              : "The lead assigns the work for this day. This does not mean the centre has no work."}
+                          </p>
+                        </div>
+                      )}
+                      {canLead && (
+                        <button
+                          className="sw-add"
+                          disabled={!workflowReady || data.closed}
+                          onClick={() => setAdding(true)}
+                        >
+                          <Plus size={16} /> Assign a duty
+                        </button>
+                      )}
+                    </section>
+                    {chosen ? (
+                      <WorkDetail
+                        key={`${chosen.key}:${day}`}
+                        item={chosen}
+                        names={names}
+                        team={data.team}
+                        me={identity.profileId}
+                        canLead={canLead}
+                        closed={data.closed}
+                        ready={workflowReady}
+                        busy={busy}
+                        work={work}
+                        transition={transition}
+                        assign={(owner, due, priority, result, instructions) =>
+                          void act(async () => {
+                            const task = await work.ensure(chosen, branch, day);
+                            replace(
+                              await work.assign(
+                                task,
+                                owner,
+                                due,
+                                priority,
+                                result,
+                                instructions,
+                              ),
+                            );
+                          }, "Assignment agreed.")
+                        }
+                      />
+                    ) : (
+                      <section className="sw-detail sw-detail-empty">
+                        <ShieldCheck size={30} />
+                        <h3>One owner. One clear result.</h3>
+                        <p>
+                          Select a duty to see its agreement, result and review
+                          in one place.
+                        </p>
+                      </section>
+                    )}
+                  </div>
+                  {data.actionablesFailed ? (
+                    <div className="sw-notice">
+                      Actionables could not be loaded.{" "}
+                      <button onClick={() => navigate("actionables")}>
+                        Open Actionables
+                      </button>
+                    </div>
+                  ) : (
+                    actionablesDue(data.actionables, day).filter(
+                      (a) =>
+                        view === "team" || a.owner_id === identity.profileId,
+                    ).length > 0 && (
+                      <div className="sw-linked-work">
+                        <div>
+                          <strong>Outreach work stays in Actionables</strong>
+                          <p>
+                            {
+                              actionablesDue(data.actionables, day).filter(
+                                (a) =>
+                                  view === "team" ||
+                                  a.owner_id === identity.profileId,
+                              ).length
+                            }{" "}
+                            open items are due. Record their results there so
+                            work is not counted twice.
+                          </p>
+                        </div>
+                        <button onClick={() => navigate("actionables")}>
+                          Open Actionables <ArrowUpRight size={15} />
+                        </button>
+                      </div>
+                    )
+                  )}
+                  <div className="sw-schedule-toggle">
+                    <button
+                      onClick={() => setShowSchedule((v) => !v)}
+                      aria-expanded={showSchedule}
+                    >
+                      {showSchedule ? "Hide" : "View"}{" "}
+                      {view === "mine"
+                        ? "my timetable & handover"
+                        : "team coverage & handovers"}
+                    </button>
+                    <a
+                      href="https://fets.online"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Candidate calling <ArrowUpRight size={14} />
+                    </a>
+                  </div>
+                  {showSchedule && (
+                    <ShiftTimetable
+                      data={data}
+                      identity={identity}
+                      names={names}
+                      day={day}
+                      today={today}
+                      time={time}
+                      teamView={view === "team"}
+                      canLead={canLead}
+                      busy={busy}
+                      log={(block, lane, kind, note) =>
+                        act(async () => {
+                          if (data.record) {
+                            const saved = await repository.event({
+                              plan_id: data.record.id,
+                              block,
+                              lane,
+                              kind,
+                              due:
+                                kind === "submit"
+                                  ? data.record.plan.blocks[block].end
+                                  : 0,
+                              note,
+                            });
+                            setData(
+                              (d) =>
+                                d && { ...d, events: [...d.events, saved] },
+                            );
+                          }
+                        }, "Handover recorded.")
+                      }
+                    />
+                  )}
+                </>
+              )}
+              {view === "planning" &&
+                (canLead ? (
+                  <>
+                    <div className="sw-section-intro">
+                      <h2>Agree the work before the day starts.</h2>
+                      <p>
+                        Set one owner, a backup, a clear result and a target
+                        time. Recurring duties appear when due; the roster
+                        decides whether the owner or backup is working.
+                      </p>
+                    </div>
+                    <div className="sw-filters">
+                      {[
+                        ["contracts", "Responsibilities"],
+                        ["rota", "Daily coverage"],
+                        ["leads", "Weekly leads"],
+                      ].map(([id, label]) => (
+                        <button
+                          key={id}
+                          aria-pressed={planning === id}
+                          onClick={() => setPlanning(id as typeof planning)}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    {planning === "contracts" && (
+                      <Blueprint
+                        branch={branch}
+                        identity={identity}
+                        repository={repository}
+                        blueprint={blueprint}
+                        workflowReady={workflowReady}
+                        canPlan={canLead}
+                      />
+                    )}
+                    {planning === "rota" && (
+                      <DayWorkspace
+                        key={`${branch}:${day}`}
+                        {...{ branch, day, identity, repository, cloud }}
+                        embedded
+                        canPlan={manager}
+                      />
+                    )}
+                    {planning === "leads" && (
+                      <MonthPlanner
+                        branch={branch}
+                        month={day.slice(0, 7)}
+                        identity={identity}
+                        repository={repository}
+                        cloud={cloud}
+                        canPlan={manager}
+                        openDay={(d) => {
+                          setDay(d);
+                          setPlanning("rota");
+                        }}
+                      />
+                    )}
+                  </>
+                ) : (
+                  <div className="sw-empty">
+                    The lead manages work agreements. Open My day to see your
+                    responsibilities.
+                  </div>
+                ))}
+              {view === "development" && (
+                <DevelopmentReview
+                  key={`${branch}:${manager}:${workflowReady}`}
+                  branch={branch}
+                  me={identity.profileId}
+                  people={data.people}
+                  manager={manager}
+                  ready={workflowReady}
+                  work={work}
+                />
+              )}
+              {view === "report" && canLead && (
+                <>
+                  <DayReport {...sharedProps} canPlan={manager} />
+                  <Reports
+                    branch={branch}
+                    month={day.slice(0, 7)}
+                    identity={identity}
+                    repository={repository}
+                    cloud={cloud}
+                  />
+                  {legacy && (
+                    <details className="sw-legacy">
+                      <summary>Earlier handover records</summary>
+                      {legacy}
+                    </details>
+                  )}
+                </>
+              )}
+            </>
+          )}
+        </>
+      )}
+      {adding && data && (
+        <AddDuty
+          team={data.team}
+          close={() => setAdding(false)}
+          busy={busy}
+          error={error}
+          save={(input) =>
+            void act(async () => {
+              replace(await work.add({ ...input, branch, day }));
+              setAdding(false);
+              setFilter("all");
+            }, "Duty assigned with a clear result.")
+          }
+        />
+      )}
+    </main>
+  );
 }
-function Reports({branch,month,identity,repository,cloud}:{branch:string;month:string;identity:Identity;repository:ShiftRepository;cloud:boolean}) {
-  const [rows,setRows]=useState<DutyReport[]>([]);const [error,setError]=useState('');const [loading,setLoading]=useState(cloud);const [busy,setBusy]=useState(false);
-  useEffect(()=>{if(!cloud)return;let live=true;repository.reports(branch,month).then(data=>{if(live)setRows(data);}).catch(e=>{if(live)setError(message(e));}).finally(()=>{if(live)setLoading(false);});return()=>{live=false;};},[branch,month,cloud,repository]);
-  const download=(r:DutyReport)=>{const blob=new Blob([JSON.stringify(r,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`fets-${r.branch}-${r.day}-report.json`;a.click();URL.revokeObjectURL(url);};
-  return <section className="dw-card"><div className="dw-section-head"><div><span className="planning-eyebrow">CENTRE REPORTS</span><h2>The day, with nothing lost.</h2></div><span className="dw-pill">{rows.filter(r=>!r.acknowledged_at).length} awaiting acknowledgement</span></div>{error&&<div className="dw-notice dw-error" role="alert">{error}</div>}{loading?<p className="dw-empty">Loading reports…</p>:!rows.length?<div className="dw-empty"><ShieldCheck size={35}/><h3>No reports submitted here yet.</h3><p>Published shifts finish with a lead’s report. The super admin can review all centres from the global view.</p></div>:rows.map(r=>{
-    const snapshotEvents=r.snapshot.events||[];const expected=checkpoints(r.snapshot.plan,r.snapshot.changes||[]);const count=expected.filter(p=>snapshotEvents.some(e=>e.block===p.block&&e.lane===p.lane&&e.kind===p.kind&&e.due===p.due)).length;const reviewed=r.snapshot.plan.blocks.flatMap((_,i)=>LANES.map(l=>blockReview(snapshotEvents,i,l))).filter(s=>s==='verify').length;
-    return <article className="dw-report" key={r.id}><div className="dw-section-head"><div><span className="planning-eyebrow">{r.branch} · {r.day}</span><h3>{r.acknowledged_at?'Acknowledged':'Ready for review'}</h3></div><div className="dw-actions"><button className="dw-secondary" onClick={()=>shareOnWhatsApp(reportAsText(r,'the lead'))}>WhatsApp</button><button className="dw-secondary" onClick={()=>download(r)}><Download size={14}/>Export</button></div></div><div className="dw-report-counts"><span>{count}/{expected.length} checks recorded</span><span>{reviewed}/18 blocks reviewed</span>{(r.snapshot as any).tasks&&<span>{(r.snapshot as any).tasks.filter((t:any)=>t.status==='done').length}/{(r.snapshot as any).tasks.filter((t:any)=>t.status!=='carried'&&t.status!=='skipped').length} jobs done</span>}<span>{snapshotEvents.filter(e=>e.kind==='support').length} support updates</span></div>{(r.snapshot.changes||[]).length>0&&<details><summary>Coverage changes ({r.snapshot.changes!.length})</summary>{r.snapshot.changes!.map(c=><p key={c.id}>{c.kind==='lead'?'Acting lead':`Block ${c.block!+1} · ${laneInfo[c.lane!].title}`} · {clock(c.starts)}–{clock(c.ends)}<br/>{c.reason}</p>)}</details>}<h4>Centre summary</h4><p>{r.summary}</p><h4>Open items and next owners</h4><p>{r.followups}</p>{r.recognition&&<><h4>Thank you, team</h4><p>{r.recognition}</p></>}<details><summary>Recorded updates ({snapshotEvents.length})</summary>{snapshotEvents.map(e=><p key={e.id}>Block {e.block+1} · {laneInfo[e.lane].title} · {e.kind} {e.due?clock(e.due):''}<br/>{e.note}<small>{new Date(e.created_at).toLocaleString('en-GB',{timeZone:'Asia/Kolkata'})} IST</small></p>)}</details>{identity.admin&&!r.acknowledged_at&&<button className="dw-primary" disabled={busy} onClick={async()=>{setBusy(true);try{await repository.acknowledge(r.id);setRows(old=>old.map(x=>x.id===r.id?{...x,acknowledged_at:new Date().toISOString()}:x));}catch(e){setError(message(e));}finally{setBusy(false);}}}><Check size={15}/>Acknowledge report</button>}</article>;
-  })}</section>;
+
+function AddDuty({
+  team,
+  busy,
+  close,
+  save,
+  error,
+}: {
+  team: TeamMember[];
+  busy: boolean;
+  close: () => void;
+  error: string;
+  save: (input: {
+    title: string;
+    assigned_to: string;
+    expected_result: string;
+    instructions: string;
+    due_minute: number;
+    priority: string;
+  }) => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [owner, setOwner] = useState("");
+  const [result, setResult] = useState("");
+  const [instructions, setInstructions] = useState("");
+  const [due, setDue] = useState("");
+  const [priority, setPriority] = useState("normal");
+  const ref = React.useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    ref.current?.querySelector("input")?.focus();
+    return () => previous?.focus();
+  }, []);
+  return (
+    <div
+      className="sw-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Assign a duty"
+      ref={ref}
+      onKeyDown={(e) => {
+        if (e.key === "Escape" && !busy) close();
+        if (e.key === "Tab") {
+          const nodes = ref.current?.querySelectorAll<HTMLElement>(
+            "input,textarea,select,button:not(:disabled)",
+          );
+          if (!nodes?.length) return;
+          const first = nodes[0],
+            last = nodes[nodes.length - 1];
+          if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }}
+    >
+      <form
+        className="sw-modal"
+        onSubmit={(e) => {
+          e.preventDefault();
+          save({
+            title: title.trim(),
+            assigned_to: owner,
+            expected_result: result.trim(),
+            instructions: instructions.trim(),
+            due_minute: minutes(due),
+            priority,
+          });
+        }}
+      >
+        <header>
+          <div>
+            <span className="sw-eyebrow">AGREE THE OUTCOME</span>
+            <h2>Assign a duty</h2>
+          </div>
+          <button
+            type="button"
+            aria-label="Close assignment"
+            disabled={busy}
+            onClick={close}
+          >
+            ×
+          </button>
+        </header>
+        {error && (
+          <p className="sw-error" role="alert">
+            {error}
+          </p>
+        )}
+        <label>
+          Duty
+          <input
+            required
+            maxLength={160}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+        </label>
+        <label>
+          Owner
+          <select
+            required
+            value={owner}
+            onChange={(e) => setOwner(e.target.value)}
+          >
+            <option value="">Choose someone on today’s roster</option>
+            {team.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Done means
+          <textarea
+            required
+            maxLength={2000}
+            value={result}
+            onChange={(e) => setResult(e.target.value)}
+            placeholder="What result should the reviewer be able to confirm?"
+          />
+        </label>
+        <label>
+          Instructions
+          <textarea
+            maxLength={2000}
+            value={instructions}
+            onChange={(e) => setInstructions(e.target.value)}
+          />
+        </label>
+        <div className="sw-form-row">
+          <label>
+            Target time
+            <input
+              required
+              type="time"
+              value={due}
+              onChange={(e) => setDue(e.target.value)}
+            />
+          </label>
+          <label>
+            Priority
+            <select
+              value={priority}
+              onChange={(e) => setPriority(e.target.value)}
+            >
+              <option value="normal">Normal</option>
+              <option value="important">Important</option>
+            </select>
+          </label>
+        </div>
+        <button
+          className="sw-primary"
+          disabled={busy || !title.trim() || !owner || !result.trim() || !due}
+        >
+          {busy ? "Saving…" : "Agree & assign duty"}
+        </button>
+      </form>
+    </div>
+  );
 }

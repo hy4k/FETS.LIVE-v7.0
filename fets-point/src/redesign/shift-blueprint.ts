@@ -29,12 +29,17 @@ export type Responsibility = {
   id: string; branch: string; area: AreaKey; title: string; details: string;
   frequency: Frequency; weekday: number | null; monthday: number | null;
   owner_id: string | null; backup_id: string | null; position: number; active: boolean;
+  expected_result?: string; due_minute?: number | null; priority?: 'normal' | 'important';
 };
 export type TaskStatus = 'open' | 'done' | 'blocked' | 'carried' | 'skipped';
 export type DayTask = {
   id: string; branch: string; day: string; responsibility_id: string | null; title: string;
   assigned_to: string | null; status: TaskStatus; note: string; carried_from: string | null;
   done_by: string | null; done_at: string | null; created_at?: string;
+  verified_by?: string | null; verified_at?: string | null;
+  instructions?: string; expected_result?: string; due_minute?: number | null; priority?: 'normal' | 'important';
+  started_at?: string | null; completion_note?: string; support_category?: string;
+  review_note?: string; rework_count?: number; version?: number;
 };
 /** A task on the day's list: saved, or due from the blueprint and not yet touched. */
 export type ListItem = {
@@ -126,6 +131,8 @@ export function draftReport(input: {
 }) {
   const { items, names, checks, actionables } = input;
   const all = progress(items);
+  const reviewEnabled = items.some(i => i.task?.verified_at !== undefined);
+  const awaitingReview = items.filter(i => i.status === 'done' && !i.task?.verified_at);
   const people = [...new Set(items.map(i => i.assignee).filter((x): x is string => Boolean(x)))];
   const done = people.map(p => {
     const list = items.filter(i => i.assignee === p && i.status === 'done').map(i => i.title);
@@ -133,13 +140,15 @@ export function draftReport(input: {
   }).filter(Boolean);
   const summary = [
     `Tasks: ${all.done} of ${all.total} done.`,
+    ...(reviewEnabled ? [`Reviews: ${all.done - awaitingReview.length} verified; ${awaitingReview.length} awaiting review.`] : []),
     `Exam floor checks: ${checks.recorded} of ${checks.expected} recorded${checks.missed ? `, ${checks.missed} missed` : ''}.`,
     ...done,
   ].join('\n');
   const open = items.filter(i => i.status === 'open' || i.status === 'blocked' || i.status === 'carried')
     .map(i => `${i.title} · ${names(i.assignee)}${i.status === 'blocked' ? ` · blocked: ${i.note}` : i.status === 'carried' ? ' · moved to tomorrow' : ''}`);
   const overdue = actionables.map(a => `Actionables: ${a.title}${a.institution?.name ? ` (${a.institution.name})` : ''} · ${names(a.owner_id)} · due ${a.due_date}`);
-  const followups = [...open, ...overdue].join('\n') || 'None';
+  const reviews = reviewEnabled ? awaitingReview.map(i => `${i.title} · ${names(i.assignee)} · awaiting review`) : [];
+  const followups = [...open, ...reviews, ...overdue].join('\n') || 'None';
   return { summary, followups };
 }
 

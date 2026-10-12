@@ -41,6 +41,12 @@ describe('who does it', () => {
 });
 
 describe('the lead’s report', () => {
+  it('distinguishes completed work from independently verified work', () => {
+    const items = dayList([], [task('x', { status: 'done', verified_by: null, verified_at: null })], '2026-10-02', new Set(['a']));
+    const report = draftReport({ items, names: () => 'Aysha', checks: { recorded: 0, expected: 0, missed: 0 }, actionables: [] });
+    expect(report.summary).toContain('0 verified; 1 awaiting review');
+    expect(report.followups).toContain('Task x · Aysha · awaiting review');
+  });
   it('drafts what was done and what carries over, Actionables included', () => {
     const items = dayList([job('1'), job('2', { owner_id: 'b' })], [task('t', { responsibility_id: '1', status: 'done' }), task('u', { responsibility_id: '2', assigned_to: 'b', status: 'blocked', note: 'No ink' })], '2026-10-02', new Set(['a', 'b']));
     const names = (id: string | null) => ({ a: 'Aysha', b: 'Bindu' } as Record<string, string>)[id ?? ''] ?? 'Nobody yet';
