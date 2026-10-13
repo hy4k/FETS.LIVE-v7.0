@@ -1,0 +1,86 @@
+{
+  "auditCriteria": [
+    {
+      "id": "c1",
+      "text": "Workstation OS: Windows 10/11 64-bit clean install (No piracy/adware)",
+      "weight": 10
+    },
+    {
+      "id": "c2",
+      "text": "RAM & CPU: Minimum 4GB RAM + Intel i3/i5 multi-core processor",
+      "weight": 10
+    },
+    {
+      "id": "c3",
+      "text": "Display: Minimum 15-inch monitor (1024x768 or higher native resolution)",
+      "weight": 10
+    },
+    {
+      "id": "c4",
+      "text": "Physical Spacing: 4 feet (1.2m) separation OR rigid 18-inch privacy partitions",
+      "weight": 10
+    },
+    {
+      "id": "c5",
+      "text": "Internet Connection: Dedicated commercial static IP line (10+ Mbps wired Ethernet)",
+      "weight": 10
+    },
+    {
+      "id": "c6",
+      "text": "Zero-Latency Power: Commercial Online UPS with battery bank (min 30 min runtime)",
+      "weight": 10
+    },
+    {
+      "id": "c7",
+      "text": "Emergency Power: Automatic Diesel Generator (DG) synchronization",
+      "weight": 10
+    },
+    {
+      "id": "c8",
+      "text": "CCTV Surveillance: High-res cameras covering every candidate screen with zero blind spots",
+      "weight": 10
+    },
+    {
+      "id": "c9",
+      "text": "Proctor Command: Dedicated administrator PC overlooking candidate room",
+      "weight": 10
+    },
+    {
+      "id": "c10",
+      "text": "Security & Lockers: Lockable candidate storage & strict no-cellphone check-in gate",
+      "weight": 10
+    }
+  ],
+  "programmeGroups": [
+    {
+      "title": "IT, Cloud & Cybersecurity",
+      "programmes": [
+        "Amazon Web Services (AWS)",
+        "Microsoft Azure & Role-Based",
+        "Cisco (CCNA, CCNP)",
+        "CompTIA (Security+, Network+)",
+        "Oracle & VMware Certifications"
+      ]
+    },
+    {
+      "title": "Chartered Accounting & Finance",
+      "programmes": [
+        "ACCA (Session & On-Demand CBE)",
+        "US CMA (Institute of Mgmt Accountants)",
+        "CIMA (Chartered Global Mgmt Acct)",
+        "CIA (Certified Internal Auditor)",
+        "CFA Institute Screenings"
+      ]
+    },
+    {
+      "title": "Language & Global Licensure",
+      "programmes": [
+        "PTE Academic (Pearson Test of English)",
+        "NCLEX (US/Canada Registered Nurse)",
+        "GMAT (Graduate Management Admission)",
+        "DHA / MOH (Middle East Medical Licensing)",
+        "Professional Licensure Screenings"
+      ]
+    }
+  ]
+}
