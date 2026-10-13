@@ -1,6 +1,6 @@
 # Clear Actionables — prepared release
 
-This release follows the supplied Actionables feature structure with an institution-first landing page and a restrained blue/white design. It removes the added dashboard, slogans and separate personal-work navigation. It uses the user's supplied `actionablesacca.html` as a factual reference, not as executable application code. It is stacked on the existing Shift work in PR #33. Website deployment and these database migrations have **not** been performed.
+This release follows the supplied Actionables feature structure with an institution-first landing page and a restrained blue/white design. It removes the added dashboard, slogans and separate personal-work navigation. It uses the user's supplied `actionablesacca.html` as a factual reference, not as executable application code. It is stacked on the existing Shift work in PR #33. The FETS Live backend migrations were installed and verified on 14 October. The website deployment is pending an online VPS connection.
 
 ## Source data and behavior
 
@@ -15,10 +15,10 @@ Institution cards expose contact details, type, PIN, capacity, status and the su
 
 ## Database installation
 
-Apply only to **FETS Live `qqewusetilxxfvfkmsed`**, after rechecking current schema, migration history, staff roster and production changes:
+Installed only on **FETS Live `qqewusetilxxfvfkmsed`**. The prepared SQL contents are unchanged; local filenames now match the actual migration-history versions. Do not apply these again:
 
-1. `supabase/migrations/20261013125943_actionable_rollout_and_readiness.sql`
-2. `supabase/migrations/20261013131321_import_supplied_actionables_catalogue.sql`
+1. `supabase/migrations/20261013211421_actionable_rollout_and_readiness.sql`
+2. `supabase/migrations/20261013211431_import_supplied_actionables_catalogue.sql`
 
 Prerequisites are the existing expansion/work tables, `staff_profiles`, `fets_is_active_staff`, the stage/results/report-recipient migration `20261001220000_simple_institution_actionables.sql`, its delete RPC and stage seeding trigger. Both new migrations are transactional. No existing users, duties, results or reports are deleted by installation. The second migration imports source facts and stage guides, not fabricated completion history.
 
@@ -43,3 +43,11 @@ FETS Online `ueufcqmdqtwvhjjyudeu` and Android PR #31 are unchanged. Online rota
 `fets-point/actionables-preview.html` is a development-only entry with actual source records and an in-memory repository. Its generic account selector is a technical preview control, not a fabricated source staff member. Browser verification writes only local memory and blocks Supabase requests. Clean screenshots show the supplied state; verification screenshots containing test observations/results are not production evidence. `scripts/verification/build-actionables-preview.mjs` builds a self-contained HTML review file with the supplied data, in-memory edits and no live authentication/database initialization. It sets a network-blocking content policy and works without a preview server.
 
 Reproduce targeted checks from `fets-point` with `vitest run src/redesign/ActionablesWorkspace.test.tsx src/redesign/actionables-model.test.ts src/redesign/institution-workflow.test.ts` and the normal build. Run `scripts/tests/actionables-rollout.mjs` with PGlite 0.3.14 available through `FETS_PGLITE_MODULE`. Start the preview on local port 3011 and run `scripts/verification/verify-actionables-workspace.cjs` with Playwright and Chromium paths in `FETS_PLAYWRIGHT_MODULE` and `CHROMIUM_PATH`. The browser verifier is intentionally fixed to the local preview URL.
+
+## Activation evidence — 14 October
+
+The backend import matches all 25 source institution objects and all five source task objects exactly. The original RIT KOTTAYAM is retained, giving 26 saved institutions. The import adds 175 stage guides, with zero invented stage completions, shortlist decisions or audit observations. The three pre-existing duties and two results remain intact. Before/after counts and content fingerprints match across 20 existing tables, including users, profiles, rotas, duty assignments, logs, reports and the original institution/workflow records.
+
+Production SQL role checks verified management authority for existing managers, read/evidence access without shortlist authority for ordinary active staff, and denied project access for inactive accounts. REST checks confirmed anonymous callers cannot invoke the capability RPC or read the source brief/imported catalogue, and the private schema is not exposed. Security advisors reported no new findings relative to the preflight baseline; existing unrelated project warnings remain. No fake operational records were written for verification.
+
+The previous public website remains the Shift release from 12 October. Its HTML fingerprint is `9a4d7a13a395b84996cb6ce356f83547195d77338eafe0cc5566fbdc858d6a0f`. `scripts/releases/deploy-actionables.sh` accepts the exact reviewed commit, checks current public/container release and branch/main changes, retains the running image/configuration and a rollback script, builds in isolation, then verifies all public assets and preserved runtime configuration. It changes only the FETS Live app container and never executes database operations. It must run through the authorized, online VPS connection; it has not been executed yet.

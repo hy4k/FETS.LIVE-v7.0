@@ -78,10 +78,10 @@ try {
   ).rows[0].row;
   await as(null, "postgres");
   await db.exec(
-    await migration("20261013125943_actionable_rollout_and_readiness.sql"),
+    await migration("20261013211421_actionable_rollout_and_readiness.sql"),
   );
   await db.exec(
-    await migration("20261013131321_import_supplied_actionables_catalogue.sql"),
+    await migration("20261013211431_import_supplied_actionables_catalogue.sql"),
   );
   const source = JSON.parse(
     await readFile(
