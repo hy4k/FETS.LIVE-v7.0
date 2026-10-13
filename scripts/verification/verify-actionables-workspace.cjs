@@ -120,7 +120,7 @@ const fs = require("node:fs");
     await page.keyboard.press("Escape");
     assert.equal(await page.getByRole("dialog").count(), 0);
     await page
-      .getByRole("button", { name: "Seven-centre plan", exact: true })
+      .getByRole("button", { name: "Selected centres", exact: true })
       .click();
     await page.getByText("1 / 7 shortlisted", { exact: true }).waitFor();
     await check("rollout");
@@ -129,11 +129,43 @@ const fs = require("node:fs");
       fullPage: false,
     });
     await page
-      .getByRole("button", { name: "Guides & planning", exact: true })
+      .getByRole("button", { name: "Exam programmes", exact: true })
       .click();
+    assert.equal(await page.locator(".aw-portfolio-groups li").count(), 15);
+    await check("exam programmes");
+    await page.getByRole("button", { name: "Audit", exact: true }).click();
+    await page.getByLabel("Audit institution").selectOption("cochin-blastline");
+    await page
+      .getByRole("button", { name: "Record observation", exact: true })
+      .first()
+      .click();
+    const fieldAudit = page.getByRole("dialog", {
+      name: "Record readiness observation",
+    });
+    await fieldAudit.getByLabel("Observed result").selectOption("ready");
+    await fieldAudit
+      .getByLabel("Observation / evidence")
+      .fill(
+        "Local verification only: a separate selected institution receives this field finding.",
+      );
+    await fieldAudit
+      .getByRole("button", { name: "Record observation", exact: true })
+      .click();
+    await fieldAudit.waitFor({ state: "hidden" });
+    assert.equal(
+      await page.getByLabel("Audit institution").inputValue(),
+      "cochin-blastline",
+    );
+    await page
+      .getByText(
+        "Local verification only: a separate selected institution receives this field finding.",
+      )
+      .waitFor();
+    await check("field audit without leaving its selected institution");
+    await page.getByRole("button", { name: "Resources", exact: true }).click();
     await page
       .getByRole("heading", {
-        name: "Useful words. Clear assumptions.",
+        name: "Contact resources",
         exact: true,
       })
       .waitFor();
@@ -142,9 +174,9 @@ const fs = require("node:fs");
       path: `${out}/guides-${width}.png`,
       fullPage: false,
     });
-    await page.getByRole("button", { name: "Overview", exact: true }).click();
+    await page.getByRole("button", { name: "Tasks", exact: true }).click();
     await page
-      .getByRole("button", { name: "Assign named owner", exact: true })
+      .getByRole("button", { name: "Assign owner", exact: true })
       .first()
       .click();
     const duty = page.getByRole("dialog", { name: "Assign duty" });
@@ -156,9 +188,10 @@ const fs = require("node:fs");
     await check("duty form");
     await duty.getByRole("button", { name: "Save duty", exact: true }).click();
     await page.getByRole("dialog").waitFor({ state: "hidden" });
-    await page.getByRole("button", { name: "My work", exact: true }).click();
+    await page.getByRole("button", { name: "Tasks", exact: true }).click();
     await page
       .getByRole("button", { name: "Update result", exact: true })
+      .last()
       .click();
     const result = page.getByRole("dialog", { name: "Update result" });
     await result.waitFor();
@@ -183,9 +216,7 @@ const fs = require("node:fs");
       path: `${out}/my-work-${width}.png`,
       fullPage: false,
     });
-    await page
-      .getByRole("button", { name: "Team follow-up", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Tasks", exact: true }).click();
     await page.getByLabel("Filter work").selectOption("blocked");
     await check("team follow-up");
     // Preserve clean review screenshots using the unmodified actual source records.
@@ -222,6 +253,8 @@ const fs = require("node:fs");
         "own work result",
         "team follow-up",
         "guides and scenario",
+        "exam programmes",
+        "shared field-audit selection",
       ],
     });
     await context.close();

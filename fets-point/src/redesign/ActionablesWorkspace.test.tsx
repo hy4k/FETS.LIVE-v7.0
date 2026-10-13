@@ -87,6 +87,51 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 describe("Actionables staff and manager journeys", () => {
+  it("adds a task from the team board with an explicit institution, owner and reporting recipient", async () => {
+    const { user, repository } = setup();
+    await screen.findByText("25 institutions");
+    await user.click(
+      screen.getByRole("button", { name: "Tasks", exact: true }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Add task", exact: true }),
+    );
+    const dialog = screen.getByRole("dialog", { name: "Assign duty" });
+    await user.selectOptions(
+      within(dialog).getByLabelText("Institution"),
+      "cochin-rajagiri",
+    );
+    await user.type(
+      within(dialog).getByLabelText("Duty", { exact: true }),
+      "Confirm the appointment",
+    );
+    await user.type(
+      within(dialog).getByLabelText("Instructions / expected result"),
+      "Record the date agreed with the office.",
+    );
+    await user.type(
+      within(dialog).getByLabelText("Due date", { exact: true }),
+      "2026-10-20",
+    );
+    await user.selectOptions(
+      within(dialog).getByLabelText("Who should receive the result?"),
+      "me-user",
+    );
+    await user.click(within(dialog).getByRole("button", { name: "Save duty" }));
+    await waitFor(() =>
+      expect(repository.save).toHaveBeenCalledWith(
+        "mission_work_items",
+        expect.objectContaining({
+          institution_id: "cochin-rajagiri",
+          owner_id: "me",
+          report_to_id: "me-user",
+          title: "Confirm the appointment",
+        }),
+        null,
+      ),
+    );
+  });
+
   it("hides previously cached project records when access is revoked", async () => {
     const { repository, user } = setup();
     await screen.findByText("25 institutions");
@@ -105,11 +150,23 @@ describe("Actionables staff and manager journeys", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("shows actual source counts, source task states and no invented shortlisted institutions", async () => {
-    setup();
+  it("opens on the exact institution catalogue without marketing or fabricated selection", async () => {
+    const { user } = setup();
     expect(await screen.findByText("25 institutions")).toBeInTheDocument();
-    expect(screen.getAllByText("3 certified in the brief")).toHaveLength(2);
-    expect(screen.getByText("institutions shortlisted")).toBeInTheDocument();
+    expect(screen.getByText("0 / 7 selected")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: reference.institutions[0].name,
+        exact: true,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Big goals.")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Overview", exact: true }),
+    ).not.toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: "Tasks", exact: true }),
+    );
     expect(screen.getByText(reference.tasks[2].title)).toBeInTheDocument();
     expect(screen.getByText("Completed in project brief")).toBeInTheDocument();
   });
@@ -144,8 +201,9 @@ describe("Actionables staff and manager journeys", () => {
     const { user } = setup(data);
     await screen.findByText("25 institutions");
     await user.click(
-      screen.getByRole("button", { name: "My work", exact: true }),
+      screen.getByRole("button", { name: "Tasks", exact: true }),
     );
+    await user.selectOptions(screen.getByLabelText("Filter owner"), "me");
     expect(await screen.findByText("My next conversation")).toBeInTheDocument();
     expect(
       screen.queryByText("Someone else’s assignment"),
@@ -168,7 +226,7 @@ describe("Actionables staff and manager journeys", () => {
     });
     await screen.findByText("25 institutions");
     await user.click(
-      screen.getByRole("button", { name: "My work", exact: true }),
+      screen.getByRole("button", { name: "Tasks", exact: true }),
     );
     await user.click(
       screen.getByRole("button", { name: "Update result", exact: true }),

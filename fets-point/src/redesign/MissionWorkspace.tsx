@@ -194,9 +194,9 @@ export function ActionablesWorkspace({
   repository?: ActionablesRepository;
 }) {
   const qc = useQueryClient();
-  const [view, setView] = useState<PortfolioView>("overview");
+  const [view, setView] = useState<PortfolioView>("institutions");
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<WorkFilter>("active");
+  const [filter, setFilter] = useState<WorkFilter>("all");
   const [person, setPerson] = useState("all");
   const [institutionView, setInstitutionView] = useState<"work" | "readiness">(
     "work",
@@ -218,6 +218,7 @@ export function ActionablesWorkspace({
   const [resultTask, setResultTask] = useState<any>(null);
   const [institute, setInstitute] = useState({ ...blankInstitute });
   const [duty, setDuty] = useState({ ...blankDuty });
+  const [dutyInstitutionId, setDutyInstitutionId] = useState("");
   const [result, setResult] = useState({ ...blankResult });
   const [stageForm, setStageForm] = useState({
     title: "",
@@ -233,6 +234,7 @@ export function ActionablesWorkspace({
     source: string;
     previous?: string;
   }>({ criterion: "c1", state: "", evidence: "", source: "" });
+  const [observationInstitutionId, setObservationInstitutionId] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirmation, setConfirmation] = useState<{
     title: string;
@@ -327,7 +329,7 @@ export function ActionablesWorkspace({
     setStageId(null);
     setSearch("");
     setPerson("all");
-    setFilter(nextFilter || (next === "followup" ? "attention" : "active"));
+    setFilter(nextFilter || "all");
     if (next !== "institutions") setDistrict(null);
   }
   function openWork(task: WorkItem) {
@@ -417,15 +419,24 @@ export function ActionablesWorkspace({
     );
     setModal("duty");
   }
+  function newProjectTask() {
+    setEditId(null);
+    setReferenceTask(null);
+    setDutyInstitutionId("");
+    setDuty({ ...blankDuty, owner_id: actor.id });
+    setModal("duty");
+  }
   async function saveDuty() {
     await mutate(
       async () => {
         const due_at = dueInIST(duty.due_date, duty.due_time);
-        if (!current)
-          throw new Error("Open an institution before assigning a duty.");
+        const institution =
+          current || institutions.find((i) => i.id === dutyInstitutionId);
+        if (!institution)
+          throw new Error("Choose an institution for this task.");
         const values = {
-          institution_id: current.id,
-          district: current.district,
+          institution_id: institution.id,
+          district: institution.district,
           title: duty.title.trim(),
           instructions: duty.instructions.trim(),
           owner_id: duty.owner_id,
@@ -598,7 +609,12 @@ export function ActionablesWorkspace({
       value ? "Institution shortlisted" : "Institution removed from shortlist",
     );
   }
-  function recordObservation(criterion: Criterion, latest?: Observation) {
+  function recordObservation(
+    criterion: Criterion,
+    latest?: Observation,
+    institution = current,
+  ) {
+    setObservationInstitutionId(institution?.id || "");
     setObservation({
       criterion,
       state: "",
@@ -608,15 +624,23 @@ export function ActionablesWorkspace({
     });
     setModal("observation");
   }
-  function readinessFollowup(o: Observation, title: string) {
+  function readinessFollowup(
+    o: Observation,
+    title: string,
+    institution = current,
+  ) {
     dutyForm();
+    setDutyInstitutionId(institution?.id || "");
     setDuty({
       ...blankDuty,
       title: `Resolve ${title.toLowerCase()} gap`,
       instructions: o.evidence,
       owner_id: actor.id,
       institution_stage_id:
-        currentStages.find((s) => s.stage_key === "assess")?.id || "",
+        stages.find(
+          (s) =>
+            s.institution_id === institution?.id && s.stage_key === "assess",
+        )?.id || "",
     });
   }
   function assignSourceTask(key: number) {
@@ -652,7 +676,8 @@ export function ActionablesWorkspace({
     setModal("duty");
   }
   async function saveObservation() {
-    if (!current) return;
+    const id = current?.id || observationInstitutionId;
+    if (!id) return;
     if (observation.source && !safeWebsite(observation.source)) {
       toast.error("Use a full http:// or https:// source address.");
       return;
@@ -660,7 +685,7 @@ export function ActionablesWorkspace({
     await mutate(
       () =>
         repository.observe(
-          current.id,
+          id,
           observation.criterion,
           observation.state,
           observation.evidence.trim(),
@@ -691,13 +716,24 @@ export function ActionablesWorkspace({
     <div className="ia-page">
       <header className="aw-page-header">
         <div>
-          <span className="aw-eyebrow">FETS / SHARED PROJECT WORK</span>
-          <h1>
-            Actionables<span>.</span>
-          </h1>
-          <p>Know the next step. Keep the whole team in the picture.</p>
+          <h1>Actionables</h1>
+          {data.data && (
+            <p>
+              {institutions.filter((i) => i.actionables_reference).length ||
+                institutions.length}{" "}
+              institutions
+            </p>
+          )}
         </div>
         <div className="aw-header-actions">
+          {data.data && (
+            <button
+              className="aw-selection-count"
+              onClick={() => go("rollout")}
+            >
+              {selectedIds(loaded.selections).size} / 7 selected
+            </button>
+          )}
           <button
             className="aw-icon-button"
             aria-label="Refresh Actionables"
@@ -708,6 +744,7 @@ export function ActionablesWorkspace({
           </button>
           <button
             className="aw-button secondary"
+            aria-label="Add institution"
             onClick={() => institutionForm()}
           >
             <Plus size={16} /> Add institution
@@ -742,6 +779,16 @@ export function ActionablesWorkspace({
           Loading institutions…
         </p>
       )}
+      {!current && !data.isLoading && data.data && view === "followup" && (
+        <ActionablesSourceBoard
+          data={loaded}
+          onAssign={assignSourceTask}
+          onResult={resultForm}
+          onAdd={newProjectTask}
+          identity={actor}
+          onOpen={openWork}
+        />
+      )}
       {!current && !data.isLoading && data.data && (
         <ActionablesPortfolio
           data={loaded}
@@ -762,18 +809,15 @@ export function ActionablesWorkspace({
           onResult={resultForm}
           onAdd={() => institutionForm()}
           onSelect={(i, v) => void selectTarget(i, v)}
+          onAudit={(i) => {
+            chooseInstitute(i);
+            setInstitutionView("readiness");
+            setView("audit");
+          }}
+          onObservation={(i, c, o) => recordObservation(c, o, i)}
+          onGap={(i, o, t) => readinessFollowup(o, t, i)}
         />
       )}
-      {!current &&
-        !data.isLoading &&
-        data.data &&
-        (view === "overview" || view === "followup") && (
-          <ActionablesSourceBoard
-            data={loaded}
-            onAssign={assignSourceTask}
-            onResult={resultForm}
-          />
-        )}
       {current && (
         <>
           <button
@@ -1410,7 +1454,7 @@ export function ActionablesWorkspace({
           </form>
         </Modal>
       )}
-      {modal === "duty" && current && (
+      {modal === "duty" && (
         <Modal title={editId ? "Edit duty" : "Assign duty"} close={close}>
           <form
             onSubmit={(e) => {
@@ -1418,6 +1462,26 @@ export function ActionablesWorkspace({
               void saveDuty();
             }}
           >
+            {!current && (
+              <label>
+                Institution
+                <select
+                  required
+                  value={dutyInstitutionId}
+                  onChange={(e) => {
+                    setDutyInstitutionId(e.target.value);
+                    setDuty({ ...duty, institution_stage_id: "" });
+                  }}
+                >
+                  <option value="">Choose institution</option>
+                  {institutions.map((i) => (
+                    <option key={i.id} value={i.id}>
+                      {i.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <label>
               Duty
               <input
@@ -1466,7 +1530,12 @@ export function ActionablesWorkspace({
                   }
                 >
                   <option value="">General follow-ups</option>
-                  {currentStages.map((s: any) => (
+                  {(current
+                    ? currentStages
+                    : stages.filter(
+                        (s) => s.institution_id === dutyInstitutionId,
+                      )
+                  ).map((s: any) => (
                     <option key={s.id} value={s.id}>
                       {s.title}
                     </option>
@@ -1696,7 +1765,7 @@ export function ActionablesWorkspace({
           </form>
         </Modal>
       )}
-      {modal === "observation" && current && (
+      {modal === "observation" && (
         <Modal title="Record readiness observation" close={close}>
           <form
             onSubmit={(e) => {

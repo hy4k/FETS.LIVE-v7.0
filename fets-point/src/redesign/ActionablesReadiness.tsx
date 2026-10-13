@@ -32,12 +32,8 @@ export default function ActionablesReadiness({
     <section className="aw-readiness">
       <div className="aw-section-heading">
         <div>
-          <span className="aw-eyebrow">OBSERVE. RECORD. RESOLVE.</span>
-          <h2>Readiness, with the evidence.</h2>
-          <p>
-            Record what you reviewed against the current requirements. Missing
-            checks stay unreviewed.
-          </p>
+          <h2>Lab audit</h2>
+          <p>Record findings for each item.</p>
         </div>
         <a
           className="aw-button secondary"

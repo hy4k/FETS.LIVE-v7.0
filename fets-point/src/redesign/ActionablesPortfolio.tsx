@@ -1,26 +1,21 @@
 import { useState } from "react";
 import {
-  ArrowDownRight,
   ArrowRight,
   ArrowUpRight,
-  Check,
-  CheckCircle2,
   ChevronRight,
   ClipboardList,
   Clock3,
   Copy,
   Flag,
   GraduationCap,
-  HelpCircle,
-  MapPin,
   Plus,
   Search,
   ShieldCheck,
-  Sparkles,
   Target,
   Users,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
+import ActionablesReadiness from "./ActionablesReadiness";
 import {
   DISTRICTS,
   dueLabel,
@@ -43,21 +38,23 @@ import {
   type Institution,
   type WorkFilter,
   type WorkItem,
+  type Criterion,
+  type Observation,
 } from "./actionables-model";
 export type PortfolioView =
-  | "overview"
-  | "mine"
   | "institutions"
   | "rollout"
+  | "programmes"
+  | "audit"
   | "followup"
   | "resources";
 export const PORTFOLIO_TABS = [
-  { id: "overview", label: "Overview", icon: Sparkles },
-  { id: "mine", label: "My work", icon: ClipboardList },
   { id: "institutions", label: "Institutions", icon: GraduationCap },
-  { id: "rollout", label: "Seven-centre plan", icon: Target },
-  { id: "followup", label: "Team follow-up", icon: Users },
-  { id: "resources", label: "Guides & planning", icon: ShieldCheck },
+  { id: "rollout", label: "Selected centres", icon: Target },
+  { id: "programmes", label: "Exam programmes", icon: ClipboardList },
+  { id: "audit", label: "Audit", icon: ShieldCheck },
+  { id: "followup", label: "Tasks", icon: Users },
+  { id: "resources", label: "Resources", icon: Copy },
 ] as const;
 const CONTACT_SCRIPT =
   "Hello, I’m [name] from FETS. We are coordinating a seven-centre Pearson VUE project across Kerala, covering multi-exam programmes including IT, cloud, accounting and professional examinations. We would like to evaluate your campus computer-lab facilities and discuss the partnership with your principal or IT lead. Could we arrange a 15-minute introductory visit in [district] on [day]? Please let us know the appropriate contact and email address.";
@@ -154,110 +151,94 @@ export function InstitutionCard({
   institution: i,
   data,
   onOpen,
+  onAudit,
+  onSelect,
+  busy,
 }: {
   institution: Institution;
   data: ActionablesData;
   onOpen: (i: Institution) => void;
+  onAudit: (i: Institution) => void;
+  onSelect: (i: Institution, value: boolean) => void;
+  busy: boolean;
 }) {
-  const p = institutionProgress(i.id, data.stages, data.tasks),
-    r = readiness(i.id, data.observations),
+  const source = i.actionables_reference,
     chosen = selectedIds(data.selections).has(i.id);
-  const todo = data.tasks.filter(
-    (t) => t.institution_id === i.id && t.status !== "done",
-  );
-  const attention = data.tasks.filter(
-    (t) =>
-      t.institution_id === i.id && matchesWork(t, data.updates, "attention"),
-  );
-  const nextByMilestone: Record<string, string> = {
-    Scouted: "Contact and approach",
-    "Pitch Sent": "Follow up on the proposal",
-    Inspected: "Agree responsibilities",
-    "MoU Signed": "Follow up on provider approval",
-    Certified: "Confirm handover arrangements",
-  };
   return (
-    <article className={`aw-institution ${p.delivered ? "is-delivered" : ""}`}>
+    <article className={`aw-institution ${chosen ? "is-selected" : ""}`}>
       <div className="aw-institution-top">
-        <span
-          className={`aw-district district-${DISTRICTS.indexOf(i.district as any)}`}
-        >
-          <MapPin size={12} />
-          {i.district}
+        <span className="aw-district">
+          {source?.districtName || i.district}
         </span>
-        {p.delivered ? (
-          <span className="aw-state is-done">
-            <Check size={12} /> Delivered
-          </span>
-        ) : i.actionables_reference ? (
-          <span
-            className={`aw-source-status status-${i.actionables_reference.status.toLowerCase().split(" ").join("-")}`}
-          >
-            {i.actionables_reference.status}
-          </span>
-        ) : (
-          <span className="aw-muted">Exploring</span>
-        )}
+        <span
+          className={`aw-source-status status-${(source?.status || "Saved").toLowerCase().replace(/ /g, "-")}`}
+        >
+          {source?.status || "Saved"}
+        </span>
       </div>
       <button className="aw-institution-title" onClick={() => onOpen(i)}>
         <h3>{i.name}</h3>
-        <ArrowUpRight size={20} />
       </button>
-      <p className="aw-contact-line">
-        {i.primary_contact_name || "Contact point needed"}
-        {i.primary_contact_role ? ` · ${i.primary_contact_role}` : ""}
-      </p>
-      <div className="aw-directory-contact">
-        {i.primary_contact_phone && (
-          <a href={`tel:${i.primary_contact_phone.replace(/[^+\d]/g, "")}`}>
-            {i.primary_contact_phone}
-          </a>
-        )}
-        {i.address && <p title={i.address}>{i.address}</p>}
-      </div>
-      {i.actionables_reference && (
-        <div className="aw-reference-metrics">
-          <span>
-            {i.lab_seat_capacity != null
-              ? `${i.lab_seat_capacity} seats`
-              : "Capacity to confirm"}
-          </span>
-          <span>Readiness record {i.actionables_reference.score}%</span>
-          {chosen && (
-            <span>
-              <Flag size={10} /> Shortlisted
-            </span>
-          )}
+      {source && <p className="aw-institution-type">{source.type}</p>}
+      <dl className="aw-contact-details">
+        <div>
+          <dt>Address</dt>
+          <dd>{i.address || source?.address || "Not recorded"}</dd>
         </div>
-      )}
-      <div className="aw-next-step">
-        <span>NEXT STEP</span>
-        <strong>
-          {p.delivered
-            ? "Handover recorded"
-            : i.actionables_reference && p.done === 0
-              ? nextByMilestone[i.actionables_reference.status]
-              : p.next?.title || "Agree the next step"}
-        </strong>
-      </div>
-      <div className="aw-progress">
-        <span style={{ width: `${p.percent}%` }} />
-      </div>
-      <div className="aw-progress-caption">
+        {source && (
+          <div>
+            <dt>PIN</dt>
+            <dd>{source.pincode}</dd>
+          </div>
+        )}
+        <div>
+          <dt>Phone</dt>
+          <dd>
+            {i.primary_contact_phone ? (
+              <a href={`tel:${i.primary_contact_phone.replace(/[^+\d]/g, "")}`}>
+                {i.primary_contact_phone}
+              </a>
+            ) : (
+              "Not recorded"
+            )}
+          </dd>
+        </div>
+        <div>
+          <dt>Contact</dt>
+          <dd>{i.primary_contact_name || source?.nodal || "Not recorded"}</dd>
+        </div>
+      </dl>
+      <div className="aw-card-facts">
         <span>
-          {p.done} of {p.total} stage results recorded
+          <strong>{i.lab_seat_capacity ?? "—"}</strong> seats
         </span>
-        <span>{todo.length} open duties</span>
+        {source && (
+          <span>
+            Recorded readiness <strong>{source.score}%</strong>
+          </span>
+        )}
       </div>
-      <footer>
-        <span className={attention.length ? "aw-attention-note" : "aw-muted"}>
-          {attention.length
-            ? `${attention.length} ${attention.length === 1 ? "duty needs" : "duties need"} attention`
-            : "No flagged duties"}
-          {data.extensionsReady && r.gaps ? ` · ${r.gaps} readiness gaps` : ""}
-        </span>
-        <button className="aw-text-button" onClick={() => onOpen(i)}>
-          View work <ArrowRight size={15} />
+      <footer className="aw-card-actions">
+        <button className="aw-button small secondary" onClick={() => onOpen(i)}>
+          Details
+        </button>
+        <button
+          className="aw-button small secondary"
+          onClick={() => onAudit(i)}
+        >
+          Audit
+        </button>
+        <button
+          className={`aw-button small ${chosen ? "secondary" : ""}`}
+          disabled={
+            busy ||
+            !data.extensionsReady ||
+            !data.canManage ||
+            (!chosen && selectedIds(data.selections).size >= 7)
+          }
+          onClick={() => onSelect(i, !chosen)}
+        >
+          {chosen ? "Selected · remove" : "Select centre"}
         </button>
       </footer>
     </article>
@@ -282,6 +263,13 @@ type Props = {
   onResult: (t: WorkItem) => void;
   onAdd: () => void;
   onSelect: (i: Institution, value: boolean) => void;
+  onAudit: (i: Institution) => void;
+  onObservation: (
+    i: Institution,
+    criterion: Criterion,
+    latest?: Observation,
+  ) => void;
+  onGap: (i: Institution, observation: Observation, title: string) => void;
 };
 export default function ActionablesPortfolio(p: Props) {
   const {
@@ -298,32 +286,15 @@ export default function ActionablesPortfolio(p: Props) {
     onResult,
     onAdd,
     onSelect,
+    onAudit,
   } = p;
+  const [auditId, setAuditId] = useState("");
   const [days, setDays] = useState(200),
     [use, setUse] = useState(35),
     [sessions, setSessions] = useState(1);
   const chosen = selectedIds(data.selections);
   const targets = data.institutions.filter((i) => chosen.has(i.id));
   const catalogue = data.institutions.filter((i) => i.actionables_reference);
-  const certified = catalogue.filter(
-    (i) => i.actionables_reference?.status === "Certified",
-  ).length;
-  const delivered = data.institutions.filter(
-    (i) => institutionProgress(i.id, data.stages, data.tasks).delivered,
-  ).length;
-  const counts = {
-    overdue: data.tasks.filter((t) => matchesWork(t, data.updates, "overdue"))
-      .length,
-    blocked: data.tasks.filter((t) => matchesWork(t, data.updates, "blocked"))
-      .length,
-    followup: data.tasks.filter((t) => matchesWork(t, data.updates, "followup"))
-      .length,
-    report: data.tasks.filter((t) => matchesWork(t, data.updates, "report"))
-      .length,
-    unassigned: data.tasks.filter((t) =>
-      matchesWork(t, data.updates, "unassigned"),
-    ).length,
-  };
   const projectInstitutions = catalogue.length ? catalogue : data.institutions;
   const query = search.trim().toLocaleLowerCase();
   const matchInstitution = (i: Institution) =>
@@ -343,30 +314,6 @@ export default function ActionablesPortfolio(p: Props) {
         (i) => !i.actionables_reference && matchInstitution(i),
       )
     : [];
-  const queue = workOrder(
-    data.tasks.filter(
-      (t) =>
-        (view !== "mine" || t.owner_id === identity.id) &&
-        (person === "all" || t.owner_id === person) &&
-        (!district ||
-          t.district === district ||
-          data.institutions.some(
-            (i) => i.id === t.institution_id && i.district === district,
-          )) &&
-        matchesWork(t, data.updates, filter) &&
-        (!query ||
-          [
-            t.title,
-            t.owner?.full_name,
-            data.institutions.find((i) => i.id === t.institution_id)?.name,
-          ].some((v) => v?.toLocaleLowerCase().includes(query))),
-    ),
-    data.updates,
-  );
-  const attention = workOrder(
-    data.tasks.filter((t) => matchesWork(t, data.updates, "attention")),
-    data.updates,
-  );
   const estimate = capacityEstimate(
     data.institutions,
     chosen,
@@ -391,8 +338,8 @@ export default function ActionablesPortfolio(p: Props) {
           aria-label="Search work and institutions"
           placeholder={
             view === "institutions"
-              ? "Find an institution, contact or town…"
-              : "Find a duty, colleague or institution…"
+              ? "Search college, town or PIN"
+              : "Search tasks"
           }
           value={search}
           onChange={(e) => p.setSearch(e.target.value)}
@@ -417,422 +364,15 @@ export default function ActionablesPortfolio(p: Props) {
   );
   return (
     <>
-      {view === "overview" && (
-        <>
-          <section className="aw-hero">
-            <div className="aw-hero-copy">
-              <span className="aw-eyebrow">ONE TEAM. A CLEAR WAY FORWARD.</span>
-              <h2>
-                Big goals.
-                <br />
-                <em>Clear next steps.</em>
-              </h2>
-              <p>
-                Bring seven centres from first conversation to a signed-off
-                handover. See what moved, what needs help and who takes the next
-                step.
-              </p>
-              <div className="aw-reference-metrics aw-hero-records">
-                <span>
-                  {catalogue.length || data.institutions.length} institutions
-                </span>
-                <span>5 districts</span>
-                <span>{certified} certified in the brief</span>
-              </div>
-              <div className="aw-hero-actions">
-                <button
-                  className="aw-button"
-                  onClick={() => go("mine", "active")}
-                >
-                  See my work <ArrowRight size={17} />
-                </button>
-                <button
-                  className="aw-button secondary"
-                  onClick={() => go("institutions")}
-                >
-                  Explore institutions
-                </button>
-              </div>
-            </div>
-            <div className="aw-goal">
-              <div
-                className="aw-goal-ring"
-                style={
-                  {
-                    "--goal-progress": `${Math.min(100, (chosen.size / 7) * 100)}%`,
-                  } as any
-                }
-              >
-                <div>
-                  <strong>
-                    {chosen.size}
-                    <small>/ 7</small>
-                  </strong>
-                  <span>institutions shortlisted</span>
-                </div>
-                {Array.from({ length: 7 }, (_, i) => (
-                  <i
-                    key={i}
-                    className={i < chosen.size ? "done" : ""}
-                    style={{ "--dot": i } as any}
-                  />
-                ))}
-              </div>
-              <div className="aw-goal-foot">
-                <span>
-                  <i className="aw-dot lavender" />
-                  {certified} certified in the brief
-                </span>
-                <span>
-                  <i className="aw-dot mint" />
-                  {delivered} handovers recorded
-                </span>
-              </div>
-            </div>
-          </section>
-          {catalogue.length > 0 && (
-            <section
-              className="aw-milestone-strip"
-              aria-label="Recorded institution milestones"
-            >
-              <span>
-                PROJECT BRIEF
-                <br />
-                <strong>Where things stand</strong>
-              </span>
-              {[
-                "Scouted",
-                "Pitch Sent",
-                "Inspected",
-                "MoU Signed",
-                "Certified",
-              ].map((status) => (
-                <button
-                  key={status}
-                  onClick={() => {
-                    go("institutions");
-                    p.setSearch(status);
-                  }}
-                >
-                  <strong>
-                    {
-                      catalogue.filter(
-                        (i) => i.actionables_reference?.status === status,
-                      ).length
-                    }
-                  </strong>
-                  <span>{status}</span>
-                  <ArrowUpRight size={13} />
-                </button>
-              ))}
-            </section>
-          )}
-          <section className="aw-pulse" aria-label="What needs attention">
-            {(
-              [
-                {
-                  key: "overdue",
-                  label: "Past due",
-                  note: "Agree the next action",
-                  icon: Clock3,
-                  color: "peach",
-                },
-                {
-                  key: "blocked",
-                  label: "Needs support",
-                  note: "Help the work move",
-                  icon: HelpCircle,
-                  color: "lavender",
-                },
-                {
-                  key: "followup",
-                  label: "Follow-ups due",
-                  note: "Close the conversation loop",
-                  icon: ArrowDownRight,
-                  color: "mint",
-                },
-                {
-                  key: "report",
-                  label: "To report",
-                  note: "Confirm the recipient is informed",
-                  icon: Flag,
-                  color: "blue",
-                },
-              ] as const
-            ).map((c) => (
-              <button
-                className={`aw-pulse-card ${c.color}`}
-                key={c.key}
-                onClick={() => go("followup", c.key)}
-              >
-                <div>
-                  <c.icon size={19} />
-                  <ArrowUpRight size={16} />
-                </div>
-                <strong>{counts[c.key]}</strong>
-                <h3>{c.label}</h3>
-                <p>{c.note}</p>
-              </button>
-            ))}
-          </section>
-          <div className="aw-two-col">
-            <section className="aw-panel">
-              <div className="aw-section-heading">
-                <div>
-                  <span className="aw-eyebrow">KEEP WORK MOVING</span>
-                  <h2>Worth a follow-up</h2>
-                </div>
-                <button
-                  className="aw-text-button"
-                  onClick={() => go("followup", "attention")}
-                >
-                  See all <ArrowRight size={15} />
-                </button>
-              </div>
-              {attention.length ? (
-                attention
-                  .slice(0, 3)
-                  .map((t) => (
-                    <WorkCard
-                      key={t.id}
-                      task={t}
-                      data={data}
-                      onResult={onResult}
-                      onOpen={onWork}
-                    />
-                  ))
-              ) : data.referenceTasks.some((t) => t.status !== "done") ? (
-                <>
-                  <p className="aw-brief-intro">
-                    The team brief has work underway. Agree a named owner and
-                    the next follow-up for each task.
-                  </p>
-                  <div className="aw-brief-items">
-                    {data.referenceTasks
-                      .filter((t) => t.status !== "done")
-                      .slice(0, 3)
-                      .map((t) => (
-                        <button
-                          key={t.id}
-                          onClick={() => go("followup", "all")}
-                        >
-                          <div>
-                            <span>{t.assignee}</span>
-                            <strong>{t.title}</strong>
-                            <small>
-                              {t.status === "todo"
-                                ? "Ready to act"
-                                : "In progress"}
-                            </small>
-                          </div>
-                          <ArrowRight size={16} />
-                        </button>
-                      ))}
-                  </div>
-                </>
-              ) : (
-                <div className="aw-empty">
-                  <CheckCircle2 size={30} />
-                  <h3>No flagged duties</h3>
-                  <p>
-                    Open your work to see upcoming assignments and record the
-                    next result.
-                  </p>
-                </div>
-              )}
-              {counts.unassigned > 0 && (
-                <button
-                  className="aw-owner-alert"
-                  onClick={() => go("followup", "unassigned")}
-                >
-                  <Users size={17} />
-                  {counts.unassigned}{" "}
-                  {counts.unassigned === 1 ? "duty needs" : "duties need"} an
-                  owner <ArrowRight size={15} />
-                </button>
-              )}
-            </section>
-            <section className="aw-panel">
-              <div className="aw-section-heading">
-                <div>
-                  <span className="aw-eyebrow">
-                    FIVE DISTRICTS. ONE SHARED PLAN.
-                  </span>
-                  <h2>The wider picture</h2>
-                </div>
-              </div>
-              <div className="aw-district-list">
-                {DISTRICTS.map((d, i) => {
-                  const list = projectInstitutions.filter(
-                    (x) => x.district === d,
-                  );
-                  const done = list.filter(
-                    (x) =>
-                      institutionProgress(x.id, data.stages, data.tasks)
-                        .delivered,
-                  ).length;
-                  return (
-                    <button
-                      key={d}
-                      onClick={() => {
-                        p.setDistrict(d);
-                        go("institutions");
-                      }}
-                    >
-                      <span className={`aw-district-dot district-${i}`} />
-                      <div>
-                        <strong>{d}</strong>
-                        <small>
-                          {list.length} institutions ·{" "}
-                          {
-                            list.filter(
-                              (x) =>
-                                x.actionables_reference?.status === "Certified",
-                            ).length
-                          }{" "}
-                          certified · {done} handovers
-                        </small>
-                      </div>
-                      <ChevronRight size={17} />
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="aw-context-card">
-                <Target size={21} />
-                <div>
-                  <strong>
-                    Shortlisted is a decision.
-                    <br />
-                    Delivered is an outcome.
-                  </strong>
-                  <p>
-                    Keep the seven-centre plan separate from evidence of
-                    approval, setup and handover.
-                  </p>
-                </div>
-              </div>
-            </section>
-          </div>
-        </>
-      )}
-      {(view === "mine" || view === "followup") && (
-        <section>
-          <div className="aw-section-heading">
-            <div>
-              <span className="aw-eyebrow">
-                {view === "mine"
-                  ? "YOUR PART IN THE PLAN"
-                  : "SUPPORT, FOLLOW-UP & REPORTING"}
-              </span>
-              <h2>
-                {view === "mine"
-                  ? "Your next steps"
-                  : "Help the team move forward"}
-              </h2>
-              <p>
-                {view === "mine"
-                  ? "See what you own, when it is due and where to record the result."
-                  : "Follow the actual result and the next commitment across every institution."}
-              </p>
-            </div>
-            <span className="aw-count-pill">
-              {queue.length} {queue.length === 1 ? "duty" : "duties"}
-            </span>
-          </div>
-          {finder}
-          <div className="aw-work-controls">
-            <label>
-              Show
-              <select
-                aria-label="Filter work"
-                value={filter}
-                onChange={(e) => p.setFilter(e.target.value as WorkFilter)}
-              >
-                {Object.entries(FILTER_LABELS).map(([k, v]) => (
-                  <option key={k} value={k}>
-                    {v}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {view === "followup" && (
-              <label>
-                Owner
-                <select
-                  aria-label="Filter owner"
-                  value={person}
-                  onChange={(e) => p.setPerson(e.target.value)}
-                >
-                  <option value="all">All colleagues</option>
-                  {data.staff.map((s) => (
-                    <option value={s.id} key={s.id}>
-                      {s.full_name}
-                      {s.is_active === false ? " (inactive)" : ""}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-            <span>Results and follow-ups stay with the original duty.</span>
-          </div>
-          <div className="aw-work-grid">
-            {queue.map((t) => (
-              <WorkCard
-                key={t.id}
-                task={t}
-                data={data}
-                onResult={onResult}
-                onOpen={onWork}
-              />
-            ))}
-          </div>
-          {!queue.length && (
-            <div className="aw-empty">
-              <ClipboardList size={32} />
-              <h3>No duties in this view</h3>
-              <p>
-                {view === "mine"
-                  ? "You have no matching assignments. Ask the lead to agree your next contribution."
-                  : "Try another filter, district or colleague."}
-              </p>
-              <button
-                className="aw-button secondary"
-                onClick={() => {
-                  p.setFilter("all");
-                  p.setSearch("");
-                  p.setDistrict(null);
-                  p.setPerson("all");
-                }}
-              >
-                Show all {view === "mine" ? "my work" : "work"}
-              </button>
-            </div>
-          )}
-        </section>
-      )}
       {view === "institutions" && (
         <section>
-          <div className="aw-section-heading">
-            <div>
-              <span className="aw-eyebrow">FROM FIRST CONTACT TO HANDOVER</span>
-              <h2>Every institution. A clear next step.</h2>
-              <p>
-                Use your real contacts and observations to decide where to
-                focus.
-              </p>
-            </div>
-            <button className="aw-button" onClick={onAdd}>
-              <Plus size={16} /> Add institution
-            </button>
-          </div>
           {finder}
           <div className="aw-district-chips">
             <button
               aria-pressed={!district}
               onClick={() => p.setDistrict(null)}
             >
-              All districts <span>{projectInstitutions.length}</span>
+              All <span>{projectInstitutions.length}</span>
             </button>
             {DISTRICTS.map((d) => (
               <button
@@ -840,7 +380,7 @@ export default function ActionablesPortfolio(p: Props) {
                 key={d}
                 onClick={() => p.setDistrict(d)}
               >
-                {d}{" "}
+                {d === "Ernakulam" ? "Cochin" : d}{" "}
                 <span>
                   {projectInstitutions.filter((i) => i.district === d).length}
                 </span>
@@ -854,15 +394,15 @@ export default function ActionablesPortfolio(p: Props) {
                 institution={i}
                 data={data}
                 onOpen={onOpen}
+                onAudit={onAudit}
+                onSelect={onSelect}
+                busy={p.busy}
               />
             ))}
           </div>
           {legacy.length > 0 && (
             <details className="aw-legacy-records">
-              <summary>
-                Other saved institutions ({legacy.length}) · existing work
-                preserved
-              </summary>
+              <summary>Other saved institutions ({legacy.length})</summary>
               <div className="aw-institution-grid">
                 {legacy.map((i) => (
                   <InstitutionCard
@@ -870,6 +410,9 @@ export default function ActionablesPortfolio(p: Props) {
                     institution={i}
                     data={data}
                     onOpen={onOpen}
+                    onAudit={onAudit}
+                    onSelect={onSelect}
+                    busy={p.busy}
                   />
                 ))}
               </div>
@@ -881,7 +424,7 @@ export default function ActionablesPortfolio(p: Props) {
               <h3>
                 {search
                   ? "No matching institutions"
-                  : "Start with a real contact"}
+                  : "No institutions recorded"}
               </h3>
               <p>
                 {search
@@ -899,11 +442,10 @@ export default function ActionablesPortfolio(p: Props) {
         <section>
           <div className="aw-section-heading">
             <div>
-              <span className="aw-eyebrow">FOCUS THE SHARED EFFORT</span>
-              <h2>Seven places to build something good.</h2>
+              <h2>Selected centres</h2>
               <p>
-                Management chooses the shortlist. Work, readiness and handover
-                remain visible to everyone.
+                Choose up to seven institutions. Selection is separate from
+                provider approval.
               </p>
             </div>
             <span className="aw-count-pill">{chosen.size} / 7 shortlisted</span>
@@ -959,16 +501,13 @@ export default function ActionablesPortfolio(p: Props) {
                         </>
                       ) : (
                         <>
-                          <h3>Room for the next institution</h3>
-                          <p>
-                            Review the contact, readiness evidence and
-                            commitments before choosing.
-                          </p>
+                          <h3>Not selected</h3>
+                          <p>Select an institution from the directory.</p>
                           <button
                             className="aw-text-button"
                             onClick={() => go("institutions")}
                           >
-                            Explore institutions <ArrowRight size={15} />
+                            Choose institution <ArrowRight size={15} />
                           </button>
                         </>
                       )}
@@ -988,85 +527,12 @@ export default function ActionablesPortfolio(p: Props) {
               </div>
             </>
           )}
-        </section>
-      )}
-      {view === "resources" && (
-        <section>
-          <div className="aw-section-heading">
-            <div>
-              <span className="aw-eyebrow">START A GOOD CONVERSATION</span>
-              <h2>Useful words. Clear assumptions.</h2>
-              <p>
-                Use these working guides, then record what was actually agreed.
-              </p>
-            </div>
-          </div>
-          <div className="aw-portfolio-groups">
-            {ACTIONABLES_REFERENCE.programmeGroups.map((group) => (
-              <article key={group.title}>
-                <h3>{group.title}</h3>
-                <ul>
-                  {group.programmes.map((programme) => (
-                    <li key={programme}>{programme}</li>
-                  ))}
-                </ul>
-              </article>
-            ))}
-          </div>
-          <div className="aw-two-col">
-            <section className="aw-panel aw-resource">
-              <span className="aw-resource-icon lavender">
-                <Copy size={24} />
-              </span>
-              <h3>A first-contact script</h3>
-              <p className="aw-script-copy">{CONTACT_SCRIPT}</p>
-              <button
-                className="aw-button secondary"
-                onClick={() => void copy(CONTACT_SCRIPT)}
-              >
-                Copy script <Copy size={15} />
-              </button>
-              <small>
-                Adapt the name, district and proposed meeting. Agree costs,
-                scope and responsibilities through the project owner.
-              </small>
-            </section>
-            <section className="aw-panel aw-resource">
-              <span className="aw-resource-icon mint">
-                <ShieldCheck size={24} />
-              </span>
-              <h3>Current provider requirements</h3>
-              <p>
-                Review the official facility, equipment, application and
-                programme guidance before making technical decisions.
-              </p>
-              <a
-                className="aw-button secondary"
-                href={PEARSON_REQUIREMENTS_URL}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Open Pearson VUE guidance <ArrowUpRight size={15} />
-              </a>
-              <div className="aw-context-card">
-                <Flag size={20} />
-                <div>
-                  <strong>Confirm exam scope during approval.</strong>
-                  <p>
-                    Record the authorised programmes and evidence in the
-                    approval stage. Keep commitments tied to those records.
-                  </p>
-                </div>
-              </div>
-            </section>
-          </div>
           <section className="aw-panel aw-calculator">
             <div>
-              <span className="aw-eyebrow">PLANNING ESTIMATE</span>
-              <h3>What might the recorded capacity support?</h3>
+              <h3>Capacity estimate</h3>
               <p>
-                An adjustable scenario using shortlisted institutions’ recorded
-                seats. It is not certified capacity or a booking forecast.
+                Based on recorded seats and the assumptions below. This is a
+                planning estimate.
               </p>
             </div>
             <div className="aw-scenario-fields">
@@ -1133,6 +599,114 @@ export default function ActionablesPortfolio(p: Props) {
               </div>
             </div>
           </section>
+        </section>
+      )}
+      {view === "programmes" && (
+        <section>
+          <div className="aw-section-heading">
+            <h2>Exam programmes</h2>
+          </div>{" "}
+          <div className="aw-portfolio-groups">
+            {ACTIONABLES_REFERENCE.programmeGroups.map((group) => (
+              <article key={group.title}>
+                <h3>{group.title}</h3>
+                <ul>
+                  {group.programmes.map((programme) => (
+                    <li key={programme}>{programme}</li>
+                  ))}
+                </ul>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+      {view === "audit" && (
+        <section>
+          <div className="aw-audit-picker">
+            <label>
+              Institution
+              <select
+                aria-label="Audit institution"
+                value={auditId || projectInstitutions[0]?.id || ""}
+                onChange={(e) => setAuditId(e.target.value)}
+              >
+                {projectInstitutions.map((i) => (
+                  <option key={i.id} value={i.id}>
+                    {i.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          {(() => {
+            const i =
+              projectInstitutions.find((i) => i.id === auditId) ||
+              projectInstitutions[0];
+            return i ? (
+              <ActionablesReadiness
+                institution={i}
+                data={data}
+                onRecord={(c, o) => p.onObservation(i, c, o)}
+                onFollowup={(o, t) => p.onGap(i, o, t)}
+              />
+            ) : (
+              <p>No institutions recorded.</p>
+            );
+          })()}
+        </section>
+      )}
+      {view === "resources" && (
+        <section>
+          <div className="aw-section-heading">
+            <h2>Contact resources</h2>
+          </div>
+          <div className="aw-two-col">
+            <section className="aw-panel aw-resource">
+              <span className="aw-resource-icon lavender">
+                <Copy size={24} />
+              </span>
+              <h3>A first-contact script</h3>
+              <p className="aw-script-copy">{CONTACT_SCRIPT}</p>
+              <button
+                className="aw-button secondary"
+                onClick={() => void copy(CONTACT_SCRIPT)}
+              >
+                Copy script <Copy size={15} />
+              </button>
+              <small>
+                Adapt the name, district and proposed meeting. Agree costs,
+                scope and responsibilities through the project owner.
+              </small>
+            </section>
+            <section className="aw-panel aw-resource">
+              <span className="aw-resource-icon mint">
+                <ShieldCheck size={24} />
+              </span>
+              <h3>Current provider requirements</h3>
+              <p>
+                Review the official facility, equipment, application and
+                programme guidance before making technical decisions.
+              </p>
+              <a
+                className="aw-button secondary"
+                href={PEARSON_REQUIREMENTS_URL}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Open Pearson VUE guidance <ArrowUpRight size={15} />
+              </a>
+              <div className="aw-context-card">
+                <Flag size={20} />
+                <div>
+                  <strong>Confirm exam scope during approval.</strong>
+                  <p>
+                    Record the authorised programmes and evidence in the
+                    approval stage. Keep commitments tied to those records.
+                  </p>
+                </div>
+              </div>
+            </section>
+          </div>
         </section>
       )}
     </>
