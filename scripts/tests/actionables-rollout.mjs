@@ -83,6 +83,11 @@ try {
   await db.exec(
     await migration("20261013211431_import_supplied_actionables_catalogue.sql"),
   );
+  await db.exec(await migration("20261014081340_actionables_realtime_updates.sql"));
+  await check("all shared-work subscriptions are included in the Realtime publication",async()=>{
+    const published=(await db.query("select tablename from pg_publication_tables where pubname='supabase_realtime' and schemaname='public'")).rows.map(r=>r.tablename);
+    for(const table of ['expansion_institutions','mission_work_items','mission_task_updates','mission_institution_stages','mission_rollout_selections','mission_readiness_observations'])assert.ok(published.includes(table),table);
+  });
   const source = JSON.parse(
     await readFile(
       new URL(
