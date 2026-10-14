@@ -1,0 +1,475 @@
+{
+  "institutions": [
+    {
+      "id": "cochin-rajagiri",
+      "district": "cochin",
+      "districtName": "Cochin (Ernakulam)",
+      "type": "Autonomous College",
+      "name": "Rajagiri College of Social Sciences",
+      "address": "Rajagiri Valley P.O., Kakkanad, Kochi, Ernakulam District",
+      "pincode": "682039",
+      "phone": "+91 484 266 0601",
+      "nodal": "Principal / HOD Computer Science",
+      "capacity": "100 Seats",
+      "status": "Inspected",
+      "score": 90
+    },
+    {
+      "id": "cochin-cusat",
+      "district": "cochin",
+      "districtName": "Cochin (Ernakulam)",
+      "type": "State University",
+      "name": "Cochin University of Science and Tech (CUSAT)",
+      "address": "CUSAT P.O., South Kalamassery, Kochi, Ernakulam",
+      "pincode": "682022",
+      "phone": "+91 484 257 5396",
+      "nodal": "Head, Dept of Computer Applications",
+      "capacity": "120 Seats",
+      "status": "Pitch Sent",
+      "score": 80
+    },
+    {
+      "id": "cochin-mec",
+      "district": "cochin",
+      "districtName": "Cochin (Ernakulam)",
+      "type": "Govt Engineering College",
+      "name": "Govt. Model Engineering College (MEC)",
+      "address": "Thrikkakara, Edappally, Kochi, Ernakulam",
+      "pincode": "682021",
+      "phone": "+91 484 257 5370",
+      "nodal": "Principal / HOD CSE",
+      "capacity": "80 Seats",
+      "status": "Scouted",
+      "score": 70
+    },
+    {
+      "id": "cochin-sh",
+      "district": "cochin",
+      "districtName": "Cochin (Ernakulam)",
+      "type": "Autonomous Arts/Commerce",
+      "name": "Sacred Heart College (Autonomous)",
+      "address": "Pandit Karuppan Road, Thevara, Kochi, Ernakulam",
+      "pincode": "682013",
+      "phone": "+91 484 287 0500",
+      "nodal": "Dean of Commerce",
+      "capacity": "70 Seats",
+      "status": "Scouted",
+      "score": 60
+    },
+    {
+      "id": "cochin-blastline",
+      "district": "cochin",
+      "districtName": "Cochin (Ernakulam)",
+      "type": "Private IT Institute",
+      "name": "Blastline Institute of Technology",
+      "address": "3rd Floor, Johns Tower, Near Metro Pillar 485, Edappally, Kochi",
+      "pincode": "682024",
+      "phone": "+91 81290 00500",
+      "nodal": "Center Director",
+      "capacity": "45 Seats",
+      "status": "Certified",
+      "score": 100
+    },
+    {
+      "id": "thrissur-vidya",
+      "district": "thrissur",
+      "districtName": "Thrissur",
+      "type": "Engineering College",
+      "name": "Vidya Academy of Science & Technology",
+      "address": "Thalakottukara P.O., Near Kaiparambu, Thrissur District",
+      "pincode": "680501",
+      "phone": "+91 4885 287 751",
+      "nodal": "Principal / Head of CS",
+      "capacity": "110 Seats",
+      "status": "Inspected",
+      "score": 90
+    },
+    {
+      "id": "thrissur-sahrdaya",
+      "district": "thrissur",
+      "districtName": "Thrissur",
+      "type": "Engineering College",
+      "name": "Sahrdaya College of Engineering & Tech",
+      "address": "PB No. 17, Kodakara, Thrissur District",
+      "pincode": "680684",
+      "phone": "+91 480 272 6630",
+      "nodal": "Director's Office / IT Lead",
+      "capacity": "90 Seats",
+      "status": "MoU Signed",
+      "score": 90
+    },
+    {
+      "id": "thrissur-christ",
+      "district": "thrissur",
+      "districtName": "Thrissur",
+      "type": "Engineering College",
+      "name": "Christ College of Engineering",
+      "address": "Cathedral Junction, Irinjalakuda, Thrissur",
+      "pincode": "680125",
+      "phone": "+91 480 282 5355",
+      "nodal": "Principal / HOD Computer Engg",
+      "capacity": "75 Seats",
+      "status": "Pitch Sent",
+      "score": 70
+    },
+    {
+      "id": "thrissur-stthomas",
+      "district": "thrissur",
+      "districtName": "Thrissur",
+      "type": "Autonomous College",
+      "name": "St. Thomas College (Autonomous)",
+      "address": "Post Office Road, Thrissur Town, Thrissur",
+      "pincode": "680001",
+      "phone": "+91 487 242 0435",
+      "nodal": "Principal / HOD Commerce",
+      "capacity": "60 Seats",
+      "status": "Scouted",
+      "score": 60
+    },
+    {
+      "id": "thrissur-atees",
+      "district": "thrissur",
+      "districtName": "Thrissur",
+      "type": "Private IT Institute",
+      "name": "ATEES Industrial Training Pvt Ltd",
+      "address": "Kuriland Tower, Marar Road, Thrissur Town",
+      "pincode": "680001",
+      "phone": "+91 85890 12025",
+      "nodal": "Technical Director",
+      "capacity": "40 Seats",
+      "status": "Scouted",
+      "score": 70
+    },
+    {
+      "id": "thrissur-nexlern",
+      "district": "thrissur",
+      "districtName": "Thrissur",
+      "type": "Private IT Institute",
+      "name": "Nexlern Academy LLP",
+      "address": "Grace Complex, Sankara Iyer Rd, MG Road, Thrissur",
+      "pincode": "680004",
+      "phone": "+91 81368 37383",
+      "nodal": "Academy Director",
+      "capacity": "35 Seats",
+      "status": "Scouted",
+      "score": 70
+    },
+    {
+      "id": "calicut-gec",
+      "district": "calicut",
+      "districtName": "Calicut (Kozhikode)",
+      "type": "Govt Engineering College",
+      "name": "Government Engineering College Kozhikode",
+      "address": "Kannur Road, West Hill, Kozhikode District",
+      "pincode": "673005",
+      "phone": "+91 495 238 3210",
+      "nodal": "Principal / HOD CSE",
+      "capacity": "95 Seats",
+      "status": "Inspected",
+      "score": 90
+    },
+    {
+      "id": "calicut-vedavyasa",
+      "district": "calicut",
+      "districtName": "Calicut (Kozhikode)",
+      "type": "Engineering College",
+      "name": "Vedavyasa Institute of Technology",
+      "address": "Karad Road, Vazhayur, Kozhikode/Malappuram Border",
+      "pincode": "673633",
+      "phone": "+91 483 283 2157",
+      "nodal": "Campus Director",
+      "capacity": "80 Seats",
+      "status": "Pitch Sent",
+      "score": 70
+    },
+    {
+      "id": "calicut-vadakara",
+      "district": "calicut",
+      "districtName": "Calicut (Kozhikode)",
+      "type": "Engineering College",
+      "name": "College of Engineering Vadakara",
+      "address": "Mandarathur P.O., Kurunthodi, Vadakara, Kozhikode",
+      "pincode": "673105",
+      "phone": "+91 496 253 7225",
+      "nodal": "IT Nodal Officer",
+      "capacity": "70 Seats",
+      "status": "Scouted",
+      "score": 60
+    },
+    {
+      "id": "calicut-devagiri",
+      "district": "calicut",
+      "districtName": "Calicut (Kozhikode)",
+      "type": "Autonomous College",
+      "name": "St. Joseph's College (Devagiri)",
+      "address": "Devagiri College P.O., Kozhikode",
+      "pincode": "673008",
+      "phone": "+91 495 235 5901",
+      "nodal": "Commerce Faculty Head",
+      "capacity": "75 Seats",
+      "status": "Scouted",
+      "score": 70
+    },
+    {
+      "id": "calicut-ipsr",
+      "district": "calicut",
+      "districtName": "Calicut (Kozhikode)",
+      "type": "Private IT Institute",
+      "name": "IPSR Solutions Limited",
+      "address": "3rd Floor, Vyapar Bhavan, Bank Road, Kozhikode",
+      "pincode": "673001",
+      "phone": "+91 94471 69776",
+      "nodal": "Regional Lead",
+      "capacity": "50 Seats",
+      "status": "Certified",
+      "score": 100
+    },
+    {
+      "id": "calicut-aamiz",
+      "district": "calicut",
+      "districtName": "Calicut (Kozhikode)",
+      "type": "Private IT Institute",
+      "name": "AAMIZ Institute of Technology",
+      "address": "Grand Plaza, Rajaji Road, Stadium Junction, Kozhikode",
+      "pincode": "673004",
+      "phone": "+91 90617 44166",
+      "nodal": "Head of Testing Services",
+      "capacity": "40 Seats",
+      "status": "Scouted",
+      "score": 70
+    },
+    {
+      "id": "kannur-gec",
+      "district": "kannur",
+      "districtName": "Kannur",
+      "type": "Govt Engineering College",
+      "name": "Government Engineering College Kannur",
+      "address": "Mangattuparamba, Parassinikkadavu P.O., Kannur",
+      "pincode": "670563",
+      "phone": "+91 497 278 0226",
+      "nodal": "Principal / HOD Computer Science",
+      "capacity": "85 Seats",
+      "status": "Inspected",
+      "score": 80
+    },
+    {
+      "id": "kannur-vimal",
+      "district": "kannur",
+      "districtName": "Kannur",
+      "type": "Engineering College",
+      "name": "Vimal Jyothi Engineering College",
+      "address": "Jyothi Nagar, Chemperi P.O., Kannur",
+      "pincode": "670632",
+      "phone": "+91 460 221 2220",
+      "nodal": "Network Administrator",
+      "capacity": "80 Seats",
+      "status": "Pitch Sent",
+      "score": 70
+    },
+    {
+      "id": "kannur-chinmaya",
+      "district": "kannur",
+      "districtName": "Kannur",
+      "type": "Management & Tech",
+      "name": "Chinmaya Institute of Technology",
+      "address": "Govind Giri, Chala, Thottada P.O., Kannur",
+      "pincode": "670007",
+      "phone": "+91 497 282 2923",
+      "nodal": "MCA Department Head",
+      "capacity": "60 Seats",
+      "status": "Scouted",
+      "score": 60
+    },
+    {
+      "id": "kannur-catalyst",
+      "district": "kannur",
+      "districtName": "Kannur",
+      "type": "Private Testing Hub",
+      "name": "Catalyst Education Tech Hub",
+      "address": "Royal Plaza, Near New Bus Stand, SN Park Road, Kannur",
+      "pincode": "670001",
+      "phone": "+91 97450 12345",
+      "nodal": "Center Director",
+      "capacity": "40 Seats",
+      "status": "Certified",
+      "score": 90
+    },
+    {
+      "id": "kottayam-saintgits",
+      "district": "kottayam",
+      "districtName": "Kottayam",
+      "type": "Engineering College",
+      "name": "Saintgits College of Engineering",
+      "address": "Kottukulam Hills, Pathamuttom P.O., Kottayam",
+      "pincode": "686532",
+      "phone": "+91 481 243 6169",
+      "nodal": "Principal / HOD CS",
+      "capacity": "95 Seats",
+      "status": "MoU Signed",
+      "score": 90
+    },
+    {
+      "id": "kottayam-amaljyothi",
+      "district": "kottayam",
+      "districtName": "Kottayam",
+      "type": "Autonomous Engineering",
+      "name": "Amal Jyothi College of Engineering",
+      "address": "Kanjirappally, Koovappally P.O., Kottayam",
+      "pincode": "686518",
+      "phone": "+91 4828 305 500",
+      "nodal": "IT Infrastructure Lead",
+      "capacity": "110 Seats",
+      "status": "Pitch Sent",
+      "score": 80
+    },
+    {
+      "id": "kottayam-cms",
+      "district": "kottayam",
+      "districtName": "Kottayam",
+      "type": "Autonomous College",
+      "name": "CMS College Kottayam (Autonomous)",
+      "address": "CMS College Road, Kottayam Town, Kottayam",
+      "pincode": "686001",
+      "phone": "+91 481 256 6002",
+      "nodal": "HOD Commerce",
+      "capacity": "65 Seats",
+      "status": "Scouted",
+      "score": 60
+    },
+    {
+      "id": "kottayam-marian",
+      "district": "kottayam",
+      "districtName": "Kottayam",
+      "type": "Autonomous College",
+      "name": "Marian College Kuttikkanam",
+      "address": "Kuttikkanam P.O., Peermade, Idukki / Kottayam Border",
+      "pincode": "685531",
+      "phone": "+91 4869 232 203",
+      "nodal": "Director of IT & Exams",
+      "capacity": "75 Seats",
+      "status": "Scouted",
+      "score": 70
+    }
+  ],
+  "tasks": [
+    {
+      "id": 1,
+      "title": "Dispatch Multi-Exam Pearson VUE Dossier to Rajagiri College",
+      "assignee": "Scout Squad",
+      "status": "todo",
+      "priority": "high"
+    },
+    {
+      "id": 2,
+      "title": "Conduct Physical 4-ft Spacing Verification at Vidya Academy Thrissur",
+      "assignee": "Tech Audit Squad",
+      "status": "inprogress",
+      "priority": "high"
+    },
+    {
+      "id": 3,
+      "title": "Install Pearson VUE Site Manager Browser at Saintgits Kottayam",
+      "assignee": "Pearson Liaison",
+      "status": "done",
+      "priority": "high"
+    },
+    {
+      "id": 4,
+      "title": "Review Generator Zero-Transfer Latency at GEC Kozhikode",
+      "assignee": "Tech Audit Squad",
+      "status": "todo",
+      "priority": "medium"
+    },
+    {
+      "id": 5,
+      "title": "Finalize Commercial Revenue Sharing with Sahrdaya Kodakara",
+      "assignee": "Operations Lead",
+      "status": "inprogress",
+      "priority": "high"
+    }
+  ],
+  "auditCriteria": [
+    {
+      "id": "c1",
+      "text": "Workstation OS: Windows 10/11 64-bit clean install (No piracy/adware)",
+      "weight": 10
+    },
+    {
+      "id": "c2",
+      "text": "RAM & CPU: Minimum 4GB RAM + Intel i3/i5 multi-core processor",
+      "weight": 10
+    },
+    {
+      "id": "c3",
+      "text": "Display: Minimum 15-inch monitor (1024x768 or higher native resolution)",
+      "weight": 10
+    },
+    {
+      "id": "c4",
+      "text": "Physical Spacing: 4 feet (1.2m) separation OR rigid 18-inch privacy partitions",
+      "weight": 10
+    },
+    {
+      "id": "c5",
+      "text": "Internet Connection: Dedicated commercial static IP line (10+ Mbps wired Ethernet)",
+      "weight": 10
+    },
+    {
+      "id": "c6",
+      "text": "Zero-Latency Power: Commercial Online UPS with battery bank (min 30 min runtime)",
+      "weight": 10
+    },
+    {
+      "id": "c7",
+      "text": "Emergency Power: Automatic Diesel Generator (DG) synchronization",
+      "weight": 10
+    },
+    {
+      "id": "c8",
+      "text": "CCTV Surveillance: High-res cameras covering every candidate screen with zero blind spots",
+      "weight": 10
+    },
+    {
+      "id": "c9",
+      "text": "Proctor Command: Dedicated administrator PC overlooking candidate room",
+      "weight": 10
+    },
+    {
+      "id": "c10",
+      "text": "Security & Lockers: Lockable candidate storage & strict no-cellphone check-in gate",
+      "weight": 10
+    }
+  ],
+  "programmeGroups": [
+    {
+      "title": "IT, Cloud & Cybersecurity",
+      "programmes": [
+        "Amazon Web Services (AWS)",
+        "Microsoft Azure & Role-Based",
+        "Cisco (CCNA, CCNP)",
+        "CompTIA (Security+, Network+)",
+        "Oracle & VMware Certifications"
+      ]
+    },
+    {
+      "title": "Chartered Accounting & Finance",
+      "programmes": [
+        "ACCA (Session & On-Demand CBE)",
+        "US CMA (Institute of Mgmt Accountants)",
+        "CIMA (Chartered Global Mgmt Acct)",
+        "CIA (Certified Internal Auditor)",
+        "CFA Institute Screenings"
+      ]
+    },
+    {
+      "title": "Language & Global Licensure",
+      "programmes": [
+        "PTE Academic (Pearson Test of English)",
+        "NCLEX (US/Canada Registered Nurse)",
+        "GMAT (Graduate Management Admission)",
+        "DHA / MOH (Middle East Medical Licensing)",
+        "Professional Licensure Screenings"
+      ]
+    }
+  ]
+}
