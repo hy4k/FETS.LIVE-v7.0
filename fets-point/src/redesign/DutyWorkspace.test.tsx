@@ -151,6 +151,14 @@ function mount(
   );
   return m;
 }
+async function openDuty(title = "Prepare lab") {
+  const heading = await screen.findByRole("heading", {
+    name: title,
+    exact: true,
+  });
+  const summary = heading.closest("summary")!;
+  if (!summary.parentElement!.hasAttribute("open")) fireEvent.click(summary);
+}
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
@@ -159,8 +167,11 @@ afterEach(() => {
 describe("outcome duty workplace", () => {
   it("starts staff with their own agreement and puts planning in a separate destination", async () => {
     mount();
-    const list = await screen.findByRole("region", { name: "My duties" });
-    expect(within(list).getByText("Prepare lab")).toBeInTheDocument();
+    const list = await screen.findByRole("region", { name: "My timetable" });
+    expect(
+      within(list).getByRole("heading", { name: "Prepare lab" }),
+    ).toBeVisible();
+    await openDuty();
     expect(
       within(list).queryByText("Order stationery"),
     ).not.toBeInTheDocument();
@@ -176,6 +187,7 @@ describe("outcome duty workplace", () => {
   });
   it("requires a result and sends it for independent review with the current version", async () => {
     const m = mount();
+    await openDuty();
     fireEvent.click(await screen.findByRole("button", { name: "Start duty" }));
     fireEvent.click(await screen.findByRole("button", { name: "Finish duty" }));
     expect(
@@ -212,6 +224,7 @@ describe("outcome duty workplace", () => {
         : original(t, action, note),
     );
     mount(m);
+    await openDuty();
     fireEvent.click(await screen.findByRole("button", { name: "Start duty" }));
     fireEvent.click(await screen.findByRole("button", { name: "Finish duty" }));
     fireEvent.change(screen.getByLabelText("What did you complete?"), {
@@ -232,6 +245,7 @@ describe("outcome duty workplace", () => {
   });
   it("asks for the kind of support and a specific explanation", async () => {
     const m = mount();
+    await openDuty();
     fireEvent.click(await screen.findByRole("button", { name: "Need help" }));
     fireEvent.change(
       screen.getByLabelText("What is stopping you, and what would help?"),
@@ -269,6 +283,7 @@ describe("outcome duty workplace", () => {
     m.work.access.mockResolvedValue({ lead: true, manager: false });
     mount(m, "a");
     fireEvent.click(await screen.findByRole("button", { name: "Team" }));
+    await openDuty();
 
     expect(
       screen.getByRole("button", { name: "Verify result" }),
@@ -300,8 +315,8 @@ describe("outcome duty workplace", () => {
     );
     mount(m, "a");
     fireEvent.click(await screen.findByRole("button", { name: "Team" }));
+    await openDuty();
 
-    fireEvent.click(screen.getByRole("button", { name: /All duties/ }));
     fireEvent.click(
       within(screen.getByRole("article", { name: "Prepare lab" })).getByRole(
         "button",
@@ -332,7 +347,7 @@ describe("outcome duty workplace", () => {
     m.work.access.mockResolvedValue({ lead: true, manager: false });
     mount(m, "a");
 
-    fireEvent.click(await screen.findByText(/Submitted & closed/));
+    await openDuty();
     await screen.findByText(
       "Sent for review. Another lead will check your result.",
     );
@@ -342,6 +357,7 @@ describe("outcome duty workplace", () => {
   });
   it("shows historical duties but disables new actions until the server is activated", async () => {
     mount(mocks(), "b", false, false);
+    await openDuty();
     await screen.findByText(responsibility.expected_result);
     expect(screen.getByRole("button", { name: "Start duty" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Need help" })).toBeDisabled();
@@ -375,7 +391,7 @@ describe("outcome duty workplace", () => {
     });
     mount(m);
     fireEvent.click(
-      await screen.findByRole("button", { name: "Record DVR at 10:06" }),
+      await screen.findByRole("button", { name: /Record DVR check.*10:06/ }),
     );
     await waitFor(() =>
       expect(m.repository.event).toHaveBeenCalledWith({
@@ -471,20 +487,27 @@ describe("outcome duty workplace", () => {
     ).toBeDisabled();
     expect(m.work.saveNote).not.toHaveBeenCalled();
   });
-  it("shows every own duty directly and offers one main step at a time", async () => {
+  it("keeps duty titles in the timetable and opens the agreement only when needed", async () => {
     const m = mocks();
     m.blueprint.responsibilities.mockResolvedValue([
       responsibility,
       { ...responsibility, id: "r2", title: "Check supplies", owner_id: "b" },
     ]);
     mount(m);
-    const list = await screen.findByRole("region", { name: "My duties" });
+    const list = await screen.findByRole("region", { name: "My timetable" });
+    expect(
+      within(list).getByRole("heading", { name: "Prepare lab" }),
+    ).toBeVisible();
+    expect(
+      within(list).getByRole("heading", { name: "Check supplies" }),
+    ).toBeVisible();
+    screen
+      .getAllByRole("button", { name: "Start duty" })
+      .forEach((button) => expect(button).not.toBeVisible());
+    await openDuty();
     const first = within(list).getByRole("article", { name: "Prepare lab" });
     expect(
       within(first).getByText(responsibility.expected_result),
-    ).toBeVisible();
-    expect(
-      within(list).getByRole("article", { name: "Check supplies" }),
     ).toBeVisible();
     expect(
       within(first).getByRole("button", { name: "Start duty" }),
@@ -492,16 +515,15 @@ describe("outcome duty workplace", () => {
     expect(
       within(first).queryByRole("button", { name: "Finish duty" }),
     ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("group", { name: "Filter duties" }),
-    ).not.toBeInTheDocument();
   });
   it("disables future work actions before they can produce a server error", async () => {
     mount();
-    await screen.findByRole("region", { name: "My duties" });
+    await screen.findByRole("region", { name: "My timetable" });
     fireEvent.change(screen.getByLabelText("Working day"), {
       target: { value: "2099-01-01" },
     });
+    await screen.findByText(/You are viewing a future/);
+    await openDuty();
     await screen.findByText("Work updates are available on the day.");
     expect(screen.getByRole("button", { name: "Start duty" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Need help" })).toBeDisabled();
@@ -520,6 +542,7 @@ describe("outcome duty workplace", () => {
     });
     mount(m);
     await screen.findByText(/Report sent. This day is closed/);
+    await openDuty();
     expect(screen.getByRole("button", { name: "Start duty" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Need help" })).toBeDisabled();
     expect(m.work.action).not.toHaveBeenCalled();
@@ -531,10 +554,15 @@ describe("outcome duty workplace", () => {
     m.work.access.mockResolvedValue({ lead: true, manager: true });
     m.blueprint.tasks.mockResolvedValue([{ ...task, day: centreDate() }]);
     mount(m, "a", true);
-    const card = await screen.findByRole("article", { name: "Prepare lab" });
-    expect(within(card).getByText("By 10:00")).toHaveClass("is-late");
+    const focus = await screen.findByRole("button", { name: /need attention/ });
+    expect(focus).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(focus);
     expect(
-      screen.getByRole("button", { name: /Needs attention/ }),
+      await screen.findByRole("heading", { name: "Prepare lab" }),
+    ).toBeVisible();
+    expect(screen.getAllByText(/overdue/).length).toBeGreaterThan(0);
+    expect(
+      screen.getByRole("button", { name: /Show whole day/ }),
     ).toHaveAttribute("aria-pressed", "true");
   });
   it("shows a roster mismatch explicitly instead of inventing a personal post", async () => {
@@ -545,6 +573,62 @@ describe("outcome duty workplace", () => {
     expect(
       screen.queryByRole("button", { name: /Record DVR|Record walk/ }),
     ).not.toBeInTheDocument();
+  });
+  it("orders posts, breaks and deadlines together and identifies the current interval", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-19T05:07:00Z"));
+    const m = mocks(),
+      plan = createDayPlan(team);
+    plan.breaks.filter((b) => b.staff === "b").forEach((b) => (b.cover = "c"));
+    m.repository.load.mockResolvedValue({
+      record: { id: "plan", plan, status: "published" },
+      lead: { lead_id: "a" },
+      events: [],
+      changes: [],
+      closed: false,
+    } as any);
+    m.blueprint.tasks.mockResolvedValue([
+      { ...task, day: centreDate(), due_minute: 540 },
+    ]);
+    mount(m);
+    const board = await screen.findByRole("region", { name: "My timetable" });
+    const rows = Array.from(board.querySelectorAll(".st-entry"));
+    expect(rows.slice(0, 3).map((r) => r.getAttribute("data-time"))).toEqual([
+      "480",
+      "540",
+      "570",
+    ]);
+    const current = board.querySelector(".is-current")!;
+    expect(current).toHaveTextContent("10:30");
+    expect(current).toHaveTextContent("to 11:00");
+    expect(current).toHaveTextContent("Break");
+    expect(current).toHaveTextContent("Cover: Colleague C");
+    expect(screen.queryByText("Verified by")).not.toBeInTheDocument();
+  });
+  it("shows effective cover in the team timetable at the exact break boundary", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-19T04:30:00Z"));
+    const m = mocks(),
+      plan = createDayPlan(team);
+    plan.breaks.find((b) => b.staff === "a" && b.start === 600)!.cover = "c";
+    m.repository.load.mockResolvedValue({
+      record: { id: "plan", plan, status: "published" },
+      lead: { lead_id: "a" },
+      events: [],
+      changes: [],
+      closed: false,
+    } as any);
+    m.work.access.mockResolvedValue({ lead: true, manager: true });
+    mount(m, "a", true);
+    const board = await screen.findByRole("region", { name: "Team timetable" });
+    const current = board.querySelector(".is-current")!;
+    expect(current).toHaveTextContent("10:00");
+    const control = Array.from(
+      current.querySelectorAll(".st-lanes > div"),
+    ).find((el) => el.textContent?.includes("Check-in & DVR"))!;
+    expect(control.querySelector("strong")).toHaveTextContent("Colleague C");
+    expect(control).toHaveTextContent("Cover for Colleague A");
+    expect(current).toHaveTextContent("Colleague A on break until 10:30");
   });
   it("keeps submitted results separate from verified work in the day report", async () => {
     const m = mocks();

@@ -46,7 +46,27 @@ const assert = require("node:assert/strict");
       });
     };
     await page.goto("http://127.0.0.1:3012/shift-preview.html");
-    await page.getByRole("region", { name: "My duties" }).waitFor();
+    await page
+      .getByRole("region", { name: "My timetable", exact: true })
+      .waitFor();
+    const openDuty = async (title) => {
+      const summary = page
+        .locator(".st-task-detail > summary")
+        .filter({
+          has: page.getByRole("heading", { name: title, exact: true }),
+        });
+      if (!((await summary.locator("..").getAttribute("open")) !== null))
+        await summary.click();
+    };
+    const times = await page
+      .locator(".st-entry")
+      .evaluateAll((rows) => rows.map((r) => Number(r.dataset.time)));
+    assert.deepEqual(
+      times,
+      [...times].sort((a, b) => a - b),
+    );
+    await shot("staff");
+    await openDuty("Prepare the exam lab");
     const lab = page.getByRole("article", { name: "Prepare the exam lab" });
     await lab.getByText("Done means", { exact: true }).waitFor();
     assert.equal(
@@ -55,8 +75,7 @@ const assert = require("node:assert/strict");
         .count(),
       0,
     );
-    assert.equal(await page.locator(".sw-duty-cards .sw-duty-card").count(), 3);
-    await shot("staff");
+    assert.equal(await page.locator(".st-task").count(), 3);
     await lab.getByRole("button", { name: "Start duty", exact: true }).click();
     await lab.getByRole("button", { name: "Finish duty", exact: true }).click();
     assert.ok(
@@ -76,7 +95,6 @@ const assert = require("node:assert/strict");
         exact: true,
       })
       .waitFor();
-    await page.getByText("Submitted & closed", { exact: false }).click();
     await lab
       .getByText("Sent for review. Another lead will check your result.", {
         exact: true,
@@ -88,6 +106,7 @@ const assert = require("node:assert/strict");
         .count(),
       0,
     );
+    await openDuty("Call tomorrow’s candidates");
     const calls = page.getByRole("article", {
       name: "Call tomorrow’s candidates",
     });
@@ -111,7 +130,10 @@ const assert = require("node:assert/strict");
       .waitFor();
     await shot("help");
     await page.getByLabel("Preview role").selectOption("manager");
-    await page.getByRole("region", { name: "Team duties" }).waitFor();
+    await page
+      .getByRole("region", { name: "Team timetable", exact: true })
+      .waitFor();
+    await openDuty("Prepare the exam lab");
     assert.ok(
       (await page
         .getByRole("article", { name: "Prepare the exam lab" })
@@ -162,19 +184,17 @@ const assert = require("node:assert/strict");
     await page.getByLabel("Preview role").selectOption("cover");
     await page.getByLabel("Preview time").selectOption("10:07");
     await page
-      .getByRole("region", { name: "My current responsibility" })
-      .getByRole("button", { name: "Record DVR at 10:06", exact: true })
+      .getByRole("region", { name: "My timetable", exact: true })
+      .getByRole("button", { name: /Record DVR check.*10:06/ })
       .waitFor();
     await shot("break-cover");
-    await page
-      .getByRole("button", { name: "Record DVR at 10:06", exact: true })
-      .click();
+    await page.getByRole("button", { name: /Record DVR check.*10:06/ }).click();
     await page
       .getByText("Check recorded at the current time.", { exact: true })
       .waitFor();
     assert.equal(
       await page
-        .getByRole("button", { name: "Record DVR at 10:06", exact: true })
+        .getByRole("button", { name: /Record DVR check.*10:06/ })
         .count(),
       0,
     );
@@ -226,7 +246,7 @@ const assert = require("node:assert/strict");
       width,
       errors,
       journeys: [
-        "all own duties visible",
+        "chronological timetable, expandable work and named cover",
         "start/finish/result",
         "independent verification",
         "specific help request",

@@ -1,6 +1,7 @@
 import WorkDetail from "./ShiftDuty";
 import DevelopmentReview from "./ShiftDevelopment";
-import { LiveResponsibility, ShiftTimetable } from "./ShiftCoverage";
+import { ShiftTimetable } from "./ShiftCoverage";
+import ShiftDayTimeline from "./ShiftDayTimeline";
 import type { DayData } from "./shift-work-types";
 import React, { useEffect, useState } from "react";
 import {
@@ -15,8 +16,6 @@ import {
 import { useAuth } from "../hooks/useAuth";
 import { centreDate } from "./operations-data";
 import { clock, minutes, type TeamMember } from "./shift-plan";
-import { personalSchedule } from "./shift-day";
-import { laneInfo } from "./shift-plan";
 import {
   dayList,
   actionablesDue,
@@ -30,19 +29,13 @@ import {
   type BlueprintRepository,
 } from "./shift-blueprint-repository";
 import { workRepository, type WorkRepository } from "./shift-work-repository";
-import {
-  contract,
-  orderedWork,
-  overdue,
-  workState,
-  WORK_LABELS,
-  type WorkAction,
-} from "./shift-work";
+import { contract, overdue, type WorkAction } from "./shift-work";
 import { Blueprint, DayReport, dayLead, type ShiftIdentity } from "./TheShift";
 import { DayWorkspace, MonthPlanner, Reports } from "./DutyPlanning";
 import { useWorkspaceCapabilities } from "./useWorkspaceCapabilities";
 import "./duty-workspace.css";
 import "./shift-workspace.css";
+import "./shift-timetable.css";
 
 const errorText = (e: unknown) =>
   e instanceof Error ? e.message : "Could not save. Please try again.";
@@ -122,8 +115,6 @@ export function ShiftWorkplace({
   const [reload, setReload] = useState(0);
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(new Date());
-  const [person, setPerson] = useState("all");
-  const [filter, setFilter] = useState("attention");
   const [adding, setAdding] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
   useEffect(() => {
@@ -142,7 +133,6 @@ export function ShiftWorkplace({
   useEffect(() => {
     setData(null);
     setLoading(true);
-    setPerson("all");
     setError("");
     setLoadError("");
   }, [branch, day]);
@@ -295,50 +285,11 @@ export function ShiftWorkplace({
               ? "Help requested. Your lead can see what you need."
               : "Duty updated.",
     );
-  const needsAttention = (i: ListItem) =>
-    ["help", "unassigned", "review"].includes(workState(i)) ||
-    overdue(i, day, today, time);
-  const myItems = items.filter((i) => i.assignee === identity.profileId);
-  const base =
-    view === "mine"
-      ? myItems
-      : items.filter(
-          (i) =>
-            person === "all" ||
-            i.assignee === person ||
-            (person === "none" && !i.assignee),
-        );
-  const list = orderedWork(base).filter(
-    (i) =>
-      filter === "all" ||
-      (filter === "attention"
-        ? needsAttention(i)
-        : filter === "active"
-          ? !["verified", "carried", "skipped"].includes(workState(i))
-          : filter === "overdue"
-            ? overdue(i, day, today, time)
-            : workState(i) === filter),
-  );
-
   const sharedProps = { branch, day, identity, repository, blueprint };
   const showView = (next: typeof view) => {
     setView(next);
-    setFilter("attention");
     setNotice("");
   };
-  const pending = orderedWork(
-    myItems.filter(
-      (i) =>
-        !["review", "verified", "carried", "skipped"].includes(workState(i)),
-    ),
-  );
-  const submitted = orderedWork(
-    myItems.filter((i) =>
-      ["review", "verified", "carried", "skipped"].includes(workState(i)),
-    ),
-  );
-  const verified = myItems.filter((i) => workState(i) === "verified").length;
-  const rostered = Boolean(data?.team.some((p) => p.id === identity.profileId));
   const renderDuty = (item: ListItem) => (
     <WorkDetail
       key={item.key}
@@ -494,25 +445,17 @@ export function ShiftWorkplace({
             <>
               {(view === "mine" || view === "team") && (
                 <>
-                  <div className="sw-day-heading">
-                    <div>
-                      <h2>{view === "mine" ? identity.name : "Team shift"}</h2>
-                      <p>{dateLabel(day)} · India time</p>
-                    </div>
-                    <div className="sw-lead">
-                      <span>Shift lead</span>
+                  <div className="st-day-context">
+                    <span>{dateLabel(day)} · India time</span>
+                    <span>
+                      Shift lead{" "}
                       <strong>{leadId ? names(leadId) : "Not assigned"}</strong>
-                      {leadId === identity.profileId && (
-                        <small>Your regular duties still apply.</small>
-                      )}
-                    </div>
+                    </span>
                   </div>
                   {day !== today && (
                     <div className="sw-notice">
-                      {day > today
-                        ? "You are viewing a future shift."
-                        : "You are viewing an earlier shift."}{" "}
-                      Live check buttons are available only for today.
+                      You are viewing {day > today ? "a future" : "an earlier"}{" "}
+                      shift. Live check buttons are available only for today.
                     </div>
                   )}
                   {data.closed && (
@@ -521,289 +464,39 @@ export function ShiftWorkplace({
                       to read.
                     </div>
                   )}
-                  {view === "mine" && (
-                    <>
-                      <LiveResponsibility
-                        data={data}
-                        day={day}
-                        today={today}
-                        time={time}
-                        identity={identity}
-                        names={names}
-                        busy={busy}
-                        onCheck={(point) =>
-                          void act(async () => {
-                            if (data.record) {
-                              const saved = await repository.event({
-                                plan_id: data.record.id,
-                                block: point.block,
-                                lane: point.lane,
-                                kind: point.kind,
-                                due: point.due,
-                                note: "",
-                              });
-                              setData(
-                                (d) =>
-                                  d && { ...d, events: [...d.events, saved] },
-                              );
-                            }
-                          }, "Check recorded at the current time.")
+                  <ShiftDayTimeline
+                    key={`${view}:${day}:${branch}`}
+                    data={data}
+                    items={items}
+                    day={day}
+                    today={today}
+                    time={time}
+                    identity={identity}
+                    teamView={view === "team"}
+                    canLead={canLead}
+                    busy={busy}
+                    ready={workflowReady}
+                    names={names}
+                    renderDuty={renderDuty}
+                    onAdd={() => setAdding(true)}
+                    onCheck={(point) =>
+                      void act(async () => {
+                        if (data.record) {
+                          const saved = await repository.event({
+                            plan_id: data.record.id,
+                            block: point.block,
+                            lane: point.lane,
+                            kind: point.kind,
+                            due: point.due,
+                            note: "",
+                          });
+                          setData(
+                            (d) => d && { ...d, events: [...d.events, saved] },
+                          );
                         }
-                      />
-                      <section className="sw-duties" aria-label="My duties">
-                        <header className="sw-section-heading">
-                          <div>
-                            <h2>
-                              My duties{" "}
-                              <span className="sw-count">{myItems.length}</span>
-                            </h2>
-                            <p>
-                              {pending.length
-                                ? `${pending.length} to do or continue`
-                                : "No outstanding assigned duties"}
-                              {myItems.length > 0 && ` · ${verified} verified`}
-                            </p>
-                          </div>
-                        </header>
-                        {!rostered && (
-                          <div className="sw-notice">
-                            You are not on this centre’s roster for{" "}
-                            {dateLabel(day)}. Ask the lead if your shift has
-                            changed.
-                          </div>
-                        )}
-                        {pending.length ? (
-                          <div className="sw-duty-cards">
-                            {pending.map(renderDuty)}
-                          </div>
-                        ) : (
-                          <div className="sw-empty sw-complete">
-                            <CheckCheck size={23} />
-                            <div>
-                              <h3>
-                                {myItems.length
-                                  ? "Your remaining duties are with the reviewer or closed."
-                                  : "No duties assigned"}
-                              </h3>
-                              <p>
-                                {myItems.length
-                                  ? "Check the submitted work below for feedback."
-                                  : "The lead can assign work here. Published post coverage is shown above."}
-                              </p>
-                            </div>
-                          </div>
-                        )}
-                        {submitted.length > 0 && (
-                          <details className="sw-submitted">
-                            <summary>
-                              <span>
-                                Submitted & closed <b>{submitted.length}</b>
-                              </span>
-                              <ChevronDown size={17} />
-                            </summary>
-                            <div className="sw-duty-cards">
-                              {submitted.map(renderDuty)}
-                            </div>
-                          </details>
-                        )}
-                      </section>
-                    </>
-                  )}
-                  {view === "team" && (
-                    <>
-                      <div className="sw-team-actions">
-                        <p>
-                          {data.team.length} on the roster ·{" "}
-                          {data.record?.status === "published"
-                            ? "Coverage published"
-                            : "Coverage not published"}
-                        </p>
-                        {canLead && (
-                          <button
-                            className="sw-primary"
-                            disabled={busy || data.closed || !workflowReady}
-                            onClick={() => setAdding(true)}
-                          >
-                            <Plus size={15} />
-                            Assign a duty
-                          </button>
-                        )}
-                      </div>
-                      <div
-                        className="sw-team-people"
-                        aria-label="Staff on this shift"
-                      >
-                        {data.team.map((p) => {
-                          const duties = items.filter(
-                            (i) => i.assignee === p.id,
-                          );
-                          const slot =
-                            day === today && data.record?.status === "published"
-                              ? personalSchedule(
-                                  data.record.plan,
-                                  data.changes,
-                                  p.id,
-                                ).find((s) => s.start <= time && s.end > time)
-                              : null;
-                          const post = slot
-                            ? slot.kind === "break"
-                              ? "On break"
-                              : slot.lanes
-                                  .map((l) => laneInfo[l].title)
-                                  .join(" + ")
-                            : data.record?.status !== "published"
-                              ? "Coverage not published"
-                              : day === today
-                                ? "No current post"
-                                : "See timetable";
-                          const help = duties.filter(
-                            (i) => workState(i) === "help",
-                          ).length;
-                          const review = duties.filter(
-                            (i) => workState(i) === "review",
-                          ).length;
-                          return (
-                            <button
-                              key={p.id}
-                              className="sw-colleague"
-                              aria-pressed={person === p.id}
-                              onClick={() => {
-                                setPerson(person === p.id ? "all" : p.id);
-                                setFilter("all");
-                              }}
-                            >
-                              <span className="sw-avatar">
-                                {p.name
-                                  .split(/\s+/)
-                                  .map((n) => n[0])
-                                  .slice(0, 2)
-                                  .join("")}
-                              </span>
-                              <span>
-                                <strong>
-                                  {p.name}
-                                  {p.id === leadId && <small>Lead</small>}
-                                </strong>
-                                <span className="sw-colleague-post">
-                                  {post}
-                                </span>
-                                <span>
-                                  {duties.length} duties ·{" "}
-                                  {
-                                    duties.filter(
-                                      (i) => workState(i) === "verified",
-                                    ).length
-                                  }{" "}
-                                  verified
-                                </span>
-                                {(help > 0 || review > 0) && (
-                                  <em>
-                                    {[
-                                      help ? `${help} need help` : "",
-                                      review ? `${review} to review` : "",
-                                    ]
-                                      .filter(Boolean)
-                                      .join(" · ")}
-                                  </em>
-                                )}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <section className="sw-duties" aria-label="Team duties">
-                        <header className="sw-section-heading">
-                          <div>
-                            <h2>
-                              {person === "all"
-                                ? "Duties"
-                                : `${names(person)} · duties`}
-                            </h2>
-                            <p>
-                              {canLead
-                                ? "Assign open work, respond to help requests and check submitted results."
-                                : "See who owns each duty and its current status."}
-                            </p>
-                          </div>
-                        </header>
-                        <div className="sw-list-toolbar">
-                          <div
-                            className="sw-filters"
-                            aria-label="Filter duties"
-                          >
-                            {[
-                              ["attention", "Needs attention"],
-                              ["help", "Need help"],
-                              ["review", "To review"],
-                              ["unassigned", "Unassigned"],
-                              ["all", "All duties"],
-                            ].map(([id, label]) => (
-                              <button
-                                key={id}
-                                aria-pressed={filter === id}
-                                onClick={() => setFilter(id)}
-                              >
-                                {label}
-                                <span>
-                                  {
-                                    base.filter(
-                                      (i) =>
-                                        id === "all" ||
-                                        (id === "attention"
-                                          ? needsAttention(i)
-                                          : workState(i) === id),
-                                    ).length
-                                  }
-                                </span>
-                              </button>
-                            ))}
-                          </div>
-                          <label className="sw-person-filter">
-                            <span className="sw-sr">Filter by owner</span>
-                            <select
-                              aria-label="Filter by owner"
-                              value={person}
-                              onChange={(e) => setPerson(e.target.value)}
-                            >
-                              <option value="all">Everyone</option>
-                              <option value="none">Not assigned</option>
-                              {[
-                                ...new Map(
-                                  [...data.team, ...data.people].map((p) => [
-                                    p.id,
-                                    p,
-                                  ]),
-                                ).values(),
-                              ].map((p) => (
-                                <option key={p.id} value={p.id}>
-                                  {p.name}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                        </div>
-                        {list.length ? (
-                          <div className="sw-duty-cards">
-                            {list.map(renderDuty)}
-                          </div>
-                        ) : (
-                          <div className="sw-empty">
-                            <CheckCheck size={23} />
-                            <h3>
-                              {items.length
-                                ? "No duties in this view"
-                                : "No duties assigned for this day"}
-                            </h3>
-                            <p>
-                              {filter === "attention"
-                                ? "No unassigned, overdue or blocked duties, or results waiting for review."
-                                : "Choose All duties or another owner."}
-                            </p>
-                          </div>
-                        )}
-                      </section>
-                    </>
-                  )}
+                      }, "Check recorded at the current time.")
+                    }
+                  />
                   {(data.actionablesFailed || linked.length > 0) && (
                     <div className="sw-linked-work">
                       <div>
@@ -824,17 +517,17 @@ export function ShiftWorkplace({
                       <div>
                         <h2>
                           {view === "mine"
-                            ? "My timetable & handover"
-                            : "Coverage & handovers"}
+                            ? "Handover records"
+                            : "Handover records"}
                         </h2>
-                        <p>90-minute rotations · named break cover</p>
+                        <p>Record and review the result of each post.</p>
                       </div>
                       <button
                         className="sw-secondary"
                         aria-expanded={showSchedule}
                         onClick={() => setShowSchedule((v) => !v)}
                       >
-                        {showSchedule ? "Hide timetable" : "Open timetable"}
+                        {showSchedule ? "Hide handovers" : "Open handovers"}
                         <ChevronDown size={15} />
                       </button>
                     </div>
@@ -996,7 +689,6 @@ export function ShiftWorkplace({
             void act(async () => {
               replace(await work.add({ ...input, branch, day }));
               setAdding(false);
-              setFilter("all");
             }, "Duty assigned.")
           }
         />

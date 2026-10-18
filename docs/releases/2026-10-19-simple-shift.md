@@ -1,12 +1,16 @@
-# The Shift — simple daily work
+# The Shift — the day in time order
 
 Prepared on 19 October 2026, based on the currently deployed Actionables release and its follow-up migration records. This release is a website redesign. It uses the existing Shift repositories and capability version 5; it requires no database migration.
 
-Staff previously had to choose a duty in a list, find its detail panel, interpret several filters and open a hidden timetable. My shift now shows the current post, the next post or break, and the next required check together. All personal duties appear directly below, with the owner/backup, target time, expected result and instructions. Failed saves retain the written draft and visible error through background refresh. Each duty offers one main step: Start duty, then Finish duty with a written result. Need help remains available. Submitted and closed work is retained in a separate expandable list; submission is never labelled verification.
+The Shift opens as a chronological timetable. Post intervals, breaks and assigned-work deadlines appear in one sequence. The current post has a distinct green treatment, and the clock jumps to it. Deadline rows show progress without hiding them after submission. Opening a duty reveals the expected result, instructions, Start/Finish, help request, evidence and independent review controls in place.
 
-The post summary uses the published rota and its effective coverage changes. Its end time is the next actual change, including breaks inside a rotation. Named break cover receives the corresponding checks, and current block instructions remain visible. Earlier unrecorded checkpoints are shown as missing records, not backfilled. Future work actions are disabled with an explanation, and sending the day report immediately closes the local view to further edits.
+The timetable follows the published rota and effective coverage changes. Personal intervals end at break and rotation boundaries. The team timetable splits at every rotation, break and effective coverage change, showing the actual responsible person and named cover. Future work remains visible but cannot be started. Submitted work stays unverified until an independent reviewer verifies it; elapsed post time never implies a completed check or task.
 
-Team opens on duties needing attention: missing owners, overdue work, help requests and results awaiting review. Colleague cards show the published current post and assigned work. Leads can assign work, respond to support needs, inspect results and verify or return them. Leads retain their own duties and cannot verify their own results. Plan has plain Daily coverage, Regular duties and Weekly leads destinations. Report distinguishes independently verified work from results still awaiting review. People retains management recognition, support, training and warnings with evidence, context, an action and a follow-up date; staff retain their private feedback and response controls.
+My shift shows the signed-in person’s day; Team shows everyone’s responsibilities and deadlines in time order. A needs-attention filter brings forward unassigned work, overdue duties, help requests and results awaiting review, and a single action restores the whole day. Earlier missing checks are disclosed as missing records and cannot be backfilled. Handover records remain available below the timetable.
+
+The visual design uses warm off-white, dark green, restrained status colours, aligned time labels and expandable work rows. Desktop, tablet and phone layouts use the same chronological order. The timetable supports keyboard expansion, visible focus, reduced-motion navigation and a compact current-post shortcut.
+
+Leads retain Plan, independent verification, help requests and report submission. Managers retain evidence-based private recognition, support, training, warnings and follow-up outcomes. Saved result drafts and errors survive failed writes and background refresh, and report submission immediately closes the local day to further changes.
 
 ## Preservation and scope
 
@@ -19,10 +23,10 @@ Team opens on duties needing attention: missing owners, overdue work, help reque
 ## Validation
 
 - TypeScript and the production build pass. Existing chunk-size/Browserslist warnings remain.
-- 67 frontend checks pass, including written results, failed-save retention, independent review, future and closed days, role controls, management privacy/context, overdue attention and report verification totals.
-- 29 isolated PostgreSQL checks pass against the existing workflow, including ownership, version conflicts, required evidence, privacy, future-day restrictions, closure and data-preserving rollback compatibility. These checks never connect to production.
-- Browser journeys pass at 1440, 768, 393 and 320 pixels without page errors or horizontal overflow. They exercise the staff start/finish/result flow, specific help, independent verification, team attention, assignment keyboard focus/Escape, management evidence, warning context, named break-cover checks, regular duties and report submission/closure.
-- The standalone preview loads without a preview server or network connection. It uses clearly labelled fictional staff and in-memory records. Its role and time selectors are review controls only. Local preview markers and example case references are absent from the production bundle.
+- 49 targeted frontend checks pass across six files (21 workspace checks and 28 scheduling/planning checks), including chronological ordering, effective ownership at exact break boundaries, written results, failed-save retention, independent review, future and closed days, role controls, management privacy/context, overdue attention and report verification totals.
+- The existing workflow previously passed 29 isolated PostgreSQL checks; this revision changes no database code. Those checks cover the existing workflow, including ownership, version conflicts, required evidence, privacy, future-day restrictions, closure and data-preserving rollback compatibility. These checks never connect to production.
+- Browser journeys pass at 1440, 768, 393 and 320 pixels without page errors or horizontal overflow. They exercise the staff start/finish/result flow, specific help, independent verification, timetable ordering, assignment keyboard focus/Escape, management evidence, warning context, named break-cover checks, regular duties and report submission/closure.
+- The standalone preview loads without a preview server or network connection. It uses clearly labelled fictional staff and in-memory records. Offline checks also exercise keyboard expansion and the current-post shortcut at 1440, 393 and 320 pixels with zero network requests. Its role and time selectors are review controls only. Local preview markers and example case references are absent from the production bundle.
 
 ## Review preview
 
