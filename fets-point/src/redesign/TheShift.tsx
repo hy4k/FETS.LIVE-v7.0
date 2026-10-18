@@ -58,15 +58,6 @@ function namer(data: DayData) {
   return (id: string | null) => (id && all.get(id)) || (id ? 'A colleague' : 'Nobody yet');
 }
 
-function Ring({ done, total, size = 64, label }: { done: number; total: number; size?: number; label?: string }) {
-  const r = size / 2 - 5; const c = 2 * Math.PI * r; const share = total ? done / total : 0;
-  return <svg className="ts-ring" width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={label ?? `${done} of ${total} done`}>
-    <circle cx={size / 2} cy={size / 2} r={r} className="ts-ring-track" />
-    <circle cx={size / 2} cy={size / 2} r={r} className="ts-ring-fill" strokeDasharray={`${c * share} ${c}`} transform={`rotate(-90 ${size / 2} ${size / 2})`} />
-    <text x="50%" y="50%" dominantBaseline="central" textAnchor="middle">{total ? Math.round(share * 100) : 0}%</text>
-  </svg>;
-}
-
 /* ------------------------------------------------------------------ */
 /* Today                                                               */
 /* ------------------------------------------------------------------ */
@@ -114,19 +105,19 @@ export function Blueprint({ branch, identity, repository, blueprint, workflowRea
   const remove = (r: Responsibility) => act(async () => { await blueprint.removeResponsibility(r.id); setRows(old => (old || []).filter(x => x.id !== r.id)); });
 
   if (error && !rows) return <div className="dw-notice dw-error" role="alert">{error}</div>;
-  if (!rows) return <div className="dw-empty">Loading the centre blueprint…</div>;
+  if (!rows) return <div className="dw-empty">Loading regular duties…</div>;
   const load = staff.map(p => ({ ...p, owns: rows.filter(r => r.owner_id === p.id).length, backs: rows.filter(r => r.backup_id === p.id).length })).filter(p => p.owns || p.backs);
   const orphan = rows.filter(r => !r.owner_id).length;
 
   return <div className="ts-blueprint">
     {error && <div className="dw-notice dw-error" role="alert">{error}</div>}
     <section className="ts-hero ts-blueprint-hero">
-      <div className="ts-hero-main"><span className="planning-eyebrow">REGULAR JOBS</span><h2>Assign once. Repeat when due.</h2><p className="ts-muted">Agree an owner, backup, expected result and target time. These agreements become each person’s daily work.</p></div>
+      <div className="ts-hero-main"><span className="planning-eyebrow">REGULAR JOBS</span><h2>Regular duties</h2><p className="ts-muted">Agree an owner, backup, expected result and target time. These agreements become each person’s daily work.</p></div>
       <div className="ts-hero-stats"><div><strong>{rows.length}</strong><span>jobs</span></div><div className={orphan ? 'is-warn' : ''}><strong>{orphan}</strong><span>without an owner</span></div><div><strong>{load.length}</strong><span>people sharing them</span></div></div>
     </section>
     {load.length > 0 && <div className="ts-workload" aria-label="Who carries what">{load.sort((a, b) => b.owns - a.owns).map(p => <span key={p.id}><b>{initials(p.name)}</b>{p.name}<small>owns {p.owns} · backup {p.backs}</small></span>)}</div>}
-    {!canEdit && <p className="ts-muted ts-readonly">The week’s lead and the super admin keep the blueprint up to date.</p>}
-    {!rows.length && <section className="ts-card ts-empty-blueprint"><Sparkles size={28} /><h3>Start with the FETS blueprint.</h3><p>{TEMPLATE.length} jobs a FETS centre runs on, across six areas. Then choose an owner and a backup for each, and change anything that doesn’t fit.</p>{canEdit && <button className="dw-primary" disabled={busy} onClick={() => void seed()}>Use the FETS template <ArrowRight size={15} /></button>}</section>}
+    {!canEdit && <p className="ts-muted ts-readonly">The week’s lead and the super admin keep regular duties up to date.</p>}
+    {!rows.length && <section className="ts-card ts-empty-blueprint"><Sparkles size={28} /><h3>Add regular duties</h3><p>{TEMPLATE.length} jobs a FETS centre runs on, across six areas. Then choose an owner and a backup for each, and change anything that doesn’t fit.</p>{canEdit && <button className="dw-primary" disabled={busy} onClick={() => void seed()}>Use the FETS template <ArrowRight size={15} /></button>}</section>}
 
     <div className="ts-areas">{AREAS.map(area => {
       const list = rows.filter(r => r.area === area.key).sort((a, b) => a.position - b.position);
@@ -170,7 +161,7 @@ function share(text: string) {
   window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
 }
 
-export function DayReport({ branch, day, identity, repository, blueprint, canPlan = false }: { branch: string; day: string; identity: ShiftIdentity; repository: ShiftRepository; blueprint: BlueprintRepository; canPlan?: boolean }) {
+export function DayReport({ branch, day, identity, repository, blueprint, canPlan = false, onSubmitted }: { branch: string; day: string; identity: ShiftIdentity; repository: ShiftRepository; blueprint: BlueprintRepository; canPlan?: boolean; onSubmitted?: () => void }) {
   const [reload, setReload] = useState(0);
   const { data, error } = useDay(branch, day, repository, blueprint, reload);
   const [summary, setSummary] = useState(''); const [followups, setFollowups] = useState(''); const [recognition, setRecognition] = useState('');
@@ -209,36 +200,41 @@ export function DayReport({ branch, day, identity, repository, blueprint, canPla
 
   return <div className="ts-report">
     {problem && <div className="dw-notice dw-error" role="alert">{problem}</div>}
-    <section className="ts-hero">
-      <div className="ts-hero-main"><span className="planning-eyebrow">THE LEAD’S DAILY REPORT</span><h2>Close the day. Set up tomorrow.</h2><p className="ts-muted">Talk to the team, check the numbers below, then send it. It goes to the super admin in fets.live, and you can also send it on WhatsApp.</p></div>
-      <div className="ts-hero-stats"><Ring done={all.done} total={all.total} size={80} /><div><strong>{all.done}<small>/{all.total}</small></strong><span>jobs done</span></div><div><strong>{checks.recorded}<small>/{checks.expected}</small></strong><span>checks recorded</span></div><div className={checks.missed ? 'is-warn' : ''}><strong>{checks.missed}</strong><span>checks missed</span></div><div className={due.length ? 'is-warn' : ''}><strong>{due.length}</strong><span>Actionables due</span></div></div>
+    <section className="sw-report-summary">
+      <h2>Day report</h2><p>Review the recorded results and open work, then send the report.</p>
+      <div className="sw-report-facts" role="group" aria-label="Day report totals">
+        <div><strong>{items.filter(isVerified).length}<small>/{all.total}</small></strong><span>duties verified</span></div>
+        <div><strong>{items.filter(i => i.status === 'done' && !isVerified(i)).length}</strong><span>results to review</span></div>
+        <div><strong>{checks.recorded}<small>/{checks.expected}</small></strong><span>checks recorded</span></div>
+        <div className={checks.missed ? 'is-warn' : ''}><strong>{checks.missed}</strong><span>checks unrecorded</span></div>
+      </div>
     </section>
 
     {(data.closed || sent) ? <section className="ts-card ts-sent">
       <Check size={26} /><h3>Report sent for {day}.</h3>
       <pre>{sent ?? (submitted ? text(submitted) : 'Loading the submitted report…')}</pre>
       <div className="dw-actions"><button className="dw-primary" disabled={!sent && !submitted} onClick={() => share(sent ?? text(submitted!))}><MessageCircle size={15} /> Send on WhatsApp</button><button className="dw-secondary" disabled={!sent && !submitted} onClick={() => void navigator.clipboard?.writeText(sent ?? text(submitted!))}><Copy size={14} /> Copy</button></div>
-    </section> : !published ? <section className="ts-card"><h3>Publish the day’s rota first.</h3><p className="ts-muted">The report is attached to the published exam floor rota for {day}. Publish it from Today.</p></section>
+    </section> : !published ? <section className="ts-card"><h3>Publish the day’s rota first.</h3><p className="ts-muted">The report is attached to the published exam floor rota for {day}. Open Plan → Daily coverage to publish it.</p></section>
       : !canReport ? <section className="ts-card"><h3>The lead sends this report.</h3><p className="ts-muted">{lead ? `${names(lead)} leads this day.` : 'No lead is set for this day.'} Tell them what you finished and what is still open; it all ends up here.</p></section>
       : <section className="ts-card ts-compose">
-        <div className="ts-card-head"><div><span className="planning-eyebrow">YOUR REPORT</span><h3>What happened, and what’s next.</h3></div><button className="dw-secondary" onClick={fill}><Sparkles size={14} /> Fill from today’s records</button></div>
+        <div className="ts-card-head"><div><h3>Report details</h3></div><button className="dw-secondary" onClick={fill}><Sparkles size={14} /> Use today’s records</button></div>
         {assistant && <div className="dw-notice"><strong>An assistant draft is ready.</strong> Check it against today’s records before using it.<button onClick={() => { const d = takeHandoverDraft(branch, day); if (d) { setSummary(d.summary); setFollowups(d.followups); setRecognition(d.recognition); setAssistant(null); } }}>Use it</button></div>}
         <label>Today<textarea value={summary} maxLength={4000} onChange={e => setSummary(e.target.value)} placeholder="Jobs done, exam floor checks, anything that went wrong and how it was handled" /></label>
         <label>Carry into tomorrow<textarea value={followups} maxLength={4000} onChange={e => setFollowups(e.target.value)} placeholder="What is still open, who owns it and by when. Write None if nothing remains." /></label>
-        <label>Thank you, team<textarea value={recognition} maxLength={2000} onChange={e => setRecognition(e.target.value)} placeholder="Someone who went the extra mile today" /></label>
+        <label>Recognition (optional)<textarea value={recognition} maxLength={2000} onChange={e => setRecognition(e.target.value)} placeholder="Someone who went the extra mile today" /></label>
         <button className="dw-primary" disabled={busy || !summary.trim() || !followups.trim() || !afterFive} onClick={async () => {
           setBusy(true); setProblem('');
-          try { await repository.report(data.record!, summary, followups, recognition); setSent(text({ summary, followups, recognition })); }
+          try { await repository.report(data.record!, summary, followups, recognition); setSent(text({ summary, followups, recognition })); onSubmitted?.(); }
           catch (e) { setProblem(message(e)); } finally { setBusy(false); }
-        }}><Send size={15} /> Send report to super admin</button>
+        }}><Send size={15} /> Send to super admin</button>
         <small className="ts-muted">{afterFive ? 'One report per day. It keeps the rota, checks and jobs exactly as they are now.' : 'You can send it from 17:00 India time.'}</small>
       </section>}
 
     <section className="ts-card">
-      <div className="ts-card-head"><div><span className="planning-eyebrow">WHAT’S STILL OPEN</span><h3>Before you send it.</h3></div></div>
+      <div className="ts-card-head"><div><h3>Outstanding work</h3></div></div>
       <ul className="ts-tasks ts-open">{items.filter(i => i.status !== 'skipped' && (i.status !== 'done' || (i.task?.verified_at !== undefined && !isVerified(i)))).map(i => <li key={i.key} className={`ts-task is-${i.status}`}><span className="ts-check" aria-hidden="true" /><div className="ts-task-body"><strong>{i.title}</strong><small>{names(i.assignee)} · {i.status === 'done' && !isVerified(i) ? 'Awaiting review' : STATUS[i.status]}{i.status === 'blocked' && i.note ? `: ${i.note}` : ''}</small></div></li>)}
         {due.map(a => <li key={a.id} className="ts-task"><span className="ts-check" aria-hidden="true" /><div className="ts-task-body"><strong>{a.title}</strong><small>Actionables · {names(a.owner_id)} · due {a.due_date}</small></div></li>)}
-        {!items.some(i => i.status !== 'skipped' && (i.status !== 'done' || (i.task?.verified_at !== undefined && !isVerified(i)))) && !due.length && <li className="ts-muted">Everything is done. A good day.</li>}</ul>
+        {!items.some(i => i.status !== 'skipped' && (i.status !== 'done' || (i.task?.verified_at !== undefined && !isVerified(i)))) && !due.length && <li className="ts-muted">No outstanding work recorded.</li>}</ul>
     </section>
   </div>;
 }

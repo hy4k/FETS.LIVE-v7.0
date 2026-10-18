@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { Flag, HelpCircle, Play, ShieldCheck } from "lucide-react";
+import { Flag, HelpCircle, Play, ShieldCheck, Check } from "lucide-react";
 import { clock, minutes, type TeamMember } from "./shift-plan";
 import { shortDutyTitle } from "./shift-board";
-import { frequencyLabel, type ListItem } from "./shift-blueprint";
+import { type ListItem } from "./shift-blueprint";
 import type { WorkRepository } from "./shift-work-repository";
 import {
   contract,
@@ -25,8 +25,12 @@ export default function WorkDetail({
   work,
   transition,
   assign,
+  pastTarget = false,
+  future = false,
 }: {
   item: ListItem;
+  pastTarget?: boolean;
+  future?: boolean;
   names: (id: string | null) => string;
   team: TeamMember[];
   me: string;
@@ -74,6 +78,7 @@ export default function WorkDetail({
     item.task?.done_by !== me &&
     state === "review";
   const canAct = ready && !closed && !busy;
+  const canDoWork = canAct && !future;
   useEffect(() => {
     setMode("none");
     setNote("");
@@ -92,64 +97,56 @@ export default function WorkDetail({
     }
   };
   return (
-    <section className="sw-detail" aria-label="Duty agreement">
-      <header>
-        <span className={`sw-state is-${state}`}>{WORK_LABELS[state]}</span>
-        {agreement.priority === "important" && (
-          <span className="sw-priority">
-            <Flag size={12} /> Important
-          </span>
-        )}
+    <article
+      className={`sw-detail sw-duty-card is-${state}`}
+      aria-label={shortDutyTitle(item.title)}
+    >
+      <header className="sw-duty-header">
+        <div>
+          <div className="sw-duty-meta">
+            <span className={`sw-state is-${state}`}>{WORK_LABELS[state]}</span>
+            {agreement.priority === "important" && (
+              <span className="sw-priority">
+                <Flag size={12} />
+                Important
+              </span>
+            )}
+          </div>
+          <h3>{shortDutyTitle(item.title)}</h3>
+        </div>
+        <span className={`sw-duty-time ${pastTarget ? "is-late" : ""}`}>
+          {agreement.due == null
+            ? "Time not set"
+            : `By ${clock(agreement.due)}`}
+        </span>
       </header>
-      <h2>{shortDutyTitle(item.title)}</h2>
-      <div className="sw-contract">
-        <div>
-          <small>ACCOUNTABLE OWNER</small>
-          <strong>{names(item.assignee)}</strong>
-          <span>
-            {item.reason === "backup"
-              ? "Covering the regular owner"
-              : item.responsibility?.backup_id
-                ? `Backup: ${names(item.responsibility.backup_id)}`
-                : "Contact the lead for cover"}
-          </span>
-        </div>
-        <div>
-          <small>AGREED TARGET</small>
-          <strong>
-            {agreement.due == null
-              ? "Today · time not agreed"
-              : clock(agreement.due)}
-          </strong>
-          <span>
-            {item.responsibility
-              ? frequencyLabel(item.responsibility)
-              : "Assigned for this day"}
-          </span>
-        </div>
-      </div>
+      <p className="sw-duty-owner">
+        {mine ? "You" : names(item.assignee)}
+        {item.reason === "backup"
+          ? ` · Covering for ${names(item.responsibility?.owner_id || null)}`
+          : item.responsibility?.backup_id
+            ? ` · Backup: ${names(item.responsibility.backup_id)}`
+            : ""}
+      </p>
       <div className="sw-result">
-        <h3>Done means</h3>
+        <h4>Done means</h4>
         <p>
           {agreement.result ||
-            "The lead needs to define a clear result for this duty. Ask before starting if the expectation is unclear."}
+            "The expected result is not set. Ask the lead what needs to be completed."}
         </p>
       </div>
       {agreement.instructions &&
         agreement.instructions !== agreement.result && (
-          <div className="sw-instructions">
-            <h3>How to do it</h3>
+          <details className="sw-instructions">
+            <summary>Instructions</summary>
             <p>{agreement.instructions}</p>
-          </div>
+          </details>
         )}
       {item.task?.review_note && (
         <div className="sw-feedback">
           <strong>Reviewer feedback</strong>
           <p>{item.task.review_note}</p>
-          <small>
-            {item.task.rework_count || 1} recorded return(s) · read the context
-            before judging the outcome
-          </small>
+          <small>Update the work, then send the result for review again.</small>
         </div>
       )}
       {item.status === "blocked" && (
@@ -162,9 +159,7 @@ export default function WorkDetail({
               )?.[1] || "Help requested"}
             </strong>
             <p>{item.note}</p>
-            <small>
-              The lead should resolve the blocker or agree different work.
-            </small>
+            <small>The lead can arrange support or reassign this duty.</small>
           </div>
         </div>
       )}
@@ -205,7 +200,7 @@ export default function WorkDetail({
               {state === "todo" && (
                 <button
                   className="sw-primary"
-                  disabled={!canAct}
+                  disabled={!canDoWork}
                   onClick={() => void transition(item, "start")}
                 >
                   <Play size={15} /> Start duty
@@ -214,25 +209,28 @@ export default function WorkDetail({
               {state === "help" && (
                 <button
                   className="sw-primary"
-                  disabled={!canAct}
+                  disabled={!canDoWork}
                   onClick={() => void transition(item, "resume")}
                 >
                   Resume work
                 </button>
               )}
-              <button
-                className={state === "working" ? "sw-primary" : "sw-secondary"}
-                disabled={!canAct}
-                onClick={() => edit("complete")}
-              >
-                Submit result
-              </button>
+              {state === "working" && (
+                <button
+                  className="sw-primary"
+                  disabled={!canDoWork}
+                  onClick={() => edit("complete")}
+                >
+                  <Check size={15} />
+                  Finish duty
+                </button>
+              )}
               <button
                 className="sw-text"
-                disabled={!canAct}
+                disabled={!canDoWork}
                 onClick={() => edit("help")}
               >
-                I need help
+                Need help
               </button>
             </>
           )}
@@ -240,14 +238,14 @@ export default function WorkDetail({
             <>
               <button
                 className="sw-primary"
-                disabled={!canAct}
+                disabled={!canDoWork}
                 onClick={() => void transition(item, "verify")}
               >
                 <ShieldCheck size={15} /> Verify result
               </button>
               <button
                 className="sw-secondary"
-                disabled={!canAct}
+                disabled={!canDoWork}
                 onClick={() => edit("return")}
               >
                 Return with feedback
@@ -258,12 +256,12 @@ export default function WorkDetail({
             <>
               <p className="sw-muted">
                 {state === "review"
-                  ? "Submitted. Someone else must verify your work."
-                  : "Your result has been independently checked."}
+                  ? "Sent for review. Another lead will check your result."
+                  : "Your result has been checked."}
               </p>
               <button
                 className="sw-text"
-                disabled={!canAct}
+                disabled={!canDoWork}
                 onClick={() => void transition(item, "reopen")}
               >
                 Reopen my work
@@ -276,14 +274,14 @@ export default function WorkDetail({
               disabled={!canAct}
               onClick={() => edit("assign")}
             >
-              Edit work agreement
+              Edit assignment
             </button>
           )}
           {canLead &&
             ["todo", "working", "help", "unassigned"].includes(state) && (
               <button
                 className="sw-text"
-                disabled={!canAct}
+                disabled={!canDoWork}
                 onClick={() => edit("skip")}
               >
                 Not needed today
@@ -301,7 +299,7 @@ export default function WorkDetail({
         >
           <label>
             {mode === "complete"
-              ? "What result did you achieve?"
+              ? "What did you complete?"
               : mode === "help"
                 ? "What is stopping you, and what would help?"
                 : mode === "return"
@@ -315,7 +313,7 @@ export default function WorkDetail({
               onChange={(e) => setNote(e.target.value)}
               placeholder={
                 mode === "complete"
-                  ? "State what you checked or delivered. Include a safe reference if useful; no candidate ID documents."
+                  ? "Write what you completed and any follow-up needed."
                   : "Be specific so the next action is clear."
               }
             />
@@ -341,11 +339,11 @@ export default function WorkDetail({
             <button
               className="sw-primary"
               disabled={
-                !canAct || !note.trim() || (mode === "help" && !category)
+                !canDoWork || !note.trim() || (mode === "help" && !category)
               }
             >
               {mode === "complete"
-                ? "Send for independent review"
+                ? "Send for review"
                 : mode === "help"
                   ? "Ask the lead for help"
                   : "Save decision"}
@@ -374,10 +372,9 @@ export default function WorkDetail({
             );
           }}
         >
-          <p>
-            Changing a completed duty’s agreement reopens it for the owner to
-            complete again.
-          </p>
+          {item.status === "done" && (
+            <p>Changing this completed assignment reopens it for the owner.</p>
+          )}
           <label>
             Owner
             <select value={owner} onChange={(e) => setOwner(e.target.value)}>
@@ -441,6 +438,11 @@ export default function WorkDetail({
           </div>
         </form>
       )}
+      {future && mine && (
+        <p className="sw-muted sw-future-note">
+          Work updates are available on the day.
+        </p>
+      )}
       {closed && (
         <p className="sw-muted">The day report has closed this assignment.</p>
       )}
@@ -455,7 +457,7 @@ export default function WorkDetail({
                 .catch((e) => setTrailError(errorText(e)));
           }}
         >
-          <summary>Work history & evidence</summary>
+          <summary>Activity history</summary>
           {trailError ? (
             <p role="alert">{trailError}</p>
           ) : trail === null ? (
@@ -490,6 +492,6 @@ export default function WorkDetail({
           )}
         </details>
       )}
-    </section>
+    </article>
   );
 }

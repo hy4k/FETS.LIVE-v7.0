@@ -2,15 +2,32 @@
 import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { ShiftWorkplace } from "../redesign/DutyWorkspace";
-import { createDayPlan } from "../redesign/shift-plan";
+import { createDayPlan, monday } from "../redesign/shift-plan";
 import { centreDate } from "../redesign/operations-data";
+const ActualDate = Date;
+let previewTime = "09:37";
+// A fixed local sample day keeps the preview useful outside centre working hours.
+const sampleNow = () => ActualDate.parse(`2026-10-19T${previewTime}:00+05:30`);
+class PreviewDate extends ActualDate {
+  constructor(...args: any[]) {
+    super(...((args.length ? args : [sampleNow()]) as [number]));
+  }
+  static now() {
+    return sampleNow();
+  }
+}
+globalThis.Date = PreviewDate as DateConstructor;
 const team = ["Maya Joseph", "Arun Menon", "Sara Thomas", "Neha Nair"].map(
   (name, i) => ({ id: `p${i}`, userId: `p${i}`, name, code: "D" }),
 );
 const day = centreDate();
 const plan = createDayPlan(team);
 plan.availability.forEach((a) => (a.confirmed = true));
-const jobs = [
+plan.breaks.forEach((b) => {
+  b.cover = "p3";
+  b.note = "The floating cover handles this post and its checks.";
+});
+let jobs = [
   {
     id: "r1",
     title: "Prepare the exam lab",
@@ -112,32 +129,124 @@ let tasks: any[] = [
   },
 ];
 let events: any[] = [];
+let changes: any[] = [];
+let reports: any[] = [];
+let leads: any[] = [
+  { branch: "cochin", week_start: monday(day), lead_id: "p0", version: 1 },
+];
+let sampleRecord: any = {
+  id: "preview",
+  branch: "cochin",
+  day,
+  lead_id: "p0",
+  plan,
+  status: "published",
+  version: 1,
+};
+let sampleActor = "p1";
+let closed = false;
 const repository: any = {
-  roster: async () => team,
-  load: async () => ({
-    record: {
-      id: "preview",
-      branch: "cochin",
-      day,
-      lead_id: "p0",
-      plan,
-      status: "published",
-      version: 1,
-    },
-    lead: { lead_id: "p0" },
-    events,
-    changes: [],
-    closed: false,
+  roster: async (_branch: string, date: string) => (date === day ? team : []),
+  load: async (_branch: string, date: string) => ({
+    record: date === day ? structuredClone(sampleRecord) : null,
+    lead: leads.find((l) => l.week_start === monday(date)) || null,
+    events: date === day ? events : [],
+    changes: date === day ? changes : [],
+    closed: date === day && closed,
   }),
-  reports: async () => [],
+  reports: async () => reports,
+  report: async (
+    record: any,
+    summary: string,
+    followups: string,
+    recognition: string,
+  ) => {
+    const saved = {
+      id: `preview-report-${reports.length}`,
+      branch: record.branch,
+      day: record.day,
+      plan_id: record.id,
+      summary,
+      followups,
+      recognition,
+      created_at: new Date().toISOString(),
+      acknowledged_at: null,
+      snapshot: structuredClone({ plan: record.plan, events, changes, tasks }),
+    };
+    reports.push(saved);
+    closed = true;
+    return saved;
+  },
+  acknowledge: async (id: string) => {
+    reports = reports.map((r) =>
+      r.id === id ? { ...r, acknowledged_at: new Date().toISOString() } : r,
+    );
+  },
   monthRoster: async () => ({ [day]: team }),
-  leads: async () => [],
+  leads: async () => leads,
+  saveLead: async (branch: string, week_start: string, lead_id: string) => {
+    const saved = {
+      branch,
+      week_start,
+      lead_id,
+      version:
+        (leads.find((l) => l.week_start === week_start)?.version || 0) + 1,
+    };
+    leads = [...leads.filter((l) => l.week_start !== week_start), saved];
+    return saved;
+  },
+  savePlan: async (
+    branch: string,
+    date: string,
+    lead_id: string,
+    value: any,
+    _previous: any,
+    publish = false,
+  ) => {
+    sampleRecord = {
+      ...sampleRecord,
+      branch,
+      day: date,
+      lead_id,
+      plan: structuredClone(value),
+      status: publish ? "published" : "draft",
+      version: sampleRecord.version + 1,
+    };
+    return sampleRecord;
+  },
+  change: async (input: any) => {
+    const saved = {
+      ...input,
+      id: `preview-change-${changes.length}`,
+      actor_id: sampleActor,
+      created_at: new Date().toISOString(),
+    };
+    changes.push(saved);
+    return saved;
+  },
 };
 const blueprint: any = {
   staff: async () => team,
   responsibilities: async () => jobs,
-  tasks: async () => tasks,
+  tasks: async (_branch: string, date: string) =>
+    tasks.filter((t) => t.day === date),
   actionables: async () => [],
+  saveResponsibility: async (input: any) => {
+    const saved = {
+      ...input,
+      id: input.id || `preview-job-${jobs.length}`,
+      active: true,
+    };
+    jobs = [...jobs.filter((j) => j.id !== saved.id), saved];
+    return saved;
+  },
+  removeResponsibility: async (id: string) => {
+    jobs = jobs.filter((j) => j.id !== id);
+  },
+  seed: async (input: any[]) => {
+    jobs = input.map((j, i) => ({ ...j, id: `preview-seed-${i}` }));
+    return jobs;
+  },
 };
 const note: any = {
   id: "n1",
@@ -159,10 +268,12 @@ const note: any = {
 let feedback: any[] = [note];
 function Preview() {
   const [role, setRole] = useState("staff");
-  const me = role === "staff" ? "p1" : "p0";
+  const [time, setTime] = useState(previewTime);
+  const me = role === "cover" ? "p3" : role === "staff" ? "p1" : "p0";
+  sampleActor = me;
   const work: any = {
     access: async () => ({
-      lead: role !== "staff",
+      lead: ["lead", "manager"].includes(role),
       manager: role === "manager",
     }),
     ensure: async (i: any) =>
@@ -270,6 +381,7 @@ function Preview() {
         ...i,
         id: `local-note-${feedback.length}`,
         created_by: me,
+        created_at: new Date().toISOString(),
         evidence_snapshot: tasks.filter((t) => i.task_ids.includes(t.id)),
         status: "open",
         staff_response: "",
@@ -290,6 +402,20 @@ function Preview() {
           <option value="staff">Staff view</option>
           <option value="lead">Lead view</option>
           <option value="manager">Management view</option>
+          <option value="cover">Break cover view</option>
+        </select>
+        <select
+          aria-label="Preview time"
+          value={time}
+          onChange={(e) => {
+            previewTime = e.target.value;
+            setTime(e.target.value);
+          }}
+        >
+          <option value="09:37">09:37 · Morning</option>
+          <option value="10:07">10:07 · Break cover</option>
+          <option value="11:07">11:07 · DVR check</option>
+          <option value="17:10">17:10 · Day report</option>
         </select>
       </div>
       <div className="preview-nav">
@@ -303,7 +429,7 @@ function Preview() {
         </div>
       </div>
       <ShiftWorkplace
-        key={role}
+        key={`${role}:${time}`}
         branch="cochin"
         navigate={() => {}}
         identity={{
