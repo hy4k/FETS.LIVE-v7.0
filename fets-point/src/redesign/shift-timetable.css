@@ -1,3 +1,12 @@
+/* Manrope: SIL Open Font License, distributed at /licenses/Manrope-OFL.txt. */
+@font-face {
+  font-family: "Manrope";
+  src: url("../assets/fonts/manrope-latin-variable.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+}
+
 /* Timetable: chronological rows, warm paper, ink typography and a single live accent. */
 .shift-workplace {
   --sw-ink: #272b27;
@@ -10,22 +19,24 @@
   background: #f8f8f3;
   border-radius: 0;
   color: var(--sw-ink);
-  font-family: "Inter", "Segoe UI", Arial, sans-serif;
+  font-family: "Manrope", "Segoe UI", Arial, sans-serif;
+  font-feature-settings: "ss01";
   -webkit-font-smoothing: antialiased;
 }
 .shift-workplace .sw-header {
   margin-bottom: 26px;
 }
 .shift-workplace .sw-title h1 {
-  font-size: 35px;
-  font-weight: 650;
-  letter-spacing: -1.6px;
+  font-size: 36px;
+  font-weight: 750;
+  letter-spacing: -1.5px;
 }
 .shift-workplace .sw-centre {
   background: #ebeee5;
   color: #515d4c;
-  border-radius: 5px;
-  padding: 6px 10px;
+  border-radius: 20px;
+  padding: 7px 12px;
+  border: 1px solid #dce2d1;
 }
 .shift-workplace .sw-nav {
   border-bottom: 1px solid #d8dcd1;
@@ -45,8 +56,12 @@
   background: #344e40;
   border-color: #344e40;
   color: white;
-  border-radius: 6px;
-  box-shadow: none;
+  border-radius: 9px;
+  min-height: 42px;
+  font-weight: 650;
+  box-shadow:
+    inset 0 1px 0 #ffffff18,
+    0 2px 3px #263f3420;
 }
 .shift-workplace .sw-primary:hover {
   background: #253b2e;
@@ -77,8 +92,11 @@
 .st-board {
   border: 1px solid #dde0d5;
   background: #fffefa;
-  border-radius: 12px;
-  padding: 27px 30px 0;
+  border-radius: 16px;
+  box-shadow:
+    0 3px 6px #38472b03,
+    0 16px 40px #38472b06;
+  padding: 30px 32px 0;
   overflow: hidden;
 }
 .st-board-top {
@@ -95,9 +113,9 @@
   font-weight: 600;
 }
 .shift-workplace .st-board-top h2 {
-  font-size: 27px;
-  font-weight: 600;
-  letter-spacing: -1px;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -1.05px;
   margin-top: 7px;
 }
 .st-board-actions {
@@ -200,7 +218,7 @@
 }
 .st-time time {
   color: #414c3d;
-  font-weight: 650;
+  font-weight: 750;
   font-size: 15px;
   letter-spacing: -0.4px;
 }
@@ -237,9 +255,9 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.2px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
   line-height: 1.45;
 }
 .shift-workplace .st-post-copy p {
@@ -265,9 +283,12 @@
   font-size: 11px;
 }
 .st-entry.is-current .st-post-body {
-  background: #344e40;
-  border: 0;
-  border-radius: 8px;
+  background: linear-gradient(115deg, #344e40, #263f35);
+  border: 1px solid #ffffff18;
+  box-shadow:
+    inset 0 1px 0 #ffffff12,
+    0 6px 16px #263f3412;
+  border-radius: 11px;
   margin: 8px 0;
   padding: 21px 18px;
   color: #fffefa;
@@ -315,8 +336,10 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  border: 1px solid #dce0ca;
-  background: #eef0dc;
+  border: 1px solid #f1ebd2;
+  background: linear-gradient(#f6f3e2, #ebe7ce);
+  box-shadow: 0 2px 4px #132b231a;
+  min-height: 44px;
   color: #2e4535;
   border-radius: 6px;
   padding: 9px 11px;
@@ -375,7 +398,7 @@
   display: none;
 }
 .st-task-detail > summary:hover {
-  background: #f3f4ec;
+  background: #f1f3e9;
 }
 .st-task-title {
   flex: 1;
@@ -762,7 +785,7 @@
 /* Keep operational text readable at arm's length. */
 .shift-workplace .st-post-copy p,
 .shift-workplace .st-task-title p {
-  font-size: 12px;
+  font-size: 13px;
 }
 .st-type,
 .st-lanes span,
@@ -828,4 +851,118 @@
 .shift-workplace .sw-duty-owner,
 .shift-workplace .sw-muted {
   color: #697761;
+}
+
+/* A consistent finish for touch targets, focus and expanded work. */
+.shift-workplace :is(button, input, select, textarea) {
+  letter-spacing: -0.15px;
+}
+.shift-workplace .sw-icon {
+  width: 42px;
+  height: 42px;
+}
+.shift-workplace .sw-date {
+  min-height: 42px;
+  box-shadow: inset 0 1px 0 #ffffff;
+}
+.shift-workplace .sw-nav button {
+  font-weight: 600;
+  min-height: 44px;
+}
+.shift-workplace .sw-nav button[aria-current="page"] {
+  font-weight: 750;
+  border-bottom-width: 3px;
+}
+.shift-workplace .sw-secondary {
+  min-height: 40px;
+  box-shadow: 0 1px 2px #263f3408;
+}
+.shift-workplace .st-live-time {
+  font-size: 15px;
+  font-weight: 700;
+  border: 1px solid #e2e5d9;
+  border-radius: 24px;
+  padding: 9px 12px;
+  min-height: 40px;
+  background: #fbfcf7;
+}
+.shift-workplace .st-live-time:hover:not(:disabled) {
+  border-color: #a9b29b;
+  background: #f0f3e8;
+}
+.st-task-detail > summary {
+  border-radius: 8px;
+  transition: background 150ms ease;
+}
+.st-task-detail[open] > summary {
+  background: #f4f5ed;
+}
+.st-task-detail[open] {
+  border-bottom-color: #ced6c2;
+}
+.st-time:after {
+  background: linear-gradient(#e1e6d7, #eceee5);
+}
+.st-task .st-dot {
+  width: 8px;
+  height: 8px;
+  border-color: #a9b59c;
+  background: #edf0e5;
+}
+.shift-workplace .st-task .sw-state {
+  border: 1px solid #73775f18;
+  font-size: 10px;
+  padding: 5px 8px;
+  border-radius: 5px;
+}
+.shift-workplace .st-task .sw-duty-card {
+  border-radius: 10px;
+  background: #fcfcf7;
+  box-shadow: 0 4px 12px #38472b04;
+}
+.shift-workplace .sw-work-actions button {
+  min-height: 42px;
+}
+.shift-workplace :is(input:not([type="checkbox"]), select, textarea) {
+  border-radius: 8px;
+}
+.st-checks button:hover:not(:disabled) {
+  background: #fff9e5;
+  border-color: #fff5d4;
+}
+.shift-workplace .sw-title svg,
+.shift-workplace .sw-header-tools svg {
+  stroke-width: 1.6;
+}
+@media (max-width: 540px) {
+  .shift-workplace .sw-title h1 {
+    font-size: 30px;
+  }
+  .shift-workplace .st-board-top h2 {
+    font-size: 24px;
+  }
+  .shift-workplace .st-entry h3 {
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  .shift-workplace .st-post-copy p,
+  .shift-workplace .st-task-title p {
+    font-size: 12px;
+  }
+  .shift-workplace .st-live-time {
+    padding: 7px 9px;
+    font-size: 12px;
+    min-height: 36px;
+  }
+  .st-board {
+    padding: 22px 14px 0;
+  }
+  .st-board-actions .sw-primary {
+    min-height: 40px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .st-task-detail > summary {
+    transition: none;
+  }
 }

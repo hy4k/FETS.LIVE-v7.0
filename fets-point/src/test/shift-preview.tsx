@@ -412,8 +412,10 @@ function Preview() {
             setTime(e.target.value);
           }}
         >
+          <option value="08:17">08:17 · Lab walk</option>
           <option value="09:37">09:37 · Morning</option>
           <option value="10:07">10:07 · Break cover</option>
+          <option value="10:37">10:37 · Staff break</option>
           <option value="11:07">11:07 · DVR check</option>
           <option value="17:10">17:10 · Day report</option>
         </select>

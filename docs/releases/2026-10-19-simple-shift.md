@@ -8,7 +8,7 @@ The timetable follows the published rota and effective coverage changes. Persona
 
 My shift shows the signed-in person’s day; Team shows everyone’s responsibilities and deadlines in time order. A needs-attention filter brings forward unassigned work, overdue duties, help requests and results awaiting review, and a single action restores the whole day. Earlier missing checks are disclosed as missing records and cannot be backfilled. Handover records remain available below the timetable.
 
-The visual design uses warm off-white, dark green, restrained status colours, aligned time labels and expandable work rows. Desktop, tablet and phone layouts use the same chronological order. The timetable supports keyboard expansion, visible focus, reduced-motion navigation and a compact current-post shortcut.
+The visual design uses warm off-white, dark green, restrained status colours, aligned time labels and expandable work rows. Locally bundled Manrope adds consistent typography; refined buttons, clock controls, border treatments and focus states preserve the approved timetable structure. The font and its SIL license ship with the website, without a third-party font request. Desktop, tablet and phone layouts use the same chronological order. The timetable supports keyboard expansion, visible focus, reduced-motion navigation and a compact current-post shortcut.
 
 Leads retain Plan, independent verification, help requests and report submission. Managers retain evidence-based private recognition, support, training, warnings and follow-up outcomes. Saved result drafts and errors survive failed writes and background refresh, and report submission immediately closes the local day to further changes.
 
@@ -39,3 +39,9 @@ FETS_PREVIEW_OUTPUT=/tmp/fets-simple-shift node scripts/verification/build-shift
 ```
 
 For browser verification, start the frontend Vite server on local port 3012 and run `scripts/verification/verify-simple-shift.cjs` with `FETS_PLAYWRIGHT_MODULE`, `CHROMIUM_PATH` and `FETS_PREVIEW_OUTPUT` set as needed. The verifier is fixed to the isolated local preview URL and blocks external requests. Run `scripts/tests/shift-workflow.mjs` with `FETS_PGLITE_MODULE` pointing to PGlite 0.3.14 for database checks.
+
+## Staff guide and next stage
+
+`scripts/training/capture-shift-guide.cjs` and `scripts/training/build-shift-guide.py` produce a 16-page PDF and matching editable PowerPoint from 16 screenshots of the finished local preview. The guide covers the timetable, real work results, help, review feedback, checks, break cover, team ownership, post handovers and private staff responses, with a clearly marked lead section for review and report submission. Numbered highlights match the descriptions, and every page labels its fictional training records. See `scripts/training/README.md` for the build instructions.
+
+The 10-minute lab-walk and 6-minute DVR integration with FETS Online is explicitly deferred to a separate discussion and implementation stage. This release and the guide retain the current recording process in The Shift and make no synchronization claim.
