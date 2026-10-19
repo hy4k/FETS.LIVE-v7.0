@@ -9,7 +9,8 @@ import {
   blockReview,
   type DutyEvent,
 } from "./shift-plan";
-import { currentDuty, personChecks } from "./shift-board";
+import { personChecks } from "./shift-board";
+import { personalSchedule } from "./shift-day";
 import type { ShiftIdentity } from "./TheShift";
 import type { DayData } from "./shift-work-types";
 export function LiveResponsibility({
@@ -32,86 +33,164 @@ export function LiveResponsibility({
   onCheck: (p: ReturnType<typeof personChecks>[number]) => void;
 }) {
   const plan = data.record?.status === "published" ? data.record.plan : null;
+  const schedule = plan
+    ? personalSchedule(plan, data.changes, identity.profileId)
+    : [];
   const current =
-    plan && day === today
-      ? currentDuty(plan, data.changes, time, identity.profileId)
+    day === today
+      ? schedule.find((s) => s.start <= time && s.end > time)
       : null;
+  const currentBlock = plan?.blocks.find(
+    (b) => b.start <= time && b.end > time,
+  );
+  const extraInstructions = current?.lanes
+    .map((l) => currentBlock?.duties[l]?.trim())
+    .filter(Boolean)
+    .join(" · ");
+  const nextPost = schedule.find((s) => day !== today || s.start > time);
   const points =
     plan && day === today
       ? personChecks(plan, data.changes, data.events, time, identity.profileId)
       : [];
   const due = points.filter((p) => p.state === "due");
-  const next = points
+  const nextCheck = points
     .filter((p) => p.state === "upcoming")
     .sort((a, b) => a.due - b.due)[0];
-  const resting = plan?.breaks.find(
-    (b) => b.staff === identity.profileId && b.start <= time && b.end > time,
-  );
+  const missed = points.filter((p) => p.state === "missed");
+  const title = (slot: (typeof schedule)[number]) =>
+    slot.kind === "break"
+      ? "Break"
+      : slot.lanes.map((l) => laneInfo[l].title).join(" + ");
   return (
-    <section className="sw-now" aria-label="My current responsibility">
-      <div className="sw-now-main">
-        <span className="sw-eyebrow">
-          <Clock3 size={14} /> {day === today ? "RIGHT NOW" : "SELECTED DAY"}
-        </span>
-        <h3>
-          {!plan
-            ? "Daily coverage has not been published"
-            : day !== today
-              ? "Use the timetable for this date"
-              : current?.lanes.length
-                ? current.lanes.map((l) => laneInfo[l].title).join(" + ")
-                : resting
-                  ? "Your break"
-                  : "No post at this time"}
-        </h3>
-        {current?.lanes.length ? (
+    <section
+      className="sw-shift-overview"
+      aria-label="My current responsibility"
+    >
+      <div className="sw-now">
+        <div className="sw-now-main">
+          <span className="sw-eyebrow">
+            <Clock3 size={14} />
+            {day === today ? "Now" : "Post coverage"}
+          </span>
+          <h3>
+            {!plan
+              ? "Coverage not published"
+              : day !== today
+                ? "See this day’s timetable"
+                : current
+                  ? title(current)
+                  : nextPost
+                    ? "Before your next post"
+                    : "No post at this time"}
+          </h3>
           <p>
-            Until {clock(current.ends!)} ·{" "}
-            {current.lanes.map((l) => laneInfo[l].purpose).join(" ")}{" "}
-            {current.lanes.length > 1 &&
-              "You are covering more than one post; contact the lead if both cannot be managed safely."}
+            {!plan
+              ? "Your lead needs to publish the posts and break cover."
+              : current
+                ? current.kind === "break"
+                  ? `${current.cover.length ? current.cover.map(names).join(" & ") : "Cover not assigned"} · cover until ${clock(current.end)}`
+                  : `Until ${clock(current.end)} · ${current.lanes.map((l) => laneInfo[l].tasks).join(". ")}`
+                : "Your assigned duties are listed below."}
           </p>
-        ) : (
+          {extraInstructions && (
+            <p className="sw-post-instructions">Also: {extraInstructions}</p>
+          )}
+          {current && current.lanes.length > 1 && (
+            <p className="sw-cover-alert">
+              You are covering two posts. Contact the lead if you need support.
+            </p>
+          )}
+        </div>
+        <div className="sw-next-post">
+          <span className="sw-eyebrow">
+            {day === today ? "Next" : "First post"}
+            {nextPost ? ` · ${clock(nextPost.start)}` : ""}
+          </span>
+          <h3>{nextPost ? title(nextPost) : "No further posts"}</h3>
           <p>
-            {resting
-              ? `${names(resting.cover)} covers until ${clock(resting.end)}.`
-              : !plan
-                ? "Your lead needs to publish coverage. The duties below remain your assigned work."
-                : "Continue with your assigned duties below."}
+            {nextPost
+              ? `Until ${clock(nextPost.end)}${nextPost.kind === "break" ? ` · cover: ${nextPost.cover.length ? nextPost.cover.map(names).join(" & ") : "not assigned"}` : ""}`
+              : "Check the timetable for the full day."}
           </p>
-        )}
-      </div>
-      <div className="sw-next-check">
-        {due.length ? (
-          due.map((p) => (
-            <div key={`${p.block}:${p.kind}:${p.due}`}>
-              <strong>
-                {p.kind === "walk" ? "Lab walk" : "DVR check"} · {clock(p.due)}
-              </strong>
-              <button
-                className="sw-primary"
-                disabled={busy || data.closed}
-                onClick={() => onCheck(p)}
-              >
-                <Check size={15} /> Record {p.kind === "walk" ? "walk" : "DVR"}
-                <span className="sw-sr"> at {clock(p.due)}</span>
-              </button>
-            </div>
-          ))
-        ) : (
-          <>
-            <small>NEXT CHECK</small>
+        </div>
+        <div className="sw-next-check">
+          <span className="sw-eyebrow">
+            {due.length ? "Check due" : "Next check"}
+          </span>
+          {due.length ? (
+            due.map((p) => (
+              <div key={`${p.block}:${p.kind}:${p.due}`}>
+                <strong>
+                  {p.kind === "walk" ? "Lab walk" : "DVR check"} ·{" "}
+                  {clock(p.due)}
+                </strong>
+                <button
+                  className="sw-primary"
+                  disabled={busy || data.closed}
+                  onClick={() => onCheck(p)}
+                >
+                  <Check size={15} />
+                  Record {p.kind === "walk" ? "walk" : "DVR"}
+                  <span className="sw-sr"> at {clock(p.due)}</span>
+                </button>
+              </div>
+            ))
+          ) : (
             <strong>
-              {next
-                ? `${next.kind === "walk" ? "Lab walk" : "DVR"} · ${clock(next.due)}`
-                : "No upcoming check assigned"}
+              {nextCheck
+                ? `${nextCheck.kind === "walk" ? "Lab walk" : "DVR check"} · ${clock(nextCheck.due)}`
+                : day !== today
+                  ? "Available on the day"
+                  : "No check due"}
             </strong>
-          </>
-        )}
-        <small>
-          90-minute rotations · walks every 10 min · DVR every 6 min
-        </small>
+          )}
+          <small>
+            {due.length
+              ? "Record only after completing the check."
+              : "Lab walks every 10 min · DVR every 6 min"}
+          </small>
+        </div>
       </div>
+      {(schedule.length > 0 || missed.length > 0) && (
+        <details className="sw-day-outline">
+          <summary>
+            <span>
+              My post timings
+              {missed.length > 0 && (
+                <em>{missed.length} earlier checks unrecorded</em>
+              )}
+            </span>
+            <ChevronRight size={16} />
+          </summary>
+          {missed.length > 0 && (
+            <p className="sw-missing-checks">
+              Earlier checks have no record. Tell the lead what happened; they
+              cannot be recorded retrospectively here.
+            </p>
+          )}
+          <ol>
+            {schedule.map((slot) => (
+              <li
+                key={slot.start}
+                className={current === slot ? "is-current" : ""}
+              >
+                <time>
+                  {clock(slot.start)}–{clock(slot.end)}
+                </time>
+                <strong>{title(slot)}</strong>
+                {slot.kind === "break" && (
+                  <small>
+                    Cover:{" "}
+                    {slot.cover.length
+                      ? slot.cover.map(names).join(" & ")
+                      : "not assigned"}
+                  </small>
+                )}
+              </li>
+            ))}
+          </ol>
+        </details>
+      )}
     </section>
   );
 }

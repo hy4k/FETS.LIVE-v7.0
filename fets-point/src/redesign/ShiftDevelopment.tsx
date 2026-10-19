@@ -101,11 +101,11 @@ export default function DevelopmentReview({
   return (
     <section className="sw-development">
       <div className="sw-section-intro">
-        <span className="sw-eyebrow">QUALITY, SUPPORT & GROWTH</span>
+        <span className="sw-eyebrow">Private feedback</span>
         <h2>
           {manager
-            ? "Recognise good work. Help people improve."
-            : "Your feedback & next steps."}
+            ? "People & feedback"
+            : "My feedback"}
         </h2>
         <p>
           {manager
@@ -256,7 +256,7 @@ export default function DevelopmentReview({
                 >
                   {writing
                     ? "Close feedback form"
-                    : "Agree feedback & a next step"}
+                    : "Add feedback"}
                 </button>
                 {writing && (
                   <form

@@ -1,0 +1,74 @@
+# The Shift — the day in time order
+
+Prepared on 19 October 2026, based on the currently deployed Actionables release and its follow-up migration records. This release is a website redesign. It uses the existing Shift repositories and capability version 5; it requires no database migration.
+
+The Shift opens as a chronological timetable. Post intervals, breaks and assigned-work deadlines appear in one sequence. The current post has a distinct green treatment, and the clock jumps to it. Deadline rows show progress without hiding them after submission. Opening a duty reveals the expected result, instructions, Start/Finish, help request, evidence and independent review controls in place.
+
+The timetable follows the published rota and effective coverage changes. Personal intervals end at break and rotation boundaries. The team timetable splits at every rotation, break and effective coverage change, showing the actual responsible person and named cover. Future work remains visible but cannot be started. Submitted work stays unverified until an independent reviewer verifies it; elapsed post time never implies a completed check or task.
+
+My shift shows the signed-in person’s day; Team shows everyone’s responsibilities and deadlines in time order. A needs-attention filter brings forward unassigned work, overdue duties, help requests and results awaiting review, and a single action restores the whole day. Earlier missing checks are disclosed as missing records and cannot be backfilled. Handover records remain available below the timetable.
+
+The visual design uses warm off-white, dark green, restrained status colours, aligned time labels and expandable work rows. Locally bundled Manrope adds consistent typography; refined buttons, clock controls, border treatments and focus states preserve the approved timetable structure. The font and its SIL license ship with the website, without a third-party font request. Desktop, tablet and phone layouts use the same chronological order. The timetable supports keyboard expansion, visible focus, reduced-motion navigation and a compact current-post shortcut.
+
+Leads retain Plan, independent verification, help requests and report submission. Managers retain evidence-based private recognition, support, training, warnings and follow-up outcomes. Saved result drafts and errors survive failed writes and background refresh, and report submission immediately closes the local day to further changes.
+
+## Preservation and scope
+
+- Calicut and Cochin continue to use their own existing rosters and records. Global scope does not substitute a team or invent a personal assignment.
+- 90-minute rotations, 10-minute lab walks, 6-minute DVR checks, named break cover, effective amendments, handovers, independent reviews and closure rules use the existing logic and APIs.
+- Task agreement snapshots, real actors, server timestamps, version checks and private feedback remain governed by the installed database policies and guards. No historical agreement, completion, audit record or performance score is fabricated.
+- Actionables remains the source of its own work and results. Its page and backend are unchanged. FETS Online synchronization is unchanged and has not been newly validated. Android/Google Play remains separate.
+- The website was deployed from `f73a7965a584f94847bf227c8207d2b160879115` on 19 October 2026 UTC (20 October in India). No production data or schema was changed. The prior Actionables release remains available for rollback.
+
+## Validation
+
+- TypeScript and the production build pass. Existing chunk-size/Browserslist warnings remain.
+- 49 targeted frontend checks pass across six files (21 workspace checks and 28 scheduling/planning checks), including chronological ordering, effective ownership at exact break boundaries, written results, failed-save retention, independent review, future and closed days, role controls, management privacy/context, overdue attention and report verification totals.
+- The existing workflow previously passed 29 isolated PostgreSQL checks; this revision changes no database code. Those checks cover the existing workflow, including ownership, version conflicts, required evidence, privacy, future-day restrictions, closure and data-preserving rollback compatibility. These checks never connect to production.
+- Browser journeys pass at 1440, 768, 393 and 320 pixels without page errors or horizontal overflow. They exercise the staff start/finish/result flow, specific help, independent verification, timetable ordering, assignment keyboard focus/Escape, management evidence, warning context, named break-cover checks, regular duties and report submission/closure.
+- The standalone preview loads without a preview server or network connection. It uses clearly labelled fictional staff and in-memory records. Offline checks also exercise keyboard expansion and the current-post shortcut at 1440, 393 and 320 pixels with zero network requests. Its role and time selectors are review controls only. Local preview markers and example case references are absent from the production bundle.
+
+## Review preview
+
+`fets-point/shift-preview.html` is development-only and is excluded from the production build. `scripts/verification/build-shift-preview.mjs` creates a single self-contained `The-Shift-Interactive-Preview.html`, with inline assets and a content policy that blocks network requests. Preview mutations affect memory only, including assignments, evidence, coverage and reports.
+
+Build the portable preview from the repository root:
+
+```bash
+FETS_PREVIEW_OUTPUT=/tmp/fets-simple-shift node scripts/verification/build-shift-preview.mjs
+```
+
+For browser verification, start the frontend Vite server on local port 3012 and run `scripts/verification/verify-simple-shift.cjs` with `FETS_PLAYWRIGHT_MODULE`, `CHROMIUM_PATH` and `FETS_PREVIEW_OUTPUT` set as needed. The verifier is fixed to the isolated local preview URL and blocks external requests. Run `scripts/tests/shift-workflow.mjs` with `FETS_PGLITE_MODULE` pointing to PGlite 0.3.14 for database checks.
+
+## Staff guide and next stage
+
+`scripts/training/capture-shift-guide.cjs` and `scripts/training/build-shift-guide.py` produce a 16-page PDF and matching editable PowerPoint from 16 screenshots of the finished local preview. The guide covers the timetable, real work results, help, review feedback, checks, break cover, team ownership, post handovers and private staff responses, with a clearly marked lead section for review and report submission. Numbered highlights match the descriptions, and every page labels its fictional training records. See `scripts/training/README.md` for the build instructions.
+
+The 10-minute lab-walk and 6-minute DVR integration with FETS Online is explicitly deferred to a separate discussion and implementation stage. This release and the guide retain the current recording process in The Shift and make no synchronization claim.
+
+## Guarded VPS deployment
+
+`scripts/releases/deploy-shift-timetable.sh` accepts the exact reviewed commit on `codex/shift-simple-day`. It is pinned to the confirmed production predecessor `3237999e3af7841293fd5ba36b38848d108eb0c8` and HTML SHA-256 `3dd2bbcf6c29948ed86e1048920bfbf1cf491180b06aeccb439db42c3d4aedef`. It stops if the live release, container content, branch head, main ancestry, Compose configuration or Nginx configuration changes before cutover.
+
+The script runs only on `srv1120621` as root. It preserves the running image as a tagged rollback and compressed archive, captures the effective configuration privately, builds the reviewed source in isolation, retains prior hashed assets for existing browser sessions, and tests the candidate before replacing only the FETS Live app service. After switching, it compares every built JS/CSS/WOFF2 file and the font license against the public site, verifies the runtime/ports/mounts/Nginx configuration, and rolls back automatically if verification fails. No database migration or write is included.
+
+## Verified production deployment
+
+The guarded script completed on `srv1120621` after Desktop Commander access was restored. The new container started at **2026-10-19 18:41:40 UTC** (20 October, 00:11:40 IST).
+
+- Deployed commit: `f73a7965a584f94847bf227c8207d2b160879115`.
+- Release: `20261019T183650Z-shift-timetable-f73a796`.
+- Running image: `sha256:cd90bf6a647308b0073ba13c1eac22cf9c43e8f3ea391880722fdc6e200cd178`.
+- Public HTML SHA-256: `57f69bf7a0028b0a96e305ffdbfb96085ef64ff00870cd10d48bf2a0e2891c40`.
+- The candidate passed before cutover. All 51 public file/route checks matched the reviewed build, including every built JS/CSS/WOFF2 asset and the font license. Runtime environment, ports, mounts, restart policy and Nginx configuration matched the saved predecessor.
+- A separate external check confirmed public release metadata, both HTML routes, Shift JavaScript/CSS, the font and its license. Public browser checks passed at 1440 and 393 pixels with no page errors, failed site assets or horizontal overflow. These browser checks cover the unauthenticated entry screen; authenticated production staff workflows were not exercised and no production check records were created.
+- The release pointer names this release. The previous image is retained both as a Docker tag and a 385,815,342-byte compressed archive, with private configuration snapshots.
+- No database migration or writes were performed. FETS Online walk/DVR integration remains deferred.
+
+Rollback on the VPS:
+
+```bash
+bash /opt/fets-releases/20261019T183650Z-shift-timetable-f73a796/rollback.sh
+```
+
+This restores the previous website image and release pointer while retaining the existing backend and recorded data. The PR remains stacked on Actionables PR #34; deployment does not imply either PR was merged.

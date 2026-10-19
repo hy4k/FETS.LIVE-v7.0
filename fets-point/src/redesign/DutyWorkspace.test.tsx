@@ -100,15 +100,23 @@ function mocks() {
   const work = {
     access: vi.fn().mockResolvedValue({ lead: false, manager: false }),
     ensure: vi.fn().mockImplementation((i) => Promise.resolve(i.task || task)),
-    action: vi.fn().mockImplementation((t, action, note) =>
-      Promise.resolve({
+    action: vi.fn().mockImplementation((t, action, note) => {
+      const saved = {
         ...t,
         version: t.version + 1,
-        status: action === "complete" ? "done" : "open",
+        status:
+          action === "complete"
+            ? "done"
+            : action === "help"
+              ? "blocked"
+              : "open",
         completion_note: note,
+        started_at: new Date().toISOString(),
         done_by: action === "complete" ? "b" : null,
-      }),
-    ),
+      };
+      blueprint.tasks.mockResolvedValue([saved]);
+      return Promise.resolve(saved);
+    }),
     assign: vi.fn(),
     add: vi.fn(),
     history: vi.fn().mockResolvedValue([task]),
@@ -143,6 +151,14 @@ function mount(
   );
   return m;
 }
+async function openDuty(title = "Prepare lab") {
+  const heading = await screen.findByRole("heading", {
+    name: title,
+    exact: true,
+  });
+  const summary = heading.closest("summary")!;
+  if (!summary.parentElement!.hasAttribute("open")) fireEvent.click(summary);
+}
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
@@ -151,8 +167,11 @@ afterEach(() => {
 describe("outcome duty workplace", () => {
   it("starts staff with their own agreement and puts planning in a separate destination", async () => {
     mount();
-    const list = await screen.findByRole("region", { name: "My duties" });
-    expect(within(list).getByText("Prepare lab")).toBeInTheDocument();
+    const list = await screen.findByRole("region", { name: "My timetable" });
+    expect(
+      within(list).getByRole("heading", { name: "Prepare lab" }),
+    ).toBeVisible();
+    await openDuty();
     expect(
       within(list).queryByText("Order stationery"),
     ).not.toBeInTheDocument();
@@ -168,21 +187,23 @@ describe("outcome duty workplace", () => {
   });
   it("requires a result and sends it for independent review with the current version", async () => {
     const m = mount();
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Submit result" }),
-    );
+    await openDuty();
+    fireEvent.click(await screen.findByRole("button", { name: "Start duty" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Finish duty" }));
     expect(
-      screen.getByRole("button", { name: "Send for independent review" }),
+      screen.getByRole("button", { name: "Send for review" }),
     ).toBeDisabled();
-    fireEvent.change(screen.getByLabelText("What result did you achieve?"), {
+    fireEvent.change(screen.getByLabelText("What did you complete?"), {
       target: { value: "Checked every station and replaced one headset" },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: "Send for independent review" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Send for review" }));
     await waitFor(() =>
       expect(m.work.action).toHaveBeenCalledWith(
-        task,
+        expect.objectContaining({
+          id: task.id,
+          version: 2,
+          started_at: expect.any(String),
+        }),
         "complete",
         "Checked every station and replaced one headset",
         "",
@@ -196,19 +217,24 @@ describe("outcome duty workplace", () => {
   });
   it("keeps written evidence on save failure and never announces success", async () => {
     const m = mocks();
-    m.work.action.mockRejectedValue(new Error("Connection lost"));
-    mount(m);
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Submit result" }),
+    const original = m.work.action.getMockImplementation()!;
+    m.work.action.mockImplementation((t, action, note) =>
+      action === "complete"
+        ? Promise.reject(new Error("Connection lost"))
+        : original(t, action, note),
     );
-    fireEvent.change(screen.getByLabelText("What result did you achieve?"), {
+    mount(m);
+    await openDuty();
+    fireEvent.click(await screen.findByRole("button", { name: "Start duty" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Finish duty" }));
+    fireEvent.change(screen.getByLabelText("What did you complete?"), {
       target: { value: "All stations checked" },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: "Send for independent review" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Send for review" }));
     await screen.findByRole("alert");
-    expect(screen.getByLabelText("What result did you achieve?")).toHaveValue(
+    await waitFor(() => expect(m.repository.load).toHaveBeenCalledTimes(3));
+    expect(screen.getByRole("alert")).toHaveTextContent("Connection lost");
+    expect(screen.getByLabelText("What did you complete?")).toHaveValue(
       "All stations checked",
     );
     expect(
@@ -219,7 +245,8 @@ describe("outcome duty workplace", () => {
   });
   it("asks for the kind of support and a specific explanation", async () => {
     const m = mount();
-    fireEvent.click(await screen.findByRole("button", { name: "I need help" }));
+    await openDuty();
+    fireEvent.click(await screen.findByRole("button", { name: "Need help" }));
     fireEvent.change(
       screen.getByLabelText("What is stopping you, and what would help?"),
       { target: { value: "Need a spare headset" } },
@@ -255,8 +282,9 @@ describe("outcome duty workplace", () => {
     ]);
     m.work.access.mockResolvedValue({ lead: true, manager: false });
     mount(m, "a");
-    fireEvent.click(await screen.findByRole("button", { name: "Team day" }));
-    fireEvent.click(await screen.findByRole("button", { name: /Prepare lab/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Team" }));
+    await openDuty();
+
     expect(
       screen.getByRole("button", { name: "Verify result" }),
     ).toBeInTheDocument();
@@ -264,7 +292,7 @@ describe("outcome duty workplace", () => {
       screen.getByRole("button", { name: "Return with feedback" }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Submit result" }),
+      screen.queryByRole("button", { name: "Finish duty" }),
     ).not.toBeInTheDocument();
   });
   it("lets the lead agree a result on existing open work without silently rewriting history", async () => {
@@ -286,10 +314,14 @@ describe("outcome duty workplace", () => {
       },
     );
     mount(m, "a");
-    fireEvent.click(await screen.findByRole("button", { name: "Team day" }));
-    fireEvent.click(await screen.findByRole("button", { name: /Prepare lab/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Team" }));
+    await openDuty();
+
     fireEvent.click(
-      screen.getByRole("button", { name: "Edit work agreement" }),
+      within(screen.getByRole("article", { name: "Prepare lab" })).getByRole(
+        "button",
+        { name: "Edit assignment" },
+      ),
     );
     fireEvent.change(screen.getByLabelText("Done means"), {
       target: { value: "All stations and spares pass inspection" },
@@ -305,7 +337,7 @@ describe("outcome duty workplace", () => {
         responsibility.details,
       ),
     );
-    expect(await screen.findByText("Assignment agreed.")).toBeInTheDocument();
+    expect(await screen.findByText("Assignment saved.")).toBeInTheDocument();
   });
   it("keeps the lead from verifying their own completed job", async () => {
     const m = mocks();
@@ -314,24 +346,26 @@ describe("outcome duty workplace", () => {
     ]);
     m.work.access.mockResolvedValue({ lead: true, manager: false });
     mount(m, "a");
-    fireEvent.click(await screen.findByRole("button", { name: /Prepare lab/ }));
-    await screen.findByText("Submitted. Someone else must verify your work.");
+
+    await openDuty();
+    await screen.findByText(
+      "Sent for review. Another lead will check your result.",
+    );
     expect(
       screen.queryByRole("button", { name: "Verify result" }),
     ).not.toBeInTheDocument();
   });
   it("shows historical duties but disables new actions until the server is activated", async () => {
     mount(mocks(), "b", false, false);
+    await openDuty();
     await screen.findByText(responsibility.expected_result);
-    expect(
-      screen.getByRole("button", { name: "Submit result" }),
-    ).toBeDisabled();
-    expect(screen.getByRole("button", { name: "I need help" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Start duty" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Need help" })).toBeDisabled();
   });
   it("does not load a global centre as if it were a real roster", async () => {
     const m = mount(mocks(), "b", false, true, "global");
     expect(
-      await screen.findByText("Start with one centre."),
+      await screen.findByRole("heading", { name: "Choose a centre" }),
     ).toBeInTheDocument();
     expect(m.repository.roster).not.toHaveBeenCalled();
   });
@@ -357,7 +391,7 @@ describe("outcome duty workplace", () => {
     });
     mount(m);
     fireEvent.click(
-      await screen.findByRole("button", { name: "Record DVR at 10:06" }),
+      await screen.findByRole("button", { name: /Record DVR check.*10:06/ }),
     );
     await waitFor(() =>
       expect(m.repository.event).toHaveBeenCalledWith({
@@ -375,9 +409,7 @@ describe("outcome duty workplace", () => {
     m.work.access.mockResolvedValue({ lead: true, manager: true });
     m.work.history.mockRejectedValue(new Error("History unavailable"));
     mount(m, "a", true);
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Review & development" }),
-    );
+    fireEvent.click(await screen.findByRole("button", { name: "People" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "History unavailable",
     );
@@ -406,9 +438,7 @@ describe("outcome duty workplace", () => {
       followup_result: "Practised the checklist independently",
     });
     mount(m, "a", true);
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Review & development" }),
-    );
+    fireEvent.click(await screen.findByRole("button", { name: "People" }));
     fireEvent.click(
       await screen.findByRole("button", { name: "Record follow-up outcome" }),
     );
@@ -433,12 +463,10 @@ describe("outcome duty workplace", () => {
     const m = mocks();
     m.work.access.mockResolvedValue({ lead: true, manager: true });
     mount(m, "a", true);
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Review & development" }),
-    );
+    fireEvent.click(await screen.findByRole("button", { name: "People" }));
     fireEvent.click(
       await screen.findByRole("button", {
-        name: "Agree feedback & a next step",
+        name: "Add feedback",
       }),
     );
     fireEvent.change(screen.getByLabelText("Next step"), {
@@ -458,5 +486,199 @@ describe("outcome duty workplace", () => {
       screen.getByRole("button", { name: "Save feedback & follow-up" }),
     ).toBeDisabled();
     expect(m.work.saveNote).not.toHaveBeenCalled();
+  });
+  it("keeps duty titles in the timetable and opens the agreement only when needed", async () => {
+    const m = mocks();
+    m.blueprint.responsibilities.mockResolvedValue([
+      responsibility,
+      { ...responsibility, id: "r2", title: "Check supplies", owner_id: "b" },
+    ]);
+    mount(m);
+    const list = await screen.findByRole("region", { name: "My timetable" });
+    expect(
+      within(list).getByRole("heading", { name: "Prepare lab" }),
+    ).toBeVisible();
+    expect(
+      within(list).getByRole("heading", { name: "Check supplies" }),
+    ).toBeVisible();
+    screen
+      .getAllByRole("button", { name: "Start duty" })
+      .forEach((button) => expect(button).not.toBeVisible());
+    await openDuty();
+    const first = within(list).getByRole("article", { name: "Prepare lab" });
+    expect(
+      within(first).getByText(responsibility.expected_result),
+    ).toBeVisible();
+    expect(
+      within(first).getByRole("button", { name: "Start duty" }),
+    ).toBeEnabled();
+    expect(
+      within(first).queryByRole("button", { name: "Finish duty" }),
+    ).not.toBeInTheDocument();
+  });
+  it("disables future work actions before they can produce a server error", async () => {
+    mount();
+    await screen.findByRole("region", { name: "My timetable" });
+    fireEvent.change(screen.getByLabelText("Working day"), {
+      target: { value: "2099-01-01" },
+    });
+    await screen.findByText(/You are viewing a future/);
+    await openDuty();
+    await screen.findByText("Work updates are available on the day.");
+    expect(screen.getByRole("button", { name: "Start duty" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Need help" })).toBeDisabled();
+    expect(
+      screen.queryByRole("button", { name: /Record DVR|Record walk/ }),
+    ).not.toBeInTheDocument();
+  });
+  it("keeps a closed day read-only", async () => {
+    const m = mocks();
+    m.repository.load.mockResolvedValue({
+      record: null,
+      lead: { lead_id: "a" },
+      events: [],
+      changes: [],
+      closed: true,
+    });
+    mount(m);
+    await screen.findByText(/Report sent. This day is closed/);
+    await openDuty();
+    expect(screen.getByRole("button", { name: "Start duty" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Need help" })).toBeDisabled();
+    expect(m.work.action).not.toHaveBeenCalled();
+  });
+  it("includes overdue assigned work in the lead attention view", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-19T06:00:00Z"));
+    const m = mocks();
+    m.work.access.mockResolvedValue({ lead: true, manager: true });
+    m.blueprint.tasks.mockResolvedValue([{ ...task, day: centreDate() }]);
+    mount(m, "a", true);
+    const focus = await screen.findByRole("button", { name: /need attention/ });
+    expect(focus).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(focus);
+    expect(
+      await screen.findByRole("heading", { name: "Prepare lab" }),
+    ).toBeVisible();
+    expect(screen.getAllByText(/overdue/).length).toBeGreaterThan(0);
+    expect(
+      screen.getByRole("button", { name: /Show whole day/ }),
+    ).toHaveAttribute("aria-pressed", "true");
+  });
+  it("shows a roster mismatch explicitly instead of inventing a personal post", async () => {
+    const m = mocks();
+    m.repository.roster.mockResolvedValue(team.filter((p) => p.id !== "b"));
+    mount(m);
+    await screen.findByText(/You are not on this centre’s roster/);
+    expect(
+      screen.queryByRole("button", { name: /Record DVR|Record walk/ }),
+    ).not.toBeInTheDocument();
+  });
+  it("orders posts, breaks and deadlines together and identifies the current interval", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-19T05:07:00Z"));
+    const m = mocks(),
+      plan = createDayPlan(team);
+    plan.breaks.filter((b) => b.staff === "b").forEach((b) => (b.cover = "c"));
+    m.repository.load.mockResolvedValue({
+      record: { id: "plan", plan, status: "published" },
+      lead: { lead_id: "a" },
+      events: [],
+      changes: [],
+      closed: false,
+    } as any);
+    m.blueprint.tasks.mockResolvedValue([
+      { ...task, day: centreDate(), due_minute: 540 },
+    ]);
+    mount(m);
+    const board = await screen.findByRole("region", { name: "My timetable" });
+    const rows = Array.from(board.querySelectorAll(".st-entry"));
+    expect(rows.slice(0, 3).map((r) => r.getAttribute("data-time"))).toEqual([
+      "480",
+      "540",
+      "570",
+    ]);
+    const current = board.querySelector(".is-current")!;
+    expect(current).toHaveTextContent("10:30");
+    expect(current).toHaveTextContent("to 11:00");
+    expect(current).toHaveTextContent("Break");
+    expect(current).toHaveTextContent("Cover: Colleague C");
+    expect(screen.queryByText("Verified by")).not.toBeInTheDocument();
+  });
+  it("shows effective cover in the team timetable at the exact break boundary", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-19T04:30:00Z"));
+    const m = mocks(),
+      plan = createDayPlan(team);
+    plan.breaks.find((b) => b.staff === "a" && b.start === 600)!.cover = "c";
+    m.repository.load.mockResolvedValue({
+      record: { id: "plan", plan, status: "published" },
+      lead: { lead_id: "a" },
+      events: [],
+      changes: [],
+      closed: false,
+    } as any);
+    m.work.access.mockResolvedValue({ lead: true, manager: true });
+    mount(m, "a", true);
+    const board = await screen.findByRole("region", { name: "Team timetable" });
+    const current = board.querySelector(".is-current")!;
+    expect(current).toHaveTextContent("10:00");
+    const control = Array.from(
+      current.querySelectorAll(".st-lanes > div"),
+    ).find((el) => el.textContent?.includes("Check-in & DVR"))!;
+    expect(control.querySelector("strong")).toHaveTextContent("Colleague C");
+    expect(control).toHaveTextContent("Cover for Colleague A");
+    expect(current).toHaveTextContent("Colleague A on break until 10:30");
+  });
+  it("keeps submitted results separate from verified work in the day report", async () => {
+    const m = mocks();
+    const plan = createDayPlan(team);
+    m.repository.load.mockResolvedValue({
+      record: {
+        id: "plan",
+        plan,
+        status: "published",
+        day: centreDate(),
+        lead_id: "a",
+      },
+      lead: { lead_id: "a" },
+      events: [],
+      changes: [],
+      closed: false,
+    } as any);
+    m.work.access.mockResolvedValue({ lead: true, manager: true });
+    m.blueprint.tasks.mockResolvedValue([
+      {
+        ...task,
+        status: "done",
+        done_by: "b",
+        completion_note: "Result waiting for review",
+      },
+      {
+        ...task,
+        id: "t2",
+        responsibility_id: "r2",
+        assigned_to: "a",
+        status: "done",
+        done_by: "a",
+        verified_by: "b",
+        verified_at: new Date().toISOString(),
+        completion_note: "Independently checked result",
+      },
+    ]);
+    mount(m, "a", true);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Report", exact: true }),
+    );
+    const totals = await screen.findByRole("group", {
+      name: "Day report totals",
+    });
+    expect(
+      within(totals).getByText("duties verified").previousElementSibling,
+    ).toHaveTextContent("1/2");
+    expect(
+      within(totals).getByText("results to review").previousElementSibling,
+    ).toHaveTextContent("1");
+    expect(m.repository.report).not.toHaveBeenCalled();
   });
 });
