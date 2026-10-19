@@ -18,7 +18,7 @@ Leads retain Plan, independent verification, help requests and report submission
 - 90-minute rotations, 10-minute lab walks, 6-minute DVR checks, named break cover, effective amendments, handovers, independent reviews and closure rules use the existing logic and APIs.
 - Task agreement snapshots, real actors, server timestamps, version checks and private feedback remain governed by the installed database policies and guards. No historical agreement, completion, audit record or performance score is fabricated.
 - Actionables remains the source of its own work and results. Its page and backend are unchanged. FETS Online synchronization is unchanged and has not been newly validated. Android/Google Play remains separate.
-- No production data, schema or website was changed while preparing this redesign. The public site still reports `3237999e3af7841293fd5ba36b38848d108eb0c8`. Deploy the reviewed website through the guarded VPS process with a retained rollback image and preserved configuration.
+- The website was deployed from `f73a7965a584f94847bf227c8207d2b160879115` on 19 October 2026 UTC (20 October in India). No production data or schema was changed. The prior Actionables release remains available for rollback.
 
 ## Validation
 
@@ -52,4 +52,23 @@ The 10-minute lab-walk and 6-minute DVR integration with FETS Online is explicit
 
 The script runs only on `srv1120621` as root. It preserves the running image as a tagged rollback and compressed archive, captures the effective configuration privately, builds the reviewed source in isolation, retains prior hashed assets for existing browser sessions, and tests the candidate before replacing only the FETS Live app service. After switching, it compares every built JS/CSS/WOFF2 file and the font license against the public site, verifies the runtime/ports/mounts/Nginx configuration, and rolls back automatically if verification fails. No database migration or write is included.
 
-Deployment is pending authenticated VPS access. On 19 October, the public site still reported the predecessor above and Desktop Commander reported `srv1120621` offline. A prepared script or successful build is not deployment evidence; record the verified release and rollback path after actual execution.
+## Verified production deployment
+
+The guarded script completed on `srv1120621` after Desktop Commander access was restored. The new container started at **2026-10-19 18:41:40 UTC** (20 October, 00:11:40 IST).
+
+- Deployed commit: `f73a7965a584f94847bf227c8207d2b160879115`.
+- Release: `20261019T183650Z-shift-timetable-f73a796`.
+- Running image: `sha256:cd90bf6a647308b0073ba13c1eac22cf9c43e8f3ea391880722fdc6e200cd178`.
+- Public HTML SHA-256: `57f69bf7a0028b0a96e305ffdbfb96085ef64ff00870cd10d48bf2a0e2891c40`.
+- The candidate passed before cutover. All 51 public file/route checks matched the reviewed build, including every built JS/CSS/WOFF2 asset and the font license. Runtime environment, ports, mounts, restart policy and Nginx configuration matched the saved predecessor.
+- A separate external check confirmed public release metadata, both HTML routes, Shift JavaScript/CSS, the font and its license. Public browser checks passed at 1440 and 393 pixels with no page errors, failed site assets or horizontal overflow. These browser checks cover the unauthenticated entry screen; authenticated production staff workflows were not exercised and no production check records were created.
+- The release pointer names this release. The previous image is retained both as a Docker tag and a 385,815,342-byte compressed archive, with private configuration snapshots.
+- No database migration or writes were performed. FETS Online walk/DVR integration remains deferred.
+
+Rollback on the VPS:
+
+```bash
+bash /opt/fets-releases/20261019T183650Z-shift-timetable-f73a796/rollback.sh
+```
+
+This restores the previous website image and release pointer while retaining the existing backend and recorded data. The PR remains stacked on Actionables PR #34; deployment does not imply either PR was merged.
