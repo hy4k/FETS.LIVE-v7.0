@@ -45,3 +45,11 @@ For browser verification, start the frontend Vite server on local port 3012 and 
 `scripts/training/capture-shift-guide.cjs` and `scripts/training/build-shift-guide.py` produce a 16-page PDF and matching editable PowerPoint from 16 screenshots of the finished local preview. The guide covers the timetable, real work results, help, review feedback, checks, break cover, team ownership, post handovers and private staff responses, with a clearly marked lead section for review and report submission. Numbered highlights match the descriptions, and every page labels its fictional training records. See `scripts/training/README.md` for the build instructions.
 
 The 10-minute lab-walk and 6-minute DVR integration with FETS Online is explicitly deferred to a separate discussion and implementation stage. This release and the guide retain the current recording process in The Shift and make no synchronization claim.
+
+## Guarded VPS deployment
+
+`scripts/releases/deploy-shift-timetable.sh` accepts the exact reviewed commit on `codex/shift-simple-day`. It is pinned to the confirmed production predecessor `3237999e3af7841293fd5ba36b38848d108eb0c8` and HTML SHA-256 `3dd2bbcf6c29948ed86e1048920bfbf1cf491180b06aeccb439db42c3d4aedef`. It stops if the live release, container content, branch head, main ancestry, Compose configuration or Nginx configuration changes before cutover.
+
+The script runs only on `srv1120621` as root. It preserves the running image as a tagged rollback and compressed archive, captures the effective configuration privately, builds the reviewed source in isolation, retains prior hashed assets for existing browser sessions, and tests the candidate before replacing only the FETS Live app service. After switching, it compares every built JS/CSS/WOFF2 file and the font license against the public site, verifies the runtime/ports/mounts/Nginx configuration, and rolls back automatically if verification fails. No database migration or write is included.
+
+Deployment is pending authenticated VPS access. On 19 October, the public site still reported the predecessor above and Desktop Commander reported `srv1120621` offline. A prepared script or successful build is not deployment evidence; record the verified release and rollback path after actual execution.
