@@ -23,7 +23,7 @@ try {
   await db.query('insert into staff_profiles(id,user_id,full_name,branch_assigned,is_active,role) values($1,$1,$2,$3,true,$4)',[uid(n),`Staff ${n}`,n===4?'calicut':'cochin',n===5?'super_admin':'staff']);
   await db.query("insert into roster_schedules values($1,$2,'D',$3)",[uid(n),day,n===4?'calicut':'cochin']);
  }
- for(const file of ['20260929091547_centre_duty_planning.sql','20260929100511_duty_coverage_and_activation.sql','20261019185443_online_shift_checks.sql']){
+ for(const file of ['20260929091547_centre_duty_planning.sql','20260929100511_duty_coverage_and_activation.sql','20261019185443_online_shift_checks.sql','20261019203847_online_check_provenance_policy.sql']){
   const sql=await readFile(new URL(`../../supabase/migrations/${file}`,import.meta.url),'utf8');
   await db.exec(sql.replaceAll('clock_timestamp()','public.test_clock()'));
  }
