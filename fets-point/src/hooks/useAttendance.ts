@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { toast } from 'react-hot-toast'
+import { clockParts } from '../roster-workspace/model'
 
 export interface AttendanceRecord {
   id?: string
@@ -65,40 +66,15 @@ const checkIn = async (payload: {
   branch_location?: string
   notes?: string
 }) => {
-  const now = new Date()
-  const timeStr = now.toTimeString().slice(0, 5) // HH:MM
-  const isLate = now.getHours() > 9 || (now.getHours() === 9 && now.getMinutes() > 15)
-
-  const record: Partial<AttendanceRecord> = {
-    ...payload,
-    check_in: timeStr,
-    status: isLate ? 'late' : 'present',
-    updated_at: now.toISOString(),
-  }
-
-  // Upsert: update if record exists for this staff+date
-  const { error } = await supabase
-    .from('staff_attendance')
-    .upsert([{ ...record, created_at: now.toISOString() }], {
-      onConflict: 'staff_id,date',
-    })
-
+  if (payload.date !== clockParts().day) throw new Error('Check-in is for today only.')
+  const { data, error } = await (supabase as any).rpc('roster_attendance_action', { p_action: 'in', p_staff: payload.staff_id })
   if (error) throw new Error(error.message)
-  return record
+  return data as AttendanceRecord
 }
 
-// ── Check Out ─────────────────────────────────────────────────────────────────
-
 const checkOut = async (payload: { staff_id: string; date: string }) => {
-  const now = new Date()
-  const timeStr = now.toTimeString().slice(0, 5)
-
-  const { error } = await supabase
-    .from('staff_attendance')
-    .update({ check_out: timeStr, updated_at: now.toISOString() })
-    .eq('staff_id', payload.staff_id)
-    .eq('date', payload.date)
-
+  if (payload.date !== clockParts().day) throw new Error('Check-out is for today only.')
+  const { error } = await (supabase as any).rpc('roster_attendance_action', { p_action: 'out', p_staff: payload.staff_id })
   if (error) throw new Error(error.message)
 }
 

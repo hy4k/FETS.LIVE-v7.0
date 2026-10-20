@@ -7,11 +7,12 @@
   the old localStorage worklog that was being clobbered by the live-data load.
 */
 import { supabase } from "../lib/supabase";
+import { clockParts, attendanceMetrics } from "../roster-workspace/model";
 
 const F = () => window.FETS;
 const pad = (n) => String(n).padStart(2, "0");
-export const attDateStr = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-const hhmm = () => new Date().toTimeString().slice(0, 5);
+export const attDateStr = (d = new Date()) => clockParts(d).day;
+const hhmm = () => clockParts().time;
 const hm = (t) => { if (!t) return 0; const [h, m] = String(t).split(":").map(Number); return h * 60 + (m || 0); };
 
 const sid = () => {
@@ -53,10 +54,7 @@ async function ensureSid() {
 const parseNotes = (n) => { try { return JSON.parse(n || "{}"); } catch (e) { return {}; } };
 
 export function attWorked(row) {
-  if (!row || !row.check_in) return 0;
-  const end = row.check_out ? hm(row.check_out) : hm(hhmm());
-  const brk = (parseNotes(row.notes).breakMins) || 0;
-  return Math.max(0, end - hm(row.check_in) - brk);
+  return row ? attendanceMetrics(row, undefined, row.date).worked ?? 0 : 0;
 }
 export function attOnBreak(row) {
   const steps = (parseNotes(row && row.notes).steps) || [];
@@ -71,37 +69,18 @@ export async function attToday() {
   catch (e) { return null; }
 }
 
-export async function attCheckIn(branch) {
-  const id = await ensureSid(); if (!id) return { error: "We couldn't match your staff profile — ask an admin to link your account." };
-  const now = new Date(); const t = hhmm();
-  const late = now.getHours() > 9 || (now.getHours() === 9 && now.getMinutes() > 15);
-  const row = { staff_id: id, date: attDateStr(), check_in: t, status: late ? "late" : "present", branch_location: branch === "global" ? null : branch, notes: JSON.stringify({ breakMins: 0, steps: [] }), updated_at: now.toISOString(), created_at: now.toISOString() };
-  try { const { error } = await supabase.from("staff_attendance").upsert([row], { onConflict: "staff_id,date" }); if (error) throw error; return { ok: true }; }
-  catch (e) { return { error: e.message || "Check-in failed" }; }
+async function recordAction(action, staffId = null, dateStr = attDateStr()) {
+  if (dateStr !== attDateStr()) return { error: "Check-in and check-out actions are for today only." };
+  try {
+    const { error } = await supabase.rpc("roster_attendance_action", { p_action: action, p_staff: staffId });
+    if (error) throw error;
+    return { ok: true };
+  } catch (e) { return { error: e.message || "Attendance was not saved. Please refresh." }; }
 }
-
-export async function attStepOut() {
-  const id = await ensureSid(); if (!id) return { error: "Check in first" };
-  const r = await attToday(); if (!r) return { error: "Check in first" };
-  const meta = parseNotes(r.notes); meta.steps = meta.steps || []; meta.steps.push({ out: hhmm() });
-  try { await supabase.from("staff_attendance").update({ notes: JSON.stringify(meta), updated_at: new Date().toISOString() }).eq("staff_id", id).eq("date", attDateStr()); return { ok: true }; }
-  catch (e) { return { error: e.message }; }
-}
-
-export async function attBack() {
-  const id = await ensureSid(); if (!id) return { error: "Not checked in" };
-  const r = await attToday(); if (!r) return { error: "Not checked in" };
-  const meta = parseNotes(r.notes); const steps = meta.steps || []; const last = steps[steps.length - 1];
-  if (last && last.out && !last.in) { last.in = hhmm(); meta.breakMins = (meta.breakMins || 0) + Math.max(0, hm(last.in) - hm(last.out)); }
-  try { await supabase.from("staff_attendance").update({ notes: JSON.stringify(meta), updated_at: new Date().toISOString() }).eq("staff_id", id).eq("date", attDateStr()); return { ok: true }; }
-  catch (e) { return { error: e.message }; }
-}
-
-export async function attCheckOut() {
-  const id = await ensureSid(); if (!id) return { error: "Not checked in" };
-  try { await supabase.from("staff_attendance").update({ check_out: hhmm(), updated_at: new Date().toISOString() }).eq("staff_id", id).eq("date", attDateStr()); return { ok: true }; }
-  catch (e) { return { error: e.message }; }
-}
+export async function attCheckIn(_branch) { return recordAction("in"); }
+export async function attStepOut() { return recordAction("break"); }
+export async function attBack() { return recordAction("back"); }
+export async function attCheckOut() { return recordAction("out"); }
 
 /* this staff member's recent shift history */
 export async function attHistory(days = 45) {
@@ -136,18 +115,8 @@ export async function attAllForDate(dateStr) {
 
 export const attFmtMins = (m) => `${Math.floor(m / 60)}h ${pad(m % 60)}m`;
 
-export async function attCheckInStaff(staffId, branch, dateStr = attDateStr()) {
-  const now = new Date(); const t = hhmm();
-  const late = now.getHours() > 9 || (now.getHours() === 9 && now.getMinutes() > 15);
-  const row = { staff_id: staffId, date: dateStr, check_in: t, status: late ? "late" : "present", branch_location: branch === "global" ? null : branch, notes: JSON.stringify({ breakMins: 0, steps: [] }), updated_at: now.toISOString(), created_at: now.toISOString() };
-  try { const { error } = await supabase.from("staff_attendance").upsert([row], { onConflict: "staff_id,date" }); if (error) throw error; return { ok: true }; }
-  catch (e) { return { error: e.message || "Check-in failed" }; }
-}
-
-export async function attCheckOutStaff(staffId, dateStr = attDateStr()) {
-  try { await supabase.from("staff_attendance").update({ check_out: hhmm(), updated_at: new Date().toISOString() }).eq("staff_id", staffId).eq("date", dateStr); return { ok: true }; }
-  catch (e) { return { error: e.message }; }
-}
+export async function attCheckInStaff(staffId, _branch, dateStr = attDateStr()) { return recordAction("in", staffId, dateStr); }
+export async function attCheckOutStaff(staffId, dateStr = attDateStr()) { return recordAction("out", staffId, dateStr); }
 
 export async function attUpdateStatusStaff(staffId, status, dateStr = attDateStr()) {
   const row = { staff_id: staffId, date: dateStr, status, notes: JSON.stringify({ breakMins: 0, steps: [] }), updated_at: new Date().toISOString(), created_at: new Date().toISOString() };

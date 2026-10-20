@@ -425,7 +425,7 @@ export async function ensureMonth(d: Date) {
   try {
     const [sessRes, rosterRes] = await Promise.all([
       supabase.from("calendar_sessions").select("*").gte("date", ymd(first)).lte("date", ymd(last)),
-      supabase.from("roster_schedules").select("date, shift_code, overtime_hours, profile_id, branch_location, staff_profiles(full_name, branch_assigned)").gte("date", ymd(first)).lte("date", ymd(last))
+      supabase.from("roster_schedules").select("date, shift_code, overtime_hours, profile_id, branch_location, shift_label, shift_start, shift_end, grace_minutes, version, staff_profiles(full_name, branch_assigned)").gte("date", ymd(first)).lte("date", ymd(last))
     ]);
 
     if (!sessRes.error && sessRes.data) {
@@ -455,7 +455,7 @@ export async function ensureMonth(d: Date) {
         const off = F.offsetOf(dt);
         if (off != null && !isNaN(off)) {
           F._dbRoster[name] = F._dbRoster[name] || {};
-          F._dbRoster[name][off] = { code: r.shift_code, ot: Number(r.overtime_hours) || 0 };
+          F._dbRoster[name][off] = { code: r.shift_code, ot: Number(r.overtime_hours) || 0, shift_label: r.shift_label, shift_start: r.shift_start, shift_end: r.shift_end, grace_minutes: r.grace_minutes, version: r.version };
         }
 
         if (REST_CODES.has(lc(r.shift_code))) return;
