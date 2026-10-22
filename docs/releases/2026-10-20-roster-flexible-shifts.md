@@ -76,3 +76,11 @@ The following rollout procedure was used; it remains a reference for subsequent 
 3. Build this reviewed commit with the existing production environment. Start and inspect a candidate before switching the app. Preserve runtime ports, mounts, restart policy and proxy configuration.
 4. Compare every public asset with the candidate build and inspect the live roster/attendance page. Verify authenticated reads and permissions without fabricating attendance, claims or schedules.
 5. Keep the previous image and rollback command. On frontend failure restore the prior image/configuration. Retain additive schema and newly entered data; never drop new tables or truncate numeric OT as an automatic rollback. If a new trigger needs disabling, preserve its data and review that targeted rollback separately.
+
+## Runtime incident — 22 October 2026
+
+The initial roster release failed when the authenticated application lazy module was evaluated: `ReferenceError: RaiseCasePage is not defined`. Replacing the old roster section had also removed the adjacent incident component, its shared metadata/helpers, and the Calendar/Roster window registrations. TypeScript did not catch it because the legacy shell uses `@ts-nocheck`; the sign-in smoke test did not evaluate the authenticated shell. The isolated roster preview also excluded that shell.
+
+The prior website image was restored from the retained archive (its local Docker image had been removed). The database migration and all records were retained. The fix restores the adjacent shared code verbatim from the previous base. Production module import now passes locally. `verify-production-shell.mjs` explicitly imports the built lazy application module and asserts its shared exports, without credentials and with external network requests blocked. Deployment now runs it in an isolated, version-pinned browser container before switching. Rollback scripts also reload the archived image automatically if it is missing locally.
+
+Corrected rollout verification is recorded below after deployment.

@@ -113,6 +113,9 @@ cat > "$R/rollback.sh" <<'ROLLBACK'
 set -euo pipefail
 cd "$(dirname "$0")"
 release_dir=$PWD
+if ! docker image inspect "$(cat previous-image)" >/dev/null 2>&1; then
+  gzip -dc "$release_dir/rollback-image.tar.gz" | docker load
+fi
 docker tag "$(cat previous-image)" fets-live-app:latest
 cd /opt/apps/fets-live
 docker compose up -d --pull never --no-build --no-deps --force-recreate app
@@ -143,6 +146,13 @@ PORT=$(docker port "$CHECK" 80/tcp | head -n1 | awk -F: '{print $NF}')
 curl --retry 10 --retry-all-errors --retry-delay 2 -fsS --max-time 20 "http://127.0.0.1:$PORT/calendar" -o "$R/candidate.html" || { docker logs --tail 60 "$CHECK" > "$R/candidate.log" 2>&1; die 'Candidate startup failed; production was not switched. Diagnostics are retained in the release directory.'; }
 [[ $(sha256sum "$R/candidate.html" | cut -d' ' -f1) == "$HASH" ]] || die 'Candidate route verification failed.'
 
+echo 'Evaluating the full production application module before switching...'
+docker run --rm --user 0 --network host --shm-size=512m \
+  -e FETS_PUPPETEER_MODULE=/home/pptruser/node_modules/puppeteer/lib/puppeteer/puppeteer.js \
+  -e PUPPETEER_CACHE_DIR=/home/pptruser/.cache/puppeteer \
+  -v "$R/source/scripts/verification:/checks:ro" \
+  ghcr.io/puppeteer/puppeteer:25.13.0 \
+  node /checks/verify-production-shell.mjs "http://127.0.0.1:$PORT" > "$R/module-verification.json"
 echo "CANDIDATE READY: $R"
 touch "$R/candidate.ready"
 # A separate authenticated operator writes this receipt only after verifying

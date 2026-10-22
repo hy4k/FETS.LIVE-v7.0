@@ -6570,6 +6570,31 @@ export function RosterPage({ branch, setActive }) {
   return <RosterWorkspace branch={branch} meId={F()._meId} canEdit={Boolean(F().isAdmin && String(F().user?.email || '').toLowerCase() === 'mithun@fets.in')} />;
 }
 
+Object.assign(window, { CalendarPage, RosterPage });
+
+/* ============================================================
+   SOURCE: pages-desk.jsx
+   ============================================================ */
+/* ============================================================
+   FETS · LIVE — Raise a Case
+   3-pane support playground: Category · Case queue · Live thread
+   + Analysis view
+   ============================================================ */
+
+const PRIO_COLOR = { Urgent: "var(--bad)", High: "var(--warn)", Medium: "var(--accent)", Low: "var(--ink-4)" };
+const STATUS_META = {
+  open:     { label: "Open", color: "var(--warn)" },
+  progress: { label: "In progress", color: "var(--v-prometric)" },
+  resolved: { label: "Resolved", color: "var(--ok)" },
+};
+const STATUS_ORDER = ["open", "progress", "resolved"];
+
+function RaiseCasePage({ branch, setActive }) {
+  return <FetsIncidentPremium branch={branch} setActive={setActive} />;
+}
+const FieldLabel = ({ children }) => null;
+const ChipRow = ({ options, value, onChange, multi, format }) => null;
+
 /* =====================================================================
    SHIFT HANDOVER PAGE — End of Shift Checklist, Headcount & Sign-off
    ===================================================================== */
