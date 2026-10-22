@@ -2,12 +2,12 @@
 set -Eeuo pipefail
 umask 077
 
-# Deploy the reviewed roster over the confirmed Shift timetable release.
+# Deploy the reviewed roster over the confirmed recovered roster release.
 # The operator applies/verifies the FETS Live migration while the candidate waits.
 # This script never changes the database or any other Docker service.
 COMMIT=${1:?Pass the exact reviewed Git commit.}
-BASELINE=57f69bf7a0028b0a96e305ffdbfb96085ef64ff00870cd10d48bf2a0e2891c40
-PREVIOUS_COMMIT=f73a7965a584f94847bf227c8207d2b160879115
+BASELINE=7b8a4d25c287a027639da0f72348ffa6c71c542b938adca38d26e16117b9edf6
+PREVIOUS_COMMIT=03366536a07d95aa5ab9c7f40fd1fc0fb7f51fb8
 APP=/opt/apps/fets-live
 CONTAINER=fets-live-app-1
 die() { echo "STOP: $*" >&2; exit 1; }
@@ -99,7 +99,7 @@ for p in (root/'assets').glob('*.js'):
     assert all(marker not in content for marker in ('LOCAL DESIGN PREVIEW', 'CPR-EXAMPLE', 'previewTime', 'Design preview · fictional staff records')), 'Training fixture found in production assets'
 PY_BUILD
 HASH=$(sha256sum "$R/dist/index.html" | cut -d' ' -f1)
-printf '{"release":"%s","commit":"%s","index_sha256":"%s","features":["institution-first-actionables","source-institution-catalogue","shared-audit-evidence","management-shortlist","team-task-board","chronological-shift-timetable","named-break-cover","independent-duty-review","local-manrope-typography","custom-roster-hours","flexible-roster-patterns","roster-based-attendance"]}\n' "$REL" "$COMMIT" "$HASH" > "$R/dist/release.json"
+printf '{"release":"%s","commit":"%s","index_sha256":"%s","features":["institution-first-actionables","source-institution-catalogue","shared-audit-evidence","management-shortlist","team-task-board","chronological-shift-timetable","named-break-cover","independent-duty-review","local-manrope-typography","custom-roster-hours","flexible-roster-patterns","roster-based-attendance","compact-roster-codes","roster-lead-markers","editable-attendance-reports"]}\n' "$REL" "$COMMIT" "$HASH" > "$R/dist/release.json"
 chmod 644 "$R/dist/release.json"
 docker tag "$PREVIOUS" "fets-live-app:base-$REL"
 # Retain old hashed assets so existing browser sessions can finish loading them.

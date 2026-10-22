@@ -37,7 +37,7 @@ const types: ShiftType[] = [
     archived: false,
   },
 ];
-const data: Snapshot = { people, types, schedules: [], attendance: [] };
+const data: Snapshot = { people, types, schedules: [], attendance: [], leadWeeks: [{branch:'calicut',week_start:'2026-10-19',lead_id:'p0'}] };
 for (const [i, p] of people.entries())
   for (const date of monthDays("2026-10")) {
     const d = Number(date.slice(-2)),

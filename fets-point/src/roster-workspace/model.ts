@@ -1,3 +1,4 @@
+import type { CoverageChange, PlanRecord } from "../redesign/shift-plan";
 export const CODES = {
   D: "Day shift",
   E: "Legacy evening",
@@ -55,6 +56,10 @@ export type Snapshot = {
   schedules: Schedule[];
   attendance: Attendance[];
   types: ShiftType[];
+  leadWeeks?: { branch: string; week_start: string; lead_id: string }[];
+  leadPlans?: PlanRecord[];
+  leadChanges?: CoverageChange[];
+  leadError?: string;
 };
 export type Change = {
   profile_id: string;
@@ -261,7 +266,11 @@ export function attendanceMetrics(
   const future = day > today.day;
   const active = inAt !== null && outAt === null && day === today.day;
   const missingOut = inAt !== null && outAt === null && day < today.day;
-  const invalid = inAt !== null && outAt !== null && outAt < inAt;
+  const invalid =
+    (outAt !== null && (inAt === null || outAt < inAt)) ||
+    (day === today.day &&
+      ((inAt !== null && inAt > current) ||
+        (outAt !== null && outAt > current)));
   const meta = noteObject(row?.notes);
   const steps = Array.isArray(meta.steps) ? meta.steps : [];
   let breaks = Math.max(0, Number(meta.breakMins) || 0);
@@ -277,7 +286,7 @@ export function attendanceMetrics(
       ? null
       : Math.max(0, (outAt ?? current) - inAt - breaks);
   const late =
-    timed && inAt !== null && !future
+    timed && inAt !== null && !invalid && !future
       ? Math.max(0, inAt - start! - (schedule?.grace_minutes || 0))
       : null;
   const early =
@@ -311,25 +320,27 @@ export function attendanceMetrics(
     // Without intervals, historical aggregate break minutes cannot be allocated to OT.
     outside = breaks > knownBreaks && outside > 0 ? null : Math.max(0, outside);
   }
-  const status = future
-    ? "Upcoming"
-    : inAt !== null
-      ? invalid
-        ? "Check times"
-        : missingOut
-          ? "Missing check-out"
-          : active
-            ? "In progress"
-            : "Completed"
-      : row?.status === "absent"
-        ? "Marked absent"
-        : missingIn
-          ? "No check-in"
-          : scheduled
-            ? "Not started"
-            : schedule
-              ? shiftName(schedule)
-              : "Not scheduled";
+  const status = invalid
+    ? "Check times"
+    : future
+      ? "Upcoming"
+      : inAt !== null
+        ? invalid
+          ? "Check times"
+          : missingOut
+            ? "Missing check-out"
+            : active
+              ? "In progress"
+              : "Completed"
+        : row?.status === "absent"
+          ? "Marked absent"
+          : missingIn
+            ? "No check-in"
+            : scheduled
+              ? "Not started"
+              : schedule
+                ? shiftName(schedule)
+                : "Not scheduled";
   return {
     scheduled,
     timed,
@@ -345,7 +356,7 @@ export function attendanceMetrics(
     status,
     present: inAt !== null && !future,
     complete: inAt !== null && outAt !== null && !invalid && !future,
-    comparable: timed && inAt !== null && !future,
+    comparable: timed && inAt !== null && !invalid && !future,
   };
 }
 export const csvCell = (v: unknown) =>

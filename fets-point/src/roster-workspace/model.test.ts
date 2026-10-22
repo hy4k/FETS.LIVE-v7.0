@@ -134,15 +134,16 @@ describe("roster hours and patterns", () => {
   });
 });
 describe("accurate attendance comparisons", () => {
+  const endOfDay = new Date(day + "T23:00:00+05:30");
   it("compares the same arrival against the actual assigned hours, ignoring the old late flag", () => {
     const row = attendance({ check_in: "08:00" });
-    expect(attendanceMetrics(row, shift(), day, now).late).toBe(0);
+    expect(attendanceMetrics(row, shift(), day, endOfDay).late).toBe(0);
     expect(
       attendanceMetrics(
         row,
         shift({ shift_start: "06:00", shift_end: "15:00" }),
         day,
-        now,
+        endOfDay,
       ).late,
     ).toBe(120);
     expect(
@@ -150,7 +151,7 @@ describe("accurate attendance comparisons", () => {
         attendance({ check_in: "11:30" }),
         shift({ shift_start: "11:30", shift_end: "20:30" }),
         day,
-        now,
+        endOfDay,
       ).late,
     ).toBe(0);
   });
@@ -160,7 +161,7 @@ describe("accurate attendance comparisons", () => {
         attendance({ check_in: "08:05", check_out: "16:55" }),
         shift({ grace_minutes: 5 }),
         day,
-        now,
+        endOfDay,
       ),
     ).toMatchObject({ late: 0, early: 5 });
     expect(
@@ -168,7 +169,7 @@ describe("accurate attendance comparisons", () => {
         attendance({ check_in: "08:06" }),
         shift({ grace_minutes: 5 }),
         day,
-        now,
+        endOfDay,
       ).late,
     ).toBe(1);
   });
@@ -178,7 +179,7 @@ describe("accurate attendance comparisons", () => {
         attendance({ check_out: null, date: "2026-10-19" }),
         shift(),
         "2026-10-19",
-        now,
+        endOfDay,
       ),
     ).toMatchObject({ worked: null, missingOut: true, complete: false });
   });
@@ -202,7 +203,7 @@ describe("accurate attendance comparisons", () => {
         attendance({ status: "half_day", check_out: "12:30" }),
         shift({ ...halfShift(plainShift(), "first") }),
         day,
-        now,
+        endOfDay,
       ),
     ).toMatchObject({ present: true, worked: 270, early: 0 });
   });
@@ -210,20 +211,27 @@ describe("accurate attendance comparisons", () => {
     expect(
       attendanceMetrics(undefined, shift(), "2026-10-21", now),
     ).toMatchObject({ missingIn: false, status: "Upcoming" });
-    expect(attendanceMetrics(attendance(), undefined, day, now)).toMatchObject({
+    expect(
+      attendanceMetrics(attendance(), undefined, day, endOfDay),
+    ).toMatchObject({
       late: null,
       comparable: false,
     });
   });
   it("flags an ended roster without check-in for review, not confirmed absence", () => {
-    expect(attendanceMetrics(undefined, shift(), day, now)).toMatchObject({
+    expect(attendanceMetrics(undefined, shift(), day, endOfDay)).toMatchObject({
       status: "No check-in",
       missingIn: true,
     });
   });
   it("invalid clock-out before clock-in is not counted as completed hours", () => {
     expect(
-      attendanceMetrics(attendance({ check_out: "07:00" }), shift(), day, now),
+      attendanceMetrics(
+        attendance({ check_out: "07:00" }),
+        shift(),
+        day,
+        endOfDay,
+      ),
     ).toMatchObject({ invalid: true, complete: false, worked: null });
   });
   it("excludes outside-hours breaks and never converts that time to approved OT", () => {
@@ -235,7 +243,7 @@ describe("accurate attendance comparisons", () => {
         steps: [{ out: "17:00", in: "17:30" }],
       }),
     });
-    expect(attendanceMetrics(row, shift(), day, now).outside).toBe(90);
+    expect(attendanceMetrics(row, shift(), day, endOfDay).outside).toBe(90);
     expect(shift().overtime_hours).toBe(0);
   });
   it("does not invent an outside-hours total when old aggregate breaks cannot be allocated", () => {
@@ -244,7 +252,7 @@ describe("accurate attendance comparisons", () => {
         attendance({ check_out: "18:00", notes: '{"breakMins":30}' }),
         shift(),
         day,
-        now,
+        endOfDay,
       ).outside,
     ).toBeNull();
   });

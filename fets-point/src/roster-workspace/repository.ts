@@ -1,3 +1,4 @@
+import { monday } from "../redesign/shift-plan";
 import { supabase } from "../lib/supabase";
 import type {
   Snapshot,
@@ -88,7 +89,60 @@ export const rosterRepository = {
           .order("id"),
       ),
     ]);
-    return { people, schedules, attendance, types };
+    // Lead availability must not prevent staff from seeing the roster.
+    try {
+      const [leadWeeks, leadPlans] = await Promise.all([
+        allRows(() =>
+          db
+            .from("centre_lead_weeks")
+            .select("*")
+            .gte("week_start", monday(days[0]))
+            .lte("week_start", days[days.length - 1])
+            .order("branch")
+            .order("week_start"),
+        ),
+        allRows(() =>
+          db
+            .from("centre_day_plans")
+            .select("*")
+            .gte("day", days[0])
+            .lte("day", days[days.length - 1])
+            .order("id"),
+        ),
+      ]);
+      const leadChanges = leadPlans.length
+        ? await allRows(() =>
+            db
+              .from("centre_duty_changes")
+              .select("*")
+              .in(
+                "plan_id",
+                leadPlans.map((p) => p.id),
+              )
+              .eq("kind", "lead")
+              .order("created_at")
+              .order("id"),
+          )
+        : [];
+      return {
+        people,
+        schedules,
+        attendance,
+        types,
+        leadWeeks,
+        leadPlans,
+        leadChanges,
+      };
+    } catch {
+      return {
+        people,
+        schedules,
+        attendance,
+        types,
+        leadError:
+          "Lead assignments could not be loaded. Refresh to try again.",
+      };
+    }
   },
   async range(
     profileId: string,

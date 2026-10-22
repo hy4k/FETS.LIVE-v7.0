@@ -17,13 +17,8 @@ const initials = (name: string) => name.split(/\s+/).map(n => n[0]).slice(0, 2).
 const first = (name: string) => name.split(/\s+/)[0];
 const STATUS: Record<TaskStatus, string> = { open: 'To do', done: 'Done', blocked: 'Blocked', carried: 'Moved to tomorrow', skipped: 'Not needed' };
 
-/** The lead for a day: an acting lead from a later change, the plan's acting lead, the plan's lead, then the week's lead. */
-export function dayLead(record: PlanRecord | null, weekLead: string | null | undefined, changes: CoverageChange[], now = new Date()) {
-  const today = centreDate(now);
-  const day = record?.day;
-  const lead = changes.filter(c => c.kind === 'lead' && day && (day < today || (day === today && c.starts <= indiaMinute(now))));
-  return lead[lead.length - 1]?.staff_id || record?.plan.actingLead || record?.lead_id || weekLead || '';
-}
+import { dayLead } from './shift-lead';
+export { dayLead } from './shift-lead';
 
 type DayData = {
   team: TeamMember[]; staff: Person[]; record: PlanRecord | null; weekLead: string | null; events: DutyEvent[]; changes: CoverageChange[];

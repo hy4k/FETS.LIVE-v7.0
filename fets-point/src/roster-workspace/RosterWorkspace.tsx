@@ -40,6 +40,8 @@ import {
 } from "./model";
 import { isStaffRosterVisible } from "../utils/rosterVisibility";
 import "./roster-workspace.css";
+import { rosterLegend, rosterLead } from "./display";
+import { AttendanceReport } from "./AttendanceReport";
 const empty: Snapshot = {
   people: [],
   schedules: [],
@@ -835,7 +837,7 @@ export default function RosterWorkspace({
   const today = clockParts(now).day;
   const [month, setMonth] = useState(today.slice(0, 7));
   const [tab, setTab] = useState<"schedule" | "attendance">("schedule");
-  const [span, setSpan] = useState<"week" | "month">("week");
+  const [span, setSpan] = useState<"week" | "month">("month");
   const [week, setWeek] = useState(
     Math.floor((Number(today.slice(-2)) - 1) / 7),
   );
@@ -851,6 +853,7 @@ export default function RosterWorkspace({
     date: string;
     existing?: Schedule;
   } | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
   const [quick, setQuick] = useState(false);
   const [typeDialog, setTypeDialog] = useState(false);
   const [analysis, setAnalysis] = useState<"daily" | "overview">("daily");
@@ -938,6 +941,7 @@ export default function RosterWorkspace({
   const visiblePeople = people.filter((p) =>
     p.full_name.toLowerCase().includes(query.toLowerCase()),
   );
+  const codes = useMemo(() => rosterLegend(data.schedules), [data.schedules]);
   const visibleDays =
     span === "month" ? days : days.slice(week * 7, week * 7 + 7);
   const changed = () => {
@@ -1317,6 +1321,12 @@ export default function RosterWorkspace({
                     Monthly overview
                   </button>
                 </div>
+                {canEdit && (
+                  <button onClick={() => setReportOpen(true)}>
+                    <Download size={15} />
+                    Attendance report
+                  </button>
+                )}
                 <button onClick={exportLog}>
                   <Download size={15} />
                   Export log
@@ -1348,7 +1358,6 @@ export default function RosterWorkspace({
                             )}
                           </span>
                           <strong>{Number(d.slice(-2))}</strong>
-                          {d === today && <small>Today</small>}
                         </th>
                       ))}
                     </tr>
@@ -1375,12 +1384,24 @@ export default function RosterWorkspace({
                         {visibleDays.map((d) => {
                           const s = schedules.get(`${p.id}/${d}`);
                           const here = scoped(s, p);
+                          const lead =
+                            !data.leadError &&
+                            rosterLead(
+                              data,
+                              String(
+                                s?.branch_location || p.branch_assigned,
+                              ).toLowerCase(),
+                              d,
+                              now,
+                            ) === p.id;
+                          const description = `${p.full_name}, ${prettyDate(d)}, ${s ? shiftName(s) + " " + timing(s) : "Not scheduled"}${lead ? ", Shift lead" : ""}${s && !here ? ", " + branchName(s.branch_location) : ""}${s?.overtime_hours ? ", approved OT " + s.overtime_hours + "h" : ""}`;
                           return (
                             <td key={d} className={d === today ? "today" : ""}>
                               <button
                                 disabled={!canEdit || !here}
-                                className={`rw-cell ${s ? (WORK_CODES.has(s.shift_code) ? "work" : s.shift_code === "L" ? "leave" : "rest") : "empty"}`}
-                                aria-label={`${p.full_name}, ${prettyDate(d)}, ${s ? shiftName(s) + " " + timing(s) : "Not scheduled"}`}
+                                className={`rw-cell ${s ? "rw-code-" + s.shift_code : "empty"} ${lead ? "rw-lead" : ""} ${!here ? "rw-other-centre" : ""}`}
+                                aria-label={description}
+                                title={description}
                                 onClick={() =>
                                   setEditing({
                                     person: p,
@@ -1389,39 +1410,12 @@ export default function RosterWorkspace({
                                   })
                                 }
                               >
-                                {s ? (
-                                  <>
-                                    <span>{s.shift_label || s.shift_code}</span>
-                                    {WORK_CODES.has(s.shift_code) ? (
-                                      <small>
-                                        {s.shift_start && s.shift_end ? (
-                                          <>
-                                            {formatTime(s.shift_start)}
-                                            <br />
-                                            {formatTime(s.shift_end)}
-                                          </>
-                                        ) : (
-                                          "Set times"
-                                        )}
-                                      </small>
-                                    ) : (
-                                      <small>
-                                        {CODES[
-                                          s.shift_code as keyof typeof CODES
-                                        ] || s.shift_code}
-                                      </small>
-                                    )}
-                                    {!here && (
-                                      <small>
-                                        {branchName(s.branch_location)}
-                                      </small>
-                                    )}
-                                    {s.overtime_hours > 0 && (
-                                      <em>+{s.overtime_hours}h OT</em>
-                                    )}
-                                  </>
-                                ) : (
-                                  <span>—</span>
+                                <span>{s ? codes.code(s) : "—"}</span>
+                                {!!s?.overtime_hours && (
+                                  <i
+                                    className="rw-ot-mark"
+                                    aria-hidden="true"
+                                  />
                                 )}
                               </button>
                             </td>
@@ -1435,19 +1429,31 @@ export default function RosterWorkspace({
                   <div className="rw-empty">No staff match this view.</div>
                 )}
               </div>
+              <div
+                className="rw-code-legend"
+                aria-label="Roster codes and shift hours"
+              >
+                {codes.legend.map((l) => (
+                  <span key={l.id}>
+                    <b className={`rw-code-${l.type}`}>{l.code}</b>
+                    {l.label}
+                  </span>
+                ))}
+              </div>
               <div className="rw-footnote">
                 <span>
-                  <i className="rw-dot" />
-                  Work <i className="rw-dot leave" />
-                  Leave <i className="rw-dot rest" />
-                  Rest / TOIL / holiday
+                  <i className="rw-lead-key" /> Shift lead · Corner dot =
+                  approved OT · Dashed edge = other centre
                 </span>
                 <span>
-                  {canEdit
-                    ? "Select an entry to change its shift and hours."
-                    : "Times are in India Standard Time."}
+                  Times are IST{canEdit ? " · Select an entry to edit" : ""}
                 </span>
               </div>
+              {data.leadError && (
+                <p role="status" className="rw-method">
+                  {data.leadError}
+                </p>
+              )}
             </>
           ) : (
             <>
@@ -1765,6 +1771,16 @@ export default function RosterWorkspace({
             </>
           )}
         </>
+      )}
+      {reportOpen && canEdit && (
+        <Dialog title="Attendance report" onClose={() => setReportOpen(false)}>
+          <AttendanceReport
+            data={data}
+            month={month}
+            branch={branch}
+            now={now}
+          />
+        </Dialog>
       )}
       {editing && (
         <EditEntry
