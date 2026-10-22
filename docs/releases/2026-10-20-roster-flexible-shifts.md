@@ -49,11 +49,27 @@ FETS_PREVIEW_OUTPUT=/tmp/fets-roster-preview node scripts/verification/build-ros
 
 The standalone `Roster-Interactive-Preview.html` uses explicitly labelled fictional data and has no network/database access. It is not a production entry point. For browser checks serve that directory on 127.0.0.1:3015 and run `scripts/verification/verify-roster-workspace.cjs` with `FETS_PREVIEW_OUTPUT` pointing to it.
 
-## Rollout status and procedure
+## Deployment — 22 October 2026
 
 Prepared on `codex/roster-flexible-shifts`, based on `1f11bbcfeb5d7120daa59947e4ba1efc996b7764` / PR #36. Main and the parent branch were rechecked and had no newer changes at preparation time. This branch includes the earlier deployed application work; do not deploy old main over it.
 
-**Not deployed. The migration has not been applied.** Desktop Commander reports srv1120621 offline. Deploy the database and frontend together once remote access is restored:
+**Deployed and verified.**
+
+- Website commit: `f723e037f1270cb4c70f60b21f01a69b2778c2b4` (application changes from `524b18d`; the following commit adds the guarded deployment script).
+- Release: `/opt/fets-releases/20261022T033949Z-roster-f723e03`.
+- Running image: `sha256:62fbb78e6bb3b17fb828bec9b0584b3471de712cab958f1e5a2814107af1fd86`.
+- Public index SHA-256: `adaa267ae038905ab91cd36d76ac4a06d18c1a4189d2c92928716cf8c781ac4d`.
+- Live migration applied as `20261022034519_roster_shift_times_and_attendance` by Supabase MCP, from the unchanged source file `20261020144716_roster_shift_times_and_attendance.sql` (SHA-256 `b4ba34f65b4b8d57978e19d2b9c13e20d0bcad46f55033b6ebed7eb4d52d1bca`).
+- Before/after fingerprints match for all original columns in 1,976 roster entries, 755 attendance records, 135 OT/TOIL claims and 12 staff profiles. Auth users remain 17 and duty events remain two. No production records or shift types were seeded.
+- Production database checks verified authenticated reads, ordinary-staff roster-write denial, administrator validation and anonymous access denial for the new catalogue/RPCs. Validation used rejected empty batches and a rolled-back transaction; no fake attendance or claims were created.
+- All five new functions use invoker security and a fixed search path. The shift catalogue has RLS enabled. Security advisors: eight pre-existing findings, zero new findings. Existing advisories remain outside this release; see [Supabase advisors](https://supabase.com/dashboard/project/qqewusetilxxfvfkmsed/advisors).
+- Compared 52 public files/routes byte-for-byte with the candidate, including HTML, `/roster`, `/calendar`, release metadata, JS, CSS and fonts. Runtime environment, ports, mounts, restart policy and Nginx configuration match the previous release.
+- Public browser smoke tests at 1440 and 393 pixels returned HTTP 200 and a visible sign-in page with no page errors. No authenticated production browser session was available; authenticated database roles were verified directly, and interactive roster workflows were exercised with isolated fixtures before deployment.
+- Previous image `sha256:cd90bf6a647308b0073ba13c1eac22cf9c43e8f3ea391880722fdc6e200cd178` retained as a rollback tag and a 400,489,803-byte archive, alongside previous Compose/runtime/Nginx configuration.
+- Website rollback: `bash /opt/fets-releases/20261022T033949Z-roster-f723e03/rollback.sh`. It retains the database and recorded data.
+- FETS Online and the existing walk/DVR integration were not changed.
+
+The following rollout procedure was used; it remains a reference for subsequent releases:
 
 1. Recheck GitHub heads and the running `/opt/apps/fets-live` deployment/container. Retain its image, resolved Compose configuration, runtime settings and Nginx configuration in a dated rollback release. Reuse the existing deployment procedure; do not replace server configuration.
 2. Recheck Live migration history/schema and capture baseline counts and original-column data fingerprints. Apply the named migration to Live only, then verify its grants/functions and unchanged pre-existing records. Do not apply anything to the Online project.
