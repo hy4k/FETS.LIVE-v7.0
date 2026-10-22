@@ -54,3 +54,11 @@ fets-point/android/
 
 # Gemini agent
 .gemini/
+
+# Native apps (apps/)
+apps/android/.gradle/
+apps/android/**/build/
+apps/android/local.properties
+apps/ios/DerivedData/
+apps/ios/**/xcuserdata/
+apps/ios/.build/
