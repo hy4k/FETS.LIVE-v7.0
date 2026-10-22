@@ -1,3 +1,4 @@
+import { PrivateReports } from "./PrivateReports";
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   ChevronLeft,
@@ -853,6 +854,7 @@ export default function RosterWorkspace({
     date: string;
     existing?: Schedule;
   } | null>(null);
+  const [reportsOpen, setReportsOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [quick, setQuick] = useState(false);
   const [typeDialog, setTypeDialog] = useState(false);
@@ -1142,6 +1144,9 @@ export default function RosterWorkspace({
           <h1>Roster</h1>
         </div>
         <div className="rw-header-actions">
+          <button onClick={() => setReportsOpen(true)}>
+            {canEdit ? "Reports" : "My reports"}
+          </button>
           {canEdit && (
             <>
               <button
@@ -1772,9 +1777,18 @@ export default function RosterWorkspace({
           )}
         </>
       )}
+      {reportsOpen && (
+        <Dialog
+          title={canEdit ? "Attendance reports" : "My attendance reports"}
+          onClose={() => setReportsOpen(false)}
+        >
+          <PrivateReports repo={repo} canEdit={canEdit} data={data} now={now} />
+        </Dialog>
+      )}
       {reportOpen && canEdit && (
         <Dialog title="Attendance report" onClose={() => setReportOpen(false)}>
           <AttendanceReport
+            repo={repo}
             data={data}
             month={month}
             branch={branch}

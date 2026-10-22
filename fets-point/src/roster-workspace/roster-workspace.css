@@ -1208,3 +1208,20 @@
     padding: 14px;
   }
 }
+.rw-dialog .rw-report-row {
+  justify-content: space-between;
+  text-align: left;
+  padding: 14px;
+}
+.rw-report-row small {
+  display: block;
+  color: #6c7e85;
+  font-size: 11px;
+  padding-top: 4px;
+}
+.rw-report textarea:disabled,
+.rw-report input:disabled {
+  opacity: 1;
+  color: #344e58;
+  background: #f7f9fa;
+}

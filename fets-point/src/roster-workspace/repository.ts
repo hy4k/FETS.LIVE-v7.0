@@ -1,3 +1,4 @@
+import type { PrivateReport, NewReport, ReportEdits } from "./private-reports";
 import { monday } from "../redesign/shift-plan";
 import { supabase } from "../lib/supabase";
 import type {
@@ -56,6 +57,45 @@ function syncCache(changes: Change[]) {
   }
 }
 export const rosterRepository = {
+  async reports(): Promise<PrivateReport[]> {
+    return allRows(() =>
+      db
+        .from("roster_attendance_reports")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .order("id"),
+    );
+  },
+  async createReport(value: NewReport): Promise<PrivateReport> {
+    return checked(
+      await db
+        .from("roster_attendance_reports")
+        .insert(value)
+        .select()
+        .single(),
+    );
+  },
+  async updateReport(
+    id: string,
+    version: number,
+    edits: ReportEdits,
+    share = false,
+  ): Promise<PrivateReport> {
+    const rows = checked(
+      await db
+        .from("roster_attendance_reports")
+        .update({ ...edits, status: share ? "shared" : "draft" })
+        .eq("id", id)
+        .eq("version", version)
+        .eq("status", "draft")
+        .select(),
+    );
+    if (!rows?.length)
+      throw Error(
+        "This report changed elsewhere or is already shared. Reopen it from Reports before continuing.",
+      );
+    return rows[0];
+  },
   async load(month: string): Promise<Snapshot> {
     const days = monthDays(month);
     const [people, schedules, attendance, types] = await Promise.all([

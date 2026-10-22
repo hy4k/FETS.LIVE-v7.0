@@ -99,7 +99,7 @@ for p in (root/'assets').glob('*.js'):
     assert all(marker not in content for marker in ('LOCAL DESIGN PREVIEW', 'CPR-EXAMPLE', 'previewTime', 'Design preview · fictional staff records')), 'Training fixture found in production assets'
 PY_BUILD
 HASH=$(sha256sum "$R/dist/index.html" | cut -d' ' -f1)
-printf '{"release":"%s","commit":"%s","index_sha256":"%s","features":["institution-first-actionables","source-institution-catalogue","shared-audit-evidence","management-shortlist","team-task-board","chronological-shift-timetable","named-break-cover","independent-duty-review","local-manrope-typography","custom-roster-hours","flexible-roster-patterns","roster-based-attendance","compact-roster-codes","roster-lead-markers","editable-attendance-reports"]}\n' "$REL" "$COMMIT" "$HASH" > "$R/dist/release.json"
+printf '{"release":"%s","commit":"%s","index_sha256":"%s","features":["institution-first-actionables","source-institution-catalogue","shared-audit-evidence","management-shortlist","team-task-board","chronological-shift-timetable","named-break-cover","independent-duty-review","local-manrope-typography","custom-roster-hours","flexible-roster-patterns","roster-based-attendance","compact-roster-codes","roster-lead-markers","editable-attendance-reports","private-staff-reports"]}\n' "$REL" "$COMMIT" "$HASH" > "$R/dist/release.json"
 chmod 644 "$R/dist/release.json"
 docker tag "$PREVIOUS" "fets-live-app:base-$REL"
 # Retain old hashed assets so existing browser sessions can finish loading them.
@@ -168,6 +168,8 @@ r=pathlib.Path(sys.argv[1]); receipt=json.loads((r/'database-verified.json').rea
 migration=r/'source/supabase/migrations/20261020144716_roster_shift_times_and_attendance.sql'
 assert receipt['project_id']=='qqewusetilxxfvfkmsed', 'Wrong database project'
 assert receipt['migration_sha256']==hashlib.sha256(migration.read_bytes()).hexdigest(), 'Migration differs from the verified file'
+report_migration=r/'source/supabase/migrations/20261022105031_roster_private_attendance_reports.sql'
+assert receipt['report_migration_sha256']==hashlib.sha256(report_migration.read_bytes()).hexdigest(), 'Private-report migration differs from the verified file'
 assert receipt['verified'] is True, 'Database verification is incomplete'
 PY_GATE
 

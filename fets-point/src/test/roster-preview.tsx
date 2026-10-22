@@ -1,3 +1,4 @@
+import type { PrivateReport } from "../roster-workspace/private-reports";
 // Fictional isolated UI fixtures. This entry cannot connect to a production database.
 import React from "react";
 import { createRoot } from "react-dom/client";
@@ -12,6 +13,7 @@ import type { RosterRepository } from "../roster-workspace/repository";
 const people = ["Maya Joseph", "Arun Menon", "Sara Thomas", "Neha Nair"].map(
   (full_name, i) => ({
     id: `p${i}`,
+    user_id: `u${i}`,
     full_name,
     branch_assigned: i === 3 ? "cochin" : "calicut",
     is_active: true,
@@ -89,7 +91,24 @@ for (const [i, p] of people.entries())
   }
 let fail = false;
 let failures = 0;
+const mode = new URLSearchParams(location.search).get("role");
+let reportRows: PrivateReport[] = JSON.parse(sessionStorage.getItem('fictional-roster-reports') || '[]');
+const persistReports = () => sessionStorage.setItem('fictional-roster-reports',JSON.stringify(reportRows));
 const repo: RosterRepository = {
+  async reports() {
+    return structuredClone(!mode ? reportRows : reportRows.filter(r => r.status==='shared' && r.recipient_profile_id===(mode==='other'?'p1':'p0')));
+  },
+  async createReport(value) {
+    if (mode) throw Error('Not allowed');
+    const row: PrivateReport = {...value,id:crypto.randomUUID(),recipient_user_id:'u'+value.recipient_profile_id.slice(1),recipient_name:people.find(p=>p.id===value.recipient_profile_id)!.full_name,status:'draft',created_at:new Date().toISOString(),updated_at:new Date().toISOString(),shared_at:null,version:1};
+    reportRows.push(row);persistReports();return structuredClone(row);
+  },
+  async updateReport(id, version, edits, share=false) {
+    if (mode) throw Error('Not allowed');
+    const row=reportRows.find(r=>r.id===id&&r.version===version&&r.status==='draft');
+    if (!row) throw Error('This report changed elsewhere or is already shared. Reopen it from Reports before continuing.');
+    Object.assign(row,edits,{version:version+1,status:share?'shared':'draft',shared_at:share?new Date().toISOString():null});persistReports();return structuredClone(row);
+  },
   async load() {
     if (fail) throw Error("Connection unavailable. Please retry.");
     return structuredClone(data);
@@ -145,7 +164,6 @@ const repo: RosterRepository = {
     failures = 1;
   },
 };
-const mode = new URLSearchParams(location.search).get("role");
 createRoot(document.getElementById("root")!).render(
   <>
     <div
@@ -160,8 +178,8 @@ createRoot(document.getElementById("root")!).render(
     </div>
     <RosterWorkspace
       branch="calicut"
-      canEdit={mode !== "staff"}
-      meId="p0"
+      canEdit={!mode}
+      meId={mode === "other" ? "p1" : "p0"}
       repo={repo}
       now={new Date("2026-10-20T12:00:00+05:30")}
     />
