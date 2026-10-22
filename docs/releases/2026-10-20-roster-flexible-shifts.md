@@ -49,11 +49,11 @@ FETS_PREVIEW_OUTPUT=/tmp/fets-roster-preview node scripts/verification/build-ros
 
 The standalone `Roster-Interactive-Preview.html` uses explicitly labelled fictional data and has no network/database access. It is not a production entry point. For browser checks serve that directory on 127.0.0.1:3015 and run `scripts/verification/verify-roster-workspace.cjs` with `FETS_PREVIEW_OUTPUT` pointing to it.
 
-## Deployment — 22 October 2026
+## Initial deployment — 22 October 2026 (superseded by runtime fix below)
 
 Prepared on `codex/roster-flexible-shifts`, based on `1f11bbcfeb5d7120daa59947e4ba1efc996b7764` / PR #36. Main and the parent branch were rechecked and had no newer changes at preparation time. This branch includes the earlier deployed application work; do not deploy old main over it.
 
-**Deployed and verified.**
+**Initial release: asset and database checks passed; subsequently rolled back for the runtime issue described below.**
 
 - Website commit: `f723e037f1270cb4c70f60b21f01a69b2778c2b4` (application changes from `524b18d`; the following commit adds the guarded deployment script).
 - Release: `/opt/fets-releases/20261022T033949Z-roster-f723e03`.
@@ -83,4 +83,17 @@ The initial roster release failed when the authenticated application lazy module
 
 The prior website image was restored from the retained archive (its local Docker image had been removed). The database migration and all records were retained. The fix restores the adjacent shared code verbatim from the previous base. Production module import now passes locally. `verify-production-shell.mjs` explicitly imports the built lazy application module and asserts its shared exports, without credentials and with external network requests blocked. Deployment now runs it in an isolated, version-pinned browser container before switching. Rollback scripts also reload the archived image automatically if it is missing locally.
 
-Corrected rollout verification is recorded below after deployment.
+### Corrected release — verified live
+
+- Commit: `03366536a07d95aa5ab9c7f40fd1fc0fb7f51fb8`; fix introduced in `981bc2b`.
+- Release: `/opt/fets-releases/20261022T045719Z-roster-0336653`.
+- Image: `sha256:50a5940a3b0a670f63cf02c4a40b6cd10f4b10192feda4b483b83691d1fb0eb0`.
+- Index SHA-256: `7b8a4d25c287a027639da0f72348ffa6c71c542b938adca38d26e16117b9edf6`.
+- TypeScript/production build and 23 focused roster/payroll tests passed. The regression check rejected the original broken production image with the exact `RaiseCasePage is not defined` exception.
+- The full built application module and Calendar, Roster, Raise a Case, form helpers and handover registrations loaded successfully in the candidate browser and again from public `https://fets.live`. Public shell: `RedesignShell-C_FJaFt2.js`.
+- 52 public files/routes matched the candidate byte-for-byte. Existing runtime environment, ports, mounts, restart policy and Nginx configuration were preserved.
+- Browser tests run without staff credentials and block external requests. They explicitly evaluate the lazy shell behind sign-in; they do not claim an authenticated end-to-end staff workflow.
+- Newer main changes (`05adb6f`, native Android/iOS files and `.gitignore` only) were reviewed and merged into the release branch to retain repository changes. No native app was built or deployed.
+- The existing Live migration `20261022034519` and its RLS/RPC privileges were rechecked. No additional database migration, attendance or claim writes were made. FETS Online was unchanged.
+- Current website rollback: `bash /opt/fets-releases/20261022T045719Z-roster-0336653/rollback.sh`. This restores the prior stable website and retains database records. The script now reloads the saved image archive if the Docker image is absent.
+
