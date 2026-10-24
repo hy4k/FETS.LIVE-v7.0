@@ -1,0 +1,135 @@
+.su-dialog {
+  width: min(760px, calc(100vw - 32px));
+  max-height: 90dvh;
+  padding: 0;
+  border: 1px solid #455169;
+  border-radius: 18px;
+  background: #1a2332;
+  color: #f8fafc;
+  font:
+    14px/1.5 Inter,
+    system-ui,
+    sans-serif;
+}
+.su-dialog::backdrop {
+  background: #0a101bba;
+  backdrop-filter: blur(4px);
+}
+.su-dialog header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid #38445a;
+}
+.su-dialog h2 {
+  margin: 0;
+  font-size: 23px;
+  font-weight: 650;
+}
+.su-dialog form {
+  padding: 24px;
+  display: grid;
+  gap: 22px;
+}
+.su-dialog fieldset,
+.su-growth fieldset {
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.su-dialog legend,
+.su-growth legend {
+  margin-bottom: 12px;
+  color: #e8c47a;
+  font-weight: 650;
+}
+.su-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.su-dialog label,
+.su-growth label {
+  display: grid;
+  gap: 6px;
+  color: #c4cedd;
+  font-size: 12px;
+}
+.su-dialog input,
+.su-dialog select,
+.su-dialog textarea,
+.su-growth input,
+.su-growth textarea {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  background: #243044;
+  border: 1px solid #455169;
+  border-radius: 8px;
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+}
+.su-dialog :focus-visible,
+.su-growth :focus-visible {
+  outline: 2px solid #d4a853;
+  outline-offset: 2px;
+}
+.su-dialog button,
+.su-growth button {
+  border: 1px solid #455169;
+  border-radius: 8px;
+  background: #243044;
+  color: #e2e8f0;
+  padding: 9px 14px;
+  font: inherit;
+  cursor: pointer;
+}
+.su-dialog .su-primary {
+  color: #111827;
+  background: #d4a853;
+  border-color: #d4a853;
+  font-weight: 650;
+}
+.su-dialog button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.su-dialog p {
+  font-size: 12px;
+  color: #a7b7ca;
+  margin: 8px 0 0;
+}
+.su-dialog .su-error {
+  color: #ffb4ad;
+}
+.su-dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+.su-growth {
+  display: grid;
+  gap: 18px;
+}
+.su-entry {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+@media (max-width: 600px) {
+  .su-fields {
+    grid-template-columns: 1fr;
+  }
+  .su-dialog form {
+    padding: 18px;
+  }
+  .su-dialog header {
+    padding: 16px 18px;
+  }
+}
+.su-dialog { color-scheme: dark; }
+.su-entry button { flex-shrink: 0; }

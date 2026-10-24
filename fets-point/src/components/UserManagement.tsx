@@ -1,3 +1,5 @@
+import { AddUserDialog } from "../staff-management/AddUserDialog";
+import { StaffGrowthFields } from "../staff-management/StaffGrowthFields";
 import React, { useState, useMemo, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -59,8 +61,9 @@ function joinedOn(user: any) {
 export function UserManagement({ onNavigate }: UserManagementProps = {}) {
     const { profile: currentUser } = useAuth()
     const { data: staff = [] } = useStaff()
-    const { updateStaff, archiveStaff } = useStaffMutations()
+    const { updateStaff, archiveStaff, addStaff } = useStaffMutations()
 
+    const [addingUser, setAddingUser] = useState(false)
     const [searchTerm, setSearchTerm] = useState('')
     const [branchFilter, setBranchFilter] = useState<string>('all')
     const [mainTab] = useState<'users' | 'clients' | 'modules'>('users')
@@ -157,12 +160,14 @@ export function UserManagement({ onNavigate }: UserManagementProps = {}) {
     return (
         <div className="min-h-screen flex flex-col p-6" style={{ background: THEME.bgPrimary }}>
             <div className="max-w-[1600px] w-full mx-auto flex-1 flex flex-col">
-                <div className="flex items-center justify-between mb-6">
+                <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
                     <div>
                         <h1 className="text-3xl font-black text-white" style={{ fontFamily: "'Playfair Display', serif" }}>User Management & Roster Authority</h1>
                         <p className="text-xs text-slate-400 mt-1">Manage staff profiles, permissions, and temporary monthly roster exclusions.</p>
                     </div>
+                    <button onClick={() => setAddingUser(true)} className="px-5 py-2.5 rounded-lg font-semibold text-sm flex items-center gap-2 shrink-0" style={{ background: THEME.gold, color: THEME.bgPrimary }}><UserPlus size={18}/>Add User</button>
                 </div>
+                {addingUser && <AddUserDialog onClose={() => setAddingUser(false)} onAdd={async value => { const result = await addStaff(value); const created = result?.data?.profile; const row = Array.isArray(created) ? created[0] : created; setSearchTerm(''); setBranchFilter('all'); if (row?.id) setSelectedUser(row); }}/>}
 
                 <div className="flex-1 grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-6 min-h-0">
                     {/* Staff List Sidebar */}
@@ -256,7 +261,7 @@ export function UserManagement({ onNavigate }: UserManagementProps = {}) {
                                 style={{ background: THEME.bgSecondary, borderColor: THEME.border }}
                             >
                                 {/* Header */}
-                                <div className="p-6 flex items-center gap-6 border-b" style={{ borderColor: THEME.border, background: THEME.bgCard }}>
+                                <div className="p-4 sm:p-6 flex flex-wrap items-center gap-4 border-b" style={{ borderColor: THEME.border, background: THEME.bgCard }}>
                                     <div className="w-20 h-20 rounded-2xl flex items-center justify-center text-3xl font-bold shrink-0" style={{ background: THEME.gold, color: THEME.bgPrimary }}>
                                         {selectedUser.full_name.charAt(0)}
                                     </div>
@@ -268,7 +273,7 @@ export function UserManagement({ onNavigate }: UserManagementProps = {}) {
                                             <span className="flex items-center gap-1.5 text-sm"><MapPin size={14} /> {formatBranchName(formData.branch_assigned || 'global')}</span>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-2 shrink-0">
+                                    <div className="flex w-full sm:w-auto items-center gap-2 shrink-0">
                                         <button onClick={handleSave} disabled={isSaving} className="px-5 py-2.5 rounded-lg font-semibold text-sm flex items-center gap-2" style={{ background: THEME.gold, color: THEME.bgPrimary }}>
                                             <Save size={16} /> {isSaving ? 'Saving...' : 'Save Changes'}
                                         </button>
@@ -279,8 +284,8 @@ export function UserManagement({ onNavigate }: UserManagementProps = {}) {
                                 </div>
 
                                 {/* Tabs */}
-                                <div className="flex px-6 border-b" style={{ borderColor: THEME.border }}>
-                                    {['profile', 'employment', 'permissions'].map(tab => (
+                                <div className="flex flex-wrap px-3 sm:px-6 border-b" style={{ borderColor: THEME.border }}>
+                                    {['profile', 'employment', 'growth', 'permissions'].map(tab => (
                                         <button
                                             key={tab}
                                             onClick={() => setActiveTab(tab as any)}
@@ -296,7 +301,7 @@ export function UserManagement({ onNavigate }: UserManagementProps = {}) {
                                 <div className="flex-1 overflow-y-auto p-6">
                                     <div className="max-w-3xl space-y-5">
                                         {activeTab === 'profile' && (
-                                            <div className="grid grid-cols-2 gap-5">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                                                 <div>
                                                     <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">Full Name</label>
                                                     <input value={formData.full_name || ''} onChange={e => setFormData({ ...formData, full_name: e.target.value })} className="w-full p-3 rounded-lg bg-slate-800 text-white border border-slate-700" />
@@ -310,7 +315,7 @@ export function UserManagement({ onNavigate }: UserManagementProps = {}) {
 
                                         {activeTab === 'employment' && (
                                             <div className="space-y-5">
-                                                <div className="grid grid-cols-2 gap-5">
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                                                     <div>
                                                         <label className="block text-xs font-semibold uppercase text-slate-400 mb-1">Role</label>
                                                         <select value={formData.role || 'fetsian'} onChange={e => setFormData({ ...formData, role: e.target.value })} className="w-full p-3 rounded-lg bg-slate-800 text-white border border-slate-700">
@@ -330,12 +335,13 @@ export function UserManagement({ onNavigate }: UserManagementProps = {}) {
                                                     </div>
                                                 </div>
 
-                                                <div className="grid grid-cols-2 gap-5">
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                                                     <InputField label="Joining Date" value={(formData as any).joining_date || (formData as any).hire_date || ''} onChange={(v: string) => setFormData({ ...formData, joining_date: v } as any)} type="date" />
+                                                    <InputField label="Department" value={formData.department || ''} onChange={(v: string) => setFormData({ ...formData, department: v })} />
                                                     <InputField label="Position" value={(formData as any).position || ''} onChange={(v: string) => setFormData({ ...formData, position: v } as any)} placeholder="e.g. Senior Invigilator" />
                                                 </div>
 
-                                                <div className="grid grid-cols-2 gap-5">
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                                                     <InputField label="Employee ID (on payslip)" value={String((permissions as any).employee_id || '')} onChange={(v: string) => setPermissions({ ...permissions, employee_id: v } as any)} placeholder="e.g. FETS0016" />
                                                     <InputField label="Designation (on payslip)" value={String((permissions as any).designation || '')} onChange={(v: string) => setPermissions({ ...permissions, designation: v } as any)} placeholder="Test Centre Administrator" />
                                                 </div>
@@ -373,6 +379,7 @@ export function UserManagement({ onNavigate }: UserManagementProps = {}) {
                                             </div>
                                         )}
 
+                                        {activeTab === 'growth' && <StaffGrowthFields value={formData} onChange={setFormData}/>}
                                         {activeTab === 'permissions' && (
                                             <div className="space-y-3">
                                                 {PERMISSION_KEYS.map((perm) => {
