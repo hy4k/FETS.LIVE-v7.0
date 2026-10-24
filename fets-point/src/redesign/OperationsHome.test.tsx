@@ -10,12 +10,11 @@ describe('operations home', () => {
     expect(centreDate(new Date('2026-09-29T20:00:00Z'))).toBe('2026-09-30');
     expect(summariseOperations(snapshot)).toMatchObject({ candidates: 5, sessions: 1, rostered: 1, checkedIn: 0, pendingHandovers: null });
   });
-  it('shows source failures and opens the existing handover route', async () => {
+  it('shows source failures without the removed Shift promotion', async () => {
     const navigate = vi.fn();
     render(<OperationsHome branch="calicut" navigate={navigate} openDrawer={vi.fn()} load={vi.fn().mockResolvedValue(snapshot)} />);
     await screen.findByText(/Handovers could not be loaded/);
-    fireEvent.click(screen.getByRole('button', { name: 'Open The Shift' }));
-    expect(navigate).toHaveBeenCalledWith('handover');
+    expect(screen.queryByRole('button', { name: 'Open The Shift' })).not.toBeInTheDocument();
   });
   it('ignores stale results from a previously selected branch', async () => {
     let finishFirst: (data: OperationsSnapshot) => void = () => {};
