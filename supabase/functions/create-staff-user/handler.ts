@@ -51,7 +51,7 @@ export function staffPayload(body: any) {
     body.base_centre ||
     body.branch_location ||
     "global";
-  if (!["calicut", "cochin", "kannur", "global"].includes(branch))
+  if (!["calicut", "cochin", "global"].includes(branch))
     throw Error("Choose a valid branch.");
   const joining = clean(body.joining_date, "Joining date", 10);
   if (

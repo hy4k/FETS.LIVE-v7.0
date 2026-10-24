@@ -142,7 +142,7 @@ export function Header({ isMobile = false, sidebarOpen = false, setSidebarOpen, 
   ];
 
   const secondRowItems = [
-    { id: 'system-manager', label: 'SYSTEM MANAGER', icon: Server },
+    { id: 'system-manager', label: 'ASCENDER MANAGER', icon: Server },
     { id: 'fets-chat', label: 'LIVE CHAT & AI', icon: MessageSquare },
     { id: 'fets-intelligence', label: 'FETS AI', icon: Brain },
   ].filter(item => {
