@@ -29,15 +29,12 @@ const addStaff = async (newStaffData: Omit<StaffProfile, 'id' | 'created_at'> & 
     body: newStaffData,
   })
 
-  // Log for debugging
-  if (error || data?.error) {
-    console.error('Create staff user error details:', JSON.stringify({ error, data }, null, 2))
-  }
-
   if (error) {
-    // Edge Function invocation error
-    const errorDetails = error.context ? JSON.stringify(error.context) : error.message
-    throw new Error(`Edge Function error: ${errorDetails} || ${data?.error || 'No data error'}`)
+    let message = error.message;
+    if (error.context instanceof Response) {
+      try { const body = await error.context.json(); if (typeof body?.error === 'string') message = body.error; } catch { /* Preserve the transport error. */ }
+    }
+    throw new Error(message || 'Could not add the staff member. Try again.');
   }
 
   // Check if the function returned an error in its response body
