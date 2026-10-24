@@ -7,6 +7,8 @@ import type { BlueprintRepository, Person } from './shift-blueprint-repository';
 import { AREAS, FREQUENCIES, TEMPLATE, WEEKDAYS, actionablesDue, dayList, draftReport, frequencyLabel, nextDay, progress, reportText, type ActionableDuty, type AreaKey, type DayTask, type ListItem, type Responsibility, type TaskStatus } from './shift-blueprint';
 import { peekHandoverDraft, takeHandoverDraft } from '../fets-ai/handover-draft';
 import './the-shift.css';
+import { currentDuty, isVerified, personChecks, shortDutyTitle } from './shift-board';
+import './shift-board.css';
 
 export type ShiftIdentity = { id: string; profileId: string; name: string; admin: boolean };
 const message = (e: unknown) => e instanceof Error ? e.message : 'Could not save. Please try again.';
@@ -29,10 +31,11 @@ type DayData = {
 };
 
 /** Everything the day needs, loaded together. */
-function useDay(branch: string, day: string, repository: ShiftRepository, blueprint: BlueprintRepository, reload: number) {
+function useDay(branch: string, day: string, repository: ShiftRepository, blueprint: BlueprintRepository, reload: number, paused = false) {
   const [data, setData] = useState<DayData | null>(null);
   const [error, setError] = useState('');
   useEffect(() => {
+    if (paused) return;
     let live = true;
     setError('');
     (async () => {
@@ -46,7 +49,7 @@ function useDay(branch: string, day: string, repository: ShiftRepository, bluepr
       setData({ team, staff, record: shared.record, weekLead: shared.lead?.lead_id ?? null, events: shared.events, changes: (shared as any).changes || [], closed: Boolean((shared as any).closed), responsibilities, tasks, actionables });
     })().catch(e => { if (live) setError(message(e)); });
     return () => { live = false; };
-  }, [branch, day, repository, blueprint, reload]);
+  }, [branch, day, repository, blueprint, reload, paused]);
   return { data, setData, error };
 }
 
@@ -68,164 +71,133 @@ function Ring({ done, total, size = 64, label }: { done: number; total: number; 
 /* Today                                                               */
 /* ------------------------------------------------------------------ */
 
-export function TodayBoard({ branch, day, identity, repository, blueprint, navigate, children }: {
+export function TodayBoard({ branch, day, identity, repository, blueprint, navigate, children, reviewReady = false }: {
   branch: string; day: string; identity: ShiftIdentity; repository: ShiftRepository; blueprint: BlueprintRepository;
-  navigate: (page: string) => void; children?: React.ReactNode;
+  navigate: (page: string) => void; children?: React.ReactNode; reviewReady?: boolean;
 }) {
   const [reload, setReload] = useState(0);
-  const { data, setData, error } = useDay(branch, day, repository, blueprint, reload);
   const [busy, setBusy] = useState(false);
+  const { data, setData, error } = useDay(branch, day, repository, blueprint, reload, busy);
   const [problem, setProblem] = useState('');
+  const [focus, setFocus] = useState<'auto' | 'mine' | 'team'>('auto');
   const [blocking, setBlocking] = useState<{ key: string; note: string } | null>(null);
   const [adding, setAdding] = useState<{ title: string; person: string } | null>(null);
   const [now, setNow] = useState(new Date());
-  useEffect(() => { const t = setInterval(() => setNow(new Date()), 30000); return () => clearInterval(t); }, []);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(new Date());
+      if (!busy && document.visibilityState === 'visible') setReload(n => n + 1);
+    }, 15000);
+    return () => clearInterval(timer);
+  }, [busy]);
   if (error) return <div className="dw-notice dw-error" role="alert">{error}<button onClick={() => setReload(n => n + 1)}>Try again</button></div>;
-  if (!data) return <div className="dw-empty">Loading today’s team, jobs and rota…</div>;
-
+  if (!data) return <div className="dw-empty">Loading today’s duties…</div>;
   const names = namer(data);
-  const working = new Set(data.team.map(p => p.id));
-  const items = dayList(data.responsibilities, data.tasks, day, working);
+  const items = dayList(data.responsibilities, data.tasks, day, new Set(data.team.map(p => p.id)));
   const lead = dayLead(data.record, data.weekLead, data.changes, now);
-  const canLead = identity.admin || (Boolean(lead) && lead === identity.profileId);
   const me = identity.profileId;
+  const canLead = identity.admin || Boolean(lead && lead === me);
+  const showTeam = focus === 'team' || (focus === 'auto' && canLead);
   const isToday = day === centreDate(now);
   const time = indiaMinute(now);
   const plan = data.record?.status === 'published' ? data.record.plan : null;
-  const points = plan ? checkpoints(plan, data.changes) : [];
-  const recorded = (p: typeof points[number]) => data.events.some(e => e.block === p.block && e.lane === p.lane && e.kind === p.kind && e.due === p.due);
-  const isLate = (p: typeof points[number]) => !recorded(p) && (day < centreDate(now) || (isToday && p.due < time));
-  const all = progress(items);
-  const dueActionables = actionablesDue(data.actionables, day);
-  const people = data.team.length ? data.team : [];
-  const unassigned = items.filter(i => !i.assignee && i.status !== 'carried' && i.status !== 'skipped');
+  const activeBlock = plan && isToday ? plan.blocks.find(b => time >= b.start && time < b.end) : null;
   const closed = data.closed;
-
-  const act = async (fn: () => Promise<void>) => { setBusy(true); setProblem(''); try { await fn(); } catch (e) { setProblem(message(e)); } finally { setBusy(false); } };
-  const replace = (saved: DayTask, extra?: DayTask) => setData(d => d && ({ ...d, tasks: [...d.tasks.filter(t => t.id !== saved.id && t.id !== extra?.id), saved, ...(extra && extra.day === day ? [extra] : [])] }));
+  const dueActionables = actionablesDue(data.actionables, day);
+  // Saved assignments remain visible even when someone is removed from the roster.
+  const people = [...data.team, ...[...new Set(items.map(i => i.assignee).filter((id): id is string => Boolean(id)))].filter(id => !data.team.some(p => p.id === id)).map(id => ({ id, name: names(id), code: 'Not rostered', userId: '' }))];
+  const all = progress(items);
+  const awaiting = items.filter(i => i.status === 'done' && !isVerified(i));
+  const act = async (fn: () => Promise<void>) => {
+    setBusy(true); setProblem('');
+    try { await fn(); } catch (e) { setProblem(message(e)); } finally { setBusy(false); }
+  };
+  const replace = (saved: DayTask) => setData(d => d && ({ ...d, tasks: [...d.tasks.filter(t => t.id !== saved.id), saved] }));
   const set = (item: ListItem, change: Partial<Pick<DayTask, 'status' | 'note' | 'assigned_to'>>) => act(async () => {
-    const saved = await blueprint.setTask({ task: item.task, branch, day, responsibility_id: item.responsibility?.id ?? null, title: item.title, assigned_to: change.assigned_to !== undefined ? change.assigned_to : item.assignee, status: change.status ?? item.status, note: change.note ?? item.note });
-    replace(saved);
+    replace(await blueprint.setTask({ task: item.task, branch, day, responsibility_id: item.responsibility?.id ?? null, title: item.title, assigned_to: change.assigned_to !== undefined ? change.assigned_to : item.assignee, status: change.status ?? item.status, note: change.note ?? item.note }));
+    setBlocking(null);
   });
   const carry = (item: ListItem) => act(async () => {
     const saved = await blueprint.setTask({ task: item.task, branch, day, responsibility_id: item.responsibility?.id ?? null, title: item.title, assigned_to: item.assignee, status: 'carried', note: item.note });
-    const copy = await blueprint.carry({ from: saved, branch, day: nextDay(day) });
-    replace(saved, copy);
+    replace(saved);
+    await blueprint.carry({ from: saved, branch, day: nextDay(day) });
   });
-  const remove = (item: ListItem) => act(async () => { if (!item.task) return; await blueprint.removeTask(item.task.id); setData(d => d && ({ ...d, tasks: d.tasks.filter(t => t.id !== item.task!.id) })); });
-  const add = () => act(async () => {
-    if (!adding?.title.trim()) return;
-    const saved = await blueprint.setTask({ task: null, branch, day, responsibility_id: null, title: adding.title.trim(), assigned_to: adding.person || null, status: 'open', note: '' });
-    replace(saved); setAdding(null);
+  const recordCheck = (point: ReturnType<typeof personChecks>[number]) => act(async () => {
+    if (!data.record) return;
+    const saved = await repository.event({ plan_id: data.record.id, block: point.block, lane: point.lane, kind: point.kind, due: point.due, note: '' });
+    setData(d => d && ({ ...d, events: [...d.events, saved] }));
   });
-
-  const myItems = items.filter(i => i.assignee === me && i.status !== 'carried');
-  const myTurns = plan ? plan.blocks.flatMap((b, block) => LANES.filter(l => resolvedOwner(plan, block, l, b.start, data.changes) === me || b.owners[l] === me).map(l => ({ block, lane: l, start: b.start, end: b.end, extra: b.duties[l] }))) : [];
-  const myActionables = dueActionables.filter(a => a.owner_id === me);
-  const myProgress = progress(items, me);
-
-  // A plain function, not a component, so typing in a row keeps its focus.
-  const taskRow = (item: ListItem, compact = false) => {
-    const mine = item.assignee === me;
-    const can = !closed && (canLead || mine);
-    const area = AREAS.find(a => a.key === item.area);
-    return <li key={item.key} className={`ts-task is-${item.status}`}>
-      <button className="ts-check" aria-label={item.status === 'done' ? `Reopen ${item.title}` : `Mark ${item.title} done`} disabled={!can || busy || item.status === 'carried'} onClick={() => void set(item, { status: item.status === 'done' ? 'open' : 'done', note: item.status === 'done' ? item.note : item.note })}>{item.status === 'done' && <Check size={14} />}</button>
-      <div className="ts-task-body">
-        <strong>{item.title}</strong>
-        <small>
-          {area && <span className={`ts-area-dot c-${area.color}`} />}{area?.title ?? 'Added for today'}
-          {!compact && <> · {names(item.assignee)}{item.reason === 'backup' && ' (backup)'}</>}
-          {item.status !== 'open' && item.status !== 'done' && <> · <em>{STATUS[item.status]}</em></>}
-        </small>
-        {item.status === 'blocked' && item.note && <p className="ts-blocked-note"><AlertTriangle size={13} /> {item.note}</p>}
-        {item.task?.carried_from && <p className="ts-carried">Carried over from yesterday</p>}
-        {blocking?.key === item.key && <div className="ts-inline-form"><input autoFocus aria-label="What is blocking it?" placeholder="What is blocking it? Who can help?" value={blocking.note} maxLength={2000} onChange={e => setBlocking({ key: item.key, note: e.target.value })} /><button className="dw-primary" disabled={busy || !blocking.note.trim()} onClick={() => { void set(item, { status: 'blocked', note: blocking.note.trim() }); setBlocking(null); }}>Tell the lead</button><button className="ts-icon" aria-label="Cancel" onClick={() => setBlocking(null)}><X size={14} /></button></div>}
-      </div>
-      <div className="ts-task-actions">
-        {can && item.status !== 'done' && item.status !== 'blocked' && item.status !== 'carried' && <button className="ts-icon" title="Blocked: ask for help" aria-label={`Blocked: ${item.title}`} onClick={() => setBlocking({ key: item.key, note: '' })}><Flag size={14} /></button>}
-        {can && item.status === 'blocked' && <button className="ts-icon" title="Unblock" aria-label={`Unblock ${item.title}`} onClick={() => void set(item, { status: 'open' })}><RotateCcw size={14} /></button>}
-        {canLead && !closed && !compact && <select aria-label={`Who does ${item.title}`} value={item.assignee ?? ''} disabled={busy || item.status === 'carried'} onChange={e => void set(item, { assigned_to: e.target.value || null })}><option value="">Nobody yet</option>{people.map(p => <option key={p.id} value={p.id}>{first(p.name)}</option>)}</select>}
-        {canLead && !closed && !compact && item.status !== 'done' && item.status !== 'carried' && <button className="ts-icon" title="Move to tomorrow" aria-label={`Move ${item.title} to tomorrow`} onClick={() => void carry(item)}><ArrowRight size={14} /></button>}
-        {canLead && !closed && !compact && item.task && !item.responsibility && <button className="ts-icon" title="Remove" aria-label={`Remove ${item.title}`} onClick={() => void remove(item)}><Trash2 size={14} /></button>}
-      </div>
+  const taskRow = (item: ListItem) => {
+    const can = !closed && (canLead || item.assignee === me);
+    const verified = isVerified(item);
+    const title = shortDutyTitle(item.title);
+    return <li key={item.key} className={`sb-job is-${item.status}`}>
+      <div className="sb-job-heading"><strong>{title}</strong><span className={`sb-status ${verified ? 'is-verified' : ''}`}>{verified ? 'Verified' : item.status === 'done' && reviewReady ? 'Needs review' : STATUS[item.status]}</span></div>
+      {item.status === 'blocked' && <p className="ts-blocked-note">{item.note}</p>}
+      {can && item.status !== 'carried' && item.status !== 'skipped' && <div className="sb-job-actions">
+        {item.status !== 'done' ? <><button className="dw-secondary" aria-label={`Done: ${title}`} disabled={busy} onClick={() => void set(item, { status: 'done' })}>Done<span className="sb-sr">: {title}</span></button><button className="dw-link" disabled={busy} onClick={() => setBlocking({ key: item.key, note: item.note })}>Need help<span className="sb-sr">: {title}</span></button></>
+          : !verified && reviewReady && canLead && item.assignee !== me && item.task?.done_by !== me && <button className="dw-primary" aria-label={`Verify: ${title}`} disabled={busy} onClick={() => void act(async () => { if (item.task) replace(await blueprint.verifyTask(item.task)); })}>Verify<span className="sb-sr">: {title}</span></button>}
+      </div>}
+      {item.status === 'done' && !verified && reviewReady && item.assignee === lead && <small className="ts-muted">A super admin checks the lead’s own work.</small>}
+      {blocking?.key === item.key && <form className="ts-inline-form" onSubmit={e => { e.preventDefault(); void set(item, { status: 'blocked', note: blocking.note.trim() }); }}><input autoFocus aria-label={`Help needed for ${title}`} placeholder="What is stopping you?" value={blocking.note} maxLength={2000} onChange={e => setBlocking({ key: item.key, note: e.target.value })} /><button className="dw-primary" disabled={busy || !blocking.note.trim()}>Save</button><button type="button" className="dw-link" onClick={() => setBlocking(null)}>Cancel</button></form>}
+      <details className="sb-job-details"><summary>Details & options<span className="sb-sr">: {title}</span></summary>
+        {item.title !== title && <p>{item.title}</p>}
+        {item.responsibility?.details && <p>{item.responsibility.details}</p>}
+        <p>{item.responsibility ? frequencyLabel(item.responsibility) : 'Added for today'}{item.reason === 'backup' ? ' · Covering the usual owner' : ''}</p>
+        {item.note && item.status !== 'blocked' && <p>{item.note}</p>}
+        {item.task?.carried_from && <p>Carried over from an earlier day.</p>}
+        {verified && <p>Checked by {names(item.task!.verified_by!)} · {new Date(item.task!.verified_at!).toLocaleString('en-GB', { timeZone: 'Asia/Kolkata' })} IST</p>}
+        {can && item.status === 'done' && <button className="dw-secondary" disabled={busy} onClick={() => void set(item, { status: 'open' })}>Reopen<span className="sb-sr">: {title}</span></button>}
+        {canLead && !closed && <div className="sb-job-options"><label>Owner today<select aria-label={`Who does ${item.title}`} value={item.assignee ?? ''} disabled={busy || item.status === 'carried'} onChange={e => void set(item, { assigned_to: e.target.value || null })}><option value="">Choose staff</option>{item.assignee && !data.team.some(p => p.id === item.assignee) && <option value={item.assignee}>{names(item.assignee)} · not rostered</option>}{data.team.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+          {item.status !== 'done' && item.status !== 'carried' && <button className="dw-secondary" disabled={busy} onClick={() => void carry(item)}>Move to tomorrow</button>}
+          {item.task && !item.responsibility && <button className="dw-link" disabled={busy} onClick={() => void act(async () => { await blueprint.removeTask(item.task!.id); setData(d => d && ({ ...d, tasks: d.tasks.filter(t => t.id !== item.task!.id) })); })}>Remove added job</button>}
+        </div>}
+      </details>
     </li>;
   };
-
-  return <div className="ts-today">
+  const jobs = (list: ListItem[]) => {
+    const finished = list.filter(i => (i.status === 'done' && (!reviewReady || isVerified(i))) || i.status === 'carried' || i.status === 'skipped');
+    const pending = list.filter(i => !finished.includes(i));
+    return <><ul className="sb-jobs">{pending.map(taskRow)}</ul>{!list.length && <p className="ts-muted">No jobs assigned.</p>}{finished.length > 0 && <details className="sb-finished"><summary>Finished or moved ({finished.length})</summary><ul className="sb-jobs">{finished.map(taskRow)}</ul></details>}</>;
+  };
+  return <div className="ts-today sb-board">
     {problem && <div className="dw-notice dw-error" role="alert">{problem}</div>}
-    {closed && <div className="dw-notice" role="status">The lead’s report for this day is submitted. The day’s jobs are closed and kept in the report.</div>}
-
-    <section className="ts-hero">
-      <div className="ts-hero-main">
-        <span className="planning-eyebrow">{new Date(`${day}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }).toUpperCase()}</span>
-        <h2>{isToday ? 'Today' : day < centreDate(now) ? 'That day' : 'Coming up'} at {branch.charAt(0).toUpperCase() + branch.slice(1)}.</h2>
-        <div className="ts-lead"><Crown size={18} /><div><span>Lead</span><strong>{lead ? names(lead) : 'No lead chosen'}</strong></div><p>Makes sure every job gets done, helps where someone is stuck and sends the day’s report.</p></div>
-        <div className="ts-faces">{people.map(p => { const pr = progress(items, p.id); return <span key={p.id} className={p.id === lead ? 'is-lead' : ''} title={`${p.name} · ${pr.done}/${pr.total} done`}><b>{initials(p.name)}</b>{first(p.name)}<small>{pr.done}/{pr.total}</small></span>; })}{!people.length && <span className="ts-muted">Nobody is on this day’s roster yet.</span>}</div>
-      </div>
-      <div className="ts-hero-stats">
-        <Ring done={all.done} total={all.total} size={92} label={`${all.done} of ${all.total} jobs done`} />
-        <div><strong>{all.done}<small>/{all.total}</small></strong><span>jobs done</span></div>
-        <div><strong>{points.filter(recorded).length}<small>/{points.length}</small></strong><span>walk & DVR checks</span></div>
-        <div className={points.filter(isLate).length ? 'is-warn' : ''}><strong>{points.filter(isLate).length}</strong><span>checks missed</span></div>
-        <div className={all.blocked ? 'is-warn' : ''}><strong>{all.blocked}</strong><span>blocked</span></div>
-      </div>
+    {closed && <div className="dw-notice" role="status">Day report sent. These records are closed.</div>}
+    <section className="sb-summary">
+      <div><span className="planning-eyebrow">{branch} · {day}</span><h2>{isToday ? 'Today’s duties' : 'Duties for this day'}</h2><p><Crown size={16} /> {lead ? names(lead) : 'Choose a weekly lead'}{lead && data.weekLead && lead !== data.weekLead ? ' · Acting lead today' : ' · Weekly lead'}</p><button className="dw-link" onClick={() => document.dispatchEvent(new CustomEvent('the-shift-tab', { detail: 'planning' }))}>Weekly leads</button></div>
+      <div className="sb-counts"><span><strong>{all.total - all.done}</strong>pending</span><span><strong>{all.done}</strong>done</span>{reviewReady && <span><strong>{awaiting.length}</strong>to review</span>}<span><strong>{all.blocked}</strong>need help</span></div>
     </section>
-
-    {!data.responsibilities.length && <div className="ts-callout"><Sparkles size={18} /><div><strong>No blueprint yet.</strong><p>The day’s jobs come from the centre blueprint: every job with an owner and a backup.</p></div><button className="dw-secondary" onClick={() => document.dispatchEvent(new CustomEvent('the-shift-tab', { detail: 'blueprint' }))}>Set up the blueprint <ArrowRight size={14} /></button></div>}
-
-    <div className="ts-columns">
-      <section className="ts-card ts-my-day">
-        <div className="ts-card-head"><div><span className="planning-eyebrow">MY DAY</span><h3>{first(identity.name)}, here’s your part.</h3></div><Ring done={myProgress.done} total={myProgress.total} size={52} /></div>
-        <h4>Exam floor turns</h4>
-        {myTurns.length ? <ul className="ts-turns">{myTurns.map(t => <li key={`${t.block}:${t.lane}`} className={`${laneInfo[t.lane].color} ${isToday && time >= t.start && time < t.end ? 'is-now' : ''}`}><span>{clock(t.start)}–{clock(t.end)}</span><strong>{laneInfo[t.lane].title}</strong><small>{t.lane === 'floor' ? 'Lab walk every 10 min' : t.lane === 'control' ? 'DVR check every 6 min' : laneInfo[t.lane].tasks}{t.extra ? ` · ${t.extra}` : ''}</small></li>)}</ul>
-          : <p className="ts-muted">{plan ? 'No exam floor turns for you on this day.' : 'The exam floor rota for this day is not published yet.'}</p>}
-        <h4>My jobs</h4>
-        {myItems.length ? <ul className="ts-tasks">{myItems.map(i => taskRow(i, true))}</ul> : <p className="ts-muted">No jobs on your list for this day.</p>}
-        <h4>My Actionables</h4>
-        {myActionables.length ? <ul className="ts-actionables">{myActionables.map(a => <li key={a.id}><strong>{a.title}</strong><small>{a.institution?.name ? `${a.institution.name} · ` : ''}due {a.due_date}</small></li>)}</ul> : <p className="ts-muted">Nothing due in Actionables.</p>}
-        <button className="dw-link" onClick={() => navigate('actionables')}>Open Actionables <ArrowUpRight size={14} /></button>
-      </section>
-
-      <section className="ts-card ts-lead-board">
-        <div className="ts-card-head"><div><span className="planning-eyebrow">THE LEAD’S BOARD</span><h3>Everyone, at a glance.</h3></div>{canLead && <span className="dw-pill">You lead</span>}</div>
-        <div className="ts-people">{people.map(p => {
-          const pr = progress(items, p.id);
-          const pts = points.filter(x => x.owner === p.id);
-          const late = pts.filter(isLate).length;
-          const overdue = dueActionables.filter(a => a.owner_id === p.id).length;
-          const stuck = items.filter(i => i.assignee === p.id && i.status === 'blocked');
-          return <article key={p.id} className="ts-person">
-            <header><b>{initials(p.name)}</b><div><strong>{p.name}{p.id === lead && <Crown size={13} />}</strong><small>Roster {p.code}</small></div></header>
-            <div className="ts-bar" aria-label={`${pr.done} of ${pr.total} jobs done`}><span style={{ width: `${pr.total ? (pr.done / pr.total) * 100 : 0}%` }} /></div>
-            <dl><div><dt>Jobs</dt><dd>{pr.done}/{pr.total}</dd></div><div><dt>Checks</dt><dd>{pts.filter(recorded).length}/{pts.length}</dd></div><div className={late ? 'is-warn' : ''}><dt>Missed</dt><dd>{late}</dd></div><div className={overdue ? "is-warn" : ""} title="Actionables duties due"><dt>Actionables</dt><dd>{overdue}</dd></div></dl>
-            {stuck.map(s => <p key={s.key} className="ts-blocked-note"><AlertTriangle size={13} /> {s.title}: {s.note}</p>)}
-          </article>;
-        })}</div>
-        {unassigned.length > 0 && <div className="ts-needs"><h4><UserPlus size={15} /> Needs someone ({unassigned.length})</h4><p className="ts-muted">The owner and backup are both off. {canLead ? 'Choose who takes it today.' : 'The lead will choose who takes it.'}</p><ul className="ts-tasks">{unassigned.map(i => taskRow(i))}</ul></div>}
-      </section>
-    </div>
-
-    <section className="ts-card ts-full-list">
-      <div className="ts-card-head"><div><span className="planning-eyebrow">THE DAY’S JOBS</span><h3>Every job, every owner.</h3></div>{canLead && !closed && <button className="dw-secondary" onClick={() => setAdding({ title: '', person: '' })}><Plus size={14} /> Add a job for today</button>}</div>
-      {adding && <div className="ts-inline-form ts-add"><input autoFocus aria-label="New job" placeholder="What needs doing today?" value={adding.title} maxLength={200} onChange={e => setAdding({ ...adding, title: e.target.value })} /><select aria-label="Who does it" value={adding.person} onChange={e => setAdding({ ...adding, person: e.target.value })}><option value="">Nobody yet</option>{people.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><button className="dw-primary" disabled={busy || !adding.title.trim()} onClick={() => void add()}>Add</button><button className="ts-icon" aria-label="Cancel" onClick={() => setAdding(null)}><X size={14} /></button></div>}
-      {[...AREAS.map(a => ({ key: a.key as AreaKey | null, title: a.title, color: a.color })), { key: null, title: 'Added for today', color: 'ink' }].map(group => {
-        const list = items.filter(i => i.area === group.key);
-        if (!list.length) return null;
-        const pr = progress(list);
-        return <details key={group.title} className="ts-group" open>
-          <summary><span className={`ts-area-dot c-${group.color}`} />{group.title}<small>{pr.done}/{pr.total}</small><ChevronDown size={15} /></summary>
-          <ul className="ts-tasks">{list.map(i => taskRow(i))}</ul>
-        </details>;
+    <div className="sb-rotation-bar"><div><strong>{activeBlock ? `${clock(activeBlock.start)}–${clock(activeBlock.end)} · Current rotation` : plan ? 'Published daily rotation' : 'Rota not published yet'}</strong><small>Staff rotate every 90 min · Lab walk every 10 min · DVR every 6 min</small></div><a href="https://fets.online" target="_blank" rel="noreferrer">Open FETS Online <ArrowUpRight size={14} /></a></div>
+    {!data.responsibilities.length && <div className="dw-notice">No regular jobs set up for this centre. <button onClick={() => document.dispatchEvent(new CustomEvent('the-shift-tab', { detail: 'blueprint' }))}>Set up regular jobs</button></div>}
+    {!reviewReady && <p className="ts-muted">Job completion is available. Separate lead verification is awaiting activation.</p>}
+    <div className="sb-toolbar"><div className="dw-actions"><button className="dw-secondary" aria-pressed={!showTeam} onClick={() => setFocus('mine')}>My jobs today</button><button className="dw-secondary" aria-pressed={showTeam} onClick={() => setFocus('team')}>Team today</button></div><button className="dw-link" disabled={busy} onClick={() => setReload(n => n + 1)}>Refresh</button></div>
+    <div className={`sb-staff-grid ${showTeam ? '' : 'sb-mine'}`}>
+      {people.filter(p => showTeam || p.id === me).map(p => {
+        const mine = items.filter(i => i.assignee === p.id);
+        const stats = progress(mine);
+        const duty = plan && isToday ? currentDuty(plan, data.changes, time, p.id) : null;
+        const checks = plan && isToday ? personChecks(plan, data.changes, data.events, time, p.id) : [];
+        const due = checks.filter(c => c.state === 'due');
+        const upcoming = checks.filter(c => c.state === 'upcoming').sort((a, b) => a.due - b.due)[0];
+        const late = checks.filter(c => c.state === 'missed').length;
+        return <section key={p.id} className="sb-person ts-card" aria-label={`${p.name} duties`}>
+          <header><div><h3>{p.name}{p.id === lead && <span className="dw-pill">Lead</span>}</h3><small>{p.code} · {stats.done}/{stats.total} jobs done</small></div></header>
+          <div className="sb-current-post"><span>Current post</span><strong>{!plan ? 'Awaiting published rota' : !isToday ? 'See timetable for this date' : duty?.lanes.length ? duty.lanes.map(l => laneInfo[l].title).join(' + ') : 'Off post / break'}</strong>{duty?.ends && duty.lanes.length > 0 && <small>Rotation ends {clock(duty.ends)}</small>}
+            {due.map(c => <div className="sb-check-due" key={`${c.block}:${c.kind}:${c.due}`}><span>{c.kind === 'walk' ? 'Lab walk' : 'DVR check'} · {clock(c.due)}</span>{p.id === me && !closed ? <button className="dw-primary" disabled={busy} onClick={() => void recordCheck(c)}>Record {c.kind === 'walk' ? 'walk' : 'DVR'}<span className="sb-sr"> at {clock(c.due)}</span></button> : <small>Due now</small>}</div>)}
+            {upcoming && <small>Next {upcoming.kind === 'walk' ? 'walk' : 'DVR check'}: {clock(upcoming.due)}</small>}
+            {late > 0 && <small className="sb-warning">{late} checks missed · see rota log</small>}
+            {plan && duty && duty.block >= 0 && duty.lanes.some(l => plan.blocks[duty.block].duties[l]) && <details><summary>Rotation notes</summary>{duty.lanes.map(l => plan.blocks[duty.block].duties[l] && <p key={l}>{plan.blocks[duty.block].duties[l]}</p>)}</details>}
+          </div>
+          <h4>Other jobs today</h4>{jobs(mine)}
+          {dueActionables.some(a => a.owner_id === p.id) && <details className="sb-finished"><summary>Actionables due ({dueActionables.filter(a => a.owner_id === p.id).length})</summary>{dueActionables.filter(a => a.owner_id === p.id).map(a => <p key={a.id}>{a.title} · {a.due_date}</p>)}<button className="dw-link" onClick={() => navigate('actionables')}>Open Actionables</button></details>}
+        </section>;
       })}
-      {!items.length && <p className="ts-muted">No jobs are due on this day.</p>}
-    </section>
-
-    <section className="ts-rota">
-      <div className="ts-card-head"><div><span className="planning-eyebrow">EXAM FLOOR ROTA</span><h3>Three posts, 90-minute turns.</h3></div><a className="dw-link" href="https://fets.online" target="_blank" rel="noreferrer">fets.online <ArrowUpRight size={14} /></a></div>
-      <p className="ts-muted">Front office, Scanning & lab, Check-in & DVR. Whoever holds Scanning & lab does the 10-minute walk; Check-in & DVR does the 6-minute DVR check. fets.online reads this rota for its walk and DVR log.</p>
-      {children}
-    </section>
+    </div>
+    {!people.filter(p => showTeam || p.id === me).length && <p className="dw-empty">{showTeam ? 'No staff on this day’s roster.' : 'You have no assigned duties on this day.'}</p>}
+    {items.some(i => !i.assignee) && <section className="ts-card"><h3>Needs an owner</h3><p className="ts-muted">The lead assigns these to someone working today.</p>{jobs(items.filter(i => !i.assignee))}</section>}
+    {canLead && !closed && <div className="sb-add-job"><button className="dw-secondary" onClick={() => setAdding({ title: '', person: '' })}><Plus size={14} /> Add a job for today</button>{adding && <form className="ts-inline-form" onSubmit={e => { e.preventDefault(); void act(async () => { replace(await blueprint.setTask({ task: null, branch, day, responsibility_id: null, title: adding.title.trim(), assigned_to: adding.person || null, status: 'open', note: '' })); setAdding(null); }); }}><input autoFocus aria-label="New job" placeholder="Short job name" value={adding.title} maxLength={200} onChange={e => setAdding({ ...adding, title: e.target.value })} /><select aria-label="Who does it" value={adding.person} onChange={e => setAdding({ ...adding, person: e.target.value })}><option value="">Choose staff</option>{data.team.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><button className="dw-primary" disabled={busy || !adding.title.trim()}>Add</button><button type="button" className="dw-link" onClick={() => setAdding(null)}>Cancel</button></form>}</div>}
+    <details className="sb-full-rota" open={!plan}><summary>{plan ? 'Full rota, break cover & check log' : 'Set up today’s rota'}</summary>{children}</details>
+    <button className="dw-secondary" onClick={() => document.dispatchEvent(new CustomEvent('the-shift-tab', { detail: 'report' }))}>Day report <ArrowRight size={14} /></button>
   </div>;
 }
 
@@ -283,7 +255,7 @@ export function Blueprint({ branch, identity, repository, blueprint }: { branch:
   return <div className="ts-blueprint">
     {error && <div className="dw-notice dw-error" role="alert">{error}</div>}
     <section className="ts-hero ts-blueprint-hero">
-      <div className="ts-hero-main"><span className="planning-eyebrow">THE CENTRE BLUEPRINT</span><h2>Every job has an owner. And a backup.</h2><p className="ts-muted">From proctoring to printer ink. When the owner is off, the job moves to the backup’s list by itself; when both are off, it lands on the lead’s board.</p></div>
+      <div className="ts-hero-main"><span className="planning-eyebrow">REGULAR JOBS</span><h2>Assign once. Repeat when due.</h2><p className="ts-muted">Keep the current jobs. Choose an owner and backup; daily jobs repeat automatically.</p></div>
       <div className="ts-hero-stats"><div><strong>{rows.length}</strong><span>jobs</span></div><div className={orphan ? 'is-warn' : ''}><strong>{orphan}</strong><span>without an owner</span></div><div><strong>{load.length}</strong><span>people sharing them</span></div></div>
     </section>
     {load.length > 0 && <div className="ts-workload" aria-label="Who carries what">{load.sort((a, b) => b.owns - a.owns).map(p => <span key={p.id}><b>{initials(p.name)}</b>{p.name}<small>owns {p.owns} · backup {p.backs}</small></span>)}</div>}
@@ -300,7 +272,7 @@ export function Blueprint({ branch, identity, repository, blueprint }: { branch:
       return <section key={area.key} className={`ts-card ts-area c-${area.color}`}>
         <div className="ts-card-head"><div><span className="planning-eyebrow">{list.length} JOBS</span><h3>{area.title}</h3><p className="ts-muted">{area.blurb}</p></div>{canEdit && <button className="ts-icon" aria-label={`Add a job to ${area.title}`} onClick={() => setDraft(blank(area.key))}><Plus size={16} /></button>}</div>
         <ul>{list.map(r => <li key={r.id}>
-          <div><strong>{r.title}</strong><small>{frequencyLabel(r)}{r.details ? ` · ${r.details}` : ''}</small></div>
+          <div><strong>{shortDutyTitle(r.title)}</strong><small>{frequencyLabel(r)}</small>{r.details && <details><summary>Instructions</summary><p>{r.details}</p></details>}</div>
           <div className="ts-owners"><span className={r.owner_id ? '' : 'is-warn'}>{r.owner_id ? first(name(r.owner_id)) : 'No owner'}</span><small>backup {r.backup_id ? first(name(r.backup_id)) : '—'}</small></div>
           {canEdit && <div className="ts-row-actions"><button className="ts-icon" aria-label={`Edit ${r.title}`} onClick={() => setDraft({ id: r.id, area: r.area, title: r.title, details: r.details, frequency: r.frequency, weekday: r.weekday ?? 1, monthday: r.monthday ?? 1, owner_id: r.owner_id ?? '', backup_id: r.backup_id ?? '' })}><Pencil size={14} /></button><button className="ts-icon" aria-label={`Remove ${r.title}`} onClick={() => void remove(r)}><Trash2 size={14} /></button></div>}
         </li>)}{!list.length && <li className="ts-muted">No jobs here yet.</li>}</ul>
@@ -402,9 +374,9 @@ export function DayReport({ branch, day, identity, repository, blueprint }: { br
 
     <section className="ts-card">
       <div className="ts-card-head"><div><span className="planning-eyebrow">WHAT’S STILL OPEN</span><h3>Before you send it.</h3></div></div>
-      <ul className="ts-tasks ts-open">{items.filter(i => i.status !== 'done' && i.status !== 'skipped').map(i => <li key={i.key} className={`ts-task is-${i.status}`}><span className="ts-check" aria-hidden="true" /><div className="ts-task-body"><strong>{i.title}</strong><small>{names(i.assignee)} · {STATUS[i.status]}{i.status === 'blocked' && i.note ? `: ${i.note}` : ''}</small></div></li>)}
+      <ul className="ts-tasks ts-open">{items.filter(i => i.status !== 'skipped' && (i.status !== 'done' || (i.task?.verified_at !== undefined && !isVerified(i)))).map(i => <li key={i.key} className={`ts-task is-${i.status}`}><span className="ts-check" aria-hidden="true" /><div className="ts-task-body"><strong>{i.title}</strong><small>{names(i.assignee)} · {i.status === 'done' && !isVerified(i) ? 'Awaiting review' : STATUS[i.status]}{i.status === 'blocked' && i.note ? `: ${i.note}` : ''}</small></div></li>)}
         {due.map(a => <li key={a.id} className="ts-task"><span className="ts-check" aria-hidden="true" /><div className="ts-task-body"><strong>{a.title}</strong><small>Actionables · {names(a.owner_id)} · due {a.due_date}</small></div></li>)}
-        {!items.some(i => i.status !== 'done' && i.status !== 'skipped') && !due.length && <li className="ts-muted">Everything is done. A good day.</li>}</ul>
+        {!items.some(i => i.status !== 'skipped' && (i.status !== 'done' || (i.task?.verified_at !== undefined && !isVerified(i)))) && !due.length && <li className="ts-muted">Everything is done. A good day.</li>}</ul>
     </section>
   </div>;
 }
