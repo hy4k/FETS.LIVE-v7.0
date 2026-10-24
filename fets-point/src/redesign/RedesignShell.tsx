@@ -10271,7 +10271,7 @@ const TOOLS = [
   { id: "staff-ot", icon: "clock", label: "OT & TOIL Manager", sub: "Overtime logging & TOIL cash payouts" },
   { id: "dashboard", icon: "grid", label: "Dashboard", sub: "iCloud overview", legacy: true },
   { id: "news-manager", icon: "message", label: "News Manager", sub: "Announcements", legacy: true },
-  { id: "system-manager", icon: "settings", label: "System Manager", sub: "Admin & config", legacy: true },
+  { id: "system-manager", icon: "settings", label: "Ascender Manager", sub: "Test centre administration", legacy: true },
   { id: "user-management", icon: "shield", label: "User Management", sub: "Roles & permissions", legacy: true },
   { id: "branch-delegation", icon: "shield", label: "Branch Access Delegation", sub: "Temporary access override", legacy: true },
 ];
@@ -10954,7 +10954,7 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
         {active === "staff-ot" && <OtToilClaimsHub branch={branch} />}
         {active === "candidate-tracker" && <CandidateTracker />}
         {active === "access-hub" && <AccessHubPage />}
-        {active === "system-manager" && <SystemManager />}
+        {active === "system-manager" && <SystemManager onNavigate={(page, centre) => { if (centre) handleBranchChange(centre); setActive(page); }} />}
         {active === "news-manager" && <NewsManager />}
         {active === "user-management" && <UserManagement onNavigate={setActive} />}
         {active === "branch-delegation" && <BranchDelegationWidget />}

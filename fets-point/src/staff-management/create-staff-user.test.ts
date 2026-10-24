@@ -146,8 +146,8 @@ describe("staff account creation", () => {
       full_name: "Sample Staff",
     });
   });
-  it("maps global and Kannur without violating the base-centre constraint", () => {
-    for (const branch_assigned of ["global", "kannur"])
+  it("maps global without violating the base-centre constraint", () => {
+    for (const branch_assigned of ["global"])
       expect(
         staffPayload({ ...body(), branch_assigned }).profile.base_centre,
       ).toBeNull();

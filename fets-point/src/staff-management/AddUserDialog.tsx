@@ -148,7 +148,7 @@ export function AddUserDialog({
                   setValue({ ...value, branch_assigned: e.target.value })
                 }
               >
-                {["calicut", "cochin", "kannur", "global"].map((b) => (
+                {["calicut", "cochin", "global"].map((b) => (
                   <option key={b} value={b}>
                     {b[0].toUpperCase() + b.slice(1)}
                   </option>

@@ -186,7 +186,7 @@ export function UserManagement({ onNavigate }: UserManagementProps = {}) {
                             </div>
 
                             <div className="flex gap-1 flex-wrap">
-                                {['all', 'calicut', 'cochin', 'kannur'].map(branch => (
+                                {['all', 'calicut', 'cochin', 'global'].map(branch => (
                                     <button
                                         key={branch}
                                         onClick={() => setBranchFilter(branch)}
@@ -329,7 +329,6 @@ export function UserManagement({ onNavigate }: UserManagementProps = {}) {
                                                         <select value={formData.branch_assigned || 'calicut'} onChange={e => setFormData({ ...formData, branch_assigned: e.target.value })} className="w-full p-3 rounded-lg bg-slate-800 text-white border border-slate-700">
                                                             <option value="calicut">Calicut</option>
                                                             <option value="cochin">Cochin</option>
-                                                            <option value="kannur">Kannur</option>
                                                             <option value="global">Global</option>
                                                         </select>
                                                     </div>
