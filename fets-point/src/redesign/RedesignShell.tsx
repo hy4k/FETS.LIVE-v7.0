@@ -10922,7 +10922,7 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
   const V = window.VENDOR_BY_SLUG;
   const branchLabel = branch === "global" ? "All centres" : branch.charAt(0).toUpperCase() + branch.slice(1);
 
-  const isDeskActive = ["desk", "attn-admin", "business", "staff-requests", "staff-ot", "candidate-tracker", "access-hub", "system-manager", "news-manager", "user-management", "branch-delegation", "dashboard", "fets-intelligence", "gbp"].includes(active);
+  const isDeskActive = ["client-directory","desk", "attn-admin", "business", "staff-requests", "staff-ot", "candidate-tracker", "access-hub", "system-manager", "news-manager", "user-management", "branch-delegation", "dashboard", "fets-intelligence", "gbp"].includes(active);
 
   return (
     <div style={{ position: "relative", zIndex: 2, height: "100%", display: "flex", flexDirection: "column", "--branch": BRANCH_TINT[branch] || "var(--accent)" }}>
@@ -10933,7 +10933,7 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
       <main className="scroll-soft main-scroll" style={{
         flex: 1,
         overflowY: "auto",
-        background: isDeskActive ? "linear-gradient(160deg, #ECECEC 0%, #90CCF4 50%, #5DA2D5 100%)" : undefined,
+        background: active === "client-directory" ? "#f1f5f4" : isDeskActive ? "linear-gradient(160deg, #ECECEC 0%, #90CCF4 50%, #5DA2D5 100%)" : undefined,
         padding: (active === "calendar" || active === "roster" || active === "live" || active === "desk" || active === "actionables" || active === "news" || active === "chat" || active === "fets-chat" || active === "lost-and-found")
           ? "0" 
           : (active === "handover" ? "0 0 80px" : "clamp(22px,3.2vw,40px) clamp(14px,3vw,30px) 80px")

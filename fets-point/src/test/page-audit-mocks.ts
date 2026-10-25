@@ -1,3 +1,4 @@
+import React from "react";
 // Isolated read-only fixtures: never imported by a production entry point.
 export const profile = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -198,6 +199,7 @@ export const useAuth = () => ({
   refreshProfile: async () => {},
 });
 const branch = {
+  getBranchTheme:()=>"calicut",
   activeBranch: params.get("branch") || "calicut",
   setActiveBranch: () => {},
   viewMode: "single",
@@ -240,3 +242,6 @@ export const config = {
   supabaseAnonKey: "isolated",
 };
 export default supabase;
+
+export const ChatProvider=({children}:any)=>children;
+export const CallProvider=({children}:any)=>children;
