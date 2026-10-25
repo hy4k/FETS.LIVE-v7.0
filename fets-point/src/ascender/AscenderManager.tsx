@@ -301,7 +301,7 @@ export default function AscenderManager({
       <header className="am-page-head">
         <div>
           <span className="am-eyebrow">ADMIN TOOLS / TEST CENTRES</span>
-          <h1>Ascender Manager</h1>
+          <h1>FETS SITES</h1>
         </div>
         <button disabled={loading} onClick={() => void load()}>
           <RefreshCw size={15} />

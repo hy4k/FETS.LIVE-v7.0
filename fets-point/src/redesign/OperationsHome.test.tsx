@@ -12,8 +12,8 @@ describe('operations home', () => {
   });
   it('shows source failures without the removed Shift promotion', async () => {
     const navigate = vi.fn();
-    render(<OperationsHome branch="calicut" navigate={navigate} openDrawer={vi.fn()} load={vi.fn().mockResolvedValue(snapshot)} />);
-    await screen.findByText(/Handovers could not be loaded/);
+    render(<OperationsHome branch="calicut" navigate={navigate} openDrawer={vi.fn()} load={vi.fn().mockResolvedValue({...snapshot,sessions:null,failures:['Calendar']})} />);
+    await screen.findByText(/Calendar unavailable/);
     expect(screen.queryByRole('button', { name: 'Open The Shift' })).not.toBeInTheDocument();
   });
   it('ignores stale results from a previously selected branch', async () => {

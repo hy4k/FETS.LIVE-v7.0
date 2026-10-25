@@ -6,7 +6,7 @@ import MyDeskHome from './MyDeskHome';
 const makeProps = () => ({
   user: { id: 'staff-one', name: 'Alex Thomas', role: 'Staff', branch: 'Calicut' },
   people: [{ id: 'staff-two', full_name: 'Sam Joseph', branch_assigned: 'calicut' }],
-  pendingHandovers: 2,
+  pendingHandovers: 2, canAccessHub:true,
   navigate: vi.fn(), openDrawer: vi.fn(), openChat: vi.fn(),
   renderPanel: vi.fn(panel => <div>{panel} content</div>),
 });
@@ -97,3 +97,5 @@ describe('personal My Desk', () => {
     expect(screen.getByRole('button', { name: 'Pause focus' })).toBeInTheDocument();
   });
 });
+
+it('places all four support tools in My Desk without duplicate buttons',()=>{const props=makeProps();render(<MyDeskHome {...props}/>);for(const label of ['Raise a case','Quick access','Help desk','F-Vault / Access Hub'])expect(screen.getAllByRole('button',{name:new RegExp(label.replace('/','\\/'))}).length).toBe(1);fireEvent.click(screen.getByRole('button',{name:/Raise a case/}));expect(props.navigate).toHaveBeenCalledWith('case');fireEvent.click(screen.getByRole('button',{name:/Quick access/}));expect(props.openDrawer).toHaveBeenCalledWith('vault');fireEvent.click(screen.getByRole('button',{name:/Help desk/}));expect(props.openDrawer).toHaveBeenCalledWith('help');fireEvent.click(screen.getByRole('button',{name:/F-Vault/}));expect(props.navigate).toHaveBeenCalledWith('access-hub');cleanup();});
