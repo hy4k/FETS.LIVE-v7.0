@@ -20,10 +20,22 @@ No schema, attendance, payroll policy, staff records, or FETS Online integration
 
 Reproduce browser checks with `node scripts/verification/build-page-audit.mjs`, serve `.page-audit` on port 3018, and run `node scripts/verification/verify-page-audit.cjs`. Supply `FETS_PLAYWRIGHT_MODULE` and `FETS_CHROME_PATH` if Playwright/Chrome are installed outside the default resolution paths. Optional `FETS_AUDIT_DIR`, `FETS_AUDIT_URL` and comma-separated `FETS_AUDIT_ROUTES` configure output, origin and route subset. Fixtures never enter the production bundle.
 
-## Deployment status
+## Deployment
 
-Prepared; deployment blocked by the offline Desktop Commander device `srv1120621`. Public release remains `846bf49612497f95fd6bbf3e106320428bb59e0d` (`20261024T204956Z-ascender-846bf49`) when checked on 25 October.
+Deployed on 25 October 2026 from commit `dbd1c59856f33e8d48af870af1807993e8af8aa9`.
 
-`scripts/releases/deploy-calendar-reliability.sh COMMIT` pins that baseline, rejects newer repository/production changes, preserves the image, Nginx/runtime configuration and old hashed assets, checks the candidate module, and verifies every public built asset after switching only the application service. It reuses the baseline backend receipt only after asserting the entire Supabase source tree is unchanged. No migration is applied. Verification failures after switching restore the saved website image.
+- Release: `20261025T092330Z-calendar-fix-dbd1c59`
+- Running image: `sha256:a45fb23b6a88e35084728cef346911677a58ae81fe65718ca0e0086ee0c9a1d0`
+- Public index SHA-256: `80be726c32f94db7fa564af70f430139505e0706af984122a0af383d383a0559`
+- Public application module: `RedesignShell-C1a0B8iG.js`; evaluation and all six shared component exports pass.
+- 54 public files/routes match the reviewed build. Runtime environment, ports, mounts, restart policy and Nginx configuration match the previous release.
+- Public `/calendar` returns HTTP 200 at desktop and phone widths, with the sign-in email input visible and no browser page errors. Authenticated workflow coverage remains the isolated fixture checks described above.
+- Backend source tree matches the previously verified release. No database migration or record changes occurred.
 
-The script requires actual VPS access. Its existence and local checks do not imply a deployment occurred.
+The previous image is retained as a Docker tag and a 438 MiB archive in the release directory. Rollback command:
+
+```bash
+bash /opt/fets-releases/20261025T092330Z-calendar-fix-dbd1c59/rollback.sh
+```
+
+`scripts/releases/deploy-calendar-reliability.sh COMMIT` pins the prior Ascender baseline, rejects newer repository/production changes, preserves the image, Nginx/runtime configuration and old hashed assets, checks the candidate module, and verifies every public built asset after switching only the application service. It reuses the baseline backend receipt only after asserting the entire Supabase source tree is unchanged. Verification failures after switching restore the saved website image.
