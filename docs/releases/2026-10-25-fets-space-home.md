@@ -16,4 +16,13 @@ Home now fetches only today's calendar sessions, including pagination and legacy
 - Twenty targeted tests cover session rotation/pause/manual control/reduced motion, cancellation handling, India-time clock and stale requests, personal desk persistence and support actions, and absence of duplicate Workspace entries.
 - Real AppContent/RedesignShell fixture checks pass at 1440px and 393px: moved entries are absent from Workspace, all four home cards open the appropriate routes and reload, My Desk has each support action once, and cases/Access Hub navigate correctly. Fixtures use isolated authentication/data and block writes/external services. Desktop/mobile screenshot review completed.
 
-Deployment pending. Prior baseline: 20261025T161824Z-client-workspace-f0de716. No database or FETS Online changes are required. The deployment script preserves the previous release, assets and server configuration for rollback.
+Deployed from c52619fd51f4122e0b43c0f33e6809215cf1bcdd as release 20261025T175832Z-fets-space-c52619f.
+
+- Running image: sha256:abc710d7cf7658913c7535ef2735704454b67824893d9e2be7dedef7b4868315.
+- Index SHA-256: 5d5470da5889f771d526be6c1786152545e42760f076255fc8c755fa9b5777b7.
+- 55 public files/routes match the reviewed build. Home, /my-desk, /fets-sites, /fets-news, /fets-space and /team-space additionally match the new index.
+- Public My Desk sign-in smoke checks pass at desktop and phone widths (HTTP 200, email input visible, no page errors); signed-in behaviour is covered by the isolated real-router checks above.
+- Public module RedesignShell-Nqe7Df14.js evaluates with all six shared components.
+- Runtime environment, ports, mounts, restart policy and Nginx configuration preserved. No database or FETS Online changes.
+- Rollback: `bash /opt/fets-releases/20261025T175832Z-fets-space-c52619f/rollback.sh`.
+
