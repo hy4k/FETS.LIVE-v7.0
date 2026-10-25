@@ -20,4 +20,14 @@ A read-back query confirmed PARAGON → CELPIP and PROMETRIC → CMA US.
 
 ## Deployment
 
-Prepared for the current Calendar reliability baseline: release 20261025T092330Z-calendar-fix-dbd1c59, commit dbd1c59856f33e8d48af870af1807993e8af8aa9. The deployment script preserves the previous image/runtime/Nginx configuration and verifies public assets and application evaluation. Deployment evidence will be recorded after the switch.
+Deployed to FETS Live on 25 October 2026 from commit `2339b4103979180ab6e708695676c8ba3981bc3e`.
+
+- Release: `20261025T141701Z-calendar-planning-2339b41`
+- Running image: `sha256:61de0a9e7c5c6a7e1e19f11be5ce504c058fbc9438af9f02cde447b1df239531`
+- Public index SHA-256: `6f45f60a22f2a522d3de127281a1e785849a70cd7083927587fd8ead0ebf4dce`
+- Public module `RedesignShell-CtJrtnOr.js` evaluates and exposes the six required shared components.
+- 55 public files/routes match the reviewed build. Runtime environment, ports, mounts, restart policy and Nginx configuration are preserved.
+- Public Calendar route smoke checks pass at 1440px and 393px (HTTP 200, visible sign-in email field, no browser page errors). Signed-in operations are covered by the isolated fixture checks, not a production staff session.
+- Previous image retained in Docker and a 452 MiB archive. Rollback: `bash /opt/fets-releases/20261025T141701Z-calendar-planning-2339b41/rollback.sh`.
+
+The website deployment script made no database changes. The separate verified client/programme data correction above was applied before deployment. No schema migration was needed.
