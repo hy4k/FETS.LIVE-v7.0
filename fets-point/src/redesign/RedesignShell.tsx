@@ -25,7 +25,7 @@ import * as DB from "./write-data";
 import * as ACT from "./actionables-data";
 import { TeamChatWorkspace } from "../components/Chat/TeamChatWorkspace";
 import { ActionablesView } from "./ActionablesView";
-import { usesAdminWorkspace, workspaceFor } from "./workspace-features";
+import { usesAdminWorkspace, workspaceFor, hasFeature, WORKSPACE_FEATURES } from "./workspace-features";
 import "./ot-manager.css";
 import * as ATT from "./attendance-data";
 import { isStaffRosterVisible } from "../utils/rosterVisibility";
@@ -10176,6 +10176,7 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
     (!branch || ["all", "global"].includes(branch) || (p.branch_assigned || "").toLowerCase() === branch));
 
   return <MyDeskHome
+    canAccessHub={hasFeature(WORKSPACE_FEATURES.find(f=>f.id==="access-hub"), usesAdminWorkspace(Boolean(F.isAdmin), u.email), ownProfile?.permissions)}
     repository={deskCloudEnabled ? deskRepository : undefined}
     user={{ id: F._meUserId || u.email || u.name, name: u.name, role: u.role || "Staff", branch: branchLabel, avatar: ownProfile?.avatar_url }}
     people={people}
@@ -10268,12 +10269,9 @@ const TOOLS = [
   { id: "attn-admin", icon: "clock", label: "Daily Attendance", sub: "All staff check-in / out · admin" },
   { id: "business", icon: "star", label: "Google Business", sub: "Reviews, ratings & reach", page: true },
   { id: "candidate-tracker", icon: "users", label: "Candidate Tracker", sub: "Registrations & sessions", legacy: true },
-  { id: "access-hub", icon: "key", label: "F-Vault / Access Hub", sub: "Credentials & access", legacy: true },
   /* staff-requests entry removed — admin inbox is exclusively in My Desk → ApplicationsHub */
   { id: "staff-ot", icon: "clock", label: "OT & TOIL Manager", sub: "Overtime logging & TOIL cash payouts" },
   { id: "dashboard", icon: "grid", label: "Dashboard", sub: "iCloud overview", legacy: true },
-  { id: "news-manager", icon: "message", label: "News Manager", sub: "Announcements", legacy: true },
-  { id: "system-manager", icon: "settings", label: "Ascender Manager", sub: "Test centre administration", legacy: true },
   { id: "user-management", icon: "shield", label: "User Management", sub: "Roles & permissions", legacy: true },
   { id: "branch-delegation", icon: "shield", label: "Branch Access Delegation", sub: "Temporary access override", legacy: true },
 ];
@@ -10561,7 +10559,9 @@ function MenuRow({ items }) {
 }
 
 function LivePage({ branch, setDrawer, setActive }) {
-  return <OperationsHome userName={window.FETS?.user?.name || "Welcome"} branch={branch} navigate={setActive} openDrawer={setDrawer} />;
+  const F=window.FETS||{};const me=(F._staffProfiles||[]).find(p=>(F._meId&&p.id===F._meId)||(F._meUserId&&p.user_id===F._meUserId));
+  const homeAccess=WORKSPACE_FEATURES.filter(f=>f.placement==='home'&&hasFeature(f,usesAdminWorkspace(Boolean(F.isAdmin),me?.email||F.user?.email),me?.permissions)).map(f=>f.id);
+  return <OperationsHome homeAccess={homeAccess} userName={window.FETS?.user?.name || "Welcome"} branch={branch} navigate={setActive} openDrawer={setDrawer} />;
 }
 
 function LiveChatCommandDeck({ branch, onOpenChat }) {
@@ -10958,6 +10958,7 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
         {active === "candidate-tracker" && <CandidateTracker />}
         {active === "client-directory" && <ClientDirectory />}
         {active === "access-hub" && <AccessHubPage />}
+        {active === "fets-space" && <section className="fs-pending"><h1>FETS SPACE</h1><p>This workspace is ready for the setup details you will provide.</p><button onClick={()=>setActive("live")}>Back to Fets Space home</button></section>}
         {active === "system-manager" && <SystemManager onNavigate={(page, centre) => { if (centre) handleBranchChange(centre); setActive(page); }} />}
         {active === "news-manager" && <NewsManager />}
         {active === "user-management" && <UserManagement onNavigate={setActive} />}

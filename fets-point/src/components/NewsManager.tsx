@@ -212,7 +212,7 @@ export function NewsManager() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
           <h1 className="text-4xl font-black text-gray-800 tracking-tighter uppercase relative z-10">
-            Notice <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-500 to-yellow-500">Board</span>
+            FETS <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-500 to-yellow-500">NEWS</span>
           </h1>
           <p className="text-gray-500 font-medium mt-2 text-lg">
             Manage global announcements and branch-specific alerts.

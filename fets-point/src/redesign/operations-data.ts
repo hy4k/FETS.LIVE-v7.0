@@ -33,3 +33,11 @@ export function summariseOperations(snapshot: OperationsSnapshot) {
     roster,
   };
 }
+
+// Home only needs today's sessions; roster, attendance and handovers live in their own pages.
+export async function loadHomeSessions(branch:string, day=centreDate()):Promise<OperationsSnapshot>{
+ const rows:any[]=[];
+ try {for(let n=0;;n+=1000){let q=supabase.from('calendar_sessions').select('*').eq('date',day).order('start_time').order('id');if(!['global','all'].includes(branch))q=branch==='calicut'?q.or('branch_location.eq.calicut,branch_location.is.null'):q.eq('branch_location',branch);const {data,error}=await q.range(n,n+999);if(error)throw error;rows.push(...data||[]);if((data||[]).length<1000)break;}
+ return {sessions:rows,roster:null,attendance:null,handovers:null,failures:[],updatedAt:new Date().toISOString()};
+ }catch{return {sessions:null,roster:null,attendance:null,handovers:null,failures:['Calendar'],updatedAt:new Date().toISOString()}}
+}

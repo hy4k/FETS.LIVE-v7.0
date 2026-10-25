@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  ArrowDown, ArrowRight, ArrowUpRight, Award, BookOpen, CalendarDays,
+  ShieldCheck, ArrowDown, ArrowRight, ArrowUpRight, Award, BookOpen, CalendarDays,
   Check, CheckCheck, Clock3, Cloud, Coffee, Flower2, Headphones, Heart,
   Inbox, KeyRound, Leaf, LockKeyhole, MapPin, MessageCircle,
   Moon, Pause, Play, RotateCcw, Shuffle, Smile, Sparkles, Sun, Users,
@@ -14,6 +14,7 @@ export type DeskPerson = {
 };
 export type DeskPanel = 'time' | 'handovers' | 'checklist' | 'growth' | 'requests';
 type Props = {
+  canAccessHub?: boolean;
   repository?: DeskRepository;
   user: { id: string; name: string; role: string; branch: string; avatar?: string };
   people: DeskPerson[];
@@ -127,7 +128,7 @@ export default function MyDeskHome(props: Props) {
   return <PersonalDesk key={`${props.user.id}:${day}`} {...props} day={day} date={date} />;
 }
 
-function PersonalDesk({ user, people, pendingHandovers, navigate, openDrawer, openChat, renderPanel, repository, day, date }: Props & { day: string; date: Date }) {
+function PersonalDesk({ canAccessHub=false, user, people, pendingHandovers, navigate, openDrawer, openChat, renderPanel, repository, day, date }: Props & { day: string; date: Date }) {
   const [tab, setTab] = useState<'today' | DeskPanel>(() => {
     const w = window as any; const asked = w.FETS?._deskTab; if (w.FETS) w.FETS._deskTab = undefined;
     return asked || 'today';
@@ -167,6 +168,12 @@ function PersonalDesk({ user, people, pendingHandovers, navigate, openDrawer, op
   return <div className="my-desk" data-cover={['peach', 'sage', 'lilac'].includes(cover) ? cover : 'peach'}>
     <div className="md-page-heading"><div><span className="md-kicker">FETS · LIVE / YOUR PERSONAL SPACE</span><h1>My Desk<span>.</span></h1></div><div className="md-date"><CalendarDays size={16} /><span>{date.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</span></div></div>
 
+    <section className="md-support-workspace" aria-label="Support and access"><div className="md-support-heading"><h2>Support & access</h2><span>Your work tools, in one place</span></div><div className="md-support-grid">{[
+      {label:'Raise a case',hint:'Record an incident or request help',icon:ShieldCheck,action:()=>navigate('case'),enabled:true},
+      {label:'Quick access',hint:'Vendor portals and saved credentials',icon:KeyRound,action:()=>openDrawer('vault'),enabled:true},
+      {label:'Help desk',hint:'Support contacts and channels',icon:Headphones,action:()=>openDrawer('help'),enabled:true},
+      {label:'F-Vault / Access Hub',hint:canAccessHub?'Manage credentials and access':'Administrator access',icon:LockKeyhole,action:()=>navigate('access-hub'),enabled:canAccessHub}
+    ].map(tool=><button key={tool.label} onClick={tool.action} disabled={!tool.enabled}><tool.icon size={21} strokeWidth={1.5}/><span><strong>{tool.label}</strong><small>{tool.hint}</small></span><ArrowUpRight size={15}/></button>)}</div></section>
     <section className="md-profile-cover" aria-label="Your personal workspace">
       <div className="md-cover-art">
         <div className="md-cover-copy"><span className="md-kicker">A GOOD DAY STARTS WITH YOU</span><h2>A little focus.<br />A lot of <em>you.</em></h2><p>Your work, your people, your own little corner of FETS.</p></div>
@@ -187,7 +194,7 @@ function PersonalDesk({ user, people, pendingHandovers, navigate, openDrawer, op
     {tab === 'today' ? <div className="md-grid">
       <aside className="md-left-column">
         <section className="md-card md-day-card"><span className="md-kicker"><CalendarDays size={14} /> YOUR WORKDAY</span><h2>Let’s ease into it.</h2><p>A few familiar places to get your day moving.</p><button className="md-work-link" onClick={() => navigate('roster')}><span className="md-link-icon md-icon-peach"><CalendarDays size={18} /></span><span><strong>My schedule</strong><small>Find your next shift</small></span><ArrowUpRight size={15} /></button><button className="md-work-link" onClick={() => setTab('requests')}><span className="md-link-icon md-icon-sage"><Coffee size={18} /></span><span><strong>Plan some time off</strong><small>Leave, swaps & requests</small></span><ArrowRight size={15} /></button></section>
-        <section className="md-card md-shortcuts"><span className="md-kicker">WITHIN REACH</span><button onClick={() => navigate('calendar')}><CalendarDays size={16} /> Centre calendar <ArrowUpRight size={13} /></button><button onClick={() => openDrawer('vault')}><KeyRound size={16} /> Quick access vault <ArrowUpRight size={13} /></button><button onClick={() => openDrawer('help')}><MessageCircle size={16} /> Help desk <ArrowUpRight size={13} /></button><button onClick={() => window.dispatchEvent(new Event('fets-open-ai'))}><Sparkles size={16} /> Ask FETS AI <ArrowUpRight size={13} /></button></section>
+        <section className="md-card md-shortcuts"><span className="md-kicker">WITHIN REACH</span><button onClick={() => navigate('calendar')}><CalendarDays size={16} /> Centre calendar <ArrowUpRight size={13} /></button><button onClick={() => window.dispatchEvent(new Event('fets-open-ai'))}><Sparkles size={16} /> Ask FETS AI <ArrowUpRight size={13} /></button></section>
         <div className="md-margin-note"><Flower2 size={27} /><p>You bring something<br /><em>only you can.</em></p></div>
       </aside>
 
