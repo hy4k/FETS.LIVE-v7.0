@@ -1,3 +1,4 @@
+import { ClientDirectoryDialog } from './ClientDirectory'
 import { useState, useMemo, memo, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -53,7 +54,7 @@ const CLIENT_LOGOS: Record<string, string> = {
 // Simple Clean Card Component
 // Compact Button Card Component
 const CandidateCard = memo(({ candidate, onClick }: any) => {
-  const clientLogo = candidate.clientName ? CLIENT_LOGOS[candidate.clientName.toUpperCase()] : '/fets-point-logo.png'
+  const clientLogo = (candidate.clientName && CLIENT_LOGOS[candidate.clientName.toUpperCase()]) || '/fets-point-logo.png'
 
   return (
     <motion.button
@@ -103,6 +104,7 @@ export function CandidateTrackerPremium() {
   }, [activeBranch])
 
   const [showModal, setShowModal] = useState(false)
+  const [showClients, setShowClients] = useState(false)
   const [isEdit, setIsEdit] = useState(false)
   const [selectedCandidate, setSelectedCandidate] = useState<any>(null)
 
@@ -280,6 +282,7 @@ export function CandidateTrackerPremium() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
+      {showClients && <ClientDirectoryDialog onClose={() => setShowClients(false)} />}
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-500 mx-auto mb-4"></div>
           <p className="text-gray-600 font-medium">Loading candidates...</p>
@@ -384,6 +387,7 @@ export function CandidateTrackerPremium() {
               </div>
 
               <div className="flex items-center space-x-4 flex-wrap gap-2">
+                <button onClick={() => setShowClients(true)} className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-700 font-semibold">Clients & programmes</button>
                 {/* Search Bar */}
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -601,7 +605,7 @@ export function CandidateTrackerPremium() {
                 <div className="flex items-center space-x-4 mb-4">
                   <div className="w-16 h-16 bg-white rounded-2xl p-3 flex items-center justify-center">
                     <img
-                      src={selectedCandidate.clientName ? CLIENT_LOGOS[selectedCandidate.clientName.toUpperCase()] : '/fets-point-logo.png'}
+                      src={(selectedCandidate.clientName && CLIENT_LOGOS[selectedCandidate.clientName.toUpperCase()]) || '/fets-point-logo.png'}
                       alt=""
                       className="w-full h-full object-contain"
                     />

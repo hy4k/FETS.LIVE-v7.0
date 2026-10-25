@@ -56,12 +56,12 @@ describe("Calendar Analysis reliability", () => {
   it("opens with a legacy session lacking both times, preserving totals", async () => {
     fixture.rows = [session(1, null, null, 9)];
     render(<CalendarAnalysis onClose={() => {}} activeBranch="calicut" />);
-    await screen.findByText(/timing.*incomplete|incomplete.*timing/i);
+    await screen.findByText("1 session with incomplete timing");
     expect(
       screen.queryByText("Analyzing Session Data..."),
     ).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /Overlap Analysis/ }));
-    await screen.findByText(/Overlap check incomplete/);
+    fireEvent.click(screen.getByRole("button", { name: /Needs attention/ }));
+    expect(screen.getByRole("dialog")).toBeVisible();
   });
   it("loads sessions past the first database page", async () => {
     fixture.rows = Array.from({ length: 1001 }, (_, i) =>
@@ -97,8 +97,10 @@ describe("Calendar Analysis reliability", () => {
       session(3, "09:00", "11:00", 25),
     ];
     render(<CalendarAnalysis onClose={() => {}} activeBranch="calicut" />);
-    await screen.findByText(/timing.*incomplete|incomplete.*timing/i);
-    fireEvent.click(screen.getByRole("button", { name: /Overlap Analysis/ }));
-    await screen.findByText("Seat Capacity Conflicts Detected");
+    await screen.findByText("1 session with incomplete timing");
+    fireEvent.click(screen.getByRole("button", { name: /Needs attention/ }));
+    await screen.findByText(
+      "Known peak 55 exceeds 40 seats at 09:00 IST. Review bookings or session times.",
+    );
   });
 });

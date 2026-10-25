@@ -7,6 +7,7 @@ import {
   AlertCircle, Loader2, User, ChevronDown, LayoutGrid
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { ClientDirectoryDialog } from './ClientDirectory'
 import { CalendarAnalysis } from './CalendarAnalysis'
 import { useAuth } from '../hooks/useAuth'
 import { useBranch } from '../hooks/useBranch'
@@ -243,6 +244,7 @@ export function FetsCalendarPremium() {
   const [showModal, setShowModal] = useState(false)
   const [showDetailsModal, setShowDetailsModal] = useState(false)
   const [showAnalysis, setShowAnalysis] = useState(false)
+  const [showClients, setShowClients] = useState(false)
   const [editingSession, setEditingSession] = useState<Session | null>(null)
   const [expandedClient, setExpandedClient] = useState<ExamKind | null>(null)
 
@@ -255,16 +257,7 @@ export function FetsCalendarPremium() {
     currentDate, activeBranch, applyFilter, isGlobalView
   )
   const { data: dbClients = [] } = useClients()
-  const clientsWithOptions = useMemo(() => {
-    const list = [...dbClients];
-    if (!list.some((c: any) => c.name === 'CMA US')) {
-      list.push({ id: 'cma-us-client', name: 'CMA US', color: 'emerald' });
-    }
-    if (!list.some((c: any) => c.name === 'CELPIP')) {
-      list.push({ id: 'celpip-client', name: 'CELPIP', color: 'rose' });
-    }
-    return list;
-  }, [dbClients]);
+  const clientsWithOptions = dbClients;
   const { data: dbExams = [] } = useClientExams()
   const { addSession, updateSession, deleteSession, isMutating } = useSessionMutations()
 
@@ -1102,6 +1095,7 @@ export function FetsCalendarPremium() {
               </AnimatePresence>
             </div>
 
+            <button onClick={() => setShowClients(true)} className="neomorphic-btn">Clients & programmes</button>
             {/* Analysis */}
             <button onClick={() => setShowAnalysis(true)}
               className="px-4 py-2.5 text-sm font-bold text-[var(--text-secondary)] bg-[var(--recessed-bg)] border border-[var(--border-color)] rounded-lg hover:border-[var(--accent-mint)] hover:text-[var(--accent-mint)] transition-colors flex items-center gap-1.5">
@@ -1502,10 +1496,11 @@ export function FetsCalendarPremium() {
         )}
       </AnimatePresence>
 
+      {showClients && <ClientDirectoryDialog onClose={() => setShowClients(false)} />}
       {/* Analysis Modal */}
       <AnimatePresence>
         {showAnalysis && (
-          <CalendarAnalysis onClose={() => setShowAnalysis(false)} activeBranch={activeBranch} />
+          <CalendarAnalysis onClose={() => setShowAnalysis(false)} activeBranch={activeBranch} initialMonth={currentDate} onOpenDay={date => { setCurrentDate(new Date(date + "T12:00:00")); setShowAnalysis(false); setViewMode("day"); }} />
         )}
       </AnimatePresence>
 
