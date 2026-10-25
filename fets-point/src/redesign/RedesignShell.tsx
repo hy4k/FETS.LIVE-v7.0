@@ -16,6 +16,7 @@ import { monday as dutyMonday } from './shift-plan';
   into the legacy app. Exports <RedesignShell bridge={fn} />.
 */
 import React from "react";
+import { PageErrorBoundary } from "../components/PageErrorBoundary";
 import "./liquid-glass.css";
 import { loadLiveData, ensureMonth, loadLeaveRequests, loadOtClaims, loadApplications } from "./live-data";
 import { supabase } from "../lib/supabase";
@@ -5342,22 +5343,21 @@ function OtToilClaimsHub({ branch }) {
   };
   
   React.useEffect(() => {
-    load();
-    const h = () => setClaims(F._otClaims || []);
+    // These events announce refreshed cache data. Fetching again here would
+    // trigger the same events from loadLiveData/loadMonthlyPayroll forever.
+    const h = () => { setClaims(F._otClaims || []); setRefreshKey(v => v + 1); };
     window.addEventListener("fets-ot-claims-changed", h);
-    window.addEventListener("fets-roster-changed", load);
-    window.addEventListener("fets-payroll-changed", load);
+    window.addEventListener("fets-roster-changed", h);
+    window.addEventListener("fets-payroll-changed", h);
     return () => {
       window.removeEventListener("fets-ot-claims-changed", h);
-      window.removeEventListener("fets-roster-changed", load);
-      window.removeEventListener("fets-payroll-changed", load);
+      window.removeEventListener("fets-roster-changed", h);
+      window.removeEventListener("fets-payroll-changed", h);
     };
   }, []);
 
   React.useEffect(() => {
-    const [year, month] = selectedMonth.split("-").map(Number);
-    const d = new Date(year, month - 1, 1);
-    ensureMonth(d).then(() => load());
+    load();
   }, [selectedMonth]);
   
   const resolve = async (id, status, approvedHours) => {
@@ -10936,6 +10936,7 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
           ? "0" 
           : (active === "handover" ? "0 0 80px" : "clamp(22px,3.2vw,40px) clamp(14px,3vw,30px) 80px")
       }}>
+        <PageErrorBoundary key={`${active}:${branch}`} onHome={() => setActive("live")}>
         {active === "live" && <LivePage branch={branch} setDrawer={setDrawer} setActive={setActive} bridge={bridge} />}
         {active === "calendar" && (
           <div style={{ width: "100%" }}>
@@ -10961,6 +10962,7 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
         {active === "dashboard" && <Dashboard onNavigate={setActive} />}
         {active === "fets-intelligence" && <FetsIntelligence initialQuery="" />}
         {active === "gbp" && <GBPDashboard />}
+        </PageErrorBoundary>
       </main>
 
       {/* drawers */}

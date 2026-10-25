@@ -62,3 +62,6 @@ apps/android/local.properties
 apps/ios/DerivedData/
 apps/ios/**/xcuserdata/
 apps/ios/.build/
+
+# Isolated browser page audit output
+.page-audit/

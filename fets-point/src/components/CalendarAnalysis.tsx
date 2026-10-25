@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     X,
@@ -28,6 +28,7 @@ import toast from 'react-hot-toast';
 import { useAuth } from '../hooks/useAuth';
 import { formatDateForIST } from '../utils/dateUtils';
 import { getBranchCapacity } from '../utils/sessionUtils';
+import { calendarTimeMinutes, hasUsableSessionTiming } from './calendar-analysis-time';
 
 interface CalendarAnalysisProps {
     onClose: () => void;
@@ -37,8 +38,8 @@ interface CalendarAnalysisProps {
 interface CalendarSession {
     id: number;
     date: string;
-    start_time: string;
-    end_time: string;
+    start_time: string | null;
+    end_time: string | null;
     client_name: string;
     candidate_count: number;
     exam_name: string;
@@ -84,6 +85,8 @@ interface OverlapInfo {
 export const CalendarAnalysis: React.FC<CalendarAnalysisProps> = ({ onClose, activeBranch }) => {
     const { user } = useAuth();
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
+    const requestSequence = useRef(0);
     const [sessions, setSessions] = useState<CalendarSession[]>([]);
     const [currentMonth, setCurrentMonth] = useState(new Date());
     const [rangeEndMonth, setRangeEndMonth] = useState(new Date());
@@ -110,6 +113,7 @@ export const CalendarAnalysis: React.FC<CalendarAnalysisProps> = ({ onClose, act
 
     useEffect(() => {
         fetchSessionData();
+        return () => { requestSequence.current += 1; };
     }, [currentMonth, rangeEndMonth, isRangeMode, activeBranch]);
 
     const isGlobalView = activeBranch === 'global' || !activeBranch;
@@ -124,58 +128,34 @@ export const CalendarAnalysis: React.FC<CalendarAnalysisProps> = ({ onClose, act
     };
 
     const fetchSessionData = async () => {
+        const request = ++requestSequence.current;
         setLoading(true);
+        setLoadError('');
         try {
-            const startOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
-            const endOfMonth = new Date(effectiveEndMonth.getFullYear(), effectiveEndMonth.getMonth() + 1, 0);
-
-            let query = supabase
-                .from('calendar_sessions')
-                .select('*')
-                .gte('date', formatDateForIST(startOfMonth))
-                .lte('date', formatDateForIST(endOfMonth))
-                .order('date', { ascending: true })
-                .order('start_time', { ascending: true });
-
-            // Filter by branch if a specific center is selected (not global view)
-            if (!isGlobalView) {
-                query = query.eq('branch_location', activeBranch);
+            const first = formatDateForIST(new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1));
+            const last = formatDateForIST(new Date(effectiveEndMonth.getFullYear(), effectiveEndMonth.getMonth() + 1, 0));
+            if (last < first) throw new Error('Choose an end month on or after the start month.');
+            const rows: CalendarSession[] = [];
+            for (let from = 0; ; from += 1000) {
+                let query = supabase.from('calendar_sessions').select('*').gte('date', first).lte('date', last)
+                    .order('date').order('start_time').order('id');
+                if (!isGlobalView) query = activeBranch === 'calicut'
+                    ? query.or('branch_location.eq.calicut,branch_location.is.null')
+                    : query.eq('branch_location', activeBranch);
+                const { data, error } = await query.range(from, from + 999);
+                if (error) throw error;
+                if (request !== requestSequence.current) return;
+                rows.push(...(data || []));
+                if ((data || []).length < 1000) break;
             }
-
-            const { data, error } = await query;
-
-            if (error) throw error;
-            
-            // For legacy data without branch_location, default to calicut
-            let filteredData = (data as CalendarSession[]) || [];
-            
-            // If specific branch selected but no branch_location column exists, 
-            // handle fallback for legacy Calicut data
-            if (!isGlobalView && activeBranch === 'calicut' && filteredData.length === 0) {
-                // Retry without branch filter for legacy data
-                const fallbackQuery = supabase
-                    .from('calendar_sessions')
-                    .select('*')
-                    .gte('date', formatDateForIST(startOfMonth))
-                    .lte('date', formatDateForIST(endOfMonth))
-                    .order('date', { ascending: true })
-                    .order('start_time', { ascending: true });
-                
-                const { data: fallbackData } = await fallbackQuery;
-                if (fallbackData) {
-                    // Only include sessions without branch_location (legacy) or calicut
-                    filteredData = (fallbackData as CalendarSession[]).filter(
-                        s => !s.branch_location || s.branch_location === 'calicut'
-                    );
-                }
-            }
-            
-            setSessions(filteredData);
+            if (request === requestSequence.current) setSessions(rows);
         } catch (error) {
-            console.error('Error fetching session data:', error);
-            toast.error('Failed to load session data');
+            if (request === requestSequence.current) {
+                setSessions([]);
+                setLoadError(error instanceof Error ? error.message : 'Could not load calendar sessions. Please retry.');
+            }
         } finally {
-            setLoading(false);
+            if (request === requestSequence.current) setLoading(false);
         }
     };
 
@@ -208,8 +188,7 @@ export const CalendarAnalysis: React.FC<CalendarAnalysisProps> = ({ onClose, act
 
     // Helper functions - must be defined before useMemo hooks
     const timeToMinutes = (time: string): number => {
-        const [hours, minutes] = time.split(':').map(Number);
-        return hours * 60 + minutes;
+        return calendarTimeMinutes(time) ?? NaN;
     };
 
     const minutesToTime = (minutes: number): string => {
@@ -307,11 +286,13 @@ export const CalendarAnalysis: React.FC<CalendarAnalysisProps> = ({ onClose, act
         return Object.values(clientMap).sort((a, b) => b.totalCandidates - a.totalCandidates);
     }, [sessions]);
 
-    // Calculate overlap analysis from actual concurrent exam timings and branch seat capacity.
+    const incompleteTiming = sessions.filter(session => !hasUsableSessionTiming(session));
+
+    // Calculate overlap analysis only where both actual timings are known.
     const overlapAnalysis = useMemo((): OverlapInfo[] => {
         const branchDateMap: { [key: string]: CalendarSession[] } = {};
 
-        sessions.forEach(session => {
+        sessions.filter(hasUsableSessionTiming).forEach(session => {
             const branch = session.branch_location || 'calicut';
             const key = `${session.date}__${branch}`;
             if (!branchDateMap[key]) branchDateMap[key] = [];
@@ -589,7 +570,7 @@ export const CalendarAnalysis: React.FC<CalendarAnalysisProps> = ({ onClose, act
         const monthName = isRangeMode ? getRangeLabel() : currentMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
         const centerName = isGlobalView ? 'ALL CENTERS (GLOBAL)' : activeBranch.toUpperCase();
 
-        let report = `
+        let report = `Timing completeness: ${incompleteTiming.length} session(s) cannot be assessed for overlap.\n
 ╔══════════════════════════════════════════════════════════════════╗
 ║                    FETS EXAMINATION INVOICE REPORT                ║
 ║                         ${monthName.toUpperCase().padStart(20)}                        ║
@@ -743,6 +724,7 @@ ${overlap.suggestions.map(s => `      → ${s}`).join('\n')}
                     <div className="flex items-center gap-6">
                         <button
                             onClick={onClose}
+                            aria-label="Close Calendar Analysis"
                             className="p-4 rounded-2xl bg-gradient-to-br from-[#388087] to-[#27575b] shadow-[6px_6px_16px_rgba(0,0,0,0.4),-3px_-3px_10px_rgba(255,255,255,0.02)] text-gray-400 hover:text-rose-400 transition-colors active:scale-95 border border-white/5"
                         >
                             <X size={24} />
@@ -835,11 +817,11 @@ ${overlap.suggestions.map(s => `      → ${s}`).join('\n')}
                             </div>
                         )}
 
-                        <button onClick={exportAsCSV} className={neumorphicBtn}>
+                        <button onClick={exportAsCSV} disabled={loading || !!loadError} className={neumorphicBtn}>
                             <FileSpreadsheet size={18} />
                             CSV
                         </button>
-                        <button onClick={exportDetailedReport} className={neumorphicBtnActive}>
+                        <button onClick={exportDetailedReport} disabled={loading || !!loadError} className={neumorphicBtnActive}>
                             <Download size={18} />
                             Full Report
                         </button>
@@ -881,8 +863,17 @@ ${overlap.suggestions.map(s => `      → ${s}`).join('\n')}
                         </div>
                         <p className="text-gray-400 font-bold mt-6 animate-pulse">Analyzing Session Data...</p>
                     </div>
+                ) : loadError ? (
+                    <div role="alert" className="p-6 rounded-xl border border-rose-400 text-white">
+                        <p>{loadError}</p><button onClick={fetchSessionData} className={neumorphicBtn}>Retry analysis</button>
+                    </div>
                 ) : (
                     <div className="flex-1 overflow-y-auto custom-scrollbar pr-4">
+                        {incompleteTiming.length > 0 && <div role="status" className="mb-6 p-4 rounded-xl border border-amber-400/40 text-amber-100 bg-amber-900/20">
+                            <strong>{incompleteTiming.length} session{incompleteTiming.length === 1 ? '' : 's'} with incomplete timing</strong>
+                            <p>Candidate and session totals include these records. Their overlap cannot be assessed until valid start and end times are recorded in Calendar.</p>
+                            <ul>{incompleteTiming.map(session => <li key={session.id}>{formatDateLabel(session.date)} · {getBranchLabel(session.branch_location || 'calicut')} · {session.exam_name || session.client_name}</li>)}</ul>
+                        </div>}
                         <AnimatePresence mode="wait">
                             {selectedView === 'overview' && (
                                 <motion.div
@@ -1282,9 +1273,9 @@ ${overlap.suggestions.map(s => `      → ${s}`).join('\n')}
                                             <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-emerald-500/20 to-emerald-600/20 flex items-center justify-center mb-6">
                                                 <CheckCircle size={48} className="text-emerald-400" />
                                             </div>
-                                            <h3 className="text-2xl font-black text-white mb-2">No Overlap Conflicts</h3>
+                                            <h3 className="text-2xl font-black text-white mb-2">{incompleteTiming.length ? 'Overlap check incomplete' : 'No Overlap Conflicts'}</h3>
                                             <p className="text-gray-500 text-center max-w-md">
-                                                All scheduled sessions are within capacity limits with no time conflicts detected.
+                                                {incompleteTiming.length ? 'No conflicts were found among sessions with complete timings. Review the incomplete records listed above.' : 'No over-capacity windows were detected among the recorded session timings.'}
                                             </p>
                                         </div>
                                     ) : (

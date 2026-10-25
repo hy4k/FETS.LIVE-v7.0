@@ -1,0 +1,225 @@
+// Isolated read-only fixtures: never imported by a production entry point.
+export const profile = {
+  id: "11111111-1111-4111-8111-111111111111",
+  user_id: "22222222-2222-4222-8222-222222222222",
+  full_name: "Example Administrator",
+  email: "mithun@fets.in",
+  role: "super_admin",
+  branch_assigned: "calicut",
+  base_centre: "calicut",
+  is_active: true,
+  permissions: {},
+  joining_date: "2026-01-01",
+};
+export const user = {
+  id: profile.user_id,
+  email: profile.email,
+  app_metadata: { role: "super_admin" },
+};
+const day = new Date().toISOString().slice(0, 7) + "-02";
+const sessions = [
+  {
+    id: 1,
+    date: day,
+    branch_location: "calicut",
+    client_name: "PROMETRIC",
+    exam_name: "CMA US",
+    candidate_count: 9,
+    start_time: null,
+    end_time: null,
+  },
+  {
+    id: 2,
+    date: day,
+    branch_location: "cochin",
+    client_name: "PSI",
+    exam_name: "Example exam",
+    candidate_count: 10,
+    start_time: "09:00:00",
+    end_time: "11:00:00",
+  },
+];
+const params = new URLSearchParams(location.search);
+function rows(table: string) {
+  if (params.has("empty")) return [];
+  switch (table) {
+    case "staff_profiles":
+      return [profile];
+    case "clients":
+      return [
+        { id: "client", name: "PROMETRIC", color: "#008080", softwares: [] },
+        { id: "psi", name: "PSI", color: "#dd8800", softwares: [] },
+      ];
+    case "calendar_sessions":
+      return sessions;
+    case "ascender_centres":
+      return ["calicut", "cochin", "mobile"].map((code, i) => ({
+        id: "centre" + i,
+        code,
+        version: 1,
+        updated_at: new Date().toISOString(),
+      }));
+    default:
+      return [];
+  }
+}
+function chain(table: string, rpc = false) {
+  (window as any).auditReads = ((window as any).auditReads || 0) + 1;
+  let one = false,
+    from = 0,
+    to = 999;
+  const filters: any[] = [];
+  let q: any;
+  const result = () => {
+    let data: any = rows(table);
+    if (rpc)
+      data =
+        table === "ascender_capabilities"
+          ? true
+          : table === "fets_workspace_capabilities"
+            ? {
+                version: 5,
+                desk: true,
+                duties: true,
+                blueprint: true,
+                dutyReview: true,
+                dutyWorkflow: true,
+              }
+            : table === "fets_actionables_capabilities"
+              ? { version: 2, rollout: true }
+              : [];
+    if (!rpc) {
+      for (const [key, value] of filters)
+        data = data.filter(
+          (r: any) => r[key] === undefined || r[key] === value,
+        );
+      data = data.slice(from, to + 1);
+      if (one) data = data[0] || null;
+    }
+    return { data, error: null, count: Array.isArray(data) ? data.length : 0 };
+  };
+  q = new Proxy(
+    {},
+    {
+      get(_t, key) {
+        if (key === "then")
+          return (resolve: any, reject: any) =>
+            Promise.resolve(result()).then(resolve, reject);
+        if (key === "single" || key === "maybeSingle")
+          return () => {
+            one = true;
+            return q;
+          };
+        if (key === "range")
+          return (a: number, b: number) => {
+            from = a;
+            to = b;
+            return q;
+          };
+        if (key === "eq")
+          return (k: string, v: any) => {
+            filters.push([k, v]);
+            return q;
+          };
+        if (["insert", "update", "upsert", "delete"].includes(String(key)))
+          return () => {
+            throw Error("Writes disabled in page audit");
+          };
+        return () => q;
+      },
+    },
+  );
+  return q;
+}
+const channel: any = {
+  on() {
+    return channel;
+  },
+  subscribe() {
+    return channel;
+  },
+  unsubscribe: async () => {},
+  track: async () => {},
+  presenceState: () => ({}),
+};
+export const supabase: any = {
+  from: (table: string) => chain(table),
+  rpc: (name: string) => chain(name, true),
+  channel: () => channel,
+  removeChannel: async () => {},
+  removeAllChannels: async () => {},
+  auth: {
+    getUser: async () => ({ data: { user }, error: null }),
+    getSession: async () => ({
+      data: { session: { user, access_token: "isolated-fixture" } },
+      error: null,
+    }),
+    onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+  },
+  functions: {
+    invoke: async () => ({
+      data: null,
+      error: { message: "External integration disabled in isolated audit" },
+    }),
+  },
+  storage: {
+    from: () => ({
+      createSignedUrl: async () => ({ data: null, error: null }),
+      getPublicUrl: () => ({ data: { publicUrl: "" } }),
+    }),
+  },
+};
+export const useAuth = () => ({
+  profile,
+  user,
+  loading: false,
+  hasPermission: () => true,
+  isAdmin: true,
+  isSuperAdmin: true,
+  signOut: async () => {},
+  signIn: async () => {},
+  refreshProfile: async () => {},
+});
+const branch = {
+  activeBranch: params.get("branch") || "calicut",
+  setActiveBranch: () => {},
+  viewMode: "single",
+  canAccessBranch: () => true,
+  canUseDualMode: () => true,
+  userAccessLevel: "super_admin",
+  userBranchAccess: "both",
+  branchStatus: {},
+  loading: false,
+};
+export const useBranch = () => branch;
+export const useTheme = () => ({
+  isDarkMode: false,
+  theme: "light",
+  toggleTheme: () => {},
+});
+export const useChat = () => ({
+  isDetached: false,
+  activeUser: null,
+  setActiveUser: () => {},
+  setIsDetached: () => {},
+  toggleDetach: () => {},
+});
+export const useGlobalCall = () => ({ startCall: async () => {} });
+export const useCallCenter = () => ({
+  online: new Set(),
+  live: {},
+  current: null,
+  calls: {},
+  startCall: async () => {},
+  setOpenChat: () => {},
+  setNames: () => {},
+});
+export const supabaseHelpers = new Proxy(
+  {},
+  { get: () => async () => ({ data: [], error: null }) },
+);
+export const config = {
+  supabaseUrl: "https://invalid.example.test",
+  supabaseAnonKey: "isolated",
+};
+export default supabase;
