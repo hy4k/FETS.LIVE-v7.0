@@ -33,6 +33,7 @@ fs.mkdirSync(out, { recursive: true });
         "attn-admin",
         "staff-ot",
         "candidate-tracker",
+        "client-directory",
         "access-hub",
         "system-manager",
         "news-manager",
@@ -73,11 +74,14 @@ fs.mkdirSync(out, { recursive: true });
           await page
             .getByText("1 session with incomplete timing", { exact: true })
             .waitFor({ timeout: 5000 });
-          await page.getByRole("button", { name: /Client Details/ }).click();
-          await page.waitForTimeout(250);
-          await page.getByRole("button", { name: /Overlap Analysis/ }).click();
           await page
-            .getByText("Overlap check incomplete", { exact: true })
+            .getByRole("dialog")
+            .getByRole("button", { name: /Clients & programmes/ })
+            .click();
+          await page.waitForTimeout(250);
+          await page.getByRole("button", { name: /Needs attention/ }).click();
+          await page
+            .getByText("Record valid start and end times", { exact: false })
             .waitFor({ timeout: 5000 });
           await page.screenshot({
             path: `${out}/calendar-analysis-${width}.png`,

@@ -47,8 +47,18 @@ function rows(table: string) {
       return [profile];
     case "clients":
       return [
+        { id: "paragon", name: "PARAGON", color: "teal", softwares: [] },
         { id: "client", name: "PROMETRIC", color: "#008080", softwares: [] },
         { id: "psi", name: "PSI", color: "#dd8800", softwares: [] },
+      ];
+    case "client_exams":
+      return [
+        {
+          id: "celpip",
+          client_id: "paragon",
+          name: "CELPIP",
+          locations: ["calicut", "cochin"],
+        },
       ];
     case "calendar_sessions":
       return sessions;
@@ -90,8 +100,10 @@ function chain(table: string, rpc = false) {
               : [];
     if (!rpc) {
       for (const [key, value] of filters)
-        data = data.filter(
-          (r: any) => r[key] === undefined || r[key] === value,
+        data = data.filter((r: any) =>
+          key === "__calicut"
+            ? r.branch_location == null || r.branch_location === "calicut"
+            : r[key] === undefined || r[key] === value,
         );
       data = data.slice(from, to + 1);
       if (one) data = data[0] || null;
@@ -114,6 +126,11 @@ function chain(table: string, rpc = false) {
           return (a: number, b: number) => {
             from = a;
             to = b;
+            return q;
+          };
+        if (key === "or")
+          return () => {
+            filters.push(["__calicut", true]);
             return q;
           };
         if (key === "eq")

@@ -12,6 +12,7 @@ export type WorkspaceFeature = { id: string; label: string; sub: string; staff: 
 
 export const WORKSPACE_FEATURES: WorkspaceFeature[] = [
   { id: 'fets-chat', label: 'Team space', sub: 'Conversations, decisions and follow-through', staff: true, admin: true },
+  { id: 'client-directory', label: 'Clients & programmes', sub: 'Shared provider and exam catalogue', staff: false, admin: true },
   { id: 'candidate-tracker', label: 'Candidate Tracker', sub: 'Registrations & sessions', staff: true, admin: true },
   { id: 'case', label: 'Raise a case', sub: 'Record an incident or ask for support', staff: false, admin: false },
   { id: 'attn-admin', label: 'Daily Attendance', sub: 'All staff check-in / out', staff: false, admin: true },

@@ -16,6 +16,7 @@ import { monday as dutyMonday } from './shift-plan';
   into the legacy app. Exports <RedesignShell bridge={fn} />.
 */
 import React from "react";
+import { ClientDirectory } from "../components/ClientDirectory";
 import { PageErrorBoundary } from "../components/PageErrorBoundary";
 import "./liquid-glass.css";
 import { loadLiveData, ensureMonth, loadLeaveRequests, loadOtClaims, loadApplications } from "./live-data";
@@ -10263,6 +10264,7 @@ const NAV = [
 
 /* secondary tools (Lost & Found now lives on the LIVE page under Help & support) */
 const TOOLS = [
+  { id: "client-directory", icon: "users", label: "Clients & programmes", sub: "Shared provider and exam catalogue" },
   { id: "attn-admin", icon: "clock", label: "Daily Attendance", sub: "All staff check-in / out · admin" },
   { id: "business", icon: "star", label: "Google Business", sub: "Reviews, ratings & reach", page: true },
   { id: "candidate-tracker", icon: "users", label: "Candidate Tracker", sub: "Registrations & sessions", legacy: true },
@@ -10954,6 +10956,7 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
         {/* staff-requests route removed — exclusively handled in My Desk → ApplicationsHub */}
         {active === "staff-ot" && <OtToilClaimsHub branch={branch} />}
         {active === "candidate-tracker" && <CandidateTracker />}
+        {active === "client-directory" && <ClientDirectory />}
         {active === "access-hub" && <AccessHubPage />}
         {active === "system-manager" && <SystemManager onNavigate={(page, centre) => { if (centre) handleBranchChange(centre); setActive(page); }} />}
         {active === "news-manager" && <NewsManager />}

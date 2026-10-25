@@ -1,0 +1,264 @@
+import React, { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "../hooks/useAuth";
+import { useClients, useClientExams } from "../hooks/useClients";
+import { supabase } from "../lib/supabase";
+import { PlanningDialog } from "./PlanningDialog";
+import "./planning-workspace.css";
+export const canManageClients = (profile: any) =>
+  ["super_admin", "admin"].includes(profile?.role) ||
+  profile?.email?.toLowerCase() === "mithun@fets.in";
+export function ClientDirectory() {
+  const { profile } = useAuth();
+  const manage = canManageClients(profile);
+  const qc = useQueryClient();
+  const clients = useClients(),
+    exams = useClientExams();
+  const [selected, setSelected] = useState(""),
+    [name, setName] = useState(""),
+    [exam, setExam] = useState(""),
+    [search, setSearch] = useState(""),
+    [locations, setLocations] = useState<string[]>(["calicut", "cochin"]),
+    [busy, setBusy] = useState(false),
+    [message, setMessage] = useState(""),
+    [error, setError] = useState("");
+  const rows = clients.data || [],
+    programmes = exams.data || [];
+  const active = rows.find((c) => c.id === selected) || rows[0];
+  const save = async (kind: "client" | "exam") => {
+    setError("");
+    setMessage("");
+    const value = (kind === "client" ? name : exam)
+      .trim()
+      .replace(/\s+/g, " ")
+      .toUpperCase();
+    if (!value || value.length > 120) {
+      setError("Enter a name of 1–120 characters.");
+      return;
+    }
+    if (kind === "exam" && !active) return;
+    const duplicate =
+      kind === "client"
+        ? rows.some((c) => c.name.trim().toUpperCase() === value)
+        : programmes.some(
+            (e) =>
+              e.client_id === active!.id &&
+              e.name.trim().toUpperCase() === value,
+          );
+    if (duplicate) {
+      setError("That name already exists in this catalogue.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const { data, error } =
+        kind === "client"
+          ? await supabase
+              .from("clients")
+              .insert({ name: value, color: "teal" })
+              .select()
+              .single()
+          : await supabase
+              .from("client_exams")
+              .insert({ client_id: active!.id, name: value, locations })
+              .select()
+              .single();
+      if (error) throw error;
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["clients"] }),
+        qc.invalidateQueries({ queryKey: ["client_exams"] }),
+      ]);
+      if (kind === "client") {
+        setSelected(data.id);
+        setName("");
+      } else setExam("");
+      setMessage(
+        `${value} saved. Available in Calendar and Candidate Tracker.`,
+      );
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? e.message
+          : (e as any)?.message || "Could not save. Please retry.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="pw-page">
+      <h1>Clients & programmes</h1>
+      <p className="pw-muted">
+        Shared catalogue for Calendar and Candidate Tracker. Add the provider as
+        the client, then its exam programmes: PROMETRIC → CMA US; PARAGON →
+        CELPIP.
+      </p>
+      {error && (
+        <p role="alert" className="pw-error">
+          {error}
+        </p>
+      )}
+      {message && (
+        <p role="status" className="pw-warn">
+          {message}
+        </p>
+      )}
+      {clients.isError || exams.isError ? (
+        <div role="alert" className="pw-error">
+          Could not load the catalogue.{" "}
+          <button
+            onClick={() => {
+              clients.refetch();
+              exams.refetch();
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      ) : clients.isLoading || exams.isLoading ? (
+        <p role="status">Loading catalogue…</p>
+      ) : (
+        <>
+          {manage && (
+            <form
+              className="pw-form pw-panel"
+              onSubmit={(e) => {
+                e.preventDefault();
+                save("client");
+              }}
+            >
+              <label>
+                New client / provider
+                <input
+                  required
+                  maxLength={120}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Provider name"
+                />
+              </label>
+              <button className="pw-primary" disabled={busy}>
+                Add client
+              </button>
+            </form>
+          )}
+          <div className="pw-split">
+            <aside>
+              <label className="pw-muted">
+                Find client
+                <input
+                  aria-label="Find client"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  style={{ display: "block", width: "100%", marginTop: 8 }}
+                />
+              </label>
+              {rows
+                .filter((c) =>
+                  c.name.toLowerCase().includes(search.toLowerCase()),
+                )
+                .map((c) => (
+                  <button
+                    className="pw-client-btn"
+                    key={c.id}
+                    aria-pressed={active?.id === c.id}
+                    onClick={() => setSelected(c.id)}
+                  >
+                    {c.name}{" "}
+                    <small>
+                      ({programmes.filter((e) => e.client_id === c.id).length})
+                    </small>
+                  </button>
+                ))}
+            </aside>
+            <section className="pw-panel">
+              <h2>{active?.name || "Add your first client"}</h2>
+              <ul className="pw-list">
+                {programmes
+                  .filter((e) => e.client_id === active?.id)
+                  .map((e) => (
+                    <li key={e.id}>
+                      <div>
+                        <strong>{e.name}</strong>
+                        <small>
+                          {e.locations?.length
+                            ? e.locations
+                                .map((l) =>
+                                  l === "mobile"
+                                    ? "Mobile unit"
+                                    : l.charAt(0).toUpperCase() + l.slice(1),
+                                )
+                                .join(" · ")
+                            : "All centres"}
+                        </small>
+                      </div>
+                    </li>
+                  ))}
+              </ul>
+              {active && !programmes.some((e) => e.client_id === active.id) && (
+                <p className="pw-empty">
+                  No programmes recorded for this client.
+                </p>
+              )}
+              {manage && active && (
+                <form
+                  className="pw-form"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    save("exam");
+                  }}
+                >
+                  <label>
+                    New exam programme
+                    <input
+                      required
+                      maxLength={120}
+                      value={exam}
+                      onChange={(e) => setExam(e.target.value)}
+                      placeholder="Programme name"
+                    />
+                  </label>
+                  <div className="pw-checks">
+                    {["calicut", "cochin", "mobile"].map((l) => (
+                      <label key={l}>
+                        <input
+                          type="checkbox"
+                          checked={locations.includes(l)}
+                          onChange={() =>
+                            setLocations(
+                              locations.includes(l)
+                                ? locations.filter((x) => x !== l)
+                                : [...locations, l],
+                            )
+                          }
+                        />
+                        {l === "mobile"
+                          ? "Mobile unit"
+                          : l.charAt(0).toUpperCase() + l.slice(1)}
+                      </label>
+                    ))}
+                  </div>
+                  <button className="pw-primary" disabled={busy}>
+                    Add programme
+                  </button>
+                </form>
+              )}
+            </section>
+          </div>
+        </>
+      )}
+      {!manage && (
+        <p className="pw-muted">
+          Ask an administrator to add a client or programme.
+        </p>
+      )}
+    </div>
+  );
+}
+export function ClientDirectoryDialog({ onClose }: { onClose: () => void }) {
+  return (
+    <PlanningDialog title="Clients & programmes" onClose={onClose}>
+      <ClientDirectory />
+    </PlanningDialog>
+  );
+}
