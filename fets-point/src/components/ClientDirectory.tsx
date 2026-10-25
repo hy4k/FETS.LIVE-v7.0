@@ -5,6 +5,7 @@ import { useClients, useClientExams } from "../hooks/useClients";
 import { supabase } from "../lib/supabase";
 import { PlanningDialog } from "./PlanningDialog";
 import "./planning-workspace.css";
+import "./client-directory.css";
 export const canManageClients = (profile: any) =>
   ["super_admin", "admin"].includes(profile?.role) ||
   profile?.email?.toLowerCase() === "mithun@fets.in";
@@ -85,26 +86,40 @@ export function ClientDirectory() {
       setBusy(false);
     }
   };
+  const filtered = rows.filter((c) =>
+    `${c.name} ${programmes
+      .filter((p) => p.client_id === c.id)
+      .map((p) => p.name)
+      .join(" ")}`
+      .toLowerCase()
+      .includes(search.toLowerCase()),
+  );
+  const activeProgrammes = programmes.filter((p) => p.client_id === active?.id);
   return (
-    <div className="pw-page">
-      <h1>Clients & programmes</h1>
-      <p className="pw-muted">
-        Shared catalogue for Calendar and Candidate Tracker. Add the provider as
-        the client, then its exam programmes: PROMETRIC → CMA US; PARAGON →
-        CELPIP.
-      </p>
+    <div className="cd-workspace" data-client-workspace>
+      <header className="cd-heading">
+        <div>
+          <span className="cd-eyebrow">CLIENT DIRECTORY</span>
+          <h1>Clients & programmes</h1>
+          <p>Manage providers and the exams offered at your centres.</p>
+        </div>
+        <div className="cd-summary">
+          <strong>{rows.length}</strong> clients <span>·</span>{" "}
+          <strong>{programmes.length}</strong> programmes
+        </div>
+      </header>
       {error && (
-        <p role="alert" className="pw-error">
+        <p role="alert" className="cd-feedback cd-failure">
           {error}
         </p>
       )}
       {message && (
-        <p role="status" className="pw-warn">
+        <p role="status" className="cd-feedback">
           {message}
         </p>
       )}
       {clients.isError || exams.isError ? (
-        <div role="alert" className="pw-error">
+        <div role="alert" className="cd-feedback cd-failure">
           Could not load the catalogue.{" "}
           <button
             onClick={() => {
@@ -116,17 +131,21 @@ export function ClientDirectory() {
           </button>
         </div>
       ) : clients.isLoading || exams.isLoading ? (
-        <p role="status">Loading catalogue…</p>
+        <p role="status">Loading clients…</p>
       ) : (
         <>
           {manage && (
             <form
-              className="pw-form pw-panel"
+              className="cd-add-client"
               onSubmit={(e) => {
                 e.preventDefault();
                 save("client");
               }}
             >
+              <div>
+                <h2>Add a client</h2>
+                <p>Use the provider name, such as PARAGON.</p>
+              </div>
               <label>
                 New client / provider
                 <input
@@ -137,77 +156,108 @@ export function ClientDirectory() {
                   placeholder="Provider name"
                 />
               </label>
-              <button className="pw-primary" disabled={busy}>
+              <button className="cd-primary" disabled={busy}>
                 Add client
               </button>
             </form>
           )}
-          <div className="pw-split">
-            <aside>
-              <label className="pw-muted">
-                Find client
+          <div className="cd-layout">
+            <aside className="cd-sidebar">
+              <label className="cd-search">
+                Find a client or programme
                 <input
                   aria-label="Find client"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  style={{ display: "block", width: "100%", marginTop: 8 }}
+                  placeholder="Search catalogue"
                 />
               </label>
-              {rows
-                .filter((c) =>
-                  c.name.toLowerCase().includes(search.toLowerCase()),
-                )
-                .map((c) => (
+              <nav aria-label="Client list">
+                {filtered.map((c) => (
                   <button
-                    className="pw-client-btn"
                     key={c.id}
+                    className="cd-client"
                     aria-pressed={active?.id === c.id}
-                    onClick={() => setSelected(c.id)}
+                    onClick={() => {
+                      setSelected(c.id);
+                      setMessage("");
+                      setError("");
+                    }}
                   >
-                    {c.name}{" "}
-                    <small>
-                      ({programmes.filter((e) => e.client_id === c.id).length})
-                    </small>
+                    <span className="cd-monogram" aria-hidden="true">
+                      {c.name.slice(0, 2)}
+                    </span>
+                    <span>
+                      <strong>{c.name}</strong>
+                      <small>
+                        {programmes.filter((e) => e.client_id === c.id).length}{" "}
+                        programmes
+                      </small>
+                    </span>
+                    <span aria-hidden="true">›</span>
                   </button>
                 ))}
+                {!filtered.length && (
+                  <p className="cd-empty">No matching clients.</p>
+                )}
+              </nav>
             </aside>
-            <section className="pw-panel">
-              <h2>{active?.name || "Add your first client"}</h2>
-              <ul className="pw-list">
-                {programmes
-                  .filter((e) => e.client_id === active?.id)
-                  .map((e) => (
-                    <li key={e.id}>
-                      <div>
-                        <strong>{e.name}</strong>
-                        <small>
-                          {e.locations?.length
-                            ? e.locations
-                                .map((l) =>
-                                  l === "mobile"
-                                    ? "Mobile unit"
-                                    : l.charAt(0).toUpperCase() + l.slice(1),
-                                )
-                                .join(" · ")
-                            : "All centres"}
-                        </small>
+            <section className="cd-detail" aria-label="Client programmes">
+              <header className="cd-detail-heading">
+                <div>
+                  <span className="cd-eyebrow">SELECTED CLIENT</span>
+                  <h2>{active?.name || "No clients yet"}</h2>
+                </div>
+                <span className="cd-count">
+                  {activeProgrammes.length} programme{activeProgrammes.length === 1 ? "" : "s"}
+                </span>
+              </header>
+              <div className="cd-programmes">
+                {activeProgrammes.map((e) => (
+                  <article className="cd-programme" key={e.id}>
+                    <span className="cd-exam-icon" aria-hidden="true">
+                      ▤
+                    </span>
+                    <div>
+                      <h3>{e.name}</h3>
+                      <p>
+                        {active?.name} → {e.name}
+                      </p>
+                      <div className="cd-locations">
+                        {(e.locations?.length
+                          ? e.locations
+                          : ["all centres"]
+                        ).map((l) => (
+                          <span key={l}>
+                            {l === "mobile"
+                              ? "Mobile unit"
+                              : l.charAt(0).toUpperCase() + l.slice(1)}
+                          </span>
+                        ))}
                       </div>
-                    </li>
-                  ))}
-              </ul>
-              {active && !programmes.some((e) => e.client_id === active.id) && (
-                <p className="pw-empty">
-                  No programmes recorded for this client.
-                </p>
-              )}
+                    </div>
+                  </article>
+                ))}
+                {!activeProgrammes.length && (
+                  <div className="cd-empty">
+                    <h3>No programmes recorded</h3>
+                    <p>
+                      {manage
+                        ? "Add the first exam programme for this provider below."
+                        : "Ask an administrator to add an exam programme."}
+                    </p>
+                  </div>
+                )}
+              </div>
               {manage && active && (
                 <form
-                  className="pw-form"
+                  className="cd-programme-form"
                   onSubmit={(e) => {
                     e.preventDefault();
                     save("exam");
                   }}
                 >
+                  <h3>Add a programme to {active.name}</h3>
                   <label>
                     New exam programme
                     <input
@@ -215,46 +265,49 @@ export function ClientDirectory() {
                       maxLength={120}
                       value={exam}
                       onChange={(e) => setExam(e.target.value)}
-                      placeholder="Programme name"
+                      placeholder="Exam programme, e.g. CELPIP"
                     />
                   </label>
-                  <div className="pw-checks">
-                    {["calicut", "cochin", "mobile"].map((l) => (
-                      <label key={l}>
-                        <input
-                          type="checkbox"
-                          checked={locations.includes(l)}
-                          onChange={() =>
-                            setLocations(
-                              locations.includes(l)
-                                ? locations.filter((x) => x !== l)
-                                : [...locations, l],
-                            )
-                          }
-                        />
-                        {l === "mobile"
-                          ? "Mobile unit"
-                          : l.charAt(0).toUpperCase() + l.slice(1)}
-                      </label>
-                    ))}
-                  </div>
-                  <button className="pw-primary" disabled={busy}>
+                  <fieldset>
+                    <legend>Available centres</legend>
+                    <div className="cd-checks">
+                      {["calicut", "cochin", "mobile"].map((l) => (
+                        <label key={l}>
+                          <input
+                            type="checkbox"
+                            checked={locations.includes(l)}
+                            onChange={() =>
+                              setLocations(
+                                locations.includes(l)
+                                  ? locations.filter((x) => x !== l)
+                                  : [...locations, l],
+                              )
+                            }
+                          />
+                          {l === "mobile"
+                            ? "Mobile unit"
+                            : l.charAt(0).toUpperCase() + l.slice(1)}
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                  <button className="cd-primary" disabled={busy}>
                     Add programme
                   </button>
                 </form>
               )}
             </section>
           </div>
+          <footer className="cd-footer">
+            One shared catalogue · Available in Calendar and Candidate Tracker.
+            {!manage && " Ask an administrator to add clients or programmes."}
+          </footer>
         </>
-      )}
-      {!manage && (
-        <p className="pw-muted">
-          Ask an administrator to add a client or programme.
-        </p>
       )}
     </div>
   );
 }
+
 export function ClientDirectoryDialog({ onClose }: { onClose: () => void }) {
   return (
     <PlanningDialog title="Clients & programmes" onClose={onClose}>

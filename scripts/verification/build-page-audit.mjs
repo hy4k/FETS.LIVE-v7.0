@@ -17,6 +17,7 @@ await build({
       name: "read-only-page-audit",
       enforce: "pre",
       resolveId(s, importer) {
+        if(s.endsWith("/fets-ai/FetsAIAgent"))return root+"src/test/agent-audit-mock.tsx";
         const resolved =
           s.startsWith(".") && importer
             ? path.resolve(path.dirname(importer), s)
@@ -42,7 +43,7 @@ await build({
     emptyOutDir: true,
     cssCodeSplit: false,
     lib: {
-      entry: root + "src/test/page-audit-preview.tsx",
+      entry: root + "src/test/" + (process.env.FETS_AUDIT_APP ? "app-navigation-preview.tsx" : "page-audit-preview.tsx"),
       name: "PageAudit",
       formats: ["iife"],
       fileName: "preview",

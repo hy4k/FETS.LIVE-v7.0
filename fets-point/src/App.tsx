@@ -88,6 +88,7 @@ const getInitialTab = () => {
   if (target === 'my-desk' || target === 'desk') return 'my-desk';
   if (target === 'actionables') return 'actionables';
   if (target === 'shift' || target === 'the-shift' || target === 'handover' || target === 'shift-handover') return 'handover';
+  if (target === 'client-directory' || target === 'clients' || target === 'clients-and-programmes') return 'client-directory';
   if (target === 'candidate-tracker' || target === 'tracker') return 'candidate-tracker';
   if (target === 'fets-intelligence' || target === 'intelligence' || target === 'ai') return 'fets-intelligence';
   if (target === 'incident-log' || target === 'incidents' || target === 'cases') return 'incident-log';
@@ -98,7 +99,7 @@ const getInitialTab = () => {
   return 'command-center';
 };
 
-function AppContent() {
+export function AppContent() {
   const { user, loading, profile, signOut } = useAuth()
   const { activeBranch, setActiveBranch, getBranchTheme } = useBranch()
   const [activeTab, setActiveTabState] = useState(getInitialTab)
@@ -266,7 +267,7 @@ function AppContent() {
 
     const isRedesignPage = [
       'command-center', 'fets-calendar', 'fets-roster', 'my-desk',
-      'access-hub', 'dashboard', 'candidate-tracker', 'fets-intelligence',
+      'access-hub', 'dashboard', 'candidate-tracker', 'client-directory', 'fets-intelligence',
       'incident-log', 'system-manager', 'news-manager', 'user-management',
       'branch-delegation', 'gbp', 'attn-admin', 'business', 'staff-requests', 'staff-ot',
       'handover', 'news', 'actionables', 'fets-chat', 'chat', 'lost-and-found'
@@ -320,7 +321,7 @@ function AppContent() {
     );
   }
 
-  const isFullscreenPage = ['fets-chat','chat','lost-and-found','actionables'].includes(activeTab) || activeTab === 'my-desk' || activeTab === 'fets-intelligence' || activeTab === 'command-center' || activeTab === 'fets-roster' || activeTab === 'fets-calendar' || activeTab === 'access-hub' || activeTab === 'dashboard' || activeTab === 'candidate-tracker' || activeTab === 'incident-log' || activeTab === 'system-manager' || activeTab === 'news-manager' || activeTab === 'user-management' || activeTab === 'branch-delegation' || activeTab === 'gbp' || activeTab === 'attn-admin' || activeTab === 'business' || activeTab === 'staff-requests' || activeTab === 'staff-ot' || activeTab === 'handover' || activeTab === 'news' || activeTab === 'expansion';
+  const isFullscreenPage = activeTab === 'client-directory' || ['fets-chat','chat','lost-and-found','actionables'].includes(activeTab) || activeTab === 'my-desk' || activeTab === 'fets-intelligence' || activeTab === 'command-center' || activeTab === 'fets-roster' || activeTab === 'fets-calendar' || activeTab === 'access-hub' || activeTab === 'dashboard' || activeTab === 'candidate-tracker' || activeTab === 'incident-log' || activeTab === 'system-manager' || activeTab === 'news-manager' || activeTab === 'user-management' || activeTab === 'branch-delegation' || activeTab === 'gbp' || activeTab === 'attn-admin' || activeTab === 'business' || activeTab === 'staff-requests' || activeTab === 'staff-ot' || activeTab === 'handover' || activeTab === 'news' || activeTab === 'expansion';
 
   return (
     <div className={`golden-theme min-h-screen h-screen flex flex-col overflow-hidden relative ${getBranchTheme(activeBranch)} ${(activeTab === 'fets-calendar' || activeTab === 'fets-calendar-demo') ? 'fets-calendar-active-page' : ''}`}>
