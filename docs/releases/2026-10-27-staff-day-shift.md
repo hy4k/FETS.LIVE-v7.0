@@ -29,7 +29,7 @@ Checks remain on a continuous 10/6-minute cadence through handovers and breaks. 
 
 - Production TypeScript and Vite build.
 - 19 targeted frontend tests, including explicit removal of a previous lead marker.
-- 24 isolated PostgreSQL checks: centre isolation, actual roster hours, gap/overlap validation, named cover, immutable history, independent review, due windows, idempotence, temporary cover and closing rules.
+- 30 isolated PostgreSQL checks: centre isolation, actual roster hours, gap/overlap validation, named cover, immutable history, independent review, due windows, idempotence, temporary cover, closing rules and explicit cross-project identities.
 - Full application browser fixture at 1440px and 393px: timetable, staff sheet, checks, retained editing draft and empty future day; no runtime errors or body overflow. Fixtures use fictional people and are excluded from production entry points.
 - FETS Online: 187 tests, TypeScript and production build; browser checks at 1440px, 393px and 320px cover failed saves, retained notes, canonical records, failed refreshes and unpublished days.
 - Post-migration security advisors report no findings for the new objects. Unrelated existing advisories were not changed.
@@ -39,3 +39,9 @@ Checks remain on a continuous 10/6-minute cadence through handovers and breaks. 
 Use the pinned scripts `scripts/releases/deploy-staff-day-shift.sh` and the matching Online branch `codex/staff-day-checks`. Each retains the running image, original environment, effective Compose configuration, old assets and Nginx configuration, checks for intervening repository/production changes, verifies candidates, switches only its app and compares public assets byte-for-byte. A failed post-switch check restores the previous image.
 
 Only activate the approved day after both websites pass deployment checks. Production integration verification reads real mapped identities and published slots through the installed Online server credentials, including staff changeovers and temporary break cover; it does not insert production check records.
+
+## Different verified login emails
+
+A second additive migration, `20261027031642_verified_online_staff_links.sql` (installed as `20261027031811`), provides private administrator-reviewed identity links. Its source SHA256 is `e18b15e948548ca2f5fa559653ee944468d8935575ea3330880c622fcb55de6c`. The exact Online UUID and verified email are pinned to the confirmed Live profile; a changed email cannot fall through to another identity. Live activity, verified account and centre membership are still required. No application role can read or edit the link table. `20261027031859_private_online_staff_link_policy.sql` adds an explicit deny policy (installed as `20261027031936`). Login emails and credentials are unchanged. The single confirmed staff link is production data, not part of this repository.
+
+Read-only production verification: `scripts/verification/verify-production-shift-bridge.py PLAN_ID --identity-map ROOT_PRIVATE_JSON`. It compares every canonical slot against the actual published plan, checks all named break covers and changeovers, and validates each existing verified staff identity through the installed Online server connection. It never inserts a check record.

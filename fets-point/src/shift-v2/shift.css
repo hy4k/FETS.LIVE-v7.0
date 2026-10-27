@@ -1,3 +1,12 @@
+/* Manrope: SIL Open Font License, distributed at /licenses/Manrope-OFL.txt. */
+@font-face {
+  font-family: "Manrope";
+  src: url("../assets/fonts/manrope-latin-variable.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+}
+
 .shift-v2 {
   --sv-ink: #253b3d;
   --sv-muted: #6c7e7e;

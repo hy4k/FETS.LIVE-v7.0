@@ -66,7 +66,7 @@ git -C "$R/source" checkout --detach "$COMMIT"
 
 echo 'Saving the running image, effective configuration, and previous release...'
 docker tag "$PREVIOUS" "fets-live-app:rollback-$REL"
-docker save "fets-live-app:rollback-$REL" | gzip > "$R/rollback-image.tar.gz"
+docker save "fets-live-app:rollback-$REL" | gzip -1 > "$R/rollback-image.tar.gz"
 docker cp "$CONTAINER:/etc/nginx" "$R/nginx.before"
 printf '%s\n' "$PREVIOUS" > "$R/previous-image"
 if [[ -f /opt/fets-releases/current ]]; then cp /opt/fets-releases/current "$R/previous-release"; fi
@@ -158,7 +158,11 @@ touch "$R/candidate.ready"
 # applied through Supabase MCP, and verified for RLS and RPC privileges.
 PREVIOUS_RELEASE=20261025T175832Z-fets-space-c52619f
 [[ $(cat /opt/fets-releases/current) == "$PREVIOUS_RELEASE" ]] || die 'Previous release pointer changed.'
-[[ $(git -C "$R/source" diff --name-only "$PREVIOUS_COMMIT" "$COMMIT" -- supabase/) == 'supabase/migrations/20261027021528_staff_day_shift_workspace.sql' ]] || die 'Unexpected backend changes.'
+python3 - "$R/source" "$PREVIOUS_COMMIT" "$COMMIT" <<'PY_DIFF'
+import subprocess,sys
+expected={'supabase/migrations/20261027021528_staff_day_shift_workspace.sql','supabase/migrations/20261027031642_verified_online_staff_links.sql','supabase/migrations/20261027031859_private_online_staff_link_policy.sql'}
+assert set(subprocess.check_output(['git','-C',sys.argv[1],'diff','--name-only',sys.argv[2],sys.argv[3],'--','supabase/'],text=True).splitlines())==expected,'Unexpected backend changes'
+PY_DIFF
 cp "/opt/fets-releases/$PREVIOUS_RELEASE/database-verified.json" "$R/database-verified.json"
 cp /opt/fets-releases/shift-v2-database-verified.json "$R/shift-database-verified.json"
 python3 - "$R" <<'PY_GATE'
@@ -179,7 +183,11 @@ assert v2['verified'] is True and v2['project_id']=='qqewusetilxxfvfkmsed'
 assert v2['migration_version']=='20261027025510'
 assert v2['migration_sha256']==hashlib.sha256((r/'source/supabase/migrations/20261027021528_staff_day_shift_workspace.sql').read_bytes()).hexdigest()
 assert v2['rls_tables']==4 and v2['online_rpc_server_only'] is True
-assert v2['isolated_database_checks']==24
+assert v2['isolated_database_checks']==30
+assert v2['identity_migration_version']=='20261027031811' and v2['identity_policy_version']=='20261027031936'
+assert v2['identity_migration_sha256']==hashlib.sha256((r/'source/supabase/migrations/20261027031642_verified_online_staff_links.sql').read_bytes()).hexdigest()
+assert v2['identity_policy_sha256']==hashlib.sha256((r/'source/supabase/migrations/20261027031859_private_online_staff_link_policy.sql').read_bytes()).hexdigest()
+assert v2['private_identity_no_app_access'] is True
 receipt['staff_day_shift']=v2
 (r/'database-verified.json').write_text(json.dumps(receipt,indent=2)+'\n')
 PY_GATE
