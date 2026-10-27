@@ -142,7 +142,7 @@ trap cleanup EXIT
 echo 'Testing the candidate with the existing runtime environment and mounted configuration...'
 docker run --rm -d --name "$CHECK" --env-file "$R/runtime.env" --volumes-from "$CONTAINER:ro" -p 127.0.0.1::80 "fets-live-app:$REL" >/dev/null
 PORT=$(docker port "$CHECK" 80/tcp | head -n1 | awk -F: '{print $NF}')
-curl --retry 10 --retry-all-errors --retry-delay 2 -fsS --max-time 20 "http://127.0.0.1:$PORT/calendar" -o "$R/candidate.html" || { docker logs --tail 60 "$CHECK" > "$R/candidate.log" 2>&1; die 'Candidate startup failed; production was not switched. Diagnostics are retained in the release directory.'; }
+curl --retry 10 --retry-all-errors --retry-delay 2 -fsS --max-time 20 "http://127.0.0.1:$PORT/news-manager" -o "$R/candidate.html" || { docker logs --tail 60 "$CHECK" > "$R/candidate.log" 2>&1; die 'Candidate startup failed; production was not switched. Diagnostics are retained in the release directory.'; }
 [[ $(sha256sum "$R/candidate.html" | cut -d' ' -f1) == "$HASH" ]] || die 'Candidate route verification failed.'
 
 echo 'Evaluating the full production application module before switching...'
@@ -205,7 +205,7 @@ echo 'Verifying public HTML, routes, release metadata, and every built JavaScrip
 python3 - "$R/dist" "$REL" <<'PY'
 import pathlib,sys,time,urllib.request
 dist=pathlib.Path(sys.argv[1]); release=sys.argv[2]
-checks=[('/',dist/'index.html'),('/calendar',dist/'index.html'),('/roster',dist/'index.html'),('/release.json',dist/'release.json')]
+checks=[('/',dist/'index.html'),('/calendar',dist/'index.html'),('/roster',dist/'index.html'),('/news-manager',dist/'index.html'),('/release.json',dist/'release.json')]
 checks += [('/licenses/Manrope-OFL.txt',dist/'licenses/Manrope-OFL.txt')]
 checks += [('/'+p.relative_to(dist).as_posix(),p) for p in (dist/'assets').rglob('*') if p.is_file() and p.suffix in ('.js','.css','.woff2')]
 for url,p in checks:
