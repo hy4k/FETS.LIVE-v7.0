@@ -52,6 +52,10 @@ export function rosterLead(
   day: string,
   now: Date,
 ) {
+  const currentDay = data.staffDayLeads?.find(
+    (p) => p.branch === branch && p.day === day,
+  );
+  if (currentDay) return currentDay.lead_id || "";
   const plan =
     data.leadPlans?.find((p) => p.branch === branch && p.day === day) || null;
   const weekly = data.leadWeeks?.find(

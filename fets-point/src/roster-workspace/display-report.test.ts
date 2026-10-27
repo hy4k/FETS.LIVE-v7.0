@@ -112,6 +112,17 @@ describe("compact roster", () => {
     expect(rosterLead(d, "calicut", "2026-10-20", now)).toBe("planlead");
   });
 });
+it("uses the new published day lead and respects an explicitly unassigned lead", () => {
+  const d = data();
+  d.leadWeeks = [
+    { branch: "calicut", week_start: "2026-10-26", lead_id: "oldlead" },
+  ];
+  d.staffDayLeads = [{ branch: "calicut", day: "2026-10-27", lead_id: null }];
+  expect(rosterLead(d, "calicut", "2026-10-27", now)).toBe("");
+  d.staffDayLeads[0].lead_id = "newlead";
+  expect(rosterLead(d, "calicut", "2026-10-27", now)).toBe("newlead");
+  expect(rosterLead(d, "calicut", "2026-10-28", now)).toBe("oldlead");
+});
 describe("attendance report accuracy", () => {
   it("scores against assigned 6-3 and 11:30-20:30 hours and excludes future dates", () => {
     const d = data();

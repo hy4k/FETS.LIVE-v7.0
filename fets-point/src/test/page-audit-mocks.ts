@@ -1,3 +1,4 @@
+import {fixturePlan,fixtureDay,fixtureRecord,fixtureChecks} from "./shift-v2-fixture";
 import React from "react";
 // Isolated read-only fixtures: never imported by a production entry point.
 export const profile = {
@@ -42,6 +43,14 @@ const sessions = [
 ];
 const params = new URLSearchParams(location.search);
 function rows(table: string) {
+  if(params.has('shift')){
+    if(table==='shift_days_v2')return [fixtureRecord];
+    if(table==='shift_work_events_v2')return [];
+    if(table==='centre_duty_members')return [{profile_id:profile.id,user_id:profile.user_id,branch:'*',role:'super_admin'}];
+    if(table==='staff_profiles')return [profile,...fixturePlan.people.filter(p=>p.id!==profile.id).map(p=>({id:p.id,user_id:p.id,full_name:p.name,branch_assigned:'calicut',is_active:true,permissions:{}}))];
+    if(table==='roster_schedules')return fixturePlan.people.filter(p=>!p.support).map(p=>({profile_id:p.id,date:fixtureDay,shift_code:'D',shift_start:String(Math.floor(p.start/60)).padStart(2,'0')+':'+String(p.start%60).padStart(2,'0'),shift_end:String(Math.floor(p.end/60)).padStart(2,'0')+':'+String(p.end%60).padStart(2,'0'),branch_location:'calicut',staff_profiles:{id:p.id,user_id:p.id,full_name:p.name,branch_assigned:'calicut',is_active:true,permissions:{}}}));
+  }
+
   if (params.has("empty")) return [];
   switch (table) {
     case "staff_profiles":
@@ -99,6 +108,7 @@ function chain(table: string, rpc = false) {
             : table === "fets_actionables_capabilities"
               ? { version: 2, rollout: true }
               : [];
+    if(rpc&&table==='fets_shift_check_snapshot_v2')data=fixtureChecks;
     if (!rpc) {
       for (const [key, value] of filters)
         data = data.filter((r: any) =>
