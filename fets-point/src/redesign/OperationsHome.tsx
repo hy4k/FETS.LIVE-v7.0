@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { ArrowUpRight, RefreshCw } from "lucide-react";
+import { ArrowUpRight, RefreshCw, CalendarDays, CalendarRange, LayoutDashboard, Clock3, ListChecks } from "lucide-react";
 import {
   centreDate,
   loadHomeSessions,
@@ -79,31 +79,36 @@ export default function OperationsHome({
     };
   }, [branch, date, refresh, load]);
   const tools = [
+    { id: "roster", label: "Roster", hint: "Shifts and working hours", icon: CalendarRange },
+    { id: "calendar", label: "Calendar", hint: "Exams and sessions", icon: CalendarDays },
+    { id: "desk", label: "My Desk", hint: "Attendance, requests and support", icon: LayoutDashboard },
+    { id: "handover", label: "The Shift", hint: "Your day, duties and handovers", icon: Clock3 },
     {
       id: "system-manager",
-      label: "FETS SITES",
+      label: "FETS Sites",
       hint: "Test centre administration",
       icon: Building2,
     },
     {
       id: "fets-chat",
-      label: "TEAM SPACE",
+      label: "Team Space",
       hint: "Team chat and collaboration",
       icon: MessagesSquare,
     },
     {
       id: "news-manager",
-      label: "FETS NEWS",
+      label: "FETS News",
       hint: "News and announcements",
       icon: Newspaper,
     },
     {
       id: "fets-space",
-      label: "FETS SPACE",
+      label: "FETS Space",
       hint: "Workspace setup to follow",
       icon: Layers,
     },
   ];
+  const canOpen = (id: string) => ["roster", "calendar", "desk", "handover"].includes(id) || homeAccess.includes(id);
   return (
     <div className="operations-home">
       <PersonalHero
@@ -112,7 +117,7 @@ export default function OperationsHome({
         onDesk={() => navigate("desk")}
       />
       <div className="oh-overview-heading">
-        <h2>Fets Space</h2>
+        <h2>Your workspace</h2>
         <button
           className="oh-icon-button"
           onClick={() => setRefresh((n) => n + 1)}
@@ -122,18 +127,18 @@ export default function OperationsHome({
           <RefreshCw size={15} />
         </button>
       </div>
-      <section className="fs-tools" aria-label="Fets Space tools">
+      <section className="fs-tools" aria-label="Your workspace">
         {tools.map((t) => (
           <button
             key={t.id}
-            disabled={!homeAccess.includes(t.id)}
+            disabled={!canOpen(t.id)}
             onClick={() => navigate(t.id)}
           >
-            <t.icon size={25} strokeWidth={1.4} />
+            <span className="fs-tool-icon"><t.icon size={23} strokeWidth={1.5} /></span>
             <ArrowUpRight size={16} className="fs-tool-arrow" />
             <strong>{t.label}</strong>
             <small>
-              {homeAccess.includes(t.id) ? t.hint : "Administrator access"}
+              {canOpen(t.id) ? t.hint : "Administrator access"}
             </small>
           </button>
         ))}
@@ -145,6 +150,12 @@ export default function OperationsHome({
           error={!loading && snapshot.sessions === null}
           onOpen={() => navigate("calendar")}
         />
+        <button className="fs-actionables" onClick={() => navigate("actionables")}>
+          <span className="fs-tool-icon"><ListChecks size={25} strokeWidth={1.5} /></span>
+          <ArrowUpRight size={19} className="fs-tool-arrow" />
+          <span className="fs-actionables-copy"><strong>Actionables</strong><small>Institutions, tasks and follow-ups</small></span>
+          <span className="fs-actionables-link">Open Actionables <ArrowUpRight size={15} /></span>
+        </button>
       </div>
       <footer className="oh-footer">
         <span>{label} · Calendar times in IST</span>

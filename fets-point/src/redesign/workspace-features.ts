@@ -1,6 +1,6 @@
 /**
  * What each person sees in the Workspace menu (the four-square icon, top
- * right). Live, Calendar, Roster, My Desk and Actionables are on the main menu,
+ * right). Home, Calendar, Roster, My Desk and Actionables are available as home cards,
  * so they are never repeated here.
  *
  * Each feature has a default by role. The super admin can switch any feature
@@ -11,8 +11,8 @@
 export type WorkspaceFeature = { id: string; label: string; sub: string; staff: boolean; admin: boolean; placement?: 'home' | 'desk' };
 
 export const WORKSPACE_FEATURES: WorkspaceFeature[] = [
-  { placement:'home', id:'fets-space', label:'FETS SPACE', sub:'Workspace setup to follow', staff:false, admin:true },
-  { placement: 'home', id: 'fets-chat', label: 'TEAM SPACE', sub: 'Conversations, decisions and follow-through', staff: true, admin: true },
+  { placement:'home', id:'fets-space', label:'FETS Space', sub:'Workspace setup to follow', staff:false, admin:true },
+  { placement: 'home', id: 'fets-chat', label: 'Team Space', sub: 'Conversations, decisions and follow-through', staff: true, admin: true },
   { id: 'client-directory', label: 'Clients & programmes', sub: 'Shared provider and exam catalogue', staff: false, admin: true },
   { id: 'candidate-tracker', label: 'Candidate Tracker', sub: 'Registrations & sessions', staff: true, admin: true },
   { placement: 'desk', id: 'case', label: 'Raise a case', sub: 'Record an incident or ask for support', staff: false, admin: false },
@@ -21,8 +21,8 @@ export const WORKSPACE_FEATURES: WorkspaceFeature[] = [
   { placement: 'desk', id: 'access-hub', label: 'F-Vault / Access Hub', sub: 'Credentials & access', staff: false, admin: true },
   { id: 'staff-ot', label: 'OT & TOIL Manager', sub: 'Overtime logging & TOIL cash payouts', staff: false, admin: true },
   { id: 'dashboard', label: 'Dashboard', sub: 'iCloud overview', staff: false, admin: false },
-  { placement: 'home', id: 'news-manager', label: 'FETS NEWS', sub: 'Client updates and industry news', staff: true, admin: true },
-  { placement: 'home', id: 'system-manager', label: 'FETS SITES', sub: 'Test centre administration', staff: false, admin: true },
+  { placement: 'home', id: 'news-manager', label: 'FETS News', sub: 'Client updates and industry news', staff: true, admin: true },
+  { placement: 'home', id: 'system-manager', label: 'FETS Sites', sub: 'Test centre administration', staff: false, admin: true },
   { id: 'user-management', label: 'User Management', sub: 'Roles & permissions', staff: false, admin: true },
   { id: 'branch-delegation', label: 'Branch Access Delegation', sub: 'Temporary access override', staff: false, admin: true },
 ];

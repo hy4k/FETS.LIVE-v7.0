@@ -78,7 +78,7 @@ function rows(table: string) {
         },
       ];
     case "calendar_sessions":
-      return sessions;
+      return params.has('landing') ? sessions.map((session, index) => ({...session, date: new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()), branch_location:'calicut', start_time:index ? '13:30:00' : '08:00:00', end_time:index ? '17:30:00' : '12:00:00', status:'scheduled'})) : sessions;
     case "ascender_centres":
       return ["calicut", "cochin", "mobile"].map((code, i) => ({
         id: "centre" + i,

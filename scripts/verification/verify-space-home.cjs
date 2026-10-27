@@ -14,7 +14,7 @@ const fs = require("node:fs");
   fs.mkdirSync(out, { recursive: true });
   const results = [];
   try {
-    for (const width of [1440, 393]) {
+    for (const width of [1440, 768, 393, 320]) {
       const p = await b.newPage({ viewport: { width, height: 1000 } });
       p.setDefaultTimeout(8000);
       const errors = [];
@@ -22,7 +22,7 @@ const fs = require("node:fs");
       await p.goto(base);
       const home = p.locator("main").first();
       await home
-        .getByRole("heading", { name: "Fets Space", exact: true })
+        .getByRole("heading", { name: "Your workspace", exact: true })
         .waitFor();
       for (const text of [
         "Scheduled candidates",
@@ -33,6 +33,11 @@ const fs = require("node:fs");
         "Help desk",
       ])
         assert.equal(await home.getByText(text, { exact: true }).count(), 0);
+      assert.equal(await home.locator('.fs-tools>button').count(), 8);
+      assert.equal(await p.locator('.topnav-links').count(), 0);
+      await p.getByRole('search', {name:'FETS AI'}).waitFor();
+      assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false);
+      await home.getByRole('heading',{name:'Today’s sessions',exact:true}).scrollIntoViewIfNeeded();
       await p.screenshot({ path: `${out}/home-${width}.png`, fullPage: true });
       await p.getByRole("button", { name: "All tools", exact: true }).click();
       const menu = p.getByRole("dialog", { name: "Workspace", exact: true });
@@ -50,14 +55,14 @@ const fs = require("node:fs");
         );
       await p.keyboard.press("Escape");
       for (const [label, title] of [
-        ["FETS SITES", "FETS SITES"],
-        ["TEAM SPACE", "Team space"],
-        ["FETS NEWS", "FETS NEWS"],
-        ["FETS SPACE", "FETS SPACE"],
+        ["FETS Sites", "FETS SITES"],
+        ["Team Space", "Team space"],
+        ["FETS News", "FETS News"],
+        ["FETS Space", "FETS SPACE"],
       ]) {
         await p.getByRole("button", { name: "FETS LIVE home" }).click();
         console.log("Opening", width, label);
-        await p.getByRole("button", { name: new RegExp("^" + label) }).click();
+        await p.getByRole("button", { name: new RegExp("^" + label,"i") }).click();
         await p.waitForTimeout(500);
         assert(
           !/This page could not be displayed/.test(

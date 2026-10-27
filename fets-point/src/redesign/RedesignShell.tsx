@@ -49,6 +49,7 @@ import GBPDashboard from "../pages/GBPDashboard";
 import MyDeskLivingBoard from "../components/MyDeskLivingBoard";
 import MyDeskHome from "./MyDeskHome";
 import OperationsHome from "./OperationsHome";
+import { FetsAIInput } from "../fets-ai/FetsAIInput";
 import { BrandLoader } from "./BrandExperience";
 import WorkspaceMenu from "./WorkspaceMenu";
 import { deskRepository } from "./desk-data";
@@ -10254,15 +10255,6 @@ const MODULE_COLORS = {
   "system-manager": "#A855F7", "user-management": "#3B82F6", "branch-delegation": "#10B981",
 };
 
-/* primary nav */
-const NAV = [
-  { id: "calendar", label: "Calendar" },
-  { id: "roster", label: "Roster" },
-  { id: "desk", label: "My Desk" },
-  { id: "actionables", label: "Actionables" },
-  { id: "handover", label: "The Shift" },
-];
-
 /* secondary tools (Lost & Found now lives on the LIVE page under Help & support) */
 const TOOLS = [
   { id: "client-directory", icon: "users", label: "Clients & programmes", sub: "Shared provider and exam catalogue" },
@@ -10299,10 +10291,7 @@ function ordinal(n) {
 export function TopNav({ active, onNavigate, branch, setBranch, t, setTweak, onTools, onBurger, onLogout, pendingHandoverBadge }) {
   return <header className="premium-nav">
     <button className="nav-brand" onClick={() => onNavigate({ id: "live" })} aria-label="FETS LIVE home"><span className="nav-brand-symbol">f.</span><span className="nav-brand-type">fets<span>.</span>live</span></button>
-    <nav className="topnav-links" aria-label="Primary navigation">{NAV.map(n => {
-      const isActive = n.id === "desk" ? ["desk", "attn-admin", "business", "staff-requests", "staff-ot", "candidate-tracker", "access-hub", "system-manager", "news-manager", "user-management", "branch-delegation", "dashboard", "fets-intelligence", "gbp"].includes(active) : n.id === "actionables" ? ["actionables", "news"].includes(active) : active === n.id;
-      return <button key={n.id} className={`topnav-item ${isActive ? "active" : ""}`} aria-current={isActive ? "page" : undefined} onClick={() => onNavigate(n)}>{n.label}{n.id === "desk" && pendingHandoverBadge > 0 && <span className="nav-unread">{pendingHandoverBadge > 9 ? "9+" : pendingHandoverBadge}</span>}</button>;
-    })}</nav>
+    <FetsAIInput />
     <div className="nav-controls">
       {!["news", "actionables"].includes(active) && <select className="nav-centre-select" aria-label="Active centre" value={branch} onChange={e => setBranch(e.target.value)}><option value="calicut">Calicut</option><option value="cochin">Cochin</option><option value="global">All centres</option></select>}
       <button className="nav-control" onClick={onTools} title="All tools" aria-label="All tools"><Icon name="grid" size={16} /></button>
@@ -10746,14 +10735,14 @@ function AttendanceAdminPage({ branch }) {
 }
 
 function ToolsSheet({ open, onClose, onPick }) {
-  // Calendar, Roster, My Desk, Actionables and The Shift are on the main menu, so the
-  // workspace holds only tools. Who sees which tool: workspace-features.ts,
+  // Main work areas live on Home; keep them reachable from other pages too.
+  // The workspace also holds additional tools. Who sees which tool: workspace-features.ts,
   // with any per-person choice from User Management.
   const F = window.FETS || {};
   const me = (F._staffProfiles || []).find(p => (F._meId && p.id === F._meId) || (F._meUserId && p.user_id === F._meUserId));
   const adminWorkspace = usesAdminWorkspace(Boolean(F.isAdmin), me?.email || F.user?.email);
   const icons = Object.fromEntries(TOOLS.map(t => [t.id, t]));
-  const items = workspaceFor(adminWorkspace, me?.permissions).map(f => ({ ...(icons[f.id] || {}), id: f.id, label: f.label, sub: f.sub }));
+  const items = [{ id: "live", label: "Home" }, { id: "roster", label: "Roster" }, { id: "calendar", label: "Calendar" }, { id: "desk", label: "My Desk" }, { id: "handover", label: "The Shift" }, { id: "actionables", label: "Actionables" }, ...workspaceFor(adminWorkspace, me?.permissions).map(f => ({ ...(icons[f.id] || {}), id: f.id, label: f.label, sub: f.sub }))];
   return <WorkspaceMenu open={open} onClose={onClose} onPick={onPick} items={items} />;
 }
 
@@ -10958,7 +10947,7 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
         {active === "candidate-tracker" && <CandidateTracker />}
         {active === "client-directory" && <ClientDirectory />}
         {active === "access-hub" && <AccessHubPage />}
-        {active === "fets-space" && <section className="fs-pending"><h1>FETS SPACE</h1><p>This workspace is ready for the setup details you will provide.</p><button onClick={()=>setActive("live")}>Back to Fets Space home</button></section>}
+        {active === "fets-space" && <section className="fs-pending"><h1>FETS SPACE</h1><p>This workspace is ready for the setup details you will provide.</p><button onClick={()=>setActive("live")}>Back to Home</button></section>}
         {active === "system-manager" && <SystemManager onNavigate={(page, centre) => { if (centre) handleBranchChange(centre); setActive(page); }} />}
         {active === "news-manager" && <NewsManager />}
         {active === "user-management" && <UserManagement onNavigate={setActive} />}
