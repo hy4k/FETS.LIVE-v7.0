@@ -27,3 +27,14 @@ describe('operations home', () => {
     await waitFor(() => expect(screen.queryByText('Old branch session')).not.toBeInTheDocument());
   });
 });
+
+ it('opens core pages for staff while preserving restricted home tool access', async () => {
+   const navigate=vi.fn();
+   render(<OperationsHome branch="calicut" navigate={navigate} openDrawer={vi.fn()} load={vi.fn().mockResolvedValue(snapshot)} homeAccess={['fets-chat','news-manager']} />);
+   await screen.findByRole('heading',{name:'Your workspace'});
+   for(const [label, page] of [['Roster','roster'],['Calendar','calendar'],['My Desk','desk'],['The Shift','handover'],['Actionables','actionables']]) {
+     const button=screen.getByRole('button',{name:new RegExp('^'+label)}); expect(button).toBeEnabled();fireEvent.click(button);expect(navigate).toHaveBeenLastCalledWith(page);
+   }
+   expect(screen.getByRole('button',{name:/^FETS Sites/})).toBeDisabled();
+   expect(screen.getByRole('button',{name:/^Team Space/})).toBeEnabled();
+ });

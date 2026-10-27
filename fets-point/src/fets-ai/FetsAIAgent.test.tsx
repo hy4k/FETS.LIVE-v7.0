@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FetsAIAgent } from './FetsAIAgent';
+import { FetsAIInput } from './FetsAIInput';
 
 const requests=vi.hoisted(()=>vi.fn());
 vi.mock('./fets-ai-api',()=>({agentRequest:requests}));
@@ -28,4 +29,15 @@ describe('persistent work companion',()=>{
     await screen.findByText(/The server-side Gemini key is pending/);
     await waitFor(()=>expect(screen.getByRole('button',{name:'Send message'})).toBeDisabled());
   });
+});
+
+it('opens a header question as an editable draft without sending it',async()=>{
+ requests.mockResolvedValue({ready:true,databaseReady:true,modelReady:true,admin:false});
+ render(<><FetsAIInput/><FetsAIAgent userId="staff-1" branch="cochin" page="command-center" navigate={vi.fn()} hideLauncher/></>);
+ const field=screen.getByRole('textbox',{name:'Ask FETS AI'});
+ fireEvent.change(field,{target:{value:'What is on today?'}});
+ fireEvent.submit(screen.getByRole('search',{name:'FETS AI'}));
+ await screen.findByRole('dialog',{name:'FETS AI assistant'});
+ expect(screen.getAllByRole('textbox',{name:'Ask FETS AI'}).find(el=>el.tagName==='TEXTAREA')).toHaveValue('What is on today?');
+ expect(requests.mock.calls.every(([body])=>body.action==='status')).toBe(true);
 });

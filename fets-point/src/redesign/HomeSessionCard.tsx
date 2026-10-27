@@ -2,6 +2,9 @@ import React, { useEffect, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   ArrowUpRight,
+  Clock3,
+  MapPin,
+  Users,
   ChevronLeft,
   ChevronRight,
   Pause,
@@ -28,6 +31,15 @@ export default function HomeSessionCard({
     (s) =>
       !["cancelled", "canceled"].includes(String(s.status || "").toLowerCase()),
   );
+  const candidateTotal = items.length && items.every(s => s.candidate_count !== null && s.candidate_count !== undefined && Number.isFinite(Number(s.candidate_count)))
+    ? items.reduce((total, s) => total + Number(s.candidate_count), 0) : null;
+  const formatTime = (value?: string) => {
+    if (!value) return "Time TBC";
+    const match = /^(\d{2}):(\d{2})/.exec(value);
+    if (!match) return "Time TBC";
+    const hour = Number(match[1]);
+    return `${hour % 12 || 12}:${match[2]} ${hour >= 12 ? "PM" : "AM"}`;
+  };
   const item = items[index % Math.max(items.length, 1)];
   const duration = Math.max(
     7000,
@@ -67,11 +79,10 @@ export default function HomeSessionCard({
       }}
     >
       <header>
-        <span>Today’s sessions</span>
-        <button onClick={onOpen} aria-label="Open calendar">
-          <ArrowUpRight size={15} />
-        </button>
+        <div><span className="fs-session-eyebrow">TODAY · IST</span><h2>Today’s sessions</h2></div>
+        <button onClick={onOpen} aria-label="Open calendar">Calendar <ArrowUpRight size={15} /></button>
       </header>
+      {!loading && !error && items.length > 0 && <div className="fs-session-totals"><span><strong>{items.length}</strong> {items.length === 1 ? "session" : "sessions"}</span>{candidateTotal !== null && <span><strong>{candidateTotal}</strong> scheduled candidates</span>}</div>}
       <div className="fs-session-stage" aria-live={stopped ? "polite" : "off"}>
         {loading ? (
           <p>Loading sessions…</p>
@@ -102,14 +113,12 @@ export default function HomeSessionCard({
               }}
               className="fs-session-copy"
             >
-              <strong>{item.client_name || "Exam session"}</strong>
-              <span>{item.exam_name || "Programme not specified"}</span>
-              <small>
-                {item.start_time?.slice(0, 5) || "Time TBC"}
-                {item.end_time ? " – " + item.end_time.slice(0, 5) : ""} ·{" "}
-                {item.candidate_count ?? "—"} candidates
-                {item.branch_location ? " · " + item.branch_location : ""}
-              </small>
+              <div className="fs-session-title"><span className="fs-session-client">{item.client_name || "Exam session"}</span><strong>{item.exam_name || "Programme not specified"}</strong></div>
+              <div className="fs-session-details">
+                <div><Clock3 size={17} /><span><small>Session time</small><b>{formatTime(item.start_time)}{item.end_time ? " – " + formatTime(item.end_time) : ""}</b></span></div>
+                <div><MapPin size={17} /><span><small>Centre</small><b>{item.branch_location || "Centre not specified"}</b></span></div>
+                <div><Users size={17} /><span><small>Candidates</small><b>{item.candidate_count ?? "Not entered"}</b></span></div>
+              </div>
             </motion.div>
           </AnimatePresence>
         )}
@@ -118,12 +127,12 @@ export default function HomeSessionCard({
         <span>
           {items.length
             ? `${(index % items.length) + 1} / ${items.length}`
-            : "Calendar · IST"}
+            : "Calendar · IST"}{item?.status && <span className="fs-session-status">{item.status}</span>}
         </span>
         <div>
           <button
             aria-label="Previous session"
-            onClick={() => next(-1)}
+            onClick={() => { setPaused(true); next(-1); }}
             disabled={items.length < 2}
           >
             <ChevronLeft size={14} />
@@ -138,7 +147,7 @@ export default function HomeSessionCard({
           </button>
           <button
             aria-label="Next session"
-            onClick={() => next(1)}
+            onClick={() => { setPaused(true); next(1); }}
             disabled={items.length < 2}
           >
             <ChevronRight size={14} />

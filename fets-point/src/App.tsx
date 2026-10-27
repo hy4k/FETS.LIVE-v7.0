@@ -342,7 +342,7 @@ export function AppContent() {
       </div>
 
       <BranchIndicator />
-      <FetsAIAgent userId={user!.id} branch={activeBranch} page={activeTab} navigate={setActiveTab} withMobileNav={isMobile&&!isFullscreenPage} />
+      <FetsAIAgent userId={user!.id} branch={activeBranch} page={activeTab} navigate={setActiveTab} withMobileNav={isMobile&&!isFullscreenPage} hideLauncher={isFullscreenPage || !isMobile} />
 
 
       {isMobile && !isFullscreenPage && (

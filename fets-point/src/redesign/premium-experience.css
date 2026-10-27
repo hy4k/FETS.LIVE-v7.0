@@ -74,3 +74,8 @@
 
 /* Keep the five main work areas visible on smaller screens. */
 @media(max-width:950px){.fets-redesign-root .premium-nav{flex-wrap:wrap;gap:12px!important}.fets-redesign-root .premium-nav .topnav-links{display:flex!important;order:3;flex:0 0 100%;min-width:0;overflow:auto;justify-content:space-between}.fets-redesign-root .premium-nav .topnav-item{padding:8px 10px;font-size:10px}.fets-redesign-root .premium-nav .nav-controls{margin-left:auto}}
+/* Main navigation now lives in Home's workspace cards; AI owns the masthead. */
+.fets-redesign-root .premium-nav { justify-content:space-between; }
+.premium-nav .nav-controls { margin-left:0; }
+.fets-redesign-root .premium-nav .topnav-burger { display:none!important; }
+@media(min-width:651px) { .premium-nav>.fets-ai-input { flex:0 1 auto; } }
