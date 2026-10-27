@@ -45,3 +45,22 @@ Only activate the approved day after both websites pass deployment checks. Produ
 A second additive migration, `20261027031642_verified_online_staff_links.sql` (installed as `20261027031811`), provides private administrator-reviewed identity links. Its source SHA256 is `e18b15e948548ca2f5fa559653ee944468d8935575ea3330880c622fcb55de6c`. The exact Online UUID and verified email are pinned to the confirmed Live profile; a changed email cannot fall through to another identity. Live activity, verified account and centre membership are still required. No application role can read or edit the link table. `20261027031859_private_online_staff_link_policy.sql` adds an explicit deny policy (installed as `20261027031936`). Login emails and credentials are unchanged. The single confirmed staff link is production data, not part of this repository.
 
 Read-only production verification: `scripts/verification/verify-production-shift-bridge.py PLAN_ID --identity-map ROOT_PRIVATE_JSON`. It compares every canonical slot against the actual published plan, checks all named break covers and changeovers, and validates each existing verified staff identity through the installed Online server connection. It never inserts a check record.
+
+## Verified production release
+
+- Live release: `20261027T032554Z-staff-day-701c23f`; deployed web commit `701c23f909bc257f98a3e53322059f7cde671b70`.
+- Live image: `sha256:4d4862556ddb8b0eddd6edde5689073c4e580690d3d3bac9a98b94c22387f5cf`; index SHA256 `4e60c4bc1fffae94321e6a6d0f8cb49a14883431d87af1aeafc48107299289c0`.
+- Online release: `20261027T033236Z-staff-day-8ed6441`; deployed web commit `8ed64417f5fc5111b4701c75e131d35120e2e05f` (PR hy4k/fets.tv#81).
+- Online image: `sha256:04cb535672686292cb820c631f5c494eef3daf45c8bc0ae61dfb565d78cabbec`.
+- All 55 Live public files/routes and 65 Online public assets/metadata passed byte/MIME checks; the actual Live lazy application module evaluated on both candidate and public origins. Online's anonymous check API returned 401. Effective runtime environments, ports, mounts, networks, restart settings and Nginx configuration matched their pre-deploy state. Old hashed assets remain available for existing sessions.
+- Today's approved Calicut plan was published at **09:01:40 IST**, version 2, with no day lead and the single approved temporary cover period. Its first imported plan and publication are retained in the audit history. No work/check events were imported.
+- Read-only verification through the final installed Online server connection resolved all four verified real staff identities and compared every one of the **208 canonical slots (78 walks / 130 DVR checks)** to the published plan, including all boundaries and named breaks. All matched; verification created zero records. Evidence is retained privately as `shared-shift-production-verification.json` in both release directories. The Lab date follows the current centre day even when a future exam is imported, covered by the browser fixture.
+
+Website rollback commands (retain database and recorded history):
+
+```sh
+bash /opt/fets-releases/20261027T032554Z-staff-day-701c23f/rollback.sh
+bash /opt/fets-online-releases/20261027T033236Z-staff-day-8ed6441/rollback.sh
+```
+
+The final Online rollback restores the immediately preceding shared-check release. Its original pre-change website is also retained via `/opt/fets-online-releases/20261027T032229Z-staff-day-1a3eda1/rollback.sh`.
