@@ -40,3 +40,22 @@ Source migration files:
 - Production TypeScript and Vite build passed. Post-migration security advisors reported no new News findings.
 
 Deployment script: `scripts/releases/deploy-fets-news.sh`. It pins the inspected Live release, checks repository/production changes, saves the running image and effective server configuration, verifies the exact applied migration hashes/receipt, builds in isolation, evaluates the real lazy application module and compares every public asset. Rollback restores the prior website image and retains the database approval gate and recorded history. No news item is approved or published by deployment.
+
+## Verified production deployment
+
+- Release: `20261027T120354Z-fets-news-0c1c9e8`.
+- Deployed web commit: `0c1c9e81f658615922b448d508bda7e7e63344bd` (PR #45).
+- Image: `sha256:125eda3dd099c0918a30aa12abf30f14ae7892d78255b14994f66a14c0dd7f06`.
+- Index SHA256: `92dbca1cff2c10335ceb9c9104dc5320d41c2a739407f1c05fa96ce47ae7795d`.
+- All **56 public files/routes** matched the build, including the direct `/news-manager` route, JavaScript, styles, font and licence. The real lazy application module evaluated on candidate and public origins; its shared application components remain registered.
+- Runtime environment, ports, mounts, restart policy and Nginx matched the pre-deploy state. Existing hashed assets remain available for open browser sessions.
+- Final database readback: **4 private review drafts, 0 publications, 0 acknowledgements**. Both collection tasks are configured. Collector publication/table permissions are false, and ordinary staff cannot call collection. Deployment did not approve any item.
+- The first scheduled client-collection request completed a real read-only mailbox scan, added no duplicates and recorded a successful empty batch. No staff or external recipients were messaged.
+
+Rollback the website while retaining the database approval gate and history:
+
+```sh
+bash /opt/fets-releases/20261027T120354Z-fets-news-0c1c9e8/rollback.sh
+```
+
+The prior website's legacy direct news-writing controls remain disabled by the approval gate after rollback. Other prior application data and features are retained.
