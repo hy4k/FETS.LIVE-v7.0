@@ -1,6 +1,6 @@
 // @ts-nocheck
 import './planning-pages.css';
-import DutyWorkspace from './DutyWorkspace';
+import DutyWorkspace from '../shift-v2/ShiftWorkspace';
 import RosterWorkspace from '../roster-workspace/RosterWorkspace';
 import { overtimeMinutes, effectiveShift, timing as rosterTiming } from '../roster-workspace/model';
 import { shiftRepository } from './shift-repository';

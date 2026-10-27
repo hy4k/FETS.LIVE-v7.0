@@ -131,7 +131,7 @@ export const rosterRepository = {
     ]);
     // Lead availability must not prevent staff from seeing the roster.
     try {
-      const [leadWeeks, leadPlans] = await Promise.all([
+      const [leadWeeks, leadPlans, staffDayLeads] = await Promise.all([
         allRows(() =>
           db
             .from("centre_lead_weeks")
@@ -147,6 +147,15 @@ export const rosterRepository = {
             .select("*")
             .gte("day", days[0])
             .lte("day", days[days.length - 1])
+            .order("id"),
+        ),
+        allRows(() =>
+          db
+            .from("shift_days_v2")
+            .select("branch,day,lead_id,status")
+            .gte("day", days[0])
+            .lte("day", days[days.length - 1])
+            .in("status", ["published", "closed"])
             .order("id"),
         ),
       ]);
@@ -171,6 +180,7 @@ export const rosterRepository = {
         types,
         leadWeeks,
         leadPlans,
+        staffDayLeads,
         leadChanges,
       };
     } catch {

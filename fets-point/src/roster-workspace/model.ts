@@ -58,6 +58,12 @@ export type Snapshot = {
   types: ShiftType[];
   leadWeeks?: { branch: string; week_start: string; lead_id: string }[];
   leadPlans?: PlanRecord[];
+  staffDayLeads?: {
+    branch: string;
+    day: string;
+    lead_id: string | null;
+    status: string;
+  }[];
   leadChanges?: CoverageChange[];
   leadError?: string;
 };
