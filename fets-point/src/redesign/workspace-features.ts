@@ -21,7 +21,7 @@ export const WORKSPACE_FEATURES: WorkspaceFeature[] = [
   { placement: 'desk', id: 'access-hub', label: 'F-Vault / Access Hub', sub: 'Credentials & access', staff: false, admin: true },
   { id: 'staff-ot', label: 'OT & TOIL Manager', sub: 'Overtime logging & TOIL cash payouts', staff: false, admin: true },
   { id: 'dashboard', label: 'Dashboard', sub: 'iCloud overview', staff: false, admin: false },
-  { placement: 'home', id: 'news-manager', label: 'FETS NEWS', sub: 'Announcements', staff: false, admin: true },
+  { placement: 'home', id: 'news-manager', label: 'FETS NEWS', sub: 'Client updates and industry news', staff: true, admin: true },
   { placement: 'home', id: 'system-manager', label: 'FETS SITES', sub: 'Test centre administration', staff: false, admin: true },
   { id: 'user-management', label: 'User Management', sub: 'Roles & permissions', staff: false, admin: true },
   { id: 'branch-delegation', label: 'Branch Access Delegation', sub: 'Temporary access override', staff: false, admin: true },

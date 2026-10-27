@@ -1,3 +1,4 @@
+import {newsPost,industryPost,newsSource,newsDraft,newsConfig} from './news-fixture';
 import {fixturePlan,fixtureDay,fixtureRecord,fixtureChecks} from "./shift-v2-fixture";
 import React from "react";
 // Isolated read-only fixtures: never imported by a production entry point.
@@ -43,6 +44,12 @@ const sessions = [
 ];
 const params = new URLSearchParams(location.search);
 function rows(table: string) {
+  if(params.has('news')){
+    if(table==='fets_news_posts')return [newsPost,industryPost];
+    if(table==='fets_news_drafts')return [newsDraft];
+    if(table==='fets_news_sources')return [newsSource];
+    if(table==='fets_news_receipts'||table==='fets_news_collection_runs')return [];
+  }
   if(params.has('shift')){
     if(table==='shift_days_v2')return [fixtureRecord];
     if(table==='shift_work_events_v2')return [];
@@ -109,6 +116,7 @@ function chain(table: string, rpc = false) {
               ? { version: 2, rollout: true }
               : [];
     if(rpc&&table==='fets_shift_check_snapshot_v2')data=fixtureChecks;
+    if(rpc&&table==='fets_news_context')data=params.has('staff-news')?{can_review:false}:newsConfig;
     if (!rpc) {
       for (const [key, value] of filters)
         data = data.filter((r: any) =>
