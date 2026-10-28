@@ -62,6 +62,7 @@ function rows(table: string) {
   switch (table) {
     case "staff_profiles":
       return [profile];
+    case "fets_vault": return [{id:'fixture-vault',user_id:user.id,title:'Example staff portal',category:'Client portals',username:'sample-user',url:'https://example.test',site_id:'Sample site',password:'training-sample-only',notes:'Isolated design fixture. Not a production credential.',created_at:'2026-10-01',custom_fields:[{key:'Reference',value:'Sample reference'}]}];
     case "clients":
       return [
         { id: "paragon", name: "PARAGON", color: "teal", softwares: [] },
@@ -116,6 +117,8 @@ function chain(table: string, rpc = false) {
               ? { version: 2, rollout: true }
               : [];
     if(rpc&&table==='fets_shift_check_snapshot_v2')data=fixtureChecks;
+    if(rpc&&table==='desk_team_round')data={day:new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()),choice:null,participants:[]};
+    if(rpc&&table==='desk_team_round_join')throw Error('Writes disabled in page audit');
     if(rpc&&table==='fets_news_context')data=params.has('staff-news')?{can_review:false}:newsConfig;
     if (!rpc) {
       for (const [key, value] of filters)

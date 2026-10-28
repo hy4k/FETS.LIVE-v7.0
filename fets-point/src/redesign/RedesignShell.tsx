@@ -37,7 +37,8 @@ import FetsRoster from "../components/FetsRosterPremium";
 import { FetsCalendarPremium as FetsCalendar } from "../components/FetsCalendarPremium";
 import { MobileCalendarView as MobileCalendar } from "../components/MobileCalendarView";
 import HandoverHub from "./HandoverHub";
-import { AccessHub as AccessHubPage } from "../components/AccessHub";
+import AccessHubPage from "../vault-workspace/VaultWorkspace";
+import HelpDesk from "../desk-workspace/HelpDesk";
 import { CandidateTrackerPremium as CandidateTracker } from "../components/CandidateTrackerPremium";
 import SystemManager from "../components/SystemManager";
 import { NewsManager } from "../components/NewsManager";
@@ -1485,64 +1486,11 @@ function VaultExportModal({ items, onClose }) {
 }
 
 function VaultPanel() {
-  const [items, setItems] = React.useState(() => (window.FETS._vault ? [...window.FETS._vault] : []));
-  const [editing, setEditing] = React.useState(null); // id | "__new" | null
-  const [showExport, setShowExport] = React.useState(false);
-  const save = (entry) => {
-    if (editing === "__new") {
-      const tmp = { ...entry, id: "tmp" + Date.now() };
-      setItems((xs) => [tmp, ...xs]);
-      DB.dbAddVault(entry).then((row) => { if (row && row.id != null) setItems((xs) => xs.map((x) => x === tmp ? { ...x, id: row.id } : x)); });
-    } else {
-      DB.dbUpdateVault(editing, entry);
-      setItems((xs) => xs.map((x) => x.id === editing ? { ...x, ...entry } : x));
-    }
-    setEditing(null);
-  };
-  const del = (it) => { if (!window.confirm("Delete this credential?")) return; if (it.id != null && String(it.id).indexOf("tmp") !== 0) DB.dbDeleteVault(it.id); setItems((xs) => xs.filter((x) => x !== it)); };
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {editing !== "__new" && (
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button onClick={() => setEditing("__new")} className="tap" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px", borderRadius: 12, cursor: "pointer", border: "none", color: "var(--accent-ink)", background: "var(--accent)", fontFamily: "var(--font)", fontSize: 13, fontWeight: 750, flex: 1 }}><Icon name="plus" size={16} /> Add credential</button>
-          {items.length > 0 && (
-            <button onClick={() => setShowExport(true)} className="tap" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px 18px", borderRadius: 12, cursor: "pointer", border: "1.5px solid var(--warn)", color: "var(--warn)", background: "color-mix(in oklch, var(--warn) 8%, transparent)", fontFamily: "var(--font)", fontSize: 13, fontWeight: 700 }}>
-              <Icon name="download" size={15} /> Export
-            </button>
-          )}
-        </div>
-      )}
-      {editing === "__new" && <VaultEditForm initial={{}} onSave={save} onCancel={() => setEditing(null)} />}
-      {items.length === 0 && editing !== "__new" && <div className="inset" style={{ padding: 22, borderRadius: 14, textAlign: "center", color: "var(--ink-4)", fontSize: 13 }}>No credentials saved yet. Add your portals & logins here.</div>}
-      {items.map((it) => editing === it.id
-        ? <VaultEditForm key={it.id} initial={it} onSave={save} onCancel={() => setEditing(null)} />
-        : <VaultCard key={it.id} it={it} onEdit={() => setEditing(it.id)} onDelete={() => del(it)} />)}
-      {showExport && <VaultExportModal items={items} onClose={() => setShowExport(false)} />}
-    </div>
-  );
+ return <button className="tap" onClick={()=>window.dispatchEvent(new CustomEvent('fets-go',{detail:{page:'access-hub'}}))}>Open F Vault</button>;
 }
 
 /* ---------- help desk drawer panel ---------- */
-function HelpDeskPanel() {
-  const vendors = window.FETS.VENDORS;
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 11 }}>
-      {vendors.map((v) => (
-        <a key={v.slug} href={v.support} target="_blank" rel="noopener noreferrer" className="tap glass-2"
-          style={{ display: "flex", flexDirection: "column", gap: 12, padding: "16px 15px", borderRadius: 16, textDecoration: "none", minHeight: 96 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <span style={{ width: 36, height: 36, borderRadius: 11, display: "grid", placeItems: "center", fontSize: 11, fontWeight: 800, color: "#fff", background: v.color }}>{v.short}</span>
-            <span style={{ color: "var(--ink-4)" }}><Icon name="ext" size={15} /></span>
-          </div>
-          <div>
-            <span style={{ display: "block", fontSize: 13.5, fontWeight: 600, color: "var(--ink)" }}>{v.name}</span>
-            <span style={{ display: "block", fontSize: 11, color: "var(--ink-4)", marginTop: 2 }}>Live support portal</span>
-          </div>
-        </a>
-      ))}
-    </div>
-  );
-}
+function HelpDeskPanel() {return <HelpDesk navigate={page=>window.dispatchEvent(new CustomEvent('fets-go',{detail:{page}}))}/>;}
 
 const LOST_FOUND = [];
 const LF_STATUS = { stored: { label: "In locker", color: "var(--v-ielts)" }, claimed: { label: "Claimed", color: "var(--ok)" } };
@@ -9564,14 +9512,15 @@ function AppKindSelector({ selected, onChange, adminMode }) {
   );
 }
 
-function AppForm({ onSubmitted }) {
+function AppForm({ onSubmitted, initialKind }) {
   const F = () => window.FETS;
-  const [kind, setKind] = React.useState("leave");
+  const [kind, setKind] = React.useState(initialKind === "halfday" ? "leave" : initialKind || "leave");
   const [submitting, setSubmitting] = React.useState(false);
 
   // Leave fields
   const [date, setDate] = React.useState("");
-  const [leaveType, setLeaveType] = React.useState("Full-day");
+  const [leaveType, setLeaveType] = React.useState(initialKind === "halfday" ? "Half-day" : "Full-day");
+  const [halfDayPeriod,setHalfDayPeriod]=React.useState("first");
   const [reason, setReason] = React.useState("");
 
   // Swap fields
@@ -9639,7 +9588,7 @@ function AppForm({ onSubmitted }) {
       return;
     }
     let payload = { kind, reason };
-    if (kind === "leave")          payload = { ...payload, request_date: date, leave_type: leaveType };
+    if (kind === "leave")          payload = { ...payload, request_date: date, leave_type: leaveType, half_day_period: leaveType === "Half-day" ? halfDayPeriod : null };
     if (kind === "toil")           payload = { ...payload, request_date: date, leave_type: "TOIL" };
     if (kind === "swap")           payload = { ...payload, request_date: swapDate, swap_with_name: swapWith, swap_date: swapPartnerDate };
     if (kind === "emergency_duty") payload = { ...payload, request_date: emergDate, new_shift_code: newShift, leave_type: "Emergency" };
@@ -9655,17 +9604,17 @@ function AppForm({ onSubmitted }) {
   const kindMeta = APP_KINDS.find(a => a.k === kind);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <AppKindSelector selected={kind} onChange={setKind} />
-      <div style={{ borderRadius: 16, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 18, background: "#E7E3D4", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
+    <div className="pd-application-form" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {!initialKind && <AppKindSelector selected={kind} onChange={setKind} />}
+      <div className="pd-application-card" style={{ borderRadius: 16, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 18, background: "#E7E3D4", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, borderBottom: "1px solid #C4DBF6", paddingBottom: 14 }}>
           <div style={{ width: 34, height: 34, borderRadius: 10, display: "grid", placeItems: "center",
             background: `color-mix(in srgb, ${kindMeta?.color} 18%, #E7E3D4)`, color: kindMeta?.color }}>
             <Icon name={kindMeta?.icon} size={16} />
           </div>
           <div>
-            <div style={{ fontSize: 14.5, fontWeight: 750, color: "#2c3e50" }}>New {kindMeta?.label} Application</div>
-            <div style={{ fontSize: 11, color: "#8590AA", marginTop: 1 }}>Fill in the details and submit — Super Admin will be notified immediately.</div>
+            <div style={{ fontSize: 14.5, fontWeight: 750, color: "#2c3e50" }}>{initialKind === "halfday" ? "Half-day leave request" : `New ${kindMeta?.label} request`}</div>
+            <div style={{ fontSize: 11, color: "#8590AA", marginTop: 1 }}>Submit the details for management review.</div>
           </div>
         </div>
 
@@ -9681,6 +9630,8 @@ function AppForm({ onSubmitted }) {
               </label>
             </div>
           )}
+
+          {kind === "leave" && leaveType === "Half-day" && <label style={labelStyle}>Which half are you requesting off?<select value={halfDayPeriod} onChange={e=>setHalfDayPeriod(e.target.value)} style={inpStyle}><option value="first">First half off · work the second half</option><option value="second">Second half off · work the first half</option></select><span className="pd-half-note">Half of your rostered shift. For an 8 AM–5 PM shift, each half is 4½ hours. Your remaining working hours will be shown for approval.</span></label>}
 
           {/* Overtime / paid TOIL */}
           {kind === "ot" && (
@@ -9722,6 +9673,8 @@ function AppForm({ onSubmitted }) {
               <label style={labelStyle}>Their Date (that you'll take)<input type="date" value={swapPartnerDate} onChange={e => setSwapPartnerDate(e.target.value)} required style={inpStyle} /></label>
             </div>
           )}
+
+          {kind === 'swap' && <p className='pd-half-note'>On approval, your saved roster entries and your colleague’s entries exchange on both selected dates. Your colleague must agree first; management then reviews the change.</p>}
 
           {/* Emergency Duty */}
           {kind === "emergency_duty" && (
@@ -9828,7 +9781,7 @@ function MyApplicationsList({ range }) {
       {apps.map(app => {
         const km = APP_KINDS.find(a => a.k === app.kind);
         let detail = "";
-        if (app.kind === "leave")          detail = `${app.leave_type || "Full-day"} · ${app.request_date || ""}`;
+        if (app.kind === "leave")          detail = `${app.leave_type || "Full-day"} · ${app.request_date || ""}${app.half_day_period ? " · " + app.half_day_period + " half off" : ""}`;
         if (app.kind === "toil")           detail = `TOIL day off · ${app.request_date || ""}`;
         if (app.kind === "swap")           detail = `${app.request_date} ↔ ${app.swap_with_name} (${app.swap_date || ""})`;
         if (app.kind === "emergency_duty") detail = `${app.request_date} → ${app.new_shift_code} shift`;
@@ -9843,6 +9796,7 @@ function MyApplicationsList({ range }) {
               <div style={{ fontSize: 13, fontWeight: 700, color: "#2c3e50" }}>{km?.label || app.kind}</div>
               <div style={{ fontSize: 11, color: "#8590AA", marginTop: 2 }}>{detail}</div>
               {app.reason && <div style={{ fontSize: 11, color: "#8590AA", marginTop: 3, fontStyle: "italic" }}>"{app.reason}"</div>}
+              {app.workflow_version===1 && app.kind==='swap' && app.status==='pending' && <div style={{fontSize:11,color:"#54715b",marginTop:5}}>Colleague: {app.partner_reply||"awaiting reply"} · Management approval required</div>}
               {app.admin_reply && app.status !== "pending" && (
                 <div style={{ fontSize: 11, color: app.status === "approved" ? "#3B8BEB" : "#B23850", marginTop: 4, fontWeight: 600 }}>
                   Admin: "{app.admin_reply}"
@@ -9878,8 +9832,9 @@ function AdminApplicationsInbox({ filter, setFilter, range, setRange }) {
   const doResolve = async () => {
     if (!replyModal) return;
     setResolving(true);
-    await DB.dbResolveApplication(replyModal.app.id, replyModal.action === "approve" ? "approved" : "rejected", replyText);
+    const result=await DB.dbResolveApplication(replyModal.app.id, replyModal.action === "approve" ? "approved" : "rejected", replyText);
     setResolving(false);
+    if(result===false)return;
     setReplyModal(null);
     setReplyText("");
   };
@@ -9916,7 +9871,7 @@ function AdminApplicationsInbox({ filter, setFilter, range, setRange }) {
           {filtered.map(app => {
             const km = APP_KINDS.find(a => a.k === app.kind);
             let detail = "";
-            if (app.kind === "leave")          detail = `${app.leave_type || "Full-day"} · ${app.request_date || ""}`;
+            if (app.kind === "leave")          detail = `${app.leave_type || "Full-day"} · ${app.request_date || ""}${app.half_day_period ? " · " + app.half_day_period + " half off" : ""}`;
             if (app.kind === "toil")           detail = `TOIL day off · ${app.request_date || ""}`;
             if (app.kind === "swap")           detail = `${app.request_date} ↔ ${app.swap_with_name} (${app.swap_date || ""})`;
             if (app.kind === "emergency_duty") detail = `${app.request_date} → ${app.new_shift_code} shift`;
@@ -9935,12 +9890,14 @@ function AdminApplicationsInbox({ filter, setFilter, range, setRange }) {
                     <span style={{ fontSize: 10, color: "#8590AA", marginLeft: "auto" }}>{app.created_at ? new Date(app.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : ""}</span>
                   </div>
                   <div style={{ fontSize: 12, color: "#2c3e50", fontWeight: 600 }}>{detail}</div>
+                  {app.workflow_version===1 && app.kind==='swap' && <div style={{fontSize:12,marginTop:8,color:'#54715b'}}>Colleague: {app.partner_reply||'awaiting reply'}. The roster changes only after management approval.</div>}
+                  {app.workflow_version===1 && app.half_day_period && app.roster_snapshot?.[0] && <div style={{fontSize:12,marginTop:8,color:'#54715b'}}>Original shift: {app.roster_snapshot[0].shift_start?.slice(0,5)}–{app.roster_snapshot[0].shift_end?.slice(0,5)}. {app.half_day_period==='first'?'First':'Second'} half requested off.</div>}
                   {app.reason && <div style={{ fontSize: 11, color: "#8590AA", marginTop: 3, fontStyle: "italic" }}>"{app.reason}"</div>}
                   {app.admin_reply && <div style={{ fontSize: 11, color: "#8590AA", marginTop: 3 }}>Reply: "{app.admin_reply}"</div>}
                 </div>
                 {app.status === "pending" && (
                   <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                    <button onClick={() => { setReplyModal({ app, action: "approve" }); setReplyText(""); }} className="tap"
+                    <button disabled={app.workflow_version===1&&app.kind==="swap"&&app.partner_reply!=="accepted"} onClick={() => { setReplyModal({ app, action: "approve" }); setReplyText(""); }} className="tap"
                       style={{ padding: "8px 16px", borderRadius: 9, border: "none", background: "#3B8BEB", color: "#fff", fontSize: 12, fontWeight: 700, fontFamily: "var(--font)", cursor: "pointer" }}>
                       <Icon name="check" size={13} /> Approve
                     </button>
@@ -9996,16 +9953,18 @@ function AdminApplicationsInbox({ filter, setFilter, range, setRange }) {
   );
 }
 
-function ApplicationsHub({ isSuperAdmin }) {
-  const [tab, setTab] = React.useState(isSuperAdmin ? "inbox" : "apply");
+function ApplicationsHub({ isSuperAdmin, initialKind }) {
+  const [tab, setTab] = React.useState(initialKind ? "apply" : isSuperAdmin ? "inbox" : "apply");
   const [filter, setFilter] = React.useState("pending");
   const [range, setRange] = React.useState(histDefaultRange);
   const [, refreshHub] = React.useReducer(n => n + 1, 0);
   React.useEffect(() => {
     loadOtClaims(window.FETS).then(refreshHub).catch(() => undefined);
+    const sync=()=>{if(!document.hidden)void loadApplications(window.FETS).then(refreshHub);};
+    sync();const poll=setInterval(sync,30000);
     const h = () => refreshHub();
     window.addEventListener("fets-ot-claims-changed", h);
-    return () => window.removeEventListener("fets-ot-claims-changed", h);
+    return () => {clearInterval(poll);window.removeEventListener("fets-ot-claims-changed", h);};
   }, []);
   const pendingCount = (window.FETS._applications || []).filter(a => a.status === "pending").length
     + (isSuperAdmin ? (window.FETS._otClaims || []).filter(c => c.status === "pending").length : 0);
@@ -10035,9 +9994,9 @@ function ApplicationsHub({ isSuperAdmin }) {
           </div>
         </div>
         {/* Tab pills */}
-        <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+        <div className="pd-request-tabs" style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
           {TABS.map(t => (
-            <button key={t.k} onClick={() => setTab(t.k)} className="tap"
+            <button key={t.k} onClick={() => setTab(t.k)} aria-pressed={tab===t.k} className="tap"
               style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 16px", borderRadius: 20, fontSize: 12.5, fontWeight: 700, fontFamily: "var(--font)", cursor: "pointer",
                 border: "none",
                 background: tab === t.k ? "#3B8BEB" : "#E7E3D4",
@@ -10052,7 +10011,7 @@ function ApplicationsHub({ isSuperAdmin }) {
       </div>
 
       {/* Content */}
-      {tab === "apply" && <AppForm onSubmitted={() => setTab(isSuperAdmin ? "inbox" : "mine")} />}
+      {tab === "apply" && <AppForm initialKind={initialKind} onSubmitted={() => setTab(isSuperAdmin ? "inbox" : "mine")} />}
       {tab === "mine" && <><HistoryRange range={range} setRange={setRange} /><MyApplicationsList range={range} /><OtClaimsPanel admin={false} filter="all" range={range} /></>}
       {tab === "inbox" && <><AdminApplicationsInbox filter={filter} setFilter={setFilter} range={range} setRange={setRange} /><OtClaimsPanel admin filter={filter} range={range} /></>}
     </div>
@@ -10179,15 +10138,15 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
   return <MyDeskHome
     canAccessHub={hasFeature(WORKSPACE_FEATURES.find(f=>f.id==="access-hub"), usesAdminWorkspace(Boolean(F.isAdmin), u.email), ownProfile?.permissions)}
     repository={deskCloudEnabled ? deskRepository : undefined}
-    user={{ id: F._meUserId || u.email || u.name, name: u.name, role: u.role || "Staff", branch: branchLabel, avatar: ownProfile?.avatar_url }}
+    user={{ profileId: ownProfile?.id, id: F._meUserId || u.email || u.name, name: ownProfile?.full_name || u.name, role: u.role || "Staff", branch: branchLabel, avatar: ownProfile?.avatar_url, joiningDate: ownProfile?.joining_date }}
     people={people}
     pendingHandovers={pendingHandovers}
     navigate={page => page === "profile" && bridge ? bridge("profile") : setActive(page)}
     openDrawer={setDrawer}
     openChat={person => window.dispatchEvent(new CustomEvent("fets-open-chat", { detail: person }))}
-    renderPanel={panel => {
+    renderPanel={(panel,kind) => {
       if (panel === "time") return <LeaveModule />;
-      if (panel === "requests") return <ApplicationsHub isSuperAdmin={Boolean(F.isAdmin)} />;
+      if (panel === "requests") return <ApplicationsHub isSuperAdmin={Boolean(F.isAdmin)} initialKind={kind} />;
       if (panel === "handovers") return <HandoverInbox />;
       if (panel === "checklist") return <ChecklistModule />;
       if (panel === "growth") return <CertsModule />;
@@ -10786,6 +10745,8 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
   const [burger, setBurger] = React.useState(false);
   
   const [active, setActiveState] = React.useState(activeSubPage || "live");
+  const mainScroll=React.useRef(null);
+  React.useLayoutEffect(()=>{if(mainScroll.current)mainScroll.current.scrollTop=0;},[active]);
 
   React.useEffect(() => {
     if (activeSubPage && activeSubPage !== active) {
@@ -10919,11 +10880,11 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
         t={t} setTweak={setTweak} onTools={() => setTools(true)} onBurger={() => setBurger(true)} onLogout={onLogout}
         pendingHandoverBadge={pendingHandoverBadge} />
 
-      <main className="scroll-soft main-scroll" style={{
+      <main ref={mainScroll} className="scroll-soft main-scroll" style={{
         flex: 1,
         overflowY: "auto",
-        background: active === "client-directory" ? "#f1f5f4" : isDeskActive ? "linear-gradient(160deg, #ECECEC 0%, #90CCF4 50%, #5DA2D5 100%)" : undefined,
-        padding: (active === "calendar" || active === "roster" || active === "live" || active === "desk" || active === "actionables" || active === "news" || active === "chat" || active === "fets-chat" || active === "lost-and-found")
+        background: ["desk","access-hub"].includes(active) ? "#f6f5f0" : active === "client-directory" ? "#f1f5f4" : isDeskActive ? "linear-gradient(160deg, #ECECEC 0%, #90CCF4 50%, #5DA2D5 100%)" : undefined,
+        padding: (active === "calendar" || active === "roster" || active === "live" || active === "desk" || active === "access-hub" || active === "actionables" || active === "news" || active === "chat" || active === "fets-chat" || active === "lost-and-found")
           ? "0" 
           : (active === "handover" ? "0 0 80px" : "clamp(22px,3.2vw,40px) clamp(14px,3vw,30px) 80px")
       }}>
@@ -10964,7 +10925,7 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
         <OutlookMiniPanel branch={branch} />
       </Drawer>
       <Drawer open={drawer === "vault"} onClose={() => setDrawer(null)}
-        icon="key" title="Quick Access Vault" sub="Credentials, portals & site codes by vendor" accentColor={V.prometric.color}>
+        icon="key" title="F Vault" sub="Portals, logins and saved links" accentColor={V.prometric.color}>
         <VaultPanel />
       </Drawer>
       <Drawer open={drawer === "help"} onClose={() => setDrawer(null)}

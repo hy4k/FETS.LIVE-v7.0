@@ -574,6 +574,9 @@ export function FetsIncidentPremium({ branch, setActive }: { branch: string; set
     }}>
       {/* Scope CSS inside a tag to prevent bleeding but keep styling neat */}
       <style>{`
+        @media(max-width:1100px){.fets-incident-root .incident-workspace-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important}.incident-workspace-grid>div:last-child{grid-column:1/-1}}
+        @media(max-width:700px){.fets-incident-root .incident-workspace-grid{grid-template-columns:minmax(0,1fr)!important}.fets-incident-root .incident-workspace-grid>.incident-card-matte{height:auto!important;min-height:220px!important}.fets-incident-root>header>div>div{flex-wrap:wrap}.fets-incident-root>header h1{font-size:24px!important}.fets-incident-root>header>div:last-child{flex-wrap:wrap}.fets-incident-root .glass-drawer{width:100vw!important;max-width:100vw!important;box-sizing:border-box;padding:20px!important;overflow-y:auto!important}.fets-incident-root input,.fets-incident-root select,.fets-incident-root textarea{max-width:100%;box-sizing:border-box}}
+
         .fets-incident-root input, .fets-incident-root select, .fets-incident-root textarea {
           background: #15171e;
           border: 1px solid #232631;
@@ -791,7 +794,7 @@ export function FetsIncidentPremium({ branch, setActive }: { branch: string; set
       {view === "analysis" ? (
         <CaseAnalysis cases={inBranch} />
       ) : (
-        <div style={{
+        <div className="incident-workspace-grid" style={{
           display: "grid",
           gridTemplateColumns: "360px 320px 1fr",
           gap: 16,
@@ -1257,7 +1260,7 @@ export function FetsIncidentPremium({ branch, setActive }: { branch: string; set
                 <Plus size={16} style={{ color: "#ff9f1a" }} />
                 <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>RAISE CUSTOM CASE</h3>
               </div>
-              <button
+              <button aria-label="Close case form"
                 onClick={() => setRaiseOpen(false)}
                 style={{ background: "transparent", border: "none", color: "#64748b", cursor: "pointer" }}
               >

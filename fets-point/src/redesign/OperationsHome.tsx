@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { ArrowUpRight, RefreshCw, CalendarDays, CalendarRange, LayoutDashboard, Clock3, ListChecks } from "lucide-react";
+import { ArrowUpRight, RefreshCw, CalendarDays, CalendarRange, LayoutDashboard, Clock3, ListChecks, ShieldCheck, KeyRound } from "lucide-react";
 import {
   centreDate,
   loadHomeSessions,
@@ -81,7 +81,7 @@ export default function OperationsHome({
   const tools = [
     { id: "roster", label: "Roster", hint: "Shifts and working hours", icon: CalendarRange },
     { id: "calendar", label: "Calendar", hint: "Exams and sessions", icon: CalendarDays },
-    { id: "desk", label: "My Desk", hint: "Attendance, requests and support", icon: LayoutDashboard },
+    { id: "desk", label: "My Desk", hint: "Requests, client support and team round", icon: LayoutDashboard },
     { id: "handover", label: "The Shift", hint: "Your day, duties and handovers", icon: Clock3 },
     {
       id: "system-manager",
@@ -150,13 +150,12 @@ export default function OperationsHome({
           error={!loading && snapshot.sessions === null}
           onOpen={() => navigate("calendar")}
         />
-        <button className="fs-actionables" onClick={() => navigate("actionables")}>
-          <span className="fs-tool-icon"><ListChecks size={25} strokeWidth={1.5} /></span>
-          <ArrowUpRight size={19} className="fs-tool-arrow" />
-          <span className="fs-actionables-copy"><strong>Actionables</strong><small>Institutions, tasks and follow-ups</small></span>
-          <span className="fs-actionables-link">Open Actionables <ArrowUpRight size={15} /></span>
-        </button>
       </div>
+      <section className="fs-support-row" aria-label="Work tools">{[
+        {id:'actionables',label:'Actionables',hint:'Institutions, tasks and follow-ups',icon:ListChecks},
+        {id:'case',label:'Raise a case',hint:'Record an incident or ask for help',icon:ShieldCheck},
+        {id:'access-hub',label:'F Vault',hint:'Portals, logins and saved links',icon:KeyRound}
+      ].map(tool=><button key={tool.id} className="fs-actionables" disabled={tool.id!=='actionables'&&!homeAccess.includes(tool.id)} onClick={()=>navigate(tool.id)}><span className="fs-tool-icon"><tool.icon size={24} strokeWidth={1.5}/></span><ArrowUpRight size={18} className="fs-tool-arrow"/><span className="fs-actionables-copy"><strong>{tool.label}</strong><small>{tool.id==='actionables'||homeAccess.includes(tool.id)?tool.hint:'Access is disabled for your account'}</small></span><span className="fs-actionables-link">Open {tool.label}<ArrowUpRight size={15}/></span></button>)}</section>
       <footer className="oh-footer">
         <span>{label} · Calendar times in IST</span>
         <span>
