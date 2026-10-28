@@ -26,4 +26,13 @@ describe('workspace menu', () => {
   });
 });
 
+it('offers FETS Sites to all staff while respecting explicit User Management settings',()=>{
+  const sites=WORKSPACE_FEATURES.find(f=>f.id==='system-manager')!;
+  for(const admin of [false,true]){
+    expect(hasFeature(sites,admin)).toBe(true);
+    expect(hasFeature(sites,admin,{'ws_system-manager':true})).toBe(true);
+    expect(hasFeature(sites,admin,{'ws_system-manager':false})).toBe(false);
+  }
+});
+
 it('moved tools never repeat in Workspace, including permission overrides',()=>{for(const admin of [true,false]){const menu=ids(workspaceFor(admin,{'ws_system-manager':true,'ws_news-manager':true,'ws_access-hub':true,'ws_fets-chat':true,ws_case:true}));for(const id of ['system-manager','news-manager','fets-chat','access-hub','case','fets-space'])expect(menu).not.toContain(id)}});
