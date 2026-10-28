@@ -13,6 +13,8 @@ export interface CentreData {
   clients: Row[];
   sessions: Row[];
   leads: Row[];
+  fields?: Row[];
+  inventory?: Row[];
 }
 export interface Repository {
   load(): Promise<CentreData>;
@@ -26,6 +28,8 @@ const tables = [
   "compliance_items",
   "ascender_deployments",
   "ascender_history",
+  "ascender_fields",
+  "ascender_inventory",
 ];
 async function read(table: string, projection = "*") {
   const all: Row[] = [];
@@ -116,10 +120,19 @@ export const repository: Repository = {
       clients,
       sessions: [...other[0], ...other[1]],
       leads: other[2],
+      fields: await read("ascender_fields"),
+      inventory: await read("ascender_inventory"),
     };
   },
   async save(table, value, previous) {
-    if (!tables.slice(0, 6).includes(table)) throw Error("Unsupported record.");
+    if (
+      ![
+        ...tables.slice(0, 6),
+        "ascender_fields",
+        "ascender_inventory",
+      ].includes(table)
+    )
+      throw Error("Unsupported record.");
     validateRecord(table, value);
     let q = previous
       ? supabase
@@ -133,7 +146,8 @@ export const repository: Repository = {
       throw Error(
         "This record changed while you were editing. Close the form, refresh, and try again.",
       );
-    if (error?.code === "23505") throw Error("A record with this name already exists in this centre.");
+    if (error?.code === "23505")
+      throw Error("A record with this name already exists in this centre.");
     if (error) throw error;
     if (!data) throw Error("The record was not saved.");
   },

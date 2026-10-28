@@ -4,7 +4,7 @@ const { build } = await import(
   "../../fets-point/node_modules/vite/dist/node/index.js"
 );
 const root = fileURLToPath(new URL("../../fets-point/", import.meta.url));
-const out = "/workspace/fets-ascender-preview";
+const out = process.env.FETS_ASCENDER_PREVIEW_DIR || "/workspace/fets-ascender-preview";
 await mkdir(out, { recursive: true });
 process.chdir(root);
 await build({

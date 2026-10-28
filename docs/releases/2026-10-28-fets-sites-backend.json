@@ -1,0 +1,95 @@
+{
+  "project_id": "qqewusetilxxfvfkmsed",
+  "verified": true,
+  "verified_at": "2026-10-28T06:18:30.824727+00:00",
+  "migration": {
+    "version": "20261028061819",
+    "path": "supabase/migrations/20261028061819_fets_sites_flexible_forms_inventory.sql",
+    "sha256": "d2e17c4486fc707cd5aee538382cde7d8dca627ec5fc8ab190229faf29c045aa"
+  },
+  "access_migration": {
+    "version": "20261028043206",
+    "path": "supabase/migrations/20261028043206_fets_sites_staff_access.sql",
+    "sha256": "8e17cd516510320b5fab566381ed63541f68153019bd3d96cdeecb74f23da7c8"
+  },
+  "existing_records_preserved": true,
+  "before": {
+    "rooms": {
+      "count": 2,
+      "digest": "e469115a3bde165d613eb6ab48aa1250"
+    },
+    "centres": {
+      "count": 3,
+      "digest": "b089b12d4862d96436afe12df4173d73"
+    },
+    "history": {
+      "count": 6,
+      "digest": "bbf003102a58683507594e79b8e4c4a6"
+    },
+    "renewals": {
+      "count": 0,
+      "digest": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "documents": {
+      "count": 0,
+      "digest": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "programmes": {
+      "count": 0,
+      "digest": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "deployments": {
+      "count": 0,
+      "digest": "d41d8cd98f00b204e9800998ecf8427e"
+    }
+  },
+  "after": {
+    "rooms": {
+      "count": 2,
+      "digest": "e469115a3bde165d613eb6ab48aa1250"
+    },
+    "centres": {
+      "count": 3,
+      "digest": "b089b12d4862d96436afe12df4173d73"
+    },
+    "history": {
+      "count": 6,
+      "digest": "bbf003102a58683507594e79b8e4c4a6"
+    },
+    "renewals": {
+      "count": 0,
+      "digest": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "documents": {
+      "count": 0,
+      "digest": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "programmes": {
+      "count": 0,
+      "digest": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "deployments": {
+      "count": 0,
+      "digest": "d41d8cd98f00b204e9800998ecf8427e"
+    }
+  },
+  "isolated_checks": 19,
+  "frontend_checks": 28,
+  "screen_widths": [
+    1440,
+    768,
+    390,
+    320
+  ],
+  "optional_questions": true,
+  "new_inventory_count": 0,
+  "new_question_count": 0,
+  "anonymous_access": false,
+  "hard_delete_granted": false,
+  "security_findings_for_changed_objects": [],
+  "performance_notes": [
+    "New foreign-key indexes have INFO unused_index notices before first use."
+  ],
+  "fets_online_changed": false,
+  "seeded_records": false
+}

@@ -21,3 +21,7 @@ Eligibility from the saved production settings is eight confirmed active account
 - TypeScript and Vite production build.
 
 The focused branch is based on the current landing release and does not include the pending My Desk redesign in PR #47. The small frontend default/copy update is prepared but not deployed because the VPS Desktop Commander device is offline. The substantive database access fix is already live and works with the currently deployed website for accounts enabled in User Management.
+
+## Website deployment update
+
+The frontend permission default and wording are now deployed as part of release `20261028T062113Z-sites-d712bae`, verified on 28 October 2026. See `2026-10-28-fets-sites-flexible-forms.md` for the combined Sites release and its production receipt. Earlier counts and checksum values above describe the access-fix verification at that time; subsequent staff edits were retained.

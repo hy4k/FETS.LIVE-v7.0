@@ -49,13 +49,19 @@ describe("centre administration", () => {
     ).toBeNull();
     expect(payload(defs, { approved_capacity: "0" }).approved_capacity).toBe(0);
   });
-  it("requires real approval and closeout information", () => {
+  it("allows optional answers but still rejects contradictory dates and quantities", () => {
     expect(() =>
       validateRecord("ascender_programmes", {
         approval: "approved",
         approved_capacity: null,
       }),
-    ).toThrow();
+    ).not.toThrow();
+    expect(() =>
+      validateRecord("ascender_deployments", { readiness: "confirmed" }),
+    ).not.toThrow();
+    expect(() =>
+      validateRecord("ascender_deployments", { status: "closed" }),
+    ).not.toThrow();
     expect(() =>
       validateRecord("ascender_deployments", {
         start_date: "2026-11-01",
@@ -63,11 +69,22 @@ describe("centre administration", () => {
       }),
     ).toThrow();
     expect(() =>
-      validateRecord("ascender_deployments", { readiness: "confirmed" }),
+      validateRecord("ascender_inventory", { quantity: -1 }),
     ).toThrow();
     expect(() =>
-      validateRecord("ascender_deployments", { status: "closed" }),
+      validateRecord("ascender_inventory", { quantity: 1.5 }),
     ).toThrow();
+    expect(() =>
+      validateRecord("ascender_inventory", { quantity: null }),
+    ).not.toThrow();
+    expect(renewalState({ next_due: null }, "2026-10-25")).toMatchObject({
+      attention: false,
+      label: "Date not recorded",
+    });
+    expect(capacity([{ total_seats: null, unavailable_seats: null }])).toEqual({
+      total: null,
+      usable: null,
+    });
   });
   it("does not put shifts, attendance, tasks or credentials in centre forms", () => {
     const keys = [

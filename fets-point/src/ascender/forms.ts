@@ -1,3 +1,4 @@
+import { safeLink } from "./model";
 export type Field = {
   key: string;
   label: string;
@@ -7,10 +8,13 @@ export type Field = {
   min?: number;
   max?: number;
   hint?: string;
+  custom?: boolean;
+  removed?: boolean;
+  setting?: any;
 };
 const people = (staff: any[]): [string, string][] =>
   staff.filter((s) => s.is_active !== false).map((s) => [s.id, s.full_name]);
-export function fields(
+function baseFields(
   table: string,
   staff: any[],
   clients: any[],
@@ -183,32 +187,115 @@ export function fields(
         },
         notes("closeout_notes", "Return / handover notes"),
       ];
+    case "ascender_inventory":
+      return [
+        text("name", "Item name"),
+        text("category", "Category"),
+        {
+          key: "quantity",
+          label: "Quantity",
+          type: "number",
+          min: 0,
+          max: 1000000,
+        },
+        text("unit", "Unit"),
+        text("location", "Location / room"),
+        notes(),
+      ];
     default:
       return [];
   }
 }
-export const defaults: Record<string, any> = {
-  ascender_rooms: { total_seats: 0, unavailable_seats: 0 },
-  ascender_programmes: { approval: "not_checked" },
-  compliance_items: {
-    category: "other",
-    frequency: "once",
-    lead_days: 30,
-    active: true,
-  },
-  ascender_deployments: { status: "planned", readiness: "not_checked" },
-};
-export function payload(fields: Field[], value: any) {
-  return Object.fromEntries(
-    fields.map((f) => [
-      f.key,
-      f.type === "number"
-        ? value[f.key] === "" || value[f.key] == null
-          ? null
-          : Number(value[f.key])
-        : f.type === "date" || f.key.endsWith("_id")
-          ? value[f.key] || null
-          : String(value[f.key] ?? "").trim(),
-    ]),
+export function fields(
+  table: string,
+  staff: any[],
+  clients: any[],
+  renewals: any[],
+): Field[] {
+  return baseFields(table, staff, clients, renewals).map((f) => ({
+    ...f,
+    required: false,
+  }));
+}
+export const defaults: Record<string, any> = {};
+export function configuredFields(
+  table: string,
+  data: any,
+  centreId: string,
+  includeRemoved = false,
+): Field[] {
+  const settings = (data.fields || []).filter(
+    (f: any) => f.centre_id === centreId && f.section === table,
   );
+  const builtins = fields(
+    table,
+    data.staff || [],
+    data.clients || [],
+    (data.renewals || []).filter(
+      (r: any) => r.centre_id === centreId && r.active,
+    ),
+  );
+  return [
+    ...builtins.map((f) => {
+      const saved = settings.find((s: any) => s.field_key === f.key);
+      return {
+        ...f,
+        label: saved?.label || f.label,
+        removed: saved?.removed || false,
+        setting: saved,
+      };
+    }),
+    ...settings
+      .filter((s: any) => s.kind !== "builtin")
+      .map((s: any) => ({
+        key: s.field_key,
+        label: s.label,
+        type: s.kind === "choice" ? "select" : s.kind,
+        options:
+          s.kind === "checkbox"
+            ? [
+                ["true", "Yes"],
+                ["false", "No"],
+              ]
+            : s.options.map((o: string) => [o, o]),
+        custom: true,
+        removed: s.removed,
+        setting: s,
+      })),
+  ].filter((f) => includeRemoved || !f.removed);
+}
+export function answerValue(row: any, f: Field) {
+  return (f as any).custom ? row.custom_answers?.[f.key] : row[f.key];
+}
+export function payload(defs: Field[], value: any) {
+  const result: any = {},
+    custom = { ...(value.custom_answers || {}) };
+  for (const field of defs) {
+    const f = field as any;
+    const v = value[f.key];
+    let answer: any =
+      v === "" || v == null
+        ? null
+        : f.type === "number"
+          ? Number(v)
+          : f.type === "checkbox"
+            ? v === true || v === "true"
+            : String(v).trim() || null;
+    if (f.type === "url" && answer !== null) {
+      const link = safeLink(String(answer));
+      if (!link)
+        throw Error(
+          "Use a complete HTTPS link without embedded login details.",
+        );
+      answer = link;
+    }
+    if (f.type === "number" && answer !== null && !Number.isFinite(answer))
+      throw Error("Enter a valid number for " + f.label + ".");
+    if (f.custom) {
+      if (answer == null) delete custom[f.key];
+      else custom[f.key] = answer;
+    } else result[f.key] = answer;
+  }
+  result.custom_answers = custom;
+  return result;
 }

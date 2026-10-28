@@ -13,6 +13,8 @@ const data: CentreData = {
     version: 1,
   })),
   rooms: [],
+  fields: [],
+  inventory: [],
   programmes: [],
   documents: [],
   renewals: [],
@@ -38,6 +40,8 @@ const keys: Record<string, keyof CentreData> = {
   ascender_documents: "documents",
   compliance_items: "renewals",
   ascender_deployments: "deployments",
+  ascender_fields: "fields",
+  ascender_inventory: "inventory",
 };
 const repository: Repository = {
   async load() {
