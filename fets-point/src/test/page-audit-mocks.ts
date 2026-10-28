@@ -60,6 +60,10 @@ function rows(table: string) {
 
   if (params.has("empty")) return [];
   switch (table) {
+    case "roster_schedules":
+      return [1,2,3,4,5,6,7,8,9,10].map(n=>({id:'time-roster-'+n,profile_id:profile.id,date:new Date().toISOString().slice(0,7)+'-'+String(n).padStart(2,'0'),shift_code:n===4||n===9?'RD':n===5?'HD':'D',shift_label:n===5?'First half':'Early shift',shift_start:n===4||n===9?null:'06:00',shift_end:n===4||n===9?null:n===5?'10:30':'15:00',grace_minutes:0,overtime_hours:n===3?1:0,branch_location:'calicut',version:1}));
+    case "staff_attendance":
+      return [1,2,3,5,6,7,8,10].map(n=>({id:'time-attendance-'+n,staff_id:profile.id,date:new Date().toISOString().slice(0,7)+'-'+String(n).padStart(2,'0'),check_in:'06:00',check_out:n===10?null:n===5?'10:30':n===3?'16:00':'15:00',status:'present',branch_location:'calicut',notes:n===5?null:JSON.stringify({breakMins:30,steps:[{out:'12:00',in:'12:30'}]})}));
     case "staff_profiles":
       return [profile];
     case "fets_vault": return [{id:'fixture-vault',user_id:user.id,title:'Example staff portal',category:'Client portals',username:'sample-user',url:'https://example.test',site_id:'Sample site',password:'training-sample-only',notes:'Isolated design fixture. Not a production credential.',created_at:'2026-10-01',custom_fields:[{key:'Reference',value:'Sample reference'}]}];

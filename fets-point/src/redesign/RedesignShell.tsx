@@ -10099,62 +10099,19 @@ export const deskOperationsModules = {
 };
 
 function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
-  const { desk: deskCloudEnabled } = useWorkspaceCapabilities();
   const [, refresh] = React.useReducer(n => n + 1, 0);
   const F = window.FETS || {};
   const u = F.user || { name: "Staff Member", email: "", role: "Staff" };
-  const [pendingHandovers, setPendingHandovers] = React.useState(null);
-
-  React.useEffect(() => {
-    window.addEventListener("fets-data-loaded", refresh);
-    return () => window.removeEventListener("fets-data-loaded", refresh);
-  }, []);
-  React.useEffect(() => {
-    let cancelled = false;
-    const fetchHandovers = async () => {
-      try {
-        const items = await DB.dbFetchPendingHandovers(u.name);
-        if (!cancelled) setPendingHandovers(Array.isArray(items) ? items.length : null);
-      } catch {
-        if (!cancelled) setPendingHandovers(null);
-      }
-    };
-    fetchHandovers();
-    window.addEventListener("fets-handover-pending", fetchHandovers);
-    return () => {
-      cancelled = true;
-      window.removeEventListener("fets-handover-pending", fetchHandovers);
-    };
-  }, [u.name]);
-
+  React.useEffect(() => { window.addEventListener("fets-data-loaded", refresh); return () => window.removeEventListener("fets-data-loaded", refresh); }, []);
   const ownProfile = (F._staffProfiles || []).find(p => (F._meId && p.id === F._meId) || (F._meUserId && p.user_id === F._meUserId));
   const personalBranch = ownProfile?.branch_assigned || F._meBaseBranch || F._meBranch || branch;
-  const branchLabel = !personalBranch || ["all", "global"].includes(personalBranch)
-    ? "All centres" : personalBranch.charAt(0).toUpperCase() + personalBranch.slice(1);
-  const people = (F._staffProfiles || []).filter(p => p.is_active !== false && p.id && p.full_name &&
-    p.id !== F._meId && p.full_name !== u.name &&
-    (!branch || ["all", "global"].includes(branch) || (p.branch_assigned || "").toLowerCase() === branch));
-
+  const branchLabel = !personalBranch || ["all", "global"].includes(personalBranch) ? "All centres" : personalBranch.charAt(0).toUpperCase() + personalBranch.slice(1);
   return <MyDeskHome
-    canAccessHub={hasFeature(WORKSPACE_FEATURES.find(f=>f.id==="access-hub"), usesAdminWorkspace(Boolean(F.isAdmin), u.email), ownProfile?.permissions)}
-    repository={deskCloudEnabled ? deskRepository : undefined}
     user={{ profileId: ownProfile?.id, id: F._meUserId || u.email || u.name, name: ownProfile?.full_name || u.name, role: u.role || "Staff", branch: branchLabel, avatar: ownProfile?.avatar_url, joiningDate: ownProfile?.joining_date }}
-    people={people}
-    pendingHandovers={pendingHandovers}
     navigate={page => page === "profile" && bridge ? bridge("profile") : setActive(page)}
-    openDrawer={setDrawer}
-    openChat={person => window.dispatchEvent(new CustomEvent("fets-open-chat", { detail: person }))}
-    renderPanel={(panel,kind) => {
-      if (panel === "time") return <LeaveModule />;
-      if (panel === "requests") return <ApplicationsHub isSuperAdmin={Boolean(F.isAdmin)} initialKind={kind} />;
-      if (panel === "handovers") return <HandoverInbox />;
-      if (panel === "checklist") return <ChecklistModule />;
-      if (panel === "growth") return <CertsModule />;
-      return null;
-    }}
+    renderPanel={(_panel,kind) => <ApplicationsHub key={kind || "all"} isSuperAdmin={Boolean(F.isAdmin)} initialKind={kind} />}
   />;
 }
-
 
 Object.assign(window, { MyDeskPage, AttendanceCard, PerformanceSnapshot, DeskMenu, ProfileAvatar });
 

@@ -5,16 +5,10 @@ import MyDeskHome from "./MyDeskHome";
 vi.mock("../desk-workspace/HelpDesk", () => ({
   default: () => <div>Client support</div>,
 }));
-vi.mock("../desk-workspace/TeamRound", () => ({
-  default: () => <div>The team round</div>,
+vi.mock("../desk-workspace/MyTime", () => ({
+  default: () => <div>Personal time analysis</div>,
 }));
 vi.mock("../desk-workspace/SwapInvitations", () => ({ default: () => null }));
-const repository = {
-  load: vi
-    .fn()
-    .mockResolvedValue({ day: "2026-10-28", choice: null, participants: [] }),
-  join: vi.fn(),
-};
 const props = () => ({
   user: {
     id: "staff",
@@ -33,7 +27,6 @@ const props = () => ({
       {panel} {kind}
     </p>
   )),
-  roundRepository: repository,
 });
 afterEach(() => {
   cleanup();
@@ -51,7 +44,13 @@ describe("My Desk workspace", () => {
     expect(screen.getByText("28")).toBeInTheDocument();
     expect(screen.getByText("Joined 1 Oct 2026")).toBeInTheDocument();
     expect(screen.queryByText("Start focus")).not.toBeInTheDocument();
-    for (const text of ["My time", "Checklist", "Thought worth keeping"])
+    for (const text of [
+      "Start focus",
+      "Checklist",
+      "Thought worth keeping",
+      "Better together",
+      "The team round",
+    ])
       expect(screen.queryByText(text)).not.toBeInTheDocument();
   });
   it("explains a missing joining date without substituting account creation", () => {
@@ -71,11 +70,14 @@ describe("My Desk workspace", () => {
   ])("opens %s directly", (label, kind) => {
     const p = props();
     render(<MyDeskHome {...p} />);
+    fireEvent.click(screen.getByRole("button", { name: "Applications" }));
     fireEvent.click(
       screen.getByRole("button", { name: new RegExp("^" + label) }),
     );
     expect(p.renderPanel).toHaveBeenLastCalledWith("requests", kind);
-    fireEvent.click(screen.getByRole("button", { name: "Back to My Desk" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Back to applications" }),
+    );
     expect(
       screen.getByRole("button", { name: /^Shift swap/ }),
     ).toBeInTheDocument();
@@ -94,6 +96,7 @@ describe("My Desk workspace", () => {
         name: /Raise a case|F Vault|Quick access/,
       }),
     ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Applications" }));
     fireEvent.click(screen.getByRole("button", { name: /^Shift swap/ }));
     v.rerender(
       <MyDeskHome
@@ -101,8 +104,20 @@ describe("My Desk workspace", () => {
         user={{ ...p.user, id: "other", name: "Other Person" }}
       />,
     );
+    expect(screen.getByText("Personal time analysis")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /^Shift swap/ }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: /^Shift swap/ }),
+    ).not.toBeInTheDocument();
+  });
+  it("keeps applications, approvals and chat out of the time analysis", () => {
+    const p = props();
+    render(<MyDeskHome {...p} />);
+    expect(screen.getByText("Personal time analysis")).toBeInTheDocument();
+    expect(p.renderPanel).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole("button", { name: /chat|History & approvals/i }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Help desk" }));
+    expect(screen.getByText("Client support")).toBeInTheDocument();
   });
 });

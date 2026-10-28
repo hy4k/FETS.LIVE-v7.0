@@ -1,5 +1,7 @@
 # My Desk, requests and F Vault
 
+The final page layout and current release state are documented in `2026-10-28-my-desk-time-insights.md`. My Time is replaced with personal roster-based insights, and the optional team round described in this preparation record is removed from the final interface. The database migration and support-source verification below remain applicable.
+
 My Desk opens with the signed-in staff member’s full name and inclusive calendar days with FETS, counted in India time from `staff_profiles.joining_date`. A missing or future joining date is shown as unset rather than inferred from account creation. The focus timer, notebook, mood/growth area, My Time and Checklist are removed from this page; existing stored history is retained.
 
 Four cards open Leave, Half-day leave, TOIL day off and Shift swap directly. Requests & approvals retains existing application and claim history. New half-day requests record first/second half off relative to the saved roster: for example, 06:00–15:00 becomes 10:30–15:00 working when the first half is approved off. New swaps show the colleague their before/after shifts on the selected dates and require their agreement before Mithun’s management approval. Approval rechecks roster versions, dates, recorded attendance and overtime; changes to the saved shifts and application status commit together. Missing roster cells are not assumed to be Day shifts. Existing full-day leave, TOIL and claim workflows are retained; this does not introduce a new entitlement or payroll rate.

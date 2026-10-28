@@ -8,28 +8,16 @@ import {
   Inbox,
   Shuffle,
   UserRound,
+  Headphones,
 } from "lucide-react";
-import type { DeskRepository } from "./desk-data";
-import TeamRound from "../desk-workspace/TeamRound";
 import SwapInvitations from "../desk-workspace/SwapInvitations";
-import { tenure, indiaDay } from "../desk-workspace/model";
+import { tenure } from "../desk-workspace/model";
 import HelpDesk from "../desk-workspace/HelpDesk";
+import MyTime from "../desk-workspace/MyTime";
+import type { TimeRepository } from "../desk-workspace/time-repository";
 import "../desk-workspace/desk.css";
-export type DeskPerson = {
-  id: string;
-  full_name: string;
-  branch_assigned?: string;
-  avatar_url?: string;
-};
-export type DeskPanel =
-  | "time"
-  | "handovers"
-  | "checklist"
-  | "growth"
-  | "requests";
+export type DeskPanel = "requests";
 type Props = {
-  canAccessHub?: boolean;
-  repository?: DeskRepository;
   user: {
     profileId?: string;
     id: string;
@@ -39,37 +27,40 @@ type Props = {
     avatar?: string;
     joiningDate?: string;
   };
-  people: DeskPerson[];
-  pendingHandovers: number | null;
   navigate: (page: string) => void;
-  openDrawer: (drawer: string) => void;
-  openChat: (person: DeskPerson) => void;
   renderPanel: (panel: DeskPanel, kind?: string) => React.ReactNode;
-  roundRepository?: React.ComponentProps<typeof TeamRound>["repository"];
+  timeRepository?: TimeRepository;
 };
 export default function MyDeskHome({
   user,
   navigate,
   renderPanel,
-  roundRepository,
+  timeRepository,
 }: Props) {
   const [date, setDate] = useState(() => new Date()),
+    [tab, setTab] = useState<"time" | "applications" | "help">("time"),
     [request, setRequest] = useState<string | null>(null);
   useEffect(() => {
     const tick = setInterval(() => setDate(new Date()), 30000);
-    const open = (event: Event) => {
-      if ((event as CustomEvent).detail === "requests") setRequest("all");
-    };
-    window.addEventListener("fets-desk-tab", open);
-    const asked = (window as any).FETS?._deskTab;
-    if (asked === "requests") setRequest("all");
-    return () => {
-      clearInterval(tick);
-      window.removeEventListener("fets-desk-tab", open);
-    };
+    return () => clearInterval(tick);
   }, []);
   useEffect(() => {
-    setRequest((window as any).FETS?._deskTab === "requests" ? "all" : null);
+    setTab("time");
+    setRequest(null);
+    const open = (event: Event) => {
+      if ((event as CustomEvent).detail === "requests") {
+        setTab("applications");
+        setRequest("all");
+      }
+    };
+    const f = (window as any).FETS;
+    if (f?._deskTab === "requests") {
+      setTab("applications");
+      setRequest("all");
+    }
+    if (f) f._deskTab = undefined;
+    window.addEventListener("fets-desk-tab", open);
+    return () => window.removeEventListener("fets-desk-tab", open);
   }, [user.id]);
   const days = tenure(user.joiningDate, date);
   const choices = [
@@ -82,7 +73,7 @@ export default function MyDeskHome({
     {
       kind: "halfday",
       name: "Half-day leave",
-      hint: "Choose the first or second half",
+      hint: "First or second half of your shift",
       icon: Clock3,
     },
     {
@@ -94,7 +85,7 @@ export default function MyDeskHome({
     {
       kind: "swap",
       name: "Shift swap",
-      hint: "Arrange a swap with a teammate",
+      hint: "Swap with another staff member",
       icon: Shuffle,
     },
   ];
@@ -128,7 +119,7 @@ export default function MyDeskHome({
             ) : (
               <span>
                 Joining date not added
-                <small>Update your staff record in User Management.</small>
+                <small>Ask management to add it in User Management.</small>
               </span>
             )}
           </div>
@@ -149,50 +140,78 @@ export default function MyDeskHome({
           </button>
         </div>
       </header>
-      <div className="pd-section-heading">
+
+      <div className="pd-desk-navigation">
         <h2>My Desk</h2>
-        <button
-          className="pd-link"
-          onClick={() => setRequest(request === null ? "all" : null)}
-        >
-          {request === null ? (
-            <>
-              <Inbox size={16} />
-              Requests & approvals
-            </>
+        <nav aria-label="My Desk sections">
+          {[
+            { id: "time", label: "My time", icon: Clock3 },
+            { id: "applications", label: "Applications", icon: Inbox },
+            { id: "help", label: "Help desk", icon: Headphones },
+          ].map((item) => (
+            <button
+              key={item.id}
+              aria-current={tab === item.id ? "page" : undefined}
+              onClick={() => {
+                setTab(item.id as typeof tab);
+                setRequest(null);
+              }}
+            >
+              <item.icon size={16} />
+              {item.label}
+            </button>
+          ))}
+        </nav>
+      </div>
+      {tab === "time" ? (
+        <MyTime
+          key={user.id}
+          profileId={user.profileId}
+          repository={timeRepository}
+        />
+      ) : tab === "help" ? (
+        <HelpDesk navigate={navigate} />
+      ) : (
+        <section aria-label="Applications">
+          <div className="pd-section-heading">
+            <h3>Leave & shift changes</h3>
+            <button
+              className="pd-link"
+              onClick={() => setRequest(request === null ? "all" : null)}
+            >
+              {request === null ? (
+                <>
+                  <Inbox size={16} />
+                  History & approvals
+                </>
+              ) : (
+                <>
+                  <ArrowLeft size={16} />
+                  Back to applications
+                </>
+              )}
+            </button>
+          </div>
+          {request !== null ? (
+            <div className="pd-requests">
+              {renderPanel("requests", request === "all" ? undefined : request)}
+            </div>
           ) : (
             <>
-              <ArrowLeft size={16} />
-              Back to My Desk
+              <div className="pd-request-grid">
+                {choices.map((item) => (
+                  <button key={item.kind} onClick={() => setRequest(item.kind)}>
+                    <item.icon size={21} strokeWidth={1.5} />
+                    <ArrowUpRight className="pd-card-arrow" size={15} />
+                    <strong>{item.name}</strong>
+                    <small>{item.hint}</small>
+                  </button>
+                ))}
+              </div>
+              <SwapInvitations key={user.id} profileId={user.profileId} />
             </>
           )}
-        </button>
-      </div>
-      {request !== null ? (
-        <section className="pd-requests" aria-label="Applications">
-          {renderPanel("requests", request === "all" ? undefined : request)}
         </section>
-      ) : (
-        <>
-          <section className="pd-request-grid" aria-label="Applications">
-            {choices.map((item) => (
-              <button key={item.kind} onClick={() => setRequest(item.kind)}>
-                <item.icon size={21} strokeWidth={1.5} />
-                <ArrowUpRight className="pd-card-arrow" size={15} />
-                <strong>{item.name}</strong>
-                <small>{item.hint}</small>
-              </button>
-            ))}
-          </section>
-          <SwapInvitations key={user.id} profileId={user.profileId} />
-          <div className="pd-content">
-            <TeamRound
-              key={user.id + indiaDay(date)}
-              repository={roundRepository}
-            />
-            <HelpDesk navigate={navigate} />
-          </div>
-        </>
       )}
     </div>
   );

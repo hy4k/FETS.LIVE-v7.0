@@ -23,7 +23,7 @@ try {
     if (!shell) throw Error('Lazy application shell not found');
     // Reference errors thrown during evaluation reject this import.
     const module = await import('/assets/' + shell);
-    const names = ['CalendarPage','RosterPage','RaiseCasePage','FieldLabel','ChipRow','ShiftHandoverPage'];
+    const names = ['MyDeskPage','CalendarPage','RosterPage','RaiseCasePage','FieldLabel','ChipRow','ShiftHandoverPage'];
     const missing = names.filter(name => typeof window[name] !== 'function');
     if (typeof module.default !== 'function' || missing.length) throw Error('Application exports missing: ' + missing.join(', '));
     return {shell, defaultComponent:true, sharedComponents:names, moduleLoaded:true};

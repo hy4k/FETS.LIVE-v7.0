@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { tenure, indiaDay, roundFor } from "./model";
+import { tenure, indiaDay } from "./model";
 import {
   mergeVault,
   safeLink,
@@ -15,10 +15,6 @@ describe("personal workspace data", () => {
     expect(tenure("2026-10-29", now)).toBe(1);
     for (const input of [undefined, "2026-02-30", "2026-10-30", "n/a"])
       expect(tenure(input, now)).toBeNull();
-  });
-  it("uses the same round for the whole team on the same day", () => {
-    expect(roundFor("2026-10-28")).toEqual(roundFor("2026-10-28"));
-    expect(roundFor("2026-10-29")).not.toEqual(roundFor("2026-10-28"));
   });
   it("keeps newest Quick Access values and merges additional data without deleting records", () => {
     const base: VaultItem = {

@@ -42,7 +42,7 @@ const out = process.env.FETS_AUDIT_DIR || "/workspace/my-desk-audit";
       assert.equal(
         await page
           .getByRole("button", {
-            name: /Start focus|My time|Checklist|Find your focus/,
+            name: /Start focus|Checklist|Find your focus|Better together|Team round/i,
           })
           .count(),
         0,
@@ -53,12 +53,34 @@ const out = process.env.FETS_AUDIT_DIR || "/workspace/my-desk-audit";
           .count(),
         0,
       );
+      await page
+        .getByRole("heading", { name: "Work & time off", exact: true })
+        .waitFor();
+      await page.getByText("Weekly hours", { exact: true }).waitFor();
       assert.equal(
         await page
-          .getByText("0 people have joined today", { exact: true })
+          .getByRole("button", {
+            name: /History & approvals|Shift swap|Half-day leave/,
+          })
           .count(),
-        1,
+        0,
       );
+      await page
+        .getByRole("button", {
+          name:
+            "1 " +
+            new Date().toLocaleDateString("en-IN", {
+              month: "short",
+              timeZone: "Asia/Kolkata",
+            }) +
+            ": Completed work",
+          exact: true,
+        })
+        .click();
+      await page
+        .getByLabel("Selected day details")
+        .getByText("6:00 AM – 3:00 PM", { exact: true })
+        .waitFor();
       assert.equal(
         await page.evaluate(
           () => document.documentElement.scrollWidth > innerWidth + 1,
@@ -66,6 +88,9 @@ const out = process.env.FETS_AUDIT_DIR || "/workspace/my-desk-audit";
         false,
       );
       await page.screenshot({ path: `${out}/my-desk-${width}.png` });
+      await page
+        .getByRole("button", { name: "Applications", exact: true })
+        .click();
       for (const [label, text] of [
         ["Half-day leave", "Which half are you requesting off?"],
         ["Shift swap", "Your Date"],
@@ -85,11 +110,11 @@ const out = process.env.FETS_AUDIT_DIR || "/workspace/my-desk-audit";
         if (label === "Half-day leave")
           await page.screenshot({ path: `${out}/half-day-${width}.png` });
         await page
-          .getByRole("button", { name: "Back to My Desk", exact: true })
+          .getByRole("button", { name: "Back to applications", exact: true })
           .click();
       }
       await page
-        .getByRole("button", { name: "Requests & approvals", exact: true })
+        .getByRole("button", { name: "History & approvals", exact: true })
         .click();
       await page
         .getByRole("button", { name: "My Requests", exact: true })
@@ -98,17 +123,28 @@ const out = process.env.FETS_AUDIT_DIR || "/workspace/my-desk-audit";
         .getByRole("button", { name: "Applications Inbox", exact: true })
         .click();
       await page
-        .getByRole("button", { name: "Back to My Desk", exact: true })
+        .getByRole("button", { name: "Back to applications", exact: true })
         .click();
       await page
         .getByRole("button", { name: "FETS LIVE home", exact: true })
         .click();
       await page.getByRole("button", { name: /^Raise a case/ }).click();
       assert.equal(new URL(page.url()).pathname, "/incident-log");
-      await page.getByRole("button",{name:"Custom Incident",exact:true}).click();
-      await page.getByRole("heading",{name:"RAISE CUSTOM CASE",exact:true}).waitFor();
-      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false);
-      await page.getByRole('button',{name:'Close case form',exact:true}).click();
+      await page
+        .getByRole("button", { name: "Custom Incident", exact: true })
+        .click();
+      await page
+        .getByRole("heading", { name: "RAISE CUSTOM CASE", exact: true })
+        .waitFor();
+      assert.equal(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth > innerWidth + 1,
+        ),
+        false,
+      );
+      await page
+        .getByRole("button", { name: "Close case form", exact: true })
+        .click();
       await page
         .getByRole("button", { name: "FETS LIVE home", exact: true })
         .click();
