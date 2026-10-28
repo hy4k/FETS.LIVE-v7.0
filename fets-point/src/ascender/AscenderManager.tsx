@@ -300,7 +300,7 @@ export default function AscenderManager({
     <main className="am-page">
       <header className="am-page-head">
         <div>
-          <span className="am-eyebrow">ADMIN TOOLS / TEST CENTRES</span>
+          <span className="am-eyebrow">FETS / TEST CENTRES</span>
           <h1>FETS SITES</h1>
         </div>
         <button disabled={loading} onClick={() => void load()}>

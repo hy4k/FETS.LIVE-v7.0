@@ -22,7 +22,7 @@ export const WORKSPACE_FEATURES: WorkspaceFeature[] = [
   { id: 'staff-ot', label: 'OT & TOIL Manager', sub: 'Overtime logging & TOIL cash payouts', staff: false, admin: true },
   { id: 'dashboard', label: 'Dashboard', sub: 'iCloud overview', staff: false, admin: false },
   { placement: 'home', id: 'news-manager', label: 'FETS News', sub: 'Client updates and industry news', staff: true, admin: true },
-  { placement: 'home', id: 'system-manager', label: 'FETS Sites', sub: 'Test centre administration', staff: false, admin: true },
+  { placement: 'home', id: 'system-manager', label: 'FETS Sites', sub: 'Test centre administration', staff: true, admin: true },
   { id: 'user-management', label: 'User Management', sub: 'Roles & permissions', staff: false, admin: true },
   { id: 'branch-delegation', label: 'Branch Access Delegation', sub: 'Temporary access override', staff: false, admin: true },
 ];

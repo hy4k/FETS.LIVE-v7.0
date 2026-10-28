@@ -46,7 +46,7 @@ export const repository: Repository = {
     if (caps.error) throw caps.error;
     if (!caps.data)
       throw Error(
-        "Ascender Manager is available to authorised administrators only.",
+        "FETS Sites is unavailable for this account. Ask management to check your active status and FETS Sites permission in User Management.",
       );
     const day = istDay(),
       time = new Intl.DateTimeFormat("en-GB", {
