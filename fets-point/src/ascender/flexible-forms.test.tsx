@@ -127,7 +127,7 @@ describe("flexible Sites forms", () => {
       screen.getByRole("button", { name: "Clear answer: Quantity" }),
     );
     expect(repo.save).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Save", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>
       expect(repo.save).toHaveBeenCalledWith(
         "ascender_inventory",
@@ -156,7 +156,7 @@ describe("flexible Sites forms", () => {
       target: { value: "My record" },
     });
     expect(screen.getByLabelText("Existing document link")).not.toBeRequired();
-    fireEvent.click(screen.getByRole("button", { name: "Save", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await screen.findByRole("alert");
     expect(screen.getByLabelText("Document name")).toHaveValue("My record");
   });
@@ -174,9 +174,7 @@ describe("flexible Sites forms", () => {
         close={vi.fn()}
       />,
     );
-    fireEvent.click(
-      screen.getByRole("button", { name: "Remove Quantity", exact: true }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Remove Quantity" }));
     await waitFor(() =>
       expect(repo.save).toHaveBeenCalledWith(
         "ascender_fields",
@@ -213,9 +211,7 @@ describe("flexible Sites forms", () => {
         close={vi.fn()}
       />,
     );
-    fireEvent.click(
-      screen.getByRole("button", { name: "Restore Quantity", exact: true }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Restore Quantity" }));
     await waitFor(() =>
       expect(repo.save).toHaveBeenLastCalledWith(
         "ascender_fields",
@@ -236,18 +232,14 @@ describe("flexible Sites forms", () => {
         close={vi.fn()}
       />,
     );
-    fireEvent.click(
-      screen.getByRole("button", { name: "Add question", exact: true }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Add question" }));
     fireEvent.change(screen.getByLabelText("Question"), {
       target: { value: "Floor" },
     });
     fireEvent.change(screen.getByLabelText("Answer type"), {
       target: { value: "number" },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: "Save question", exact: true }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Save question" }));
     await waitFor(() =>
       expect(repo.save).toHaveBeenCalledWith(
         "ascender_fields",
@@ -284,23 +276,18 @@ describe("flexible Sites forms", () => {
     fireEvent.click(
       await screen.findByRole("button", {
         name: "General inventory",
-        exact: true,
       }),
     );
-    await screen.findByRole("heading", { name: "Computers", exact: true });
-    fireEvent.click(
-      screen.getByRole("button", { name: "Delete", exact: true }),
-    );
+    await screen.findByRole("heading", { name: "Computers" });
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     await waitFor(() =>
       expect(
-        screen.queryByRole("heading", { name: "Computers", exact: true }),
+        screen.queryByRole("heading", { name: "Computers" }),
       ).not.toBeInTheDocument(),
     );
     fireEvent.click(screen.getByLabelText("Show deleted items"));
-    await screen.findByRole("heading", { name: "Computers", exact: true });
-    fireEvent.click(
-      screen.getByRole("button", { name: "Restore", exact: true }),
-    );
+    await screen.findByRole("heading", { name: "Computers" });
+    fireEvent.click(screen.getByRole("button", { name: "Restore" }));
     await waitFor(() =>
       expect(repo.save).toHaveBeenLastCalledWith(
         "ascender_inventory",

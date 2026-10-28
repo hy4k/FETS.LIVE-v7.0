@@ -17,8 +17,8 @@ Details and migration hashes are in `2026-10-28-fets-sites-backend.json`. FETS O
 ## Validation and release
 
 - 19 isolated PostgreSQL checks: optional fields, retained data, custom answer validation, removal/restoration, actor attribution, denied access, duplicate stock and stale edits.
-- 28 frontend tests, TypeScript and production build.
+- 28 frontend tests, production application TypeScript check (`tsc -b tsconfig.app.json`) and Vite build.
 - Browser workflows at 1440, 768, 390 and 320 pixels: question removal/restoration, custom date answers, inventory creation/edit/deletion/restoration, answer clearing, failed-save recovery and centre isolation; no page errors or horizontal overflow.
 - The guarded release script `scripts/releases/deploy-fets-sites.sh` checks the current public release and image, retains the rollback image/configuration, builds the exact reviewed commit, evaluates the compiled application module, verifies public assets, and compares runtime/Nginx configuration.
 
-Website deployment is pending the guarded release run. This branch includes the staff-access frontend fix in PR #48; the separate My Desk redesign in PR #47 remains on its own branch.
+Deployed and independently verified on 28 October 2026: release `20261028T062113Z-sites-d712bae`, web commit `d712bae63b785eefff2c398e89b35a37a672d53e`. All 57 public file/route comparisons passed. Candidate and public application modules evaluated successfully; an independent browser also imported the Sites module and verified its new controls. Runtime environment values, Nginx, mounts, ports and restart settings are preserved. The previous entry asset is still served for existing browser sessions. Rollback: `bash /opt/fets-releases/20261028T062113Z-sites-d712bae/rollback.sh`. The production receipt is `2026-10-28-fets-sites-production.json`. This branch includes the staff-access frontend fix in PR #48; the separate My Desk redesign in PR #47 remains on its own branch.
