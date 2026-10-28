@@ -25,4 +25,8 @@ No new database migration is required. The already-applied Live-only request mig
 - Production application TypeScript check and Vite build.
 - Full-app browser checks at 1440, 768, 390 and 320 pixels, including time analysis, the four application forms/history, Home/Vault navigation and no overflow or page errors. Fixtures remain isolated from production.
 
-Deployment is pending the guarded `scripts/releases/deploy-my-desk-time.sh` run against the verified Sites release `20261028T062113Z-sites-d712bae`. It retains rollback and previous hashed assets, checks the exact repository commit and backend receipts, preserves runtime/Nginx configuration, evaluates the real compiled app and compares public files/routes after switching.
+Deployed on 28 October 2026 as `20261028T131047Z-my-desk-b90261c`, web commit `b90261cf73508c99b0f17fe7e1bff5e07fdd5f8c`. The completed checksum-verified VPS script reports 58 public file/route comparisons passed, runtime/Nginx preservation and retained rollback. Independent public checks confirmed the release commit, HTML checksum, My Desk/calendar/roster/Sites route responses, retained previous shell asset and successful evaluation of the actual compiled application module with no page errors. These checks did not log in or create production test records.
+
+Live-only backend verification at 13:18 UTC confirmed the existing request migration and invoker-only functions, authenticated execution and no anonymous execution. No new migration was needed. Details and evidence boundaries are recorded in `2026-10-28-my-desk-time-production.json`.
+
+Rollback: `bash /opt/fets-releases/20261028T131047Z-my-desk-b90261c/rollback.sh`.
