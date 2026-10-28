@@ -31,7 +31,6 @@ import { BranchIndicator } from './components/BranchIndicator';
 import { MobileHome } from './components/MobileHome';
 import { MobileCalendarView as MobileCalendar } from './components/MobileCalendarView';
 import { MobileRegisterView as MobileRegister } from './components/MobileRegisterView';
-import { MobileIncidentManager } from './components/MobileIncidentManager';
 
 import { supabase } from './lib/supabase';
 import { useIsMobile, useScreenSize } from './hooks/use-mobile';
@@ -246,7 +245,6 @@ export function AppContent() {
           <FetsIntelligence initialQuery={aiQuery} />
         </Suspense>
       );
-      if (activeTab === 'incident-log') return <MobileIncidentManager />;
       if (activeTab === 'user-management') return <UserManagement onNavigate={setActiveTab} />;
       if (activeTab === 'profile') return <FetsProfilePage />;
  
@@ -282,6 +280,7 @@ export function AppContent() {
       if (activeTab === 'fets-calendar') subPage = 'calendar';
       else if (activeTab === 'fets-roster') subPage = 'roster';
       else if (activeTab === 'my-desk') subPage = 'desk';
+      else if (activeTab === 'incident-log') subPage = 'case';
       else if (activeTab === 'command-center') subPage = 'live';
       else subPage = activeTab;
 

@@ -660,6 +660,7 @@ export async function loadApplications(F: any) {
         if (status === "submitted") status = "pending";
         serverApps.push({
           id: String(r.id),
+          workflow_version:r.workflow_version||0,version:r.version||1,half_day_period:r.half_day_period,roster_snapshot:r.roster_snapshot,partner_reply:r.partner_reply,
           kind: r.kind || "leave",
           status,
           applicant_id: r.applicant_id,

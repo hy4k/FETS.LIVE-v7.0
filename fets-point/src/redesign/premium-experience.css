@@ -79,3 +79,5 @@
 .premium-nav .nav-controls { margin-left:0; }
 .fets-redesign-root .premium-nav .topnav-burger { display:none!important; }
 @media(min-width:651px) { .premium-nav>.fets-ai-input { flex:0 1 auto; } }
+/* Home's banner is a little shorter; its extra focus CTA has moved out. */
+.operations-home .personal-hero{min-height:370px;padding-bottom:24px}.operations-home .personal-hero-copy{padding-top:18px}.operations-home .hero-wordmark{font-size:clamp(66px,7.2vw,106px)}.operations-home .centre-clock{margin-top:-80px}@media(min-width:1600px){.operations-home .personal-hero{min-height:395px}}@media(max-width:650px){.operations-home .personal-hero{min-height:0;padding-bottom:18px}.operations-home .hero-wordmark{font-size:clamp(59px,15vw,82px)}.operations-home .centre-clock{margin-top:20px}.operations-home .personal-hero-copy{padding-top:20px}}
