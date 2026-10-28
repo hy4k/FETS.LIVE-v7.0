@@ -2,12 +2,10 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   ArrowUpRight,
   Building2,
-  ChevronRight,
-  MapPin,
   Plus,
   RefreshCw,
-  Truck,
-  X,
+  Settings2,
+  Search,
 } from "lucide-react";
 import {
   repository as liveRepository,
@@ -15,196 +13,36 @@ import {
   type CentreData,
   type Row,
 } from "./repository";
-import {
-  CENTRE_NAMES,
-  capacity,
-  istDay,
-  renewalState,
-  safeLink,
-} from "./model";
-import { defaults, fields, payload } from "./forms";
+import { CENTRE_NAMES } from "./model";
+import { answerValue, configuredFields } from "./forms";
+import { AnswerList, Questions, sectionNames, SiteEditor } from "./SiteForms";
 import "./ascender.css";
-const titles: Record<string, string> = {
-  ascender_centres: "Centre details",
-  ascender_rooms: "Room / lab",
-  ascender_programmes: "Exam programme",
-  ascender_documents: "Document link",
-  compliance_items: "Renewal",
-  ascender_deployments: "Mobile deployment",
+const sectionData: Record<string, keyof CentreData> = {
+  ascender_centres: "centres",
+  ascender_rooms: "rooms",
+  ascender_programmes: "programmes",
+  ascender_documents: "documents",
+  compliance_items: "renewals",
+  ascender_deployments: "deployments",
+  ascender_inventory: "inventory",
 };
-const shown = (v: any) =>
-  v === null || v === undefined || v === "" ? "Not recorded" : String(v);
-const date = (v: string) =>
-  v
-    ? new Date(v + "T12:00:00Z").toLocaleDateString("en-IN", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-        timeZone: "Asia/Kolkata",
-      })
-    : "Not recorded";
-function Link({ url, children }: { url: string; children: React.ReactNode }) {
-  const safe = safeLink(url);
-  return safe ? (
-    <a href={safe} target="_blank" rel="noopener noreferrer">
-      {children}
-      <ArrowUpRight size={14} />
-    </a>
-  ) : (
-    <span>Not linked</span>
-  );
-}
-function Editor({
-  table,
-  row,
-  centre,
-  data,
-  close,
-  saved,
-  repository,
-}: {
-  table: string;
-  row?: Row;
-  centre: Row;
-  data: CentreData;
-  close: () => void;
-  saved: () => Promise<void>;
-  repository: Repository;
-}) {
-  const defs = fields(
-    table,
-    data.staff,
-    data.clients,
-    data.renewals.filter((r) => r.centre_id === centre.id && r.active),
-  );
-  const [value, setValue] = useState<Row>({ ...defaults[table], ...row }),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    ref.current?.showModal();
-    return () => ref.current?.close();
-  }, []);
-  async function save(e: React.FormEvent) {
-    e.preventDefault();
-    if (busy) return;
-    setBusy(true);
-    setError("");
-    try {
-      const next = payload(defs, value);
-      if (table !== "ascender_centres") next.centre_id = centre.id;
-      await repository.save(table, next, row);
-      await saved();
-      close();
-    } catch (e: any) {
-      setError(e.message || "Could not save. Your details are still here.");
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <dialog
-      ref={ref}
-      className="am-dialog"
-      aria-labelledby="am-dialog-title"
-      onCancel={(e) => {
-        e.preventDefault();
-        if (!busy) close();
-      }}
-    >
-      <form onSubmit={save}>
-        <header>
-          <div>
-            <small>{CENTRE_NAMES[centre.code]}</small>
-            <h2 id="am-dialog-title">
-              {row ? "Edit" : "Add"} {titles[table].toLowerCase()}
-            </h2>
-          </div>
-          <button
-            type="button"
-            className="am-icon"
-            aria-label="Close form"
-            disabled={busy}
-            onClick={close}
-          >
-            <X size={20} />
-          </button>
-        </header>
-        <div className="am-fields">
-          {defs.map((f) => (
-            <label
-              key={f.key}
-              className={f.type === "textarea" ? "am-wide" : ""}
-            >
-              {f.label}
-              {f.required ? " *" : ""}
-              {f.type === "select" ? (
-                <select
-                  aria-label={f.label}
-                  required={f.required}
-                  value={value[f.key] ?? ""}
-                  onChange={(e) =>
-                    setValue({ ...value, [f.key]: e.target.value })
-                  }
-                >
-                  <option value="">Select…</option>
-                  {value[f.key] &&
-                    !f.options?.some(([id]) => id === value[f.key]) && (
-                      <option value={value[f.key]}>
-                        Previous selection (inactive)
-                      </option>
-                    )}
-                  {f.options?.map(([id, name]) => (
-                    <option key={id} value={id}>
-                      {name}
-                    </option>
-                  ))}
-                </select>
-              ) : f.type === "textarea" ? (
-                <textarea
-                  aria-label={f.label}
-                  maxLength={10000}
-                  value={value[f.key] ?? ""}
-                  onChange={(e) =>
-                    setValue({ ...value, [f.key]: e.target.value })
-                  }
-                />
-              ) : (
-                <input
-                  aria-label={f.label}
-                  type={f.type || "text"}
-                  required={f.required}
-                  min={f.min}
-                  max={f.max}
-                  step={f.type === "number" ? 1 : undefined}
-                  maxLength={f.type === "url" ? 2000 : 500}
-                  value={value[f.key] ?? ""}
-                  onChange={(e) =>
-                    setValue({ ...value, [f.key]: e.target.value })
-                  }
-                />
-              )}
-              {f.hint && <small>{f.hint}</small>}
-            </label>
-          ))}
-        </div>
-        {error && (
-          <p role="alert" className="am-error">
-            {error}
-          </p>
-        )}
-        <footer>
-          <button type="button" disabled={busy} onClick={close}>
-            Cancel
-          </button>
-          <button className="am-primary" disabled={busy}>
-            {busy ? "Saving…" : "Save"}
-          </button>
-        </footer>
-      </form>
-    </dialog>
-  );
-}
+const primary: Record<string, string> = {
+  ascender_rooms: "name",
+  ascender_programmes: "programme",
+  ascender_documents: "title",
+  compliance_items: "title",
+  ascender_deployments: "venue",
+  ascender_inventory: "name",
+};
+const singular: Record<string, string> = {
+  ascender_centres: "centre details",
+  ascender_rooms: "room / lab",
+  ascender_programmes: "programme",
+  ascender_documents: "document",
+  compliance_items: "renewal",
+  ascender_deployments: "deployment",
+  ascender_inventory: "item",
+};
 export default function AscenderManager({
   repository = liveRepository,
   onNavigate,
@@ -214,93 +52,121 @@ export default function AscenderManager({
 }) {
   const [data, setData] = useState<CentreData | null>(null),
     [selected, setSelected] = useState("calicut"),
-    [tab, setTab] = useState("overview"),
+    [section, setSection] = useState("ascender_centres"),
     [loading, setLoading] = useState(true),
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
     [edit, setEdit] = useState<{ table: string; row?: Row } | null>(null),
-    [archiving, setArchiving] = useState(false);
-  const mounted = useRef(true);
-  async function load() {
+    [questions, setQuestions] = useState<string | null>(null),
+    [busy, setBusy] = useState(false),
+    [query, setQuery] = useState(""),
+    [deleted, setDeleted] = useState(false);
+  const mounted = useRef(true),
+    request = useRef(0);
+  const load = async () => {
+    const id = ++request.current;
     setLoading(true);
     setError("");
     try {
-      const d = await repository.load();
-      if (mounted.current) setData(d);
+      const rows = await repository.load();
+      if (mounted.current && id === request.current) setData(rows);
     } catch (e: any) {
-      if (mounted.current)
-        setError(e.message || "Could not load centre records.");
+      if (mounted.current && id === request.current)
+        setError(e.message || "Could not load Sites.");
     } finally {
-      if (mounted.current) setLoading(false);
+      if (mounted.current && id === request.current) setLoading(false);
     }
-  }
+  };
   useEffect(() => {
     mounted.current = true;
     void load();
     return () => {
       mounted.current = false;
+      request.current++;
     };
   }, [repository]);
-  const go = (page: string) =>
-    onNavigate
-      ? onNavigate(page, selected === "mobile" ? "global" : selected)
-      : window.dispatchEvent(new CustomEvent("fets-go", { detail: { page } }));
-  const person = (id: string) =>
-    data?.staff.find((s) => s.id === id || s.user_id === id)?.full_name ||
-    "Not assigned";
-  const client = (id: string) =>
-    data?.clients.find((c) => c.id === id)?.name || "Not recorded";
-  const centre = data?.centres.find((c) => c.code === selected);
-  const records = (key: keyof CentreData) =>
-    data?.[key].filter((r) => r.centre_id === centre?.id && !r.archived) || [];
-  const renewals = records("renewals")
-    .filter((r) => r.active)
-    .sort((a, b) => a.next_due.localeCompare(b.next_due));
-  const roomCapacity = capacity(records("rooms"));
-  async function archive(table: string, row: Row) {
+  const centre = data?.centres.find((c) => c.code === selected),
+    defs = centre && data ? configuredFields(section, data, centre.id) : [];
+  const rows = (data?.[sectionData[section]] || [])
+    .filter(
+      (r) =>
+        (section === "ascender_centres" ? r.id : r.centre_id) === centre?.id,
+    )
+    .filter((r) =>
+      section === "ascender_inventory"
+        ? Boolean(r.archived) === deleted
+        : !r.archived && r.active !== false,
+    )
+    .filter(
+      (r) =>
+        !query ||
+        defs
+          .map((f) => answerValue(r, f))
+          .filter((v) => v != null)
+          .join(" ")
+          .toLowerCase()
+          .includes(query.toLowerCase()),
+    );
+  const title = (row: Row) =>
+    defs.some((f) => f.key === primary[section]) && row[primary[section]]
+      ? String(row[primary[section]])
+      : singular[section];
+  const remove = async (row: Row) => {
+    const restoring = Boolean(row.archived);
     if (
+      !restoring &&
       !confirm(
-        `Archive “${row.name || row.title || row.programme}”? Its history will be kept.`,
+        `Delete “${title(row)}” from current inventory? Its history is kept and the item can be restored.`,
       )
     )
       return;
-    setArchiving(true);
+    setBusy(true);
     try {
       await repository.save(
-        table,
-        table === "compliance_items" ? { active: false } : { archived: true },
+        "ascender_inventory",
+        { archived: !restoring },
         row,
       );
-      setNotice("Archived. History retained.");
+      setNotice(
+        restoring ? "Item restored." : "Item deleted from current inventory.",
+      );
       await load();
     } catch (e: any) {
       setError(e.message);
     } finally {
-      setArchiving(false);
+      setBusy(false);
     }
-  }
-  const add = (table: string) => (
-    <button onClick={() => setEdit({ table })}>
-      <Plus size={15} />
-      Add {titles[table].toLowerCase()}
-    </button>
+  };
+  const archive = async (row: Row) => {
+    if (!confirm(`Archive this ${singular[section]}? Its history is kept.`))
+      return;
+    setBusy(true);
+    try {
+      await repository.save(
+        section,
+        section === "compliance_items" ? { active: false } : { archived: true },
+        row,
+      );
+      setNotice("Entry archived.");
+      await load();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const go = (page: string) =>
+    onNavigate
+      ? onNavigate(page, selected === "mobile" ? "global" : selected)
+      : window.dispatchEvent(new CustomEvent("fets-go", { detail: { page } }));
+  const sections = Object.keys(sectionNames).filter(
+    (k) => selected === "mobile" || k !== "ascender_deployments",
   );
-  const actions = (table: string, row: Row) => (
-    <div className="am-row-actions">
-      <button onClick={() => setEdit({ table, row })}>Edit</button>
-      {table !== "ascender_deployments" && (
-        <button disabled={archiving} onClick={() => archive(table, row)}>
-          Archive
-        </button>
-      )}
-    </div>
-  );
-  const empty = (text: string) => <p className="am-empty">{text}</p>;
   return (
-    <main className="am-page">
+    <main className="am-page am-flex-sites">
       <header className="am-page-head">
         <div>
-          <span className="am-eyebrow">FETS / TEST CENTRES</span>
+          <span className="am-eyebrow">TEST CENTRES</span>
           <h1>FETS SITES</h1>
         </div>
         <button disabled={loading} onClick={() => void load()}>
@@ -314,562 +180,312 @@ export default function AscenderManager({
         </p>
       )}
       {error && (
-        <div role="alert" className="am-error">
-          {error} <button onClick={() => void load()}>Retry</button>
-        </div>
+        <p role="alert" className="am-error">
+          {error}
+          <button onClick={() => void load()}>Retry</button>
+        </p>
       )}
-      {!data && !error && <p className="am-empty">Loading centre records…</p>}
+      {!data && !error && <p>Loading centre records…</p>}
       {data && (
         <>
           <nav className="am-centres" aria-label="Test centres">
-            {["calicut", "cochin", "mobile"].map((code) => {
-              const c = data.centres.find((c) => c.code === code),
-                cap = capacity(data.rooms.filter((r) => r.centre_id === c?.id)),
-                due = data.renewals.filter(
-                  (r) =>
-                    r.centre_id === c?.id &&
-                    r.active &&
-                    renewalState(r).attention,
-                ).length;
-              return (
-                <button
-                  key={code}
-                  aria-pressed={selected === code}
-                  className={`am-centre am-${code}`}
-                  onClick={() => {
-                    setSelected(code);
-                    setTab("overview");
-                    setNotice("");
-                  }}
-                >
-                  <div className="am-centre-title">
-                    {code === "mobile" ? (
-                      <Truck size={20} />
-                    ) : (
-                      <Building2 size={20} />
-                    )}
-                    <strong>{CENTRE_NAMES[code]}</strong>
-                    <ChevronRight size={17} />
-                  </div>
-                  <span>{person(c?.manager_id)}</span>
-                  <div className="am-centre-foot">
-                    <span>
-                      {cap
-                        ? `${cap.usable} usable seats`
-                        : "Capacity not recorded"}
-                    </span>
-                    {due > 0 && <b>{due} due</b>}
-                  </div>
-                </button>
-              );
-            })}
+            {["calicut", "cochin", "mobile"].map((code) => (
+              <button
+                key={code}
+                aria-pressed={selected === code}
+                onClick={() => {
+                  setSelected(code);
+                  setSection("ascender_centres");
+                  setQuery("");
+                  setDeleted(false);
+                }}
+              >
+                <Building2 size={18} />
+                <strong>{CENTRE_NAMES[code]}</strong>
+              </button>
+            ))}
+          </nav>
+          <nav className="am-section-nav" aria-label="Site sections">
+            {sections.map((key) => (
+              <button
+                key={key}
+                aria-pressed={section === key}
+                onClick={() => {
+                  setSection(key);
+                  setQuery("");
+                  setDeleted(false);
+                }}
+              >
+                {sectionNames[key]}
+              </button>
+            ))}
+            <button
+              aria-pressed={section === "history"}
+              onClick={() => setSection("history")}
+            >
+              History
+            </button>
           </nav>
           {centre && (
             <>
               <div className="am-section-head">
                 <div>
-                  <h2>{CENTRE_NAMES[selected]}</h2>
-                  <p>
-                    {selected === "mobile"
-                      ? "Deployment records and centre administration"
-                      : "Centre administration"}
-                  </p>
+                  <span className="am-eyebrow">{CENTRE_NAMES[selected]}</span>
+                  <h2>{sectionNames[section] || "History"}</h2>
                 </div>
-                <span className="am-updated">
-                  Updated{" "}
-                  {new Date(centre.updated_at).toLocaleDateString("en-IN", {
-                    timeZone: "Asia/Kolkata",
-                  })}
-                </span>
+                {section !== "history" && (
+                  <div className="am-row-actions">
+                    <button onClick={() => setQuestions(section)}>
+                      <Settings2 size={15} />
+                      Edit questions
+                    </button>
+                    <button
+                      className="am-primary"
+                      onClick={() =>
+                        setEdit({
+                          table: section,
+                          row:
+                            section === "ascender_centres" ? centre : undefined,
+                        })
+                      }
+                    >
+                      {section === "ascender_centres" ? (
+                        "Edit details"
+                      ) : (
+                        <>
+                          <Plus size={15} />
+                          Add {singular[section]}
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
               </div>
-              <nav className="am-tabs" aria-label="Centre sections">
-                {[
-                  ["overview", "Overview"],
-                  ["capacity", "Rooms & programmes"],
-                  ["documents", "Documents & renewals"],
-                  ...(selected === "mobile"
-                    ? [["deployments", "Deployments"]]
-                    : []),
-                  ["history", "History"],
-                ].map(([id, label]) => (
-                  <button
-                    key={id}
-                    aria-current={tab === id ? "page" : undefined}
-                    onClick={() => setTab(id)}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </nav>
-              {tab === "overview" && (
-                <div className="am-overview">
-                  <section className="am-panel">
-                    <div className="am-panel-head">
-                      <h3>Centre details</h3>
-                      <button
-                        onClick={() =>
-                          setEdit({ table: "ascender_centres", row: centre })
-                        }
-                      >
-                        Edit details
-                      </button>
-                    </div>
-                    <dl className="am-details">
-                      {[
-                        ["Address", centre.address],
-                        ["Centre phone", centre.contact_phone],
-                        ["Centre email", centre.contact_email],
-                        ["Responsible manager", person(centre.manager_id)],
-                        ["Backup contact", person(centre.backup_id)],
-                        ["Opening hours", centre.operating_hours],
-                        [
-                          "Hours effective from",
-                          centre.hours_effective_from
-                            ? date(centre.hours_effective_from)
-                            : "",
-                        ],
-                        ["Notes", centre.notes],
-                      ].map(([label, value]) => (
-                        <div key={label}>
-                          <dt>{label}</dt>
-                          <dd>{shown(value)}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                    {centre.map_url && (
-                      <Link url={centre.map_url}>View location</Link>
-                    )}
-                    <p className="am-caption">
-                      Staff timings and attendance calculations remain in
-                      Roster.
-                    </p>
-                  </section>
-                  <div className="am-side">
-                    <section className="am-panel">
-                      <h3>Needs attention</h3>
-                      {renewals.filter((r) => renewalState(r).attention).length
-                        ? renewals
-                            .filter((r) => renewalState(r).attention)
-                            .slice(0, 5)
-                            .map((r) => (
-                              <button
-                                key={r.id}
-                                className="am-attention"
-                                onClick={() => setTab("documents")}
-                              >
-                                <span>
-                                  {r.title}
-                                  <small>
-                                    {person(r.owner_profile_id)} ·{" "}
-                                    {date(r.next_due)}
-                                  </small>
-                                </span>
-                                <b>{renewalState(r).label}</b>
-                              </button>
-                            ))
-                        : empty(
-                            "No renewal reminders due. Unrecorded renewals are not assessed.",
-                          )}
-                      {!centre.manager_id && (
-                        <p className="am-caption">
-                          Assign a responsible manager in centre details.
-                        </p>
-                      )}
-                    </section>
-                    <section className="am-panel">
-                      <h3>
-                        {selected === "mobile"
-                          ? "Next deployment"
-                          : "Next scheduled exam"}
-                      </h3>
-                      {selected === "mobile"
-                        ? (() => {
-                            const r = records("deployments")
-                              .filter(
-                                (r) =>
-                                  r.end_date >= istDay() &&
-                                  !["cancelled", "closed"].includes(r.status),
-                              )
-                              .sort((a, b) =>
-                                a.start_date.localeCompare(b.start_date),
-                              )[0];
-                            return r ? (
-                              <>
-                                <strong>{r.venue}</strong>
-                                <p>
-                                  {date(r.start_date)} – {date(r.end_date)}
-                                </p>
-                                <button onClick={() => setTab("deployments")}>
-                                  Open deployment
-                                  <ChevronRight size={14} />
-                                </button>
-                              </>
-                            ) : (
-                              empty("No upcoming deployment recorded.")
-                            );
-                          })()
-                        : (() => {
-                            const s = data.sessions.find(
-                              (s) => s.branch_location === selected,
-                            );
-                            return s ? (
-                              <>
-                                <strong>{s.exam_name || s.client_name}</strong>
-                                <p>
-                                  {date(s.date)} · {s.start_time?.slice(0, 5)}{" "}
-                                  IST
-                                </p>
-                                <button onClick={() => go("calendar")}>
-                                  Open Calendar
-                                  <ArrowUpRight size={14} />
-                                </button>
-                              </>
-                            ) : (
-                              empty("No upcoming exam recorded in Calendar.")
-                            );
-                          })()}
-                    </section>
+              {section === "ascender_inventory" && (
+                <div className="am-inventory-controls">
+                  <div>
+                    <Search size={16} />
+                    <input
+                      type="search"
+                      aria-label="Search inventory"
+                      placeholder="Find an item, category or location…"
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                    />
                   </div>
-                  <section className="am-panel am-wide">
-                    <div className="am-panel-head">
-                      <h3>People & work</h3>
-                      <button onClick={() => go("user-management")}>
-                        User Management
-                        <ArrowUpRight size={14} />
-                      </button>
-                    </div>
-                    {selected !== "mobile" && (
-                      <p>
-                        Weekly lead:{" "}
-                        <strong>
-                          {person(
-                            data.leads.find((l) => l.branch === selected)
-                              ?.lead_id,
-                          )}
-                        </strong>{" "}
-                        <span className="am-caption">from The Shift</span>
-                      </p>
-                    )}
-                    <div className="am-people">
-                      {data.staff
-                        .filter(
-                          (s) =>
-                            s.is_active !== false &&
-                            s.branch_assigned === selected,
-                        )
-                        .map((s) => (
-                          <span key={s.id}>{s.full_name}</span>
-                        ))}
-                    </div>
-                    <div className="am-links">
-                      <button onClick={() => go("roster")}>
-                        Open Roster
-                        <ArrowUpRight size={14} />
-                      </button>
-                      <button onClick={() => go("handover")}>
-                        Open The Shift
-                        <ArrowUpRight size={14} />
-                      </button>
-                      <button onClick={() => go("actionables")}>
-                        Open Actionables
-                        <ArrowUpRight size={14} />
-                      </button>
-                    </div>
-                    {selected === "mobile" && (
-                      <p className="am-caption">
-                        Deployment leads are assigned per event. Staff retain
-                        their home centre; Roster opens all centres. Select the staff’s home centre in The Shift.
-                      </p>
-                    )}
-                  </section>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={deleted}
+                      onChange={(e) => setDeleted(e.target.checked)}
+                    />
+                    Show deleted items
+                  </label>
                 </div>
               )}
-              {tab === "capacity" && (
-                <>
-                  <section className="am-panel">
-                    <div className="am-panel-head">
-                      <div>
-                        <h3>Rooms & capacity</h3>
-                        <p>
-                          {roomCapacity
-                            ? `${roomCapacity.usable} usable / ${roomCapacity.total} total seats`
-                            : "Record rooms to calculate usable capacity."}
-                        </p>
-                      </div>
-                      {add("ascender_rooms")}
-                    </div>
-                    {records("rooms").map((r) => (
-                      <article className="am-record" key={r.id}>
-                        <div>
-                          <h4>{r.name}</h4>
+              {section === "history" ? (
+                <section className="am-history">
+                  {data.history
+                    .filter((r) => r.centre_id === centre.id)
+                    .map((r) => {
+                      const before = r.before_data || {},
+                        after = r.after_data || {},
+                        fieldDefs = configuredFields(
+                          r.table_name,
+                          data,
+                          centre.id,
+                          true,
+                        );
+                      const changes =
+                        r.table_name === "ascender_fields"
+                          ? [
+                              ["Question", after.label],
+                              ["Removed", after.removed ? "Yes" : "No"],
+                            ]
+                          : fieldDefs
+                              .filter(
+                                (f) =>
+                                  JSON.stringify(answerValue(before, f)) !==
+                                  JSON.stringify(answerValue(after, f)),
+                              )
+                              .map((f) => [
+                                f.label,
+                                String(answerValue(after, f) ?? "Cleared"),
+                              ]);
+                      return (
+                        <details key={r.id}>
+                          <summary>
+                            {sectionNames[r.table_name] || "Questions"} ·{" "}
+                            {new Date(r.changed_at).toLocaleString("en-IN", {
+                              timeZone: "Asia/Kolkata",
+                            })}
+                          </summary>
                           <p>
-                            <strong>
-                              {r.total_seats - r.unavailable_seats} usable
-                            </strong>{" "}
-                            · {r.total_seats} total · {r.unavailable_seats}{" "}
-                            unavailable
+                            {data.staff.find((s) => s.user_id === r.actor_id)
+                              ?.full_name || "Staff member"}
                           </p>
-                          <p>
-                            {r.accessibility || "Accessibility not recorded"}
-                          </p>
-                          {r.notes && <p>{r.notes}</p>}
-                        </div>
-                        {actions("ascender_rooms", r)}
-                      </article>
-                    ))}
-                    {!records("rooms").length &&
-                      empty(
-                        "No rooms recorded. Equipment counts are not assumed to be exam capacity.",
-                      )}
-                  </section>
-                  <section className="am-panel">
-                    <div className="am-panel-head">
-                      <h3>Exam programmes</h3>
-                      {add("ascender_programmes")}
-                    </div>
-                    {records("programmes").map((r) => (
-                      <article className="am-record" key={r.id}>
-                        <div>
-                          <h4>
-                            {client(r.client_id)} · {r.programme}
-                          </h4>
-                          <p>
-                            Centre code: {shown(r.site_code)} · Approved seats:{" "}
-                            {shown(r.approved_capacity)}
-                          </p>
-                          <span
-                            className={`am-badge ${r.approval === "approved" ? "am-ok" : ""}`}
-                          >
-                            {r.approval === "not_checked"
-                              ? "Not checked"
-                              : r.approval}
-                          </span>
-                          {r.evidence_url && (
-                            <Link url={r.evidence_url}>Approval document</Link>
-                          )}
-                          {r.notes && <p>{r.notes}</p>}
-                        </div>
-                        {actions("ascender_programmes", r)}
-                      </article>
-                    ))}
-                    {!records("programmes").length &&
-                      empty(
-                        "No programme approvals recorded. Add each exam partner’s centre code and approval separately.",
-                      )}
-                  </section>
-                </>
-              )}
-              {tab === "documents" && (
-                <>
-                  <section className="am-panel">
-                    <div className="am-panel-head">
-                      <div>
-                        <h3>Document links</h3>
-                        <p>Open the existing file in its secure location.</p>
-                      </div>
-                      {add("ascender_documents")}
-                    </div>
-                    {records("documents").map((r) => (
-                      <article className="am-record" key={r.id}>
-                        <div>
-                          <h4>
-                            <Link url={r.url}>{r.title}</Link>
-                          </h4>
-                          <p>{person(r.owner_id)}</p>
-                          {r.compliance_id && (
-                            <p>
-                              Renewal:{" "}
-                              {data.renewals.find(
-                                (x) => x.id === r.compliance_id,
-                              )?.title || "Not available"}
-                            </p>
-                          )}
-                          {r.notes && <p>{r.notes}</p>}
-                        </div>
-                        {actions("ascender_documents", r)}
-                      </article>
-                    ))}
-                    {!records("documents").length &&
-                      empty(
-                        "No document links recorded. Link existing approvals, agreements or centre documents.",
-                      )}
-                  </section>
-                  <section className="am-panel">
-                    <div className="am-panel-head">
-                      <div>
-                        <h3>Renewals & deadlines</h3>
-                        <p>
-                          Existing compliance register · reminders appear here
-                        </p>
-                      </div>
-                      {add("compliance_items")}
-                    </div>
-                    {renewals.map((r) => (
-                      <article className="am-record" key={r.id}>
-                        <div>
-                          <h4>{r.title}</h4>
-                          <p>
-                            {date(r.next_due)} · {person(r.owner_profile_id)} ·{" "}
-                            {r.frequency.replace(/_/g, " ")}
-                          </p>
-                          <span
-                            className={`am-badge ${renewalState(r).attention ? "am-warn" : ""}`}
-                          >
-                            {renewalState(r).label}
-                          </span>
-                          {r.notes && <p>{r.notes}</p>}
-                        </div>
-                        {actions("compliance_items", r)}
-                      </article>
-                    ))}
-                    {!renewals.length &&
-                      empty(
-                        "No renewals recorded. Add confirmed deadlines and their responsible person.",
-                      )}
-                  </section>
-                </>
-              )}
-              {tab === "deployments" && selected === "mobile" && (
-                <section className="am-panel">
-                  <div className="am-panel-head">
-                    <div>
-                      <h3>Mobile deployments</h3>
-                      <p>
-                        Keep a separate record for each venue and exam period.
-                      </p>
-                    </div>
-                    {add("ascender_deployments")}
-                  </div>
-                  {records("deployments")
-                    .sort((a, b) => b.start_date.localeCompare(a.start_date))
-                    .map((r) => (
-                      <article className="am-record" key={r.id}>
-                        <div>
-                          <h4>{r.venue}</h4>
-                          <p>
-                            {date(r.start_date)} – {date(r.end_date)} ·{" "}
-                            {r.status}
-                          </p>
-                          <p>
-                            {r.address} {r.contact && `· ${r.contact}`}
-                          </p>
-                          <p>
-                            {client(r.client_id)} ·{" "}
-                            {r.programme || "Programme not recorded"} ·{" "}
-                            {shown(r.required_seats)} seats
-                          </p>
-                          <p>
-                            Lead: {person(r.lead_id)} · Setup due{" "}
-                            {date(r.setup_due)}
-                          </p>
-                          <span
-                            className={`am-badge ${r.readiness === "confirmed" ? "am-ok" : ""}`}
-                          >
-                            {r.readiness.replace(/_/g, " ")}
-                          </span>
-                          {r.confirmed_at && (
-                            <p className="am-caption">
-                              Confirmed by {person(r.confirmed_by)} ·{" "}
-                              {new Date(r.confirmed_at).toLocaleString(
-                                "en-IN",
-                                { timeZone: "Asia/Kolkata" },
-                              )}{" "}
-                              IST
-                            </p>
-                          )}
-                          {r.readiness_note && <p>{r.readiness_note}</p>}
-                          {r.transport_notes && (
-                            <p>Transport / setup: {r.transport_notes}</p>
-                          )}
-                          {r.closeout_notes && (
-                            <p>Return / handover: {r.closeout_notes}</p>
-                          )}
-                        </div>
-                        {actions("ascender_deployments", r)}
-                      </article>
-                    ))}
-                  {!records("deployments").length &&
-                    empty(
-                      "No deployments recorded. Add the venue, dates and responsible lead to begin.",
-                    )}
+                          <dl className="am-answers">
+                            {changes.map(([label, value], i) => (
+                              <div key={i}>
+                                <dt>{label}</dt>
+                                <dd>{value}</dd>
+                              </div>
+                            ))}
+                            {r.before_data?.archived !==
+                              r.after_data?.archived && (
+                              <div>
+                                <dt>Deleted / archived</dt>
+                                <dd>{r.after_data?.archived ? "Yes" : "No"}</dd>
+                              </div>
+                            )}
+                            {r.before_data?.active !== r.after_data?.active &&
+                              r.table_name === "compliance_items" && (
+                                <div>
+                                  <dt>Entry active</dt>
+                                  <dd>{r.after_data?.active ? "Yes" : "No"}</dd>
+                                </div>
+                              )}
+                          </dl>
+                        </details>
+                      );
+                    })}
+                  {!data.history.some((r) => r.centre_id === centre.id) && (
+                    <p className="am-empty">No changes recorded.</p>
+                  )}
                 </section>
-              )}
-              {tab === "history" && (
-                <section className="am-panel">
-                  <h3>Change history</h3>
-                  <p className="am-caption">
-                    From the latest 200 centre administration changes. Archived
-                    records remain in history.
-                  </p>
-                  {records("history").map((r) => (
-                    <details key={r.id} className="am-history">
-                      <summary>
-                        <span>
-                          {titles[r.table_name] || r.table_name} ·{" "}
-                          {r.after_data?.title ||
-                            r.after_data?.name ||
-                            r.after_data?.venue ||
-                            r.after_data?.programme ||
-                            CENTRE_NAMES[selected]}
-                        </span>
-                        <small>
-                          {person(r.actor_id)} ·{" "}
-                          {new Date(r.changed_at).toLocaleString("en-IN", {
-                            timeZone: "Asia/Kolkata",
-                          })}{" "}
-                          IST
-                        </small>
-                      </summary>
-                      <dl>
-                        {Object.entries(r.after_data)
-                          .filter(
-                            ([k, v]) =>
-                              ![
-                                "id",
-                                "centre_id",
-                                "version",
-                                "updated_at",
-                                "updated_by",
-                                "confirmed_by",
-                                "confirmed_at",
-                              ].includes(k) &&
-                              JSON.stringify(v) !==
-                                JSON.stringify(r.before_data?.[k]),
-                          )
-                          .map(([k, v]) => (
-                            <div key={k}>
-                              <dt>{k.replace(/_/g, " ")}</dt>
-                              <dd>
-                                {r.before_data
-                                  ? `${shown(r.before_data[k])} → `
-                                  : ""}
-                                {shown(v)}
-                              </dd>
-                            </div>
-                          ))}
-                      </dl>
-                    </details>
+              ) : section === "ascender_centres" ? (
+                <>
+                  <article className="am-record-card">
+                    <AnswerList defs={defs} row={centre} />
+                  </article>
+                  <div className="am-related-tools">
+                    {[
+                      ["calendar", "Open Calendar"],
+                      ["roster", "Open Roster"],
+                      ["handover", "Open The Shift"],
+                    ].map(([id, label]) => (
+                      <button key={id} onClick={() => go(id)}>
+                        {label}
+                        <ArrowUpRight size={14} />
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <section
+                  className={
+                    section === "ascender_inventory"
+                      ? "am-inventory-list"
+                      : "am-record-grid"
+                  }
+                  aria-label={sectionNames[section]}
+                >
+                  {rows.map((row) => (
+                    <article key={row.id} className="am-record-card">
+                      <header>
+                        <div>
+                          <h3>{title(row)}</h3>
+                          {section === "ascender_inventory" &&
+                            defs.some((f) => f.key === "quantity") && (
+                              <div className="am-stock-quantity">
+                                {row.quantity != null ? (
+                                  <>
+                                    <strong>
+                                      {row.quantity.toLocaleString("en-IN")}
+                                    </strong>
+                                    {defs.some((f) => f.key === "unit") &&
+                                      row.unit && <small>{row.unit}</small>}
+                                  </>
+                                ) : (
+                                  <small>Quantity not recorded</small>
+                                )}
+                              </div>
+                            )}
+                        </div>
+                        <div className="am-row-actions">
+                          <button
+                            onClick={() => setEdit({ table: section, row })}
+                          >
+                            Edit
+                          </button>
+                          {section === "ascender_inventory" ? (
+                            <button
+                              disabled={busy}
+                              onClick={() => void remove(row)}
+                            >
+                              {row.archived ? "Restore" : "Delete"}
+                            </button>
+                          ) : (
+                            <button
+                              disabled={busy}
+                              onClick={() => void archive(row)}
+                            >
+                              Archive
+                            </button>
+                          )}
+                        </div>
+                      </header>
+                      {defs.some(
+                        (f) =>
+                          f.key !== primary[section] &&
+                          !(
+                            section === "ascender_inventory" &&
+                            ["quantity", "unit"].includes(f.key)
+                          ) &&
+                          answerValue(row, f) != null &&
+                          answerValue(row, f) !== "",
+                      ) && (
+                        <AnswerList
+                          defs={defs.filter(
+                            (f) =>
+                              f.key !== primary[section] &&
+                              !(
+                                section === "ascender_inventory" &&
+                                ["quantity", "unit"].includes(f.key)
+                              ),
+                          )}
+                          row={row}
+                        />
+                      )}
+                    </article>
                   ))}
-                  {!records("history").length &&
-                    empty("No recorded changes yet.")}
+                  {!rows.length && (
+                    <p className="am-empty">
+                      {section === "ascender_inventory"
+                        ? deleted
+                          ? "No deleted items."
+                          : "No inventory items yet. Add computers, AC, printers, chairs or any item you need."
+                        : "No entries in this section yet."}
+                    </p>
+                  )}
                 </section>
               )}
             </>
           )}
         </>
       )}
-      {edit && centre && data && (
-        <Editor
+      {edit && data && centre && (
+        <SiteEditor
+          key={edit.table + String(edit.row?.id || "new")}
           table={edit.table}
           row={edit.row}
           centre={centre}
           data={data}
           repository={repository}
+          saved={load}
           close={() => setEdit(null)}
-          saved={async () => {
-            setNotice("Saved.");
-            await load();
-          }}
+          configure={() => setQuestions(edit.table)}
+        />
+      )}{" "}
+      {questions && data && centre && (
+        <Questions
+          key={questions + centre.id}
+          table={questions}
+          centre={centre}
+          data={data}
+          repository={repository}
+          saved={load}
+          close={() => setQuestions(null)}
         />
       )}
     </main>

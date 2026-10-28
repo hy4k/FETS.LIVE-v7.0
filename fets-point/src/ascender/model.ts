@@ -27,6 +27,8 @@ export function safeLink(value: string) {
   }
 }
 export function renewalState(row: any, day = istDay()) {
+  if (!row.next_due)
+    return { days: null, label: "Date not recorded", attention: false };
   const days = Math.round(
     (Date.parse(row.next_due + "T12:00:00Z") - Date.parse(day + "T12:00:00Z")) /
       86400000,
@@ -48,45 +50,42 @@ export function capacity(rooms: any[]) {
   const current = rooms.filter((r) => !r.archived);
   return current.length
     ? {
-        total: current.reduce((n, r) => n + r.total_seats, 0),
-        usable: current.reduce(
-          (n, r) => n + r.total_seats - r.unavailable_seats,
-          0,
-        ),
+        total: current.every((r) => typeof r.total_seats === "number")
+          ? current.reduce((n, r) => n + r.total_seats, 0)
+          : null,
+        usable: current.every(
+          (r) =>
+            typeof r.total_seats === "number" &&
+            typeof r.unavailable_seats === "number",
+        )
+          ? current.reduce((n, r) => n + r.total_seats - r.unavailable_seats, 0)
+          : null,
       }
     : null;
 }
 export function validateRecord(table: string, row: any) {
-  if (table === "ascender_rooms" && row.unavailable_seats > row.total_seats)
-    throw Error("Unavailable seats cannot exceed total seats.");
   if (
-    table === "ascender_programmes" &&
-    row.approval === "approved" &&
-    (!row.site_code?.trim() ||
-      row.approved_capacity === null ||
-      !safeLink(row.evidence_url))
+    table === "ascender_inventory" &&
+    row.quantity != null &&
+    (!Number.isInteger(row.quantity) ||
+      row.quantity < 0 ||
+      row.quantity > 1000000)
   )
-    throw Error(
-      "Approved programmes need a centre code, approved capacity and evidence link.",
-    );
+    throw Error("Quantity must be a whole number from 0 to 1,000,000.");
+  if (
+    table === "ascender_rooms" &&
+    row.unavailable_seats != null &&
+    row.total_seats != null &&
+    row.unavailable_seats > row.total_seats
+  )
+    throw Error("Unavailable seats cannot exceed total seats.");
   for (const key of ["url", "map_url", "evidence_url"])
     if (row[key] && !safeLink(row[key]))
       throw Error("Use a complete HTTPS link without embedded login details.");
   if (table === "ascender_deployments") {
-    if (row.end_date < row.start_date)
+    if (row.end_date && row.start_date && row.end_date < row.start_date)
       throw Error("End date must be on or after the start date.");
-    if (row.setup_due > row.start_date)
+    if (row.setup_due && row.start_date && row.setup_due > row.start_date)
       throw Error("Setup must be due before or on the first exam date.");
-    if (
-      row.readiness === "confirmed" &&
-      (!row.readiness_note?.trim() ||
-        !row.lead_id ||
-        row.required_seats === null)
-    )
-      throw Error(
-        "Confirm the lead, required seats and readiness evidence before marking ready.",
-      );
-    if (row.status === "closed" && !row.closeout_notes?.trim())
-      throw Error("Record the return and handover before closing.");
   }
 }
