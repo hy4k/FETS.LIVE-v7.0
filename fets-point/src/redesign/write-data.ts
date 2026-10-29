@@ -11,7 +11,7 @@
   views reflect the change without a refetch.
 */
 import { supabase } from "../lib/supabase";
-import { loadOtClaims } from "./live-data";
+import { loadOtClaims, loadApplications, ensureMonth } from "./live-data";
 
 const F = () => window.FETS;
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -1363,6 +1363,7 @@ export async function dbSubmitApplication(app: {
   kind: string;
   request_date?: string;
   leave_type?: string;
+  half_day_period?: string;
   swap_with_name?: string;
   swap_with_id?: string;
   swap_date?: string;
@@ -1381,6 +1382,14 @@ export async function dbSubmitApplication(app: {
   const targetName = app.swap_with_name || "";
   const targetId = app.swap_with_id || (f._staffIdByName && targetName ? f._staffIdByName[targetName] : null);
   const targetUserId = (f._staffUserIdByName && targetName ? f._staffUserIdByName[targetName] : null) || (f._profileIdToUserId && targetId ? f._profileIdToUserId[targetId] : null) || targetId;
+
+  // Half-day and swap requests use a server-validated roster snapshot.
+  if (app.kind === 'swap' || (app.kind === 'leave' && app.leave_type === 'Half-day')) {
+    const {data:result,error}=await supabase.rpc('desk_request_submit',{p_kind:app.kind,p_date:app.request_date,p_partner:app.kind==='swap'?targetId:null,p_swap_date:app.kind==='swap'?app.swap_date:null,p_period:app.half_day_period||null,p_reason:app.reason||''});
+    const data=Array.isArray(result)?result[0]:result;
+    if(error||!data){rtoast(error?.message||'The application was not saved. Try again.','alert');return null;}
+    await loadApplications(f);rtoast('Application submitted');notifyAdminsOfApplication(data);return data;
+  }
 
   // ── 1. Insert into staff_applications (canonical table, UUID id) ──────────
   const saRow: any = {
@@ -1539,6 +1548,14 @@ export async function dbResolveApplication(appId: string, status: "approved" | "
   const storedApps = JSON.parse(localStorage.getItem("fets_staff_applications") || "[]");
   const app = (f._applications || []).find((a: any) => String(a.id) === String(appId)) ||
               storedApps.find((a: any) => String(a.id) === String(appId));
+
+  if(app?.workflow_version===1){
+    const {data:result,error}=await supabase.rpc('desk_request_resolve',{p_id:appId,p_status:status,p_version:app.version,p_reply:adminReply||''});
+    const data=Array.isArray(result)?result[0]:result;
+    if(error||!data){rtoast(error?.message||'Could not resolve this request. Refresh and try again.','alert');return false;}
+    await loadApplications(f);await ensureMonth(new Date(data.request_date+'T12:00:00'));if(data.swap_date)await ensureMonth(new Date(data.swap_date+'T12:00:00'));
+    window.dispatchEvent(new Event('fets-roster-changed'));rtoast('Request '+status);notifyApplicantOfResolution(data,status,adminReply);return true;
+  }
 
   // ── Update staff_applications (UUID — always the canonical source) ──────────
   let dbUpdated = false;

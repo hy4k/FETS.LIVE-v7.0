@@ -1,0 +1,29 @@
+{
+  "project_id": "qqewusetilxxfvfkmsed",
+  "verified": true,
+  "verified_at": "2026-10-28T02:27:10Z",
+  "migration": {
+    "version": "20261028022657",
+    "name": "personal_desk_requests_and_team_round",
+    "path": "supabase/migrations/20261028022657_personal_desk_requests_and_team_round.sql",
+    "sha256": "0d04ad5cfa95d2238e9e47c216c85a40a0b4f85b1fa9dfb18ae981ad7913f2cd"
+  },
+  "isolated_checks": 17,
+  "existing_records_unchanged": {
+    "applications": true,
+    "roster": true,
+    "vault": true
+  },
+  "counts": {
+    "applications": 8,
+    "roster": 1976,
+    "attendance": 784,
+    "vault": 67,
+    "news_posts": 4,
+    "team_rounds": 0
+  },
+  "public_functions_invoker_only": true,
+  "anonymous_execute": false,
+  "team_round_rls": true,
+  "fets_online_changed": false
+}

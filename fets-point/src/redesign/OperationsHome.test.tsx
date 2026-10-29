@@ -38,3 +38,5 @@ describe('operations home', () => {
    expect(screen.getByRole('button',{name:/^FETS Sites/})).toBeDisabled();
    expect(screen.getByRole('button',{name:/^Team Space/})).toBeEnabled();
  });
+
+it('opens Case and the merged F Vault from Home without duplicate Quick Access',async()=>{const navigate=vi.fn();render(<OperationsHome branch="calicut" navigate={navigate} openDrawer={vi.fn()} load={vi.fn().mockResolvedValue(snapshot)} homeAccess={['case','access-hub']}/>);for(const [name,page]of [['Raise a case','case'],['F Vault','access-hub']]){fireEvent.click(await screen.findByRole('button',{name:new RegExp('^'+name)}));expect(navigate).toHaveBeenLastCalledWith(page);}expect(screen.queryByRole('button',{name:/Quick access/})).not.toBeInTheDocument();});

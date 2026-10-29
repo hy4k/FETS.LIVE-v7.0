@@ -63,7 +63,7 @@ export function PersonalHero({ name, branch, onDesk }: { name: string; branch: s
     <div className="personal-hero-copy"><div className="hero-wordmark" aria-label="FETS LIVE">fets<span>.</span>live</div>
       <p className="hero-greeting">{greeting},</p><h1>{name || 'Welcome'}{!/[.!?]$/.test(name) && <span>.</span>}</h1>
       <p className="hero-note">Good work starts with you. Let’s make today count.</p>
-      <button className="hero-desk-button" onClick={onDesk}>Find your focus <span aria-hidden="true">↗</span></button>
+
     </div>
     <div className="personal-hero-art"><BrandSculpture /><span className="hero-art-caption"><span /> INDIVIDUALLY BRILLIANT. BETTER TOGETHER.</span></div>
     <CentreClock />
