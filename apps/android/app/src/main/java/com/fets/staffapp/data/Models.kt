@@ -1,4 +1,4 @@
-package com.fets.live.data
+package com.fets.staffapp.data
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable

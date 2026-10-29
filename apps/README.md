@@ -25,9 +25,19 @@ wrappers — they talk directly to the same Supabase backend as the web platform
 
 ## Design
 
-Both apps implement the platform's "golden theme": deep teal `#1A3A3D`
-surfaces, gold `#FACC15` accents, warm paper `#F5F2EA` background, and a
-floating rounded bottom navigation bar — matching the mobile web shell's look.
+Android implements **Kayal Relief**: ivory `#F1ECE3` and obsidian `#08282C`
+grounds, lagoon `#0D4A50` and champagne `#E9C779` pigments, superelliptical
+corners, and a single consistent light source. Both light and dark schemes are
+defined, and every colour pairing is held at WCAG AA by `ContrastTest`.
+
+Note that the two schemes are not inversions of each other — they swap which
+pigment carries meaning. Champagne is 1.38:1 on ivory and 9.56:1 on obsidian, so
+it is decoration in light and speech in dark; lagoon does the reverse. For that
+reason champagne is deliberately not a `ColorScheme` role at all: it lives in
+`KayalAccent`, where it cannot be assigned as a text colour.
+
+iOS still carries the older "golden theme" (`#1A3A3D` / `#FACC15`) and has not
+been migrated.
 
 ## Android build
 
@@ -35,7 +45,7 @@ Prereqs: Android Studio (JDK 17+), Android SDK 36.
 
 ```bash
 cd apps/android
-./gradlew :app:assembleDebug     # debug APK (applicationId com.fets.live.debug)
+./gradlew :app:assembleDebug     # debug APK (applicationId com.fets.staffapp.debug)
 ./gradlew :app:assembleRelease   # release AAB/APK — unsigned, sign via Play Console or your keystore
 ```
 
@@ -45,13 +55,24 @@ form entry and IME verified on an emulator.
 
 ### Play Store release checklist
 
-1. **versionCode** — must be higher than the currently published app. Update
-   `versionCode` in `apps/android/app/build.gradle.kts` before uploading.
-2. **Signing** — generate an upload key (`keytool`) or use Play App Signing,
-   then add a `signingConfigs` block to `app/build.gradle.kts`.
-3. **Store assets** — the current listing's graphics carry over since the
+> **The published listing is `com.fets.staffapp`.**
+> Until 30 Oct 2026 this module declared `com.fets.live`, and this README stated
+> that the package matched the existing listing. It did not. A build under a
+> different applicationId cannot update the listing — Play would have treated it
+> as a brand new app, abandoning the existing one along with its install base,
+> its reviews and its release history. `ReleaseIdentityTest` now holds this.
+
+1. **applicationId** — must be exactly `com.fets.staffapp`. Never `com.fets.live`.
+2. **versionCode** — must exceed the currently published value, which was **34**
+   as of 30 Oct 2026. This module is at 35. Check the current value in Play
+   Console before uploading rather than trusting this number.
+3. **Signing** — use the existing upload key. The keystore stays on the owner's
+   machine and its credentials are read from a gitignored `keystore.properties`;
+   no credentials belong in this repo.
+4. **Store assets** — the current listing's graphics carry over because the
    package ID is unchanged; update screenshots to match the new UI.
-4. Pre-launch report will flag anything the emulator checks miss.
+5. Run `./gradlew :app:testDebugUnitTest` before building a release.
+6. Pre-launch report will flag anything the emulator checks miss.
 
 ## iOS build
 

@@ -1,11 +1,11 @@
-package com.fets.live
+package com.fets.staffapp
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import com.fets.live.ui.AppRoot
-import com.fets.live.ui.theme.FetsTheme
+import com.fets.staffapp.ui.AppRoot
+import com.fets.staffapp.ui.theme.FetsTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

@@ -6,15 +6,18 @@ plugins {
 }
 
 android {
-    namespace = "com.fets.live"
+    // The published Play listing is com.fets.staffapp. A different applicationId
+    // would create a *new* app and abandon the existing listing, its history and
+    // its installed users. apps/README.md previously claimed these matched.
+    namespace = "com.fets.staffapp"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.fets.live"
+        applicationId = "com.fets.staffapp"
         minSdk = 26
         targetSdk = 36
-        versionCode = 8
-        versionName = "7.0.0"
+        versionCode = 35   // live on Production is 34; this must exceed it
+        versionName = "3.0.0"
     }
 
     buildTypes {
@@ -36,6 +39,15 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true   // ReleaseIdentityTest reads BuildConfig
+    }
+    testOptions {
+        unitTests {
+            // Colour and geometry are pure arithmetic, but they live in classes
+            // that reference android.*; stub rather than throw so they can be
+            // tested on the JVM without an emulator.
+            isReturnDefaultValues = true
+        }
     }
     packaging {
         resources {
@@ -73,4 +85,14 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-bom:2.1.21")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.1")
+
+    // This module shipped with no test dependencies at all, so nothing in it
+    // could be verified before release. These are the minimum that lets the
+    // theme, the data layer and navigation be tested.
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.1")
+
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

@@ -1,4 +1,4 @@
-package com.fets.live.ui
+package com.fets.staffapp.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.material3.MaterialTheme
@@ -22,21 +22,21 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.fets.live.data.SessionManager
-import com.fets.live.data.SessionState
-import com.fets.live.data.StaffProfile
-import com.fets.live.ui.components.FetsBottomBar
-import com.fets.live.ui.components.LoadingBlock
-import com.fets.live.ui.components.NavTab
-import com.fets.live.ui.screens.AiScreen
-import com.fets.live.ui.screens.CalendarScreen
-import com.fets.live.ui.screens.CandidatesScreen
-import com.fets.live.ui.screens.CasesScreen
-import com.fets.live.ui.screens.HomeScreen
-import com.fets.live.ui.screens.LoginScreen
-import com.fets.live.ui.screens.NewCaseScreen
-import com.fets.live.ui.screens.OnDutyScreen
-import com.fets.live.ui.screens.ProfileScreen
+import com.fets.staffapp.data.SessionManager
+import com.fets.staffapp.data.SessionState
+import com.fets.staffapp.data.StaffProfile
+import com.fets.staffapp.ui.components.FetsBottomBar
+import com.fets.staffapp.ui.components.LoadingBlock
+import com.fets.staffapp.ui.components.NavTab
+import com.fets.staffapp.ui.screens.AiScreen
+import com.fets.staffapp.ui.screens.CalendarScreen
+import com.fets.staffapp.ui.screens.CandidatesScreen
+import com.fets.staffapp.ui.screens.CasesScreen
+import com.fets.staffapp.ui.screens.HomeScreen
+import com.fets.staffapp.ui.screens.LoginScreen
+import com.fets.staffapp.ui.screens.NewCaseScreen
+import com.fets.staffapp.ui.screens.OnDutyScreen
+import com.fets.staffapp.ui.screens.ProfileScreen
 
 object Routes {
     const val HOME = "home"

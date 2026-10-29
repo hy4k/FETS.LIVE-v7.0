@@ -1,4 +1,4 @@
-package com.fets.live.ui.screens
+package com.fets.staffapp.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -47,19 +47,19 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.fets.live.data.CASE_CATEGORIES
-import com.fets.live.data.HomeSnapshot
-import com.fets.live.data.SessionManager
-import com.fets.live.data.StaffProfile
-import com.fets.live.data.UiState
-import com.fets.live.ui.components.EmptyState
-import com.fets.live.ui.components.LoadingBlock
-import com.fets.live.ui.components.SectionTitle
-import com.fets.live.ui.components.StatCard
-import com.fets.live.ui.components.StatusChip
-import com.fets.live.ui.theme.FetsDeepTeal
-import com.fets.live.ui.theme.FetsDeepTealDark
-import com.fets.live.ui.theme.FetsGold
+import com.fets.staffapp.data.CASE_CATEGORIES
+import com.fets.staffapp.data.HomeSnapshot
+import com.fets.staffapp.data.SessionManager
+import com.fets.staffapp.data.StaffProfile
+import com.fets.staffapp.data.UiState
+import com.fets.staffapp.ui.components.EmptyState
+import com.fets.staffapp.ui.components.LoadingBlock
+import com.fets.staffapp.ui.components.SectionTitle
+import com.fets.staffapp.ui.components.StatCard
+import com.fets.staffapp.ui.components.StatusChip
+import com.fets.staffapp.ui.theme.FetsDeepTeal
+import com.fets.staffapp.ui.theme.FetsDeepTealDark
+import com.fets.staffapp.ui.theme.FetsGold
 import java.time.LocalTime
 
 @Composable
@@ -314,7 +314,7 @@ private data class Quad(
 )
 
 @Composable
-fun IncidentRow(incident: com.fets.live.data.Incident) {
+fun IncidentRow(incident: com.fets.staffapp.data.Incident) {
     val category = CASE_CATEGORIES.find { it.id == incident.category }
     Card(
         shape = RoundedCornerShape(16.dp),

@@ -1,4 +1,4 @@
-package com.fets.live.ui.screens
+package com.fets.staffapp.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -32,11 +32,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.fets.live.ui.components.FetsMonogram
-import com.fets.live.ui.theme.FetsDeepTeal
-import com.fets.live.ui.theme.FetsDeepTealDark
-import com.fets.live.ui.theme.FetsGold
-import com.fets.live.ui.theme.FetsPaper
+import com.fets.staffapp.ui.components.FetsMonogram
+import com.fets.staffapp.ui.theme.FetsDeepTeal
+import com.fets.staffapp.ui.theme.FetsDeepTealDark
+import com.fets.staffapp.ui.theme.FetsGold
+import com.fets.staffapp.ui.theme.FetsPaper
 import kotlinx.coroutines.launch
 
 @Composable

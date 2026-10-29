@@ -1,4 +1,4 @@
-package com.fets.live.ui.screens
+package com.fets.staffapp.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -40,10 +40,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.fets.live.data.SessionManager
-import com.fets.live.ui.theme.FetsDeepTeal
-import com.fets.live.ui.theme.FetsDeepTealDark
-import com.fets.live.ui.theme.FetsGold
+import com.fets.staffapp.data.SessionManager
+import com.fets.staffapp.ui.theme.FetsDeepTeal
+import com.fets.staffapp.ui.theme.FetsDeepTealDark
+import com.fets.staffapp.ui.theme.FetsGold
 import kotlinx.coroutines.launch
 import java.util.UUID
 

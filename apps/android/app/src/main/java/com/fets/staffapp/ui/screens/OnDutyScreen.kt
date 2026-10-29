@@ -1,7 +1,6 @@
-package com.fets.live.ui.screens
+package com.fets.staffapp.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -15,9 +14,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.School
+import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -34,25 +32,25 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.fets.live.data.Candidate
-import com.fets.live.data.SessionManager
-import com.fets.live.data.UiState
-import com.fets.live.ui.components.EmptyState
-import com.fets.live.ui.components.LoadingBlock
-import com.fets.live.ui.theme.FetsDeepTeal
-import com.fets.live.ui.theme.FetsDeepTealDark
-import com.fets.live.ui.theme.FetsGold
-import java.time.LocalDate
+import com.fets.staffapp.data.StaffAttendance
+import com.fets.staffapp.data.SessionManager
+import com.fets.staffapp.data.UiState
+import com.fets.staffapp.ui.components.EmptyState
+import com.fets.staffapp.ui.components.LoadingBlock
+import com.fets.staffapp.ui.theme.FetsDeepTeal
+import com.fets.staffapp.ui.theme.FetsDeepTealDark
+import com.fets.staffapp.ui.theme.FetsGold
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 
 @Composable
-fun CandidatesScreen(session: SessionManager) {
+fun OnDutyScreen(session: SessionManager) {
     val branch by session.activeBranch.collectAsState()
-    var date by remember { mutableStateOf(LocalDate.now()) }
-    var candidates by remember { mutableStateOf<UiState<List<Candidate>>>(UiState.Loading) }
+    var staff by remember { mutableStateOf<UiState<List<StaffAttendance>>>(UiState.Loading) }
 
-    LaunchedEffect(date, branch) {
-        candidates = UiState.Loading
-        candidates = UiState.Ready(session.repository.loadCandidatesFor(date, branch))
+    LaunchedEffect(branch) {
+        staff = UiState.Loading
+        staff = UiState.Ready(session.repository.loadOnDutyToday(branch))
     }
 
     LazyColumn(
@@ -64,57 +62,31 @@ fun CandidatesScreen(session: SessionManager) {
     ) {
         item {
             Text(
-                "Candidate Register",
+                "On Duty Today",
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.ExtraBold,
                 color = FetsDeepTealDark,
             )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    date.toString(),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = FetsDeepTealDark.copy(alpha = 0.6f),
-                )
-                Row {
-                    Text(
-                        "‹ Prev",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = FetsDeepTeal,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { date = date.minusDays(1) }
-                            .padding(6.dp),
-                    )
-                    Text(
-                        "Next ›",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = FetsDeepTeal,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { date = date.plusDays(1) }
-                            .padding(6.dp),
-                    )
-                }
-            }
+            Text(
+                "Staff who checked in at this centre today.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = FetsDeepTealDark.copy(alpha = 0.6f),
+            )
             Spacer(Modifier.height(4.dp))
         }
 
-        when (val s = candidates) {
-            UiState.Loading -> item { LoadingBlock("Loading the register…") }
-            is UiState.Error -> item { EmptyState(Icons.Outlined.School, "Could not load", s.message) }
+        when (val s = staff) {
+            UiState.Loading -> item { LoadingBlock("Checking who's in…") }
+            is UiState.Error -> item { EmptyState(Icons.Outlined.Groups, "Could not load", s.message) }
             is UiState.Ready -> {
-                if (s.data.isEmpty()) {
-                    item { EmptyState(Icons.Outlined.School, "No candidates", "No exams scheduled at this centre on this day.") }
+                val present = s.data.filter { !it.checkIn.isNullOrBlank() }
+                if (present.isEmpty()) {
+                    item { EmptyState(Icons.Outlined.Groups, "Nobody checked in yet", "Check-ins for today will appear here.") }
                 } else {
-                    items(s.data, key = { it.id }) { c ->
+                    items(present, key = { "${it.staffId}-${it.checkIn}" }) { a ->
+                        val initials = (a.staffId ?: "?").take(2).uppercase()
                         Card(
-                            shape = RoundedCornerShape(16.dp),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         ) {
                             Row(
@@ -127,26 +99,25 @@ fun CandidatesScreen(session: SessionManager) {
                                     modifier = Modifier
                                         .size(40.dp)
                                         .clip(CircleShape)
-                                        .background(FetsGold.copy(alpha = 0.25f)),
+                                        .background(FetsDeepTeal),
                                     contentAlignment = Alignment.Center,
                                 ) {
-                                    Text(
-                                        c.name.trim().take(1).uppercase().ifBlank { "?" },
-                                        color = FetsDeepTeal,
-                                        fontWeight = FontWeight.ExtraBold,
-                                    )
+                                    Text(initials, color = FetsGold, fontWeight = FontWeight.ExtraBold)
                                 }
                                 Spacer(Modifier.padding(6.dp))
                                 Column(Modifier.padding(start = 8.dp)) {
                                     Text(
-                                        c.name,
+                                        "Staff · ${a.branchLocation ?: "—"}",
                                         style = MaterialTheme.typography.bodyLarge,
                                         fontWeight = FontWeight.Bold,
                                         color = FetsDeepTealDark,
                                     )
+                                    val checkIn = a.checkIn?.take(5) ?: ""
+                                    val label = if (checkIn.isNotBlank()) {
+                                        "Checked in $checkIn"
+                                    } else ""
                                     Text(
-                                        listOfNotNull(c.module, c.status).joinToString(" · ")
-                                            .ifBlank { c.examDate?.take(16) ?: "" },
+                                        label,
                                         style = MaterialTheme.typography.bodySmall,
                                         color = FetsDeepTealDark.copy(alpha = 0.5f),
                                     )

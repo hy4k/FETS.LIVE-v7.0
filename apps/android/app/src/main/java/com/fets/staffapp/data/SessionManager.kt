@@ -1,4 +1,4 @@
-package com.fets.live.data
+package com.fets.staffapp.data
 
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email

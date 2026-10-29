@@ -1,9 +1,9 @@
-package com.fets.live
+package com.fets.staffapp
 
 import android.app.Application
-import com.fets.live.data.FetsRepository
-import com.fets.live.data.SessionManager
-import com.fets.live.data.SupabaseProvider
+import com.fets.staffapp.data.FetsRepository
+import com.fets.staffapp.data.SessionManager
+import com.fets.staffapp.data.SupabaseProvider
 
 class FetsApplication : Application() {
 

@@ -1,4 +1,4 @@
-package com.fets.live.ui.screens
+package com.fets.staffapp.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -46,14 +46,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.fets.live.data.BranchStatus
-import com.fets.live.data.SessionManager
-import com.fets.live.data.StaffProfile
-import com.fets.live.data.UiState
-import com.fets.live.ui.components.SectionTitle
-import com.fets.live.ui.theme.FetsDeepTeal
-import com.fets.live.ui.theme.FetsDeepTealDark
-import com.fets.live.ui.theme.FetsGold
+import com.fets.staffapp.data.BranchStatus
+import com.fets.staffapp.data.SessionManager
+import com.fets.staffapp.data.StaffProfile
+import com.fets.staffapp.data.UiState
+import com.fets.staffapp.ui.components.SectionTitle
+import com.fets.staffapp.ui.theme.FetsDeepTeal
+import com.fets.staffapp.ui.theme.FetsDeepTealDark
+import com.fets.staffapp.ui.theme.FetsGold
 import kotlinx.coroutines.launch
 
 @Composable

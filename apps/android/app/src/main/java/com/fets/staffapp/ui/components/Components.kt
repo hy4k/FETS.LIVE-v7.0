@@ -1,4 +1,4 @@
-package com.fets.live.ui.components
+package com.fets.staffapp.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -35,9 +35,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.fets.live.ui.theme.FetsDeepTeal
-import com.fets.live.ui.theme.FetsDeepTealDark
-import com.fets.live.ui.theme.FetsGold
+import com.fets.staffapp.ui.theme.FetsDeepTeal
+import com.fets.staffapp.ui.theme.FetsDeepTealDark
+import com.fets.staffapp.ui.theme.FetsGold
 
 data class NavTab(val route: String, val label: String, val icon: ImageVector)
 

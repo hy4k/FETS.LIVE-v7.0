@@ -1,4 +1,4 @@
-package com.fets.live.ui.screens
+package com.fets.staffapp.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -33,15 +33,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.fets.live.data.Incident
-import com.fets.live.data.SessionManager
-import com.fets.live.data.UiState
-import com.fets.live.ui.components.EmptyState
-import com.fets.live.ui.components.LoadingBlock
-import com.fets.live.ui.components.SectionTitle
-import com.fets.live.ui.components.StatusChip
-import com.fets.live.ui.theme.FetsDeepTeal
-import com.fets.live.ui.theme.FetsGold
+import com.fets.staffapp.data.Incident
+import com.fets.staffapp.data.SessionManager
+import com.fets.staffapp.data.UiState
+import com.fets.staffapp.ui.components.EmptyState
+import com.fets.staffapp.ui.components.LoadingBlock
+import com.fets.staffapp.ui.components.SectionTitle
+import com.fets.staffapp.ui.components.StatusChip
+import com.fets.staffapp.ui.theme.FetsDeepTeal
+import com.fets.staffapp.ui.theme.FetsGold
 
 @Composable
 fun CasesScreen(session: SessionManager, onNewCase: () -> Unit) {
