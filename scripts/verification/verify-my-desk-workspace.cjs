@@ -95,6 +95,7 @@ const out = process.env.FETS_AUDIT_DIR || "/workspace/my-desk-audit";
         ["Half-day leave", "Which half are you requesting off?"],
         ["Shift swap", "Your Date"],
         ["TOIL day off", "Day off (TOIL)"],
+        ["Overtime", "Date worked"],
         ["Leave", "Leave Type"],
       ]) {
         await page
@@ -183,7 +184,7 @@ const out = process.env.FETS_AUDIT_DIR || "/workspace/my-desk-audit";
         width,
         noOverflow: true,
         identityVisible: true,
-        directRequests: 4,
+        directRequests: 5,
         requestHistory: true,
         caseAndVaultOnHome: true,
         privateDialog: true,

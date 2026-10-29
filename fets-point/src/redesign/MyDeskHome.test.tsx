@@ -66,6 +66,7 @@ describe("My Desk workspace", () => {
     ["Leave", "leave"],
     ["Half-day leave", "halfday"],
     ["TOIL day off", "toil"],
+    ["Overtime", "ot"],
     ["Shift swap", "swap"],
   ])("opens %s directly", (label, kind) => {
     const p = props();

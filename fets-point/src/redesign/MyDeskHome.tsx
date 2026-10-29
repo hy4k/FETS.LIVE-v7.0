@@ -4,6 +4,7 @@ import {
   ArrowUpRight,
   CalendarDays,
   Clock3,
+  Timer,
   Coffee,
   Inbox,
   Shuffle,
@@ -81,6 +82,12 @@ export default function MyDeskHome({
       name: "TOIL day off",
       hint: "Apply for time off in lieu",
       icon: Coffee,
+    },
+    {
+      kind: "ot",
+      name: "Overtime (OT)",
+      hint: "Claim extra hours for approval",
+      icon: Timer,
     },
     {
       kind: "swap",
@@ -174,7 +181,7 @@ export default function MyDeskHome({
       ) : (
         <section aria-label="Applications">
           <div className="pd-section-heading">
-            <h3>Leave & shift changes</h3>
+            <h3>Leave, overtime & shift changes</h3>
             <button
               className="pd-link"
               onClick={() => setRequest(request === null ? "all" : null)}
