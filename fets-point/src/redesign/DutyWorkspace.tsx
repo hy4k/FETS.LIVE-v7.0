@@ -10,7 +10,7 @@ import CoverageEditor from './CoverageEditor';
 import { pendingHandoverDay } from '../fets-ai/handover-draft';
 import { blueprintRepository, type BlueprintRepository } from './shift-blueprint-repository';
 import { Blueprint, DayReport, TodayBoard, reportAsText, shareOnWhatsApp } from './TheShift';
-import DailyOperationsReports from './DailyOperationsReports';
+import DailyOperationsReports, { ManagerDailyOperationsDashboard } from './DailyOperationsReports';
 
 type Identity = { id:string; profileId:string; name:string; admin:boolean };
 const message = (e:unknown) => e instanceof Error ? e.message : 'Could not save. Please try again.';
@@ -42,12 +42,12 @@ export default function DutyWorkspace({branch,navigate,legacy,repository=shiftRe
     <nav className="dw-tabs" aria-label="The Shift"><div>{([['today','Today'],['blueprint','Blueprint'],['planning','Plan ahead'],['report','Day report']] as const).map(([id,label])=><button key={id} aria-pressed={tab===id} onClick={()=>setTab(id)}>{label}</button>)}</div><button className="dw-link" onClick={()=>navigate('roster')}>Open roster <ArrowUpRight size={14}/></button></nav>
     {!cloud && <div className="dw-notice" role="status">Shared duty planning is awaiting activation. You can prepare a private planning draft here; assignments, checks and reports are not yet shared with the team. <button onClick={capabilities.refresh}>Check database setup</button></div>}
     {cloud && !hasBlueprint && (tab==='today'||tab==='blueprint'||tab==='report') && <div className="dw-notice" role="status">The blueprint and daily job lists need one database update (<code>20261002090000_the_shift_blueprint.sql</code>). The exam floor rota and reports keep working meanwhile. <button onClick={capabilities.refresh}>Check again</button></div>}
-    {branch==='global' && tab!=='report' ? <section className="dw-empty"><Users size={32}/><h2>One centre, one clear plan.</h2><p>Select a centre from the app’s centre selector to see its day. Day reports bring the centres together.</p></section> : <>
-      {tab==='today' && <>{dayPicker('Day')}{cloud && Boolean(identity.profileId) && <DailyOperationsReports key={`${branch}:${day}`} branch={branch} day={day} profileId={identity.profileId} />}{hasBlueprint?<TodayBoard key={`${branch}:${day}`} {...{branch,day,identity,repository,blueprint,navigate}}>{rota}</TodayBoard>:rota}</>}
+    {branch==='global' && tab!=='report' ? <><section className="dw-empty"><Users size={32}/><h2>One centre, one clear plan.</h2><p>Select a centre from the app’s centre selector to see its day. Day reports bring the centres together.</p></section>{cloud && <ManagerDailyOperationsDashboard day={day} onDayChange={d=>{setDay(d);setMonth(d.slice(0,7));}} activeBranch={branch} />}</> : <>
+      {tab==='today' && <>{dayPicker('Day')}{cloud && Boolean(identity.id || identity.profileId) && <DailyOperationsReports key={`${branch}:${day}`} branch={branch} day={day} profileId={identity.profileId} staffName={identity.name} isAdmin={identity.admin} />}{hasBlueprint?<TodayBoard key={`${branch}:${day}`} {...{branch,day,identity,repository,blueprint,navigate}}>{rota}</TodayBoard>:rota}</>}
       {tab==='blueprint' && (hasBlueprint?<Blueprint key={branch} {...{branch,identity,repository,blueprint}}/>:<section className="dw-empty"><Crown size={30}/><h2>The blueprint is one update away.</h2><p>Once the database update is in, every job in the centre gets an owner and a backup here.</p></section>)}
       {tab==='planning' && <><div className="dw-toolbar"><label>Planning month<input type="month" value={month} onChange={e=>{if(e.target.value)setMonth(e.target.value);}}/></label><span>Set the roster first, then choose leads and prepare daily duties.</span></div><MonthPlanner key={`${identity.id}:${branch}:${month}:${cloud}`} {...{branch,month,identity,repository,cloud}} openDay={d=>{setDay(d);setTab('today');}}/></>}
     </>}
-    {tab==='report' && <>
+    {tab==='report' && <>{cloud && <ManagerDailyOperationsDashboard day={day} onDayChange={d=>{setDay(d);setMonth(d.slice(0,7));}} activeBranch={branch} />}
       {branch!=='global' && hasBlueprint && <>{dayPicker('Report for')}<DayReport key={`${branch}:${day}:${draftRevision}`} {...{branch,day,identity,repository,blueprint}}/></>}
       <div className="dw-toolbar"><label>Earlier reports<input type="month" value={month} onChange={e=>{if(e.target.value)setMonth(e.target.value);}}/></label><span>Sent by the lead. Acknowledged by the super admin.</span></div>
       <Reports key={`${branch}:${month}:${cloud}`} {...{branch,month,identity,repository,cloud}}/>
