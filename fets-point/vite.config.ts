@@ -1,6 +1,7 @@
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
+import { existsSync, readFileSync } from 'node:fs'
 
 // Silence Chrome DevTools' automatic /.well-known probe (returns 404 noise otherwise)
 const devtoolsProbe = (): Plugin => ({
@@ -15,7 +16,17 @@ const devtoolsProbe = (): Plugin => ({
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
+  const firebasePath = resolve(__dirname, 'android/app/google-services.json')
+  let androidPushConfigured = false
+  if (existsSync(firebasePath)) {
+    const firebase = JSON.parse(readFileSync(firebasePath, 'utf8'))
+    androidPushConfigured = firebase.client?.some(
+      (client: any) => client.client_info?.android_client_info?.package_name === 'com.fets.staffapp'
+    ) === true
+    if (!androidPushConfigured) throw new Error('Firebase configuration must include com.fets.staffapp')
+  }
   return {
+    define: { __FETS_ANDROID_PUSH_CONFIGURED__: JSON.stringify(androidPushConfigured) },
     plugins: [react(), devtoolsProbe()],
     base: '/',
     resolve: {
