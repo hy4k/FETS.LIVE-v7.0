@@ -10828,11 +10828,11 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
     ? "All centres" : personalBranch.charAt(0).toUpperCase() + personalBranch.slice(1);
   const people = (F._staffProfiles || []).filter(p => p.is_active !== false && p.id && p.full_name &&
     p.id !== F._meId && p.full_name !== u.name &&
-    (!branch || ["all", "global"].includes(branch) || (p.branch_assigned || "").toLowerCase() === branch));
+    p.id !== F._meId && p.full_name !== u.name && p.full_name.trim().toLowerCase() !== "guest");
 
   return <MyDeskHome
     repository={deskCloudEnabled ? deskRepository : undefined}
-    user={{ id: F._meUserId || u.email || u.name, name: u.name, role: u.role || "Staff", branch: branchLabel, avatar: ownProfile?.avatar_url }}
+    user={{ id: F._meUserId || u.email || u.name, profileId: ownProfile?.id, name: u.name, role: u.role || "Staff", branch: branchLabel, avatar: ownProfile?.avatar_url, bio: ownProfile?.bio, position: ownProfile?.position, department: ownProfile?.department, joining_date: ownProfile?.joining_date || ownProfile?.hire_date, skills: ownProfile?.skills, certifications: ownProfile?.certifications }}
     people={people}
     pendingHandovers={pendingHandovers}
     navigate={page => page === "profile" && bridge ? bridge("profile") : setActive(page)}

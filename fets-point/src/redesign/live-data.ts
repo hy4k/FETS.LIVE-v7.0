@@ -72,7 +72,7 @@ export async function loadLiveData(F: any) {
       supabase.auth.getUser().catch(() => ({ data: { user: null } })),
       (async () => {
         try {
-          return await supabase.from("staff_profiles").select("id, user_id, full_name, email, role, branch_assigned, is_active, hourly_rate, daily_rate, permissions, joining_date, hire_date").order("full_name");
+          return await supabase.from("staff_profiles").select("id, user_id, full_name, email, role, department, position, branch_assigned, avatar_url, bio, skills, certifications, is_online, is_active, hourly_rate, daily_rate, permissions, joining_date, hire_date").order("full_name");
         } catch (e) {
           return { data: null, error: e };
         }
