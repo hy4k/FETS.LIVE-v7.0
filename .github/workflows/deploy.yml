@@ -57,7 +57,9 @@ jobs:
             git fetch origin
             git checkout -f main
             git reset --hard origin/main
-            docker compose build app
+            docker compose build --no-cache app
+            docker compose down --remove-orphans || true
+            (docker rm -f fets-live-app-1 || true)
             docker compose up -d --force-recreate app
             # Restart Traefik to trigger SSL / ACME certificate renewal
             (docker ps -q --filter "name=traefik" | xargs -r docker restart) || true

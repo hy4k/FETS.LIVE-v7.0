@@ -49,12 +49,14 @@ $SUDO rsync -a --delete --exclude='.well-known' fets-point/dist/ "$WEB_ROOT/"
 $SUDO chown -R www-data:www-data "/var/www/html/${DOMAIN}"
 
 $SUDO nginx -t && $SUDO systemctl reload nginx
-echo "→ Rebuilding Docker container…"
-docker compose build --no-cache app
-docker compose up -d app
+if [[ -f docker-compose.yml || -f compose.yml ]]; then
+  echo "→ Rebuilding Docker container…"
+  docker compose build --no-cache app
+  docker compose up -d app
 
-echo "→ Waiting for container to be healthy…"
-sleep 3
+  echo "→ Waiting for container to be healthy…"
+  sleep 3
+fi
 
 # Ask the local nginx directly rather than going out over the internet, so the
 # check reports what this box is serving even before DNS or a CDN catches up.
