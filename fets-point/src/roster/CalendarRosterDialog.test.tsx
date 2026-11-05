@@ -4,10 +4,19 @@ import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
 import CalendarRosterDialog from './CalendarRosterDialog';
 const api=vi.hoisted(()=>({load:vi.fn(),save:vi.fn()}));
 vi.mock('./roster-api',async()=>{const original=await vi.importActual<typeof import('./roster-api')>('./roster-api');return {...original,loadRosterContext:api.load,saveRoster:api.save};});
-vi.mock('../lib/supabase',()=>({supabase:{}}));
+vi.mock('../lib/supabase',()=>({supabase:{rpc:vi.fn().mockResolvedValue({data:[],error:null})}}));
 beforeEach(()=>{api.load.mockReset().mockResolvedValue({candidates:[],sessions:[]});api.save.mockReset().mockResolvedValue({inserted:1,updated:0,saved:1,calendar_synced:true});});
 const show=()=>render(<QueryClientProvider client={new QueryClient()}><CalendarRosterDialog mode="manual" day="2026-10-01" branch="cochin" onClose={vi.fn()}/></QueryClientProvider>);
 describe('Calendar candidate review',()=>{
+  it('opens a separate Pearson monthly report mode without the daily provider ID fields',async()=>{
+    show();
+    fireEvent.click(screen.getByRole('button',{name:'Pearson monthly report'}));
+    expect(screen.getByRole('dialog',{name:'Pearson monthly report'})).toBeInTheDocument();
+    expect(screen.getByLabelText('Coverage from · inclusive')).toBeInTheDocument();
+    expect(screen.getByLabelText('Coverage through · inclusive')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Provider roster / confirmation ID')).toBeNull();
+    await screen.findByText('No pending cancellation reviews for this centre.');
+  });
   it('requires review before saving one full-name candidate and invalidates the preview when scope changes',async()=>{
     show();expect(screen.getByRole('button',{name:'Save candidates'})).toBeDisabled();
     fireEvent.change(screen.getByLabelText('Full name'),{target:{value:'Alex Thomas Joseph'}});

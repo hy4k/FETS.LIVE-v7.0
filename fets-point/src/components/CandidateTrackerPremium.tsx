@@ -30,6 +30,12 @@ interface Candidate {
   fullName: string
   address: string
   phone?: string
+  email?: string
+  examCode?: string
+  examTitle?: string
+  examOwner?: string
+  examEndTime?: string
+  pearsonSourcePhone?: string
   examDate?: Date
   examName?: string
   status: 'registered' | 'completed' | 'no_show'
@@ -71,6 +77,7 @@ const CandidateCard = memo(({ candidate, onClick }: any) => {
           <div className="text-[10px] font-medium text-slate-400 uppercase tracking-wider truncate">
             {candidate.clientName} • {candidate.examName}
           </div>
+          {candidate.examCode && <div className="text-[10px] text-slate-500 truncate">{candidate.examCode} · {candidate.examStartTime}–{candidate.examEndTime} IST</div>}
         </div>
       </div>
       <div className="flex-shrink-0 ml-4">
@@ -134,6 +141,8 @@ export function CandidateTrackerPremium() {
   // Process data
   const candidates: Candidate[] = useMemo(() => rawCandidates?.map(c => ({
     id: c.id, fullName: c.full_name, address: c.address, phone: c.phone || '',
+    email: c.email || '', examCode: c.exam_code || '', examTitle: c.exam_title || '',
+    examOwner: c.exam_owner || '', examEndTime: c.exam_end_time || '', pearsonSourcePhone: c.pearson_source_phone ?? '',
     examDate: c.exam_date ? new Date(`${formatDateForIST(c.exam_date)}T12:00:00`) : undefined,
     examName: c.exam_name || 'General Exam',
     status: (c.status as Candidate['status']) || 'registered',
@@ -146,9 +155,9 @@ export function CandidateTrackerPremium() {
   const filteredCandidates = useMemo(() => {
     const s = searchQuery.toLowerCase();
     return candidates.filter(c => {
-      const matchSearch = c.fullName.toLowerCase().includes(s) || c.confirmationNumber.toLowerCase().includes(s);
+      const matchSearch = [c.fullName, c.confirmationNumber, c.phone, c.email, c.examCode, c.examTitle, c.examOwner, c.examStartTime, c.examEndTime, c.pearsonSourcePhone].some(value => (value || '').toLowerCase().includes(s));
       const matchClient = filterClient === 'all' || (c.clientName || '').toUpperCase() === filterClient.toUpperCase();
-      const matchExam = filterExam === 'all' || (c.examName || '').toLowerCase().includes(filterExam.toLowerCase());
+      const matchExam = filterExam === 'all' || [c.examName, c.examCode, c.examTitle, c.examOwner].some(value => (value || '').toLowerCase().includes(filterExam.toLowerCase()));
       const matchDay = format(c.examDate || new Date(), 'yyyy-MM-dd') === format(currentDate, 'yyyy-MM-dd');
       return matchSearch && matchClient && matchExam && matchDay;
     })
@@ -251,6 +260,9 @@ export function CandidateTrackerPremium() {
       'Date': c.examDate ? format(c.examDate, 'dd/MM/yyyy') : '',
       'Name': c.fullName,
       'Phone no': c.phone || 'N/A',
+      'Email': c.email || '', 'Exam code': c.examCode || '', 'Exam title': c.examTitle || '',
+      'Exam owner': c.examOwner || '', 'Exam start · IST': c.examStartTime || '',
+      'Exam end · IST': c.examEndTime || '', 'Pearson source phone': c.pearsonSourcePhone ?? '',
       'Place': c.address || 'N/A'
     }))
     const ws = XLSX.utils.json_to_sheet(data)
@@ -261,17 +273,19 @@ export function CandidateTrackerPremium() {
   }
 
   const exportToPDF = () => {
-    const doc = new jsPDF()
+    const doc = new jsPDF({ orientation: 'landscape', format: 'a3' })
     const tableData = filteredCandidates.map(c => [
       c.examDate ? format(c.examDate, 'dd/MM/yyyy') : '',
       c.fullName,
       c.phone || 'N/A',
-      c.address || 'N/A'
+      c.address || 'N/A',
+      c.email || '', c.examCode || '', c.examTitle || '', c.examOwner || '',
+      c.examStartTime || '', c.examEndTime || '', c.pearsonSourcePhone ?? ''
     ])
     autoTable(doc, {
-      head: [['Date', 'Name', 'Phone no', 'Place']],
+      head: [['Date', 'Name', 'Phone no', 'Place', 'Email', 'Exam code', 'Exam title', 'Exam owner', 'Exam start · IST', 'Exam end · IST', 'Pearson source phone']],
       body: tableData,
-      styles: { fontSize: 8 }
+      styles: { fontSize: 7, overflow: 'linebreak' }
     })
     doc.save(`FETS_Register_${format(new Date(), 'ddMMyyyy')}.pdf`)
     toast.success("PDF report downloaded")
@@ -537,12 +551,17 @@ export function CandidateTrackerPremium() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-slate-600">
                             {candidate.phone || 'N/A'}
+                            {candidate.email && <small className="block text-slate-500">{candidate.email}</small>}
+                            {candidate.pearsonSourcePhone && <small className="block text-slate-500 whitespace-pre-wrap">Pearson source: {candidate.pearsonSourcePhone}</small>}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 font-medium">
                             {candidate.clientName}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 font-medium">
                             {candidate.examName}
+                            {candidate.examCode && <small className="block">{candidate.examCode} · {candidate.examTitle}</small>}
+                            {candidate.examOwner && <small className="block">{candidate.examOwner}</small>}
+                            {candidate.examEndTime && <small className="block">{candidate.examStartTime}–{candidate.examEndTime} IST</small>}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 font-medium">
                             {candidate.address || 'N/A'}
@@ -589,7 +608,7 @@ export function CandidateTrackerPremium() {
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="bg-white rounded-[2rem] shadow-2xl max-w-lg w-full overflow-hidden border border-white/20"
+              className="bg-white rounded-[2rem] shadow-2xl max-w-lg w-full max-h-[90dvh] overflow-y-auto border border-white/20"
             >
               <div className="bg-[#002147] p-8 text-white relative">
                 <button
@@ -621,6 +640,15 @@ export function CandidateTrackerPremium() {
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Phone Number</label>
                     <p className="font-bold text-slate-800">{selectedCandidate.phone || 'N/A'}</p>
                   </div>
+                  {([
+                    ['Email', selectedCandidate.email], ['Exam code', selectedCandidate.examCode],
+                    ['Exam title', selectedCandidate.examTitle], ['Exam owner', selectedCandidate.examOwner],
+                    ['Exam start · IST', selectedCandidate.examStartTime], ['Exam end · IST', selectedCandidate.examEndTime],
+                    ['Pearson source phone', selectedCandidate.pearsonSourcePhone]
+                  ] as const).map(([label, value]) => value ? <div key={label}>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">{label}</label>
+                    <p className="font-bold text-slate-800 whitespace-pre-wrap break-words">{value}</p>
+                  </div> : null)}
                   <div>
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Confirmation</label>
                     <p className="font-mono font-bold text-amber-600">{selectedCandidate.confirmationNumber}</p>
