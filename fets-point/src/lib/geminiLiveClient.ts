@@ -18,7 +18,7 @@ export interface LiveMessageTurn {
 
 export interface LiveClientConfig {
   getSession: () => Promise<{token:string;setup:Record<string,unknown>}>;
-  executeTool: (name:string,args:Record<string,unknown>) => Promise<Record<string,unknown>>;
+  executeTool: (name:string,args:Record<string,unknown>,toolCallId?:string) => Promise<Record<string,unknown>>;
   onMediaChange?: (media:{mic:boolean;camera:boolean;screen:boolean})=>void;
   voiceName?: GeminiLiveVoice;
   model?: string;
@@ -594,7 +594,7 @@ export class GeminiLiveClient {
     for(const fc of (toolCall.functionCalls||[]).slice(0,8)){
       if(socket!==this.ws||this.cancelledCalls.has(fc.id))continue;
       this.onToolActivity?.(fc.name);let response;
-      try{response=await this.executeTool(fc.name,fc.args||{});}catch{response={error:'The lookup failed. Do not assume there are no records.'};}
+      try{response=await this.executeTool(fc.name,fc.args||{},typeof fc.id==='string'?fc.id:undefined);}catch{response={error:'The lookup failed. Do not assume there are no records.'};}
       if(socket!==this.ws)return;
       if(!this.cancelledCalls.has(fc.id))responses.push({id:fc.id,name:fc.name,response});
     }

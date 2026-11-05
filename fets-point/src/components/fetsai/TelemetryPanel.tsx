@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Activity, MessageSquare, Zap, ShieldCheck, Database, TrendingUp } from 'lucide-react'
-import { supabase } from '../../lib/supabase'
+import { useAgentResource } from '../../fets-ai/useAgentResource'
 
 /**
  * Telemetry — live operational stats about FETS AI itself:
@@ -11,76 +11,32 @@ interface Stats {
   queries7d: number
   totalActions: number
   writeActions: number
+  blockedActions: number
+  failedActions: number
   memoryCount: number
   knowledgeCount: number
   topTools: Array<{ name: string; count: number }>
   recent: Array<{ tool: string; table: string | null; status: string; when: string }>
 }
 
-async function count(table: string, filter?: (q: any) => any): Promise<number> {
-  let q = supabase.from(table).select('*', { count: 'exact', head: true })
-  if (filter) q = filter(q)
-  const { count } = await q
-  return count || 0
-}
-
-export function TelemetryPanel() {
-  const [stats, setStats] = useState<Stats | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const sevenAgo = new Date(Date.now() - 7 * 864e5).toISOString()
-        const [totalQueries, queries7d, totalActions, writeActions, memoryCount, knowledgeCount] = await Promise.all([
-          count('ai_query_log'),
-          count('ai_query_log', (q) => q.gte('created_at', sevenAgo)),
-          count('ai_agent_actions'),
-          count('ai_agent_actions', (q) => q.eq('is_write', true)),
-          count('ai_memory'),
-          count('ai_external_knowledge', (q) => q.eq('is_active', true)),
-        ])
-
-        const { data: actions } = await supabase
-          .from('ai_agent_actions')
-          .select('tool_name, table_affected, status, created_at')
-          .order('created_at', { ascending: false })
-          .limit(200)
-
-        const toolCounts: Record<string, number> = {}
-        for (const a of actions || []) toolCounts[a.tool_name] = (toolCounts[a.tool_name] || 0) + 1
-        const topTools = Object.entries(toolCounts)
-          .map(([name, count]) => ({ name, count }))
-          .sort((a, b) => b.count - a.count)
-          .slice(0, 6)
-
-        const recent = (actions || []).slice(0, 8).map((a: any) => ({
-          tool: a.tool_name, table: a.table_affected, status: a.status, when: a.created_at,
-        }))
-
-        setStats({ totalQueries, queries7d, totalActions, writeActions, memoryCount, knowledgeCount, topTools, recent })
-      } catch (e) {
-        console.error('telemetry load failed', e)
-      } finally {
-        setLoading(false)
-      }
-    })()
-  }, [])
-
-  if (loading) return <div className="text-slate-500 text-sm p-4">Loading telemetry…</div>
-  if (!stats) return <div className="text-slate-500 text-sm p-4">Telemetry unavailable.</div>
-
+export function TelemetryPanel({userId,branch}:{userId:string;branch:string}) {
+  const resource=useAgentResource<{stats:Stats}>(userId,branch,'telemetry');
+  const stats=resource.data?.stats;
+  if(resource.loading)return <div className="text-slate-500 text-sm p-4">Loading telemetry…</div>;
+  if(resource.error||!stats)return <div role="alert">{resource.error||'Telemetry unavailable.'}<button onClick={resource.load}>Retry</button></div>;
   const cards = [
     { label: 'Total Queries', value: stats.totalQueries, icon: MessageSquare, color: 'text-emerald-600', bg: 'bg-emerald-50' },
     { label: 'Queries · 7d', value: stats.queries7d, icon: TrendingUp, color: 'text-cyan-600', bg: 'bg-cyan-50' },
     { label: 'Agent Actions', value: stats.totalActions, icon: Zap, color: 'text-amber-600', bg: 'bg-amber-50' },
     { label: 'Writes Executed', value: stats.writeActions, icon: ShieldCheck, color: 'text-rose-600', bg: 'bg-rose-50' },
-    { label: 'Memories Learned', value: stats.memoryCount, icon: Database, color: 'text-violet-600', bg: 'bg-violet-50' },
+    { label: 'Blocked Actions', value: stats.blockedActions, icon: ShieldCheck, color: 'text-amber-600', bg: 'bg-amber-50' },
+    { label: 'Failed Actions', value: stats.failedActions, icon: Activity, color: 'text-rose-600', bg: 'bg-rose-50' },
+    { label: 'Pinned Memories', value: stats.memoryCount, icon: Database, color: 'text-violet-600', bg: 'bg-violet-50' },
     { label: 'External Docs', value: stats.knowledgeCount, icon: Activity, color: 'text-indigo-600', bg: 'bg-indigo-50' },
   ]
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5"><div><h3 className="font-bold text-slate-900">Your AI activity</h3><p className="text-xs text-slate-500">Queries cover your account across centres. Actions show your activity for the selected centre.</p></div>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         {cards.map((c) => {
           const Icon = c.icon
@@ -125,7 +81,7 @@ export function TelemetryPanel() {
                     {r.tool.replace(/_/g, ' ')}{r.table ? ` · ${r.table}` : ''}
                   </span>
                   <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${
-                    r.status === 'executed' ? 'bg-emerald-100 text-emerald-700'
+                    r.status === 'succeeded' ? 'bg-emerald-100 text-emerald-700'
                     : r.status === 'blocked' ? 'bg-amber-100 text-amber-700'
                     : 'bg-rose-100 text-rose-700'
                   }`}>{r.status}</span>

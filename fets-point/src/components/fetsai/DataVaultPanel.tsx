@@ -1,147 +1,408 @@
-import { useEffect, useState } from 'react'
-import { Brain, FileText, Plus, Trash2, Loader2 } from 'lucide-react'
-import { toast } from 'react-hot-toast'
-import { supabase } from '../../lib/supabase'
-
-/**
- * Data Vault — the agent's brain, made visible and editable:
- *  • Memory: durable facts the agent has learned (ai_memory)
- *  • External Knowledge: docs/SOPs you feed it (ai_external_knowledge)
- * Adding external knowledge here loads it into the agent's context on every query.
- */
-interface MemoryRow { id: string; category: string; mem_key: string; mem_value: string; importance: number; scope: string }
-interface KnowledgeRow { id: string; title: string; category: string; content: string; is_active: boolean }
-
-export function DataVaultPanel() {
-  const [tab, setTab] = useState<'memory' | 'knowledge'>('knowledge')
-  const [memory, setMemory] = useState<MemoryRow[]>([])
-  const [knowledge, setKnowledge] = useState<KnowledgeRow[]>([])
-  const [loading, setLoading] = useState(true)
-
-  const [title, setTitle] = useState('')
-  const [category, setCategory] = useState('general')
-  const [content, setContent] = useState('')
-  const [saving, setSaving] = useState(false)
-
-  const load = async () => {
-    setLoading(true)
-    try {
-      const [{ data: mem }, { data: kn }] = await Promise.all([
-        supabase.from('ai_memory').select('id,category,mem_key,mem_value,importance,scope').order('importance', { ascending: false }).limit(100),
-        supabase.from('ai_external_knowledge').select('id,title,category,content,is_active').order('created_at', { ascending: false }).limit(100),
-      ])
-      setMemory(mem || [])
-      setKnowledge(kn || [])
-    } catch (e) {
-      console.error('vault load failed', e)
-    } finally {
-      setLoading(false)
-    }
-  }
-  useEffect(() => { load() }, [])
-
-  const addKnowledge = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!title.trim() || !content.trim()) return
-    setSaving(true)
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      const { error } = await supabase.from('ai_external_knowledge').insert({
-        title: title.trim(), category: category.trim() || 'general', content: content.trim(),
-        is_active: true, added_by: user?.id ?? null,
+import { useEffect, useState } from "react";
+import { Brain, FileText } from "lucide-react";
+import { type KnowledgeRow, type MemoryRow } from "../../fets-ai/fets-ai-api";
+import { useAgentResource } from "../../fets-ai/useAgentResource";
+const inputCls =
+  "w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400";
+export function DataVaultPanel({
+  userId,
+  branch,
+  isAdmin = false,
+}: {
+  userId: string;
+  branch: string;
+  isAdmin?: boolean;
+}) {
+  const [tab, setTab] = useState<"knowledge" | "memory">("knowledge");
+  const memories = useAgentResource<{
+      memories: MemoryRow[];
+    }>(userId, branch, "memories"),
+    knowledge = useAgentResource<{
+      documents: KnowledgeRow[];
+    }>(userId, branch, "knowledge");
+  const [editMemory, setEditMemory] = useState<MemoryRow | null>(null),
+    [key, setKey] = useState(""),
+    [value, setValue] = useState(""),
+    [scope, setScope] = useState<MemoryRow["scope"]>("user"),
+    [active, setActive] = useState(true);
+  const [sourceUrl, setSourceUrl] = useState("");
+  const [editDoc, setEditDoc] = useState<KnowledgeRow | null>(null),
+    [title, setTitle] = useState(""),
+    [content, setContent] = useState(""),
+    [category, setCategory] = useState("general"),
+    [docBranch, setDocBranch] = useState(branch === "global" ? "*" : branch);
+  const resetMemory = () => {
+    setEditMemory(null);
+    setKey("");
+    setValue("");
+    setScope("user");
+    setActive(true);
+  };
+  const resetDoc = () => {
+    setSourceUrl("");
+    setEditDoc(null);
+    setTitle("");
+    setContent("");
+    setCategory("general");
+    setDocBranch(branch === "global" ? "*" : branch);
+  };
+  useEffect(() => {
+    resetMemory();
+    resetDoc();
+  }, [userId, branch]);
+  const editable = (m: MemoryRow) =>
+    isAdmin ||
+    (m.scope === "user" &&
+      (m.scope_ref === userId ||
+        (!m.scope_ref && !m.created_by) ||
+        m.created_by === userId));
+  const resource = tab === "memory" ? memories : knowledge;
+  const saveMemory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (
+      await memories.mutate({
+        action: "memory-save",
+        id: editMemory?.id,
+        key: key.trim(),
+        value: value.trim(),
+        scope,
+        active,
+        importance: editMemory?.importance ?? 3,
       })
-      if (error) throw error
-      toast.success('Knowledge added to FETS AI')
-      setTitle(''); setContent(''); setCategory('general')
-      load()
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to add knowledge')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const remove = async (table: 'ai_memory' | 'ai_external_knowledge', id: string) => {
-    try {
-      const { error } = await supabase.from(table).delete().eq('id', id)
-      if (error) throw error
-      toast.success('Deleted')
-      load()
-    } catch (err: any) {
-      toast.error(err?.message || 'Delete failed')
-    }
-  }
-
-  const inputCls = 'bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50'
-
+    )
+      resetMemory();
+  };
+  const saveDoc = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (
+      await knowledge.mutate({
+        action: "knowledge-save",
+        document: {
+          id: editDoc?.id,
+          source: editDoc?.source,
+          title: title.trim(),
+          category: category.trim(),
+          content: content.trim(),
+          branch: docBranch,
+          version: editDoc?.version,
+          source_url: sourceUrl.trim() || null,
+        },
+      })
+    )
+      resetDoc();
+  };
   return (
     <div className="space-y-4">
       <div className="flex gap-2">
-        {(['knowledge', 'memory'] as const).map((t) => (
-          <button key={t} onClick={() => setTab(t)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border ${
-              tab === t ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'text-slate-500 hover:text-slate-700 border-transparent'
-            }`}>
-            {t === 'knowledge' ? <FileText size={14} /> : <Brain size={14} />}
-            {t === 'knowledge' ? 'External Knowledge' : 'Learned Memory'}
+        {(["knowledge", "memory"] as const).map((t) => (
+          <button
+            key={t}
+            className={`flex gap-2 items-center px-4 py-2 rounded-xl border text-sm ${
+              tab === t ? "bg-indigo-50 text-indigo-700" : "text-slate-500"
+            }`}
+            onClick={() => setTab(t)}
+          >
+            {t === "knowledge" ? <FileText size={14} /> : <Brain size={14} />}
+            {t === "knowledge" ? "External Knowledge" : "Pinned Memory"}
           </button>
         ))}
       </div>
-
-      {tab === 'knowledge' && (
-        <form onSubmit={addKnowledge} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
-          <h4 className="text-xs uppercase tracking-widest text-indigo-600 font-black flex items-center gap-2">
-            <Plus size={14} /> Teach FETS AI something new
-          </h4>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title (e.g. Prometric refund policy)" className={`md:col-span-2 ${inputCls}`} />
-            <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Category" className={inputCls} />
-          </div>
-          <textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="The information the agent should know and reason over…" rows={4} className={`w-full resize-y ${inputCls}`} />
-          <button type="submit" disabled={saving || !title.trim() || !content.trim()}
-            className="flex items-center gap-2 text-white font-bold text-sm px-5 py-2.5 rounded-xl transition-all disabled:opacity-30 hover:brightness-110"
-            style={{ background: 'linear-gradient(135deg,#4F46E5,#7C3AED)' }}>
-            {saving ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} Add Knowledge
+      <p className="text-xs text-slate-500">
+        Pinned active instructions apply to every text and live session.
+        Reference documents are searched when relevant. Personal instructions
+        survive a new chat.
+      </p>
+      {resource.error && (
+        <div role="alert" className="text-rose-700">
+          {resource.error}
+          <button onClick={resource.load} className="ml-2 underline">
+            Retry
           </button>
-        </form>
-      )}
-
-      {loading ? (
-        <div className="text-slate-500 text-sm p-4">Loading…</div>
-      ) : tab === 'knowledge' ? (
-        <div className="space-y-2">
-          {knowledge.length === 0 ? <p className="text-slate-400 text-sm p-2">No external knowledge yet. Add some above.</p> :
-            knowledge.map((k) => (
-              <div key={k.id} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm font-bold text-slate-900 truncate">{k.title}</span>
-                    <span className="text-[9px] uppercase tracking-wider px-2 py-0.5 rounded bg-amber-100 text-amber-700 font-bold">{k.category}</span>
-                  </div>
-                  <p className="text-xs text-slate-500 line-clamp-2">{k.content}</p>
-                </div>
-                <button onClick={() => remove('ai_external_knowledge', k.id)} className="text-slate-400 hover:text-rose-500 shrink-0"><Trash2 size={16} /></button>
-              </div>
-            ))}
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {memory.length === 0 ? <p className="text-slate-400 text-sm p-2">The agent hasn't recorded any long-term memory yet. It will as you use it.</p> :
-            memory.map((m) => (
-              <div key={m.id} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <span className="text-sm font-bold text-slate-900 truncate">{m.mem_key}</span>
-                    <span className="text-[9px] uppercase tracking-wider px-2 py-0.5 rounded bg-violet-100 text-violet-700 font-bold">{m.category}</span>
-                    <span className="text-[9px] uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-500 font-bold">{m.scope}</span>
-                  </div>
-                  <p className="text-xs text-slate-500 line-clamp-2">{m.mem_value}</p>
-                </div>
-                <button onClick={() => remove('ai_memory', m.id)} className="text-slate-400 hover:text-rose-500 shrink-0"><Trash2 size={16} /></button>
-              </div>
-            ))}
         </div>
       )}
+      {tab === "memory" && (
+        <>
+          <form
+            onSubmit={saveMemory}
+            className="bg-slate-50 border rounded-2xl p-4 space-y-3"
+          >
+            <label className="text-xs block">
+              Memory key
+              <input
+                aria-label="Memory key"
+                required
+                maxLength={200}
+                className={inputCls}
+                value={key}
+                onChange={(e) => setKey(e.target.value)}
+              />
+            </label>
+            <label className="text-xs block">
+              Memory value
+              <textarea
+                aria-label="Memory value"
+                required
+                rows={3}
+                className={inputCls}
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+              />
+            </label>
+            <div className="flex gap-3">
+              <label className="text-xs">
+                Scope
+                <select
+                  aria-label="Memory scope"
+                  className={inputCls}
+                  value={scope}
+                  disabled={Boolean(editMemory)}
+                  onChange={(e) =>
+                    setScope(e.target.value as MemoryRow["scope"])
+                  }
+                >
+                  <option value="user">Personal</option>
+                  {isAdmin && branch !== "global" && (
+                    <option value="branch">Centre · {branch}</option>
+                  )}
+                  {isAdmin && <option value="global">Company</option>}
+                </select>
+              </label>
+              <label className="text-sm">
+                <input
+                  type="checkbox"
+                  checked={active}
+                  onChange={(e) => setActive(e.target.checked)}
+                />{" "}
+                Active
+              </label>
+            </div>
+            <button
+              className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm disabled:opacity-40"
+              disabled={
+                memories.loading ||
+                memories.saving ||
+                !key.trim() ||
+                !value.trim()
+              }
+            >
+              Save memory
+            </button>
+            {editMemory && (
+              <button type="button" className="ml-3" onClick={resetMemory}>
+                Cancel edit
+              </button>
+            )}
+          </form>
+          {!memories.loading && !(memories.data?.memories || []).length && (
+            <p className="text-sm text-slate-500">
+              No pinned memories in this scope.
+            </p>
+          )}
+          {memories.data?.memories.map((m) => (
+            <article
+              key={m.id}
+              className="border rounded-2xl bg-white p-4 space-y-2"
+            >
+              <strong>{m.mem_key}</strong>
+              <span className="text-xs ml-2 text-slate-500">
+                {m.scope === "user"
+                  ? "Personal"
+                  : m.scope === "branch"
+                  ? "Centre"
+                  : "Company"}{" "}
+                · {m.is_active ? "Active" : "Inactive"}
+              </span>
+              <p className="text-sm whitespace-pre-wrap">{m.mem_value}</p>
+              <small className="block text-slate-500">
+                Saved memory ID: {m.id}
+              </small>
+              {editable(m) && (
+                <div className="flex gap-4 text-xs text-indigo-700">
+                  <button
+                    aria-label={`Edit ${m.mem_key}`}
+                    disabled={memories.saving}
+                    onClick={() => {
+                      setEditMemory(m);
+                      setKey(m.mem_key);
+                      setValue(m.mem_value);
+                      setScope(m.scope);
+                      setActive(m.is_active);
+                    }}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    aria-label={`${m.is_active ? "Disable" : "Enable"} ${
+                      m.mem_key
+                    }`}
+                    disabled={memories.saving}
+                    onClick={() =>
+                      memories.mutate(
+                        m.is_active
+                          ? { action: "memory-delete", id: m.id }
+                          : {
+                              action: "memory-save",
+                              id: m.id,
+                              key: m.mem_key,
+                              value: m.mem_value,
+                              scope: m.scope,
+                              active: true,
+                              importance: m.importance,
+                            }
+                      )
+                    }
+                  >
+                    {m.is_active ? "Disable" : "Enable"}
+                  </button>
+                </div>
+              )}
+            </article>
+          ))}
+        </>
+      )}
+      {tab === "knowledge" && (
+        <>
+          {isAdmin && (
+            <form
+              onSubmit={saveDoc}
+              className="bg-slate-50 border rounded-2xl p-4 space-y-3"
+            >
+              <label className="text-xs block">
+                Document title
+                <input
+                  required
+                  aria-label="Document title"
+                  className={inputCls}
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                />
+              </label>
+              <label className="text-xs block">
+                Category
+                <input
+                  aria-label="Document category"
+                  className={inputCls}
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                />
+              </label>
+              <label className="text-xs block">
+                Reference content
+                <textarea
+                  required
+                  aria-label="Reference content"
+                  rows={4}
+                  className={inputCls}
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                />
+              </label>
+              <label className="text-xs block">
+                Source link · optional
+                <input
+                  aria-label="Source link · optional"
+                  type="url"
+                  pattern="https://.*"
+                  className={inputCls}
+                  value={sourceUrl}
+                  onChange={(e) => setSourceUrl(e.target.value)}
+                  placeholder="https://…"
+                />
+              </label>
+              <label className="text-xs block">
+                Document scope
+                <select
+                  aria-label="Document scope"
+                  className={inputCls}
+                  value={docBranch}
+                  onChange={(e) => setDocBranch(e.target.value)}
+                >
+                  <option value="*">Company</option>
+                  {branch !== "global" && (
+                    <option value={branch}>Centre · {branch}</option>
+                  )}
+                </select>
+              </label>
+              <button
+                className="bg-indigo-600 text-white text-sm rounded-xl px-4 py-2 disabled:opacity-40"
+                disabled={
+                  knowledge.loading ||
+                  knowledge.saving ||
+                  !title.trim() ||
+                  !content.trim()
+                }
+              >
+                Save knowledge
+              </button>
+              {editDoc && (
+                <button type="button" onClick={resetDoc} className="ml-3">
+                  Cancel edit
+                </button>
+              )}
+            </form>
+          )}
+          {!knowledge.loading && !(knowledge.data?.documents || []).length && (
+            <p className="text-sm text-slate-500">
+              No reference documents available.
+            </p>
+          )}
+          {knowledge.data?.documents.map((d) => (
+            <article
+              key={`${d.source}-${d.id}`}
+              className="border bg-white rounded-2xl p-4 space-y-2"
+            >
+              <strong>{d.title}</strong>
+              <span className="ml-2 text-xs text-slate-500">
+                {d.source} · {d.branch === "*" ? "Company" : d.branch} ·{" "}
+                {d.status} · v{d.version}
+              </span>
+              <p className="text-sm whitespace-pre-wrap">{d.content}</p>
+              {d.source_url?.startsWith("https://") && (
+                <a
+                  className="text-xs text-indigo-700"
+                  href={d.source_url}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Source reference
+                </a>
+              )}
+              {isAdmin && (
+                <div className="flex gap-4 text-xs text-indigo-700">
+                  <button
+                    disabled={knowledge.saving}
+                    aria-label={`Edit ${d.title}`}
+                    onClick={() => {
+                      setSourceUrl(d.source_url || "");
+                      setEditDoc(d);
+                      setTitle(d.title);
+                      setContent(d.content);
+                      setCategory(d.category || "general");
+                      setDocBranch(d.branch);
+                    }}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    disabled={knowledge.saving || d.status === "archived"}
+                    onClick={() =>
+                      knowledge.mutate({
+                        action: "knowledge-archive",
+                        id: d.id,
+                        source: d.source,
+                        version: d.version,
+                      })
+                    }
+                  >
+                    Archive
+                  </button>
+                </div>
+              )}
+            </article>
+          ))}
+        </>
+      )}
+      {resource.loading && <p className="text-sm text-slate-500">Loading…</p>}
     </div>
-  )
+  );
 }

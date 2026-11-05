@@ -6,14 +6,17 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Newspaper, Send, Sparkles, Activity, FileText,
+  Newspaper, Sparkles, Activity, FileText,
   Settings as SettingsIcon, AlertCircle, Users, Calendar,
   Bot, ArrowUp, Zap
 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useBranch } from '../hooks/useBranch'
-import { toast } from 'react-hot-toast'
-import { agentRequest, type AgentReply } from '../fets-ai/fets-ai-api'
+import { type AgentStatus } from '../fets-ai/fets-ai-api'
+import { useAgentConversation } from '../fets-ai/useAgentConversation'
+import { useAgentResource } from '../fets-ai/useAgentResource'
+import { AgentResults } from '../fets-ai/AgentResults'
+import { ConversationControls } from '../fets-ai/ConversationControls'
 import { Markdown } from './fetsai/Markdown'
 import { NewsManager } from './NewsManager'
 import { TelemetryPanel } from './fetsai/TelemetryPanel'
@@ -21,70 +24,49 @@ import { DataVaultPanel } from './fetsai/DataVaultPanel'
 import { SettingsPanel } from './fetsai/SettingsPanel'
 import { GeminiLiveStudio } from './Chat/GeminiLiveStudio'
 
-interface ChatMessage {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-  timestamp: Date
-}
-
 interface FetsAIProps {
   initialTab?: string
   initialQuery?: string
 }
 
 const QUICK_PROMPTS = [
-  { text: 'How many candidates are registered?', icon: Users },
+  { text: 'How many candidates are scheduled this week?', icon: Users },
   { text: 'Show the upcoming exam schedule', icon: Calendar },
   { text: 'Summarise recent incidents', icon: AlertCircle },
-  { text: 'Which staff are online right now?', icon: Zap },
+  { text: 'Summarise today’s current Shift plan', icon: Zap },
 ]
 
 export function FetsIntelligence({ initialTab = 'chat', initialQuery }: FetsAIProps) {
-  const { profile } = useAuth()
+  const { profile, user } = useAuth()
   const { activeBranch } = useBranch()
   const isAdmin = profile?.role === 'super_admin' || profile?.role === 'admin'
   const [activeTab, setActiveTab] = useState<string>(initialTab)
 
   const [query, setQuery] = useState('')
-  const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [loading, setLoading] = useState(false)
+  const chat = useAgentConversation(user?.id||'',activeBranch,'fets-intelligence')
+  const {messages,busy:loading}=chat
+  const health=useAgentResource<AgentStatus>(user?.id||'',activeBranch,'status')
+  const ready=Boolean(health.data?.ready)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const hasProcessedInitialQuery = useRef(false)
 
   useEffect(() => { if (initialTab) setActiveTab(initialTab) }, [initialTab])
 
   useEffect(() => {
-    if (initialQuery && !hasProcessedInitialQuery.current && profile) {
+    if (initialQuery && !hasProcessedInitialQuery.current && profile && ready && !chat.restoring) {
       hasProcessedInitialQuery.current = true
       setActiveTab('chat')
-      setTimeout(() => submitQuery(initialQuery), 400)
+      submitQuery(initialQuery)
     }
-  }, [initialQuery, profile])
+  }, [initialQuery, profile, ready, chat.restoring])
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, loading])
 
   const submitQuery = async (queryText: string) => {
-    if (!queryText.trim()) return
-    const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', content: queryText, timestamp: new Date() }
-    setMessages((p) => [...p, userMsg])
-    setLoading(true)
-    setQuery('')
-    try {
-      const result = await agentRequest<AgentReply>({action:'chat',branch:activeBranch,page:'fets-intelligence',message:userMsg.content,history:messages.slice(-8).map(m=>({role:m.role,text:m.content}))})
-      setMessages((p) => [...p, {
-        id: (Date.now() + 1).toString(), role: 'assistant', content: result.text,
-        timestamp: new Date(),
-      }])
-    } catch (error: any) {
-      toast.error(error?.message || 'AI connection failed')
-      setMessages((p) => [...p, {
-        id: (Date.now() + 1).toString(), role: 'assistant',
-        content: `Sorry, I hit an error: ${error?.message || 'connection failed'}. Please try again.`, timestamp: new Date(),
-      }])
-    } finally { setLoading(false) }
+    if(!ready||chat.restoring||loading||!queryText.trim())return;
+    setQuery('');await chat.send(queryText);
   }
-
+  useEffect(()=>{setQuery('');},[user?.id,activeBranch])
   const handleSend = (e?: React.FormEvent) => { e?.preventDefault(); if (query.trim()) submitQuery(query) }
 
   const tabs = [
@@ -119,15 +101,15 @@ export function FetsIntelligence({ initialTab = 'chat', initialQuery }: FetsAIPr
                 <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-white/15 backdrop-blur-md border border-white/25 grid place-items-center shadow-inner">
                   <Bot size={30} className="text-white" />
                 </div>
-                <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-400 border-2 border-white shadow" />
+                <span className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full ${ready?'bg-emerald-400':'bg-slate-300'} border-2 border-white shadow`} />
               </div>
               <div>
                 <h1 className="text-white text-3xl md:text-4xl font-black tracking-tight leading-none">
                   FETS <span className="text-transparent bg-clip-text" style={{ backgroundImage: 'linear-gradient(90deg,#FDE68A,#FCA5A5)' }}>AI</span>
                 </h1>
                 <div className="flex items-center gap-2 mt-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" />
-                  <span className="text-white/80 text-[11px] font-semibold uppercase tracking-[0.18em]">Operations Copilot · Online</span>
+                  <span className={`w-1.5 h-1.5 rounded-full ${ready?'bg-emerald-300 animate-pulse':'bg-slate-300'}`} />
+                  <span className="text-white/80 text-[11px] font-semibold uppercase tracking-[0.18em]">Operations Copilot · {health.loading?'Checking connection':ready?'Connected':'Unavailable'}</span>
                 </div>
               </div>
             </div>
@@ -177,6 +159,8 @@ export function FetsIntelligence({ initialTab = 'chat', initialQuery }: FetsAIPr
               <motion.div key="chat" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
                 className="flex-1 flex flex-col bg-white/80 backdrop-blur-xl border border-white rounded-[24px] shadow-[0_20px_50px_-30px_rgba(30,41,59,0.5)] overflow-hidden">
 
+                <ConversationControls chat={chat}/>
+                {(chat.error||health.error)&&<div role="alert" className="px-4 py-2 text-sm text-rose-700">{chat.error||health.error}<button className="ml-2 underline" onClick={()=>health.error?health.load():chat.retry()}>Retry</button></div>}
                 <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-5" style={{ minHeight: 420 }}>
                   {messages.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center text-center py-10">
@@ -186,13 +170,13 @@ export function FetsIntelligence({ initialTab = 'chat', initialQuery }: FetsAIPr
                       </div>
                       <h3 className="text-2xl font-black text-slate-900 mb-1.5">How can I help you run FETS today?</h3>
                       <p className="text-slate-500 text-sm max-w-md mb-8">
-                        Ask about candidates, sessions, staff and incidents — or tell me to take an action. I read live data and remember what matters.
+                        Ask about scheduled sessions, roster, current Shift work and incidents. Explicit permitted actions follow your Control settings; pinned instructions are managed in Knowledge.
                       </p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-2xl">
                         {QUICK_PROMPTS.map((p, i) => {
                           const Icon = p.icon
                           return (
-                            <button key={i} onClick={() => submitQuery(p.text)}
+                            <button key={i} disabled={!ready||chat.restoring||loading} onClick={() => submitQuery(p.text)}
                               className="group flex items-center gap-3 p-4 bg-white border border-slate-200 hover:border-indigo-300 hover:shadow-md rounded-2xl text-left transition-all">
                               <span className="w-9 h-9 rounded-xl grid place-items-center bg-indigo-50 group-hover:bg-indigo-100 transition-colors">
                                 <Icon size={17} className="text-indigo-600" />
@@ -219,7 +203,7 @@ export function FetsIntelligence({ initialTab = 'chat', initialQuery }: FetsAIPr
                             style={msg.role === 'user' ? { background: 'linear-gradient(135deg,#4F46E5,#7C3AED)' } : undefined}>
                             {msg.role === 'user'
                               ? <p className="text-[15px] leading-relaxed whitespace-pre-wrap font-medium">{msg.content}</p>
-                              : <div className="text-[15px]"><Markdown content={msg.content} /></div>}
+                              : <div className="text-[15px]"><Markdown content={msg.content} />{msg.metadata&&<AgentResults reply={msg.metadata}/>}</div>}
                           </div>
                           <div className={`text-[10px] mt-1.5 font-semibold ${msg.role === 'user' ? 'text-right text-slate-400' : 'text-slate-400'}`}>
                             {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -247,10 +231,10 @@ export function FetsIntelligence({ initialTab = 'chat', initialQuery }: FetsAIPr
                 {/* composer */}
                 <div className="p-3 md:p-4 border-t border-slate-100 bg-white/60">
                   <form onSubmit={handleSend} className="flex items-end gap-2 bg-white border border-slate-200 focus-within:border-indigo-400 focus-within:ring-4 focus-within:ring-indigo-100 rounded-2xl p-2 shadow-sm transition-all">
-                    <input value={query} onChange={(e) => setQuery(e.target.value)} disabled={loading}
+                    <input value={query} onChange={(e) => setQuery(e.target.value)} disabled={loading||chat.restoring||!ready}
                       placeholder="Message FETS AI…  (e.g. 'log an incident for the Cochin AC outage')"
                       className="flex-1 bg-transparent px-3 py-2.5 text-[15px] text-slate-800 placeholder-slate-400 focus:outline-none" />
-                    <button type="submit" disabled={!query.trim() || loading}
+                    <button type="submit" disabled={!query.trim()||loading||chat.restoring||!ready}
                       className="w-11 h-11 rounded-xl grid place-items-center text-white shadow-md transition-all disabled:opacity-30 hover:brightness-110"
                       style={{ background: 'linear-gradient(135deg,#4F46E5,#7C3AED)' }}>
                       {loading ? <Activity size={19} className="animate-spin" /> : <ArrowUp size={19} />}
@@ -270,21 +254,21 @@ export function FetsIntelligence({ initialTab = 'chat', initialQuery }: FetsAIPr
             {activeTab === 'exam-stats' && (
               <motion.div key="stats" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
                 className="flex-1 bg-white/85 backdrop-blur-xl border border-white rounded-[24px] shadow-sm p-4 md:p-6">
-                <TelemetryPanel />
+                <TelemetryPanel key={`${user?.id}:${activeBranch}`} userId={user?.id||''} branch={activeBranch} />
               </motion.div>
             )}
 
             {activeTab === 'knowledge' && (
               <motion.div key="vault" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
                 className="flex-1 bg-white/85 backdrop-blur-xl border border-white rounded-[24px] shadow-sm p-4 md:p-6">
-                <DataVaultPanel />
+                <DataVaultPanel key={`${user?.id}:${activeBranch}`} userId={user?.id||''} branch={activeBranch} isAdmin={isAdmin} />
               </motion.div>
             )}
 
             {activeTab === 'settings' && (
               <motion.div key="settings" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
                 className="flex-1 bg-white/85 backdrop-blur-xl border border-white rounded-[24px] shadow-sm p-4 md:p-6">
-                <SettingsPanel isAdmin={!!isAdmin} />
+                <SettingsPanel key={`${user?.id}:${activeBranch}`} isAdmin={!!isAdmin} userId={user?.id||''} branch={activeBranch} onStatus={()=>health.load()} />
               </motion.div>
             )}
           </AnimatePresence>
