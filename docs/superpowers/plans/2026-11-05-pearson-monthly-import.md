@@ -80,4 +80,4 @@ Shared contract is `fets-point/src/pearson/types.ts`. RPCs:
 - [x] Run trusted preview against the original 451 rows. Supply the now-approved 35 candidate and 238 session bindings; inspect exact planned result. Keep private rollback snapshots and recheck original workbook hash.
 - [x] Apply once atomically; verify all source fields, 451 IDs, 238 session memberships/totals, existing history and unrelated fingerprints. Repeating same import returns receipt without mutation.
 - [x] Deploy only the frontend with old assets/config retained, verify public routes/assets and isolated authenticated component behavior. Confirm new email/code metadata and calendar totals in both read paths.
-- [ ] Create/attach draft PR and give concise factual completion report.
+- [x] Create/attach draft PR and give concise factual completion report.
