@@ -36,6 +36,11 @@ describe('Pearson monthly workbook parsing',()=>{
   const p=await parsePearsonWorkbook('blank-email.xlsx',await workbook([booking('Alex','A','9:00 AM - 10:00 AM','')]));
   expect(p.rows[0].email).toBeNull();expect(p.issues).toContainEqual(expect.objectContaining({source_row:2,level:'warning'}));expect(p.issues.some(i=>i.level==='error')).toBe(false);
  });
+ it('retains the source phone text and leading zeroes without treating it as identity',async()=>{
+  const row=booking();row[5]=' 00123  456 ';
+  const p=await parsePearsonWorkbook('phone.xlsx',await workbook([row]));
+  expect(p.rows[0].phone).toBe(' 00123  456 ');
+ });
  it('rejects formulas and reports invalid emails instead of accepting cached values',async()=>{
   const a=booking();a[4]='invalid';const p=await parsePearsonWorkbook('invalid.xlsx',await workbook([a]));expect(p.issues.some(i=>i.level==='error')).toBe(true);
   const b=await workbook([booking()],s=>{s.getCell('C2').value={formula:'"Injected"',result:'Alex'};});

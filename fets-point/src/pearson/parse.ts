@@ -64,7 +64,7 @@ export async function parsePearsonWorkbook(filename:string,bytes:Uint8Array):Pro
     const email=values[4]||null;
     if(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))issue('Email address is not valid. Correct this row before saving.');
     if(!email)issue('Email is missing. Keep this booking separate unless an existing identity is explicitly confirmed.','warning');
-    const row:PearsonRow={source_row:n,date:day,start_time:start,end_time:end,full_name:fullName,email,phone:values[5]||null,exam_owner:values[6],exam_code:values[7],exam_title:values[8]};
+    const row:PearsonRow={source_row:n,date:day,start_time:start,end_time:end,full_name:fullName,email,phone:values[5]?cells[5].text:null,exam_owner:values[6],exam_code:values[7],exam_title:values[8]};
     const identity=JSON.stringify([day,start,end,fullName.toLowerCase(),email?.toLowerCase()||'',row.exam_owner.toLowerCase(),row.exam_code.toLowerCase()]);
     if(seen.has(identity))issue('Duplicate booking in this file: same name, email, exam and appointment. Remove the duplicate source row before saving.');
     seen.add(identity);result.rows.push(row);
