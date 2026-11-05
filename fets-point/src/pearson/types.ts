@@ -15,7 +15,7 @@ export type PearsonPreviewRow = PearsonRow & {
 export type PearsonPreviewSession = {
   group_key: string; date: string; exam_owner: string; start_time: string; end_time: string;
   candidate_count: number; calendar_id: number | null; match_kind: 'new' | 'exact' | 'review';
-  possible_sessions: { id: number; exam_name: string; start_time: string; end_time: string; candidate_count: number }[];
+  possible_sessions: { id: number; date?: string; exam_name: string; start_time: string; end_time: string; candidate_count: number }[];
 };
 export type PearsonCancellation = {
   id: string; candidate_id: string; full_name: string; date: string; start_time: string | null;
