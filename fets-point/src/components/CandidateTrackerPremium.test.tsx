@@ -23,6 +23,39 @@ beforeEach(() => {
 });
 
 describe('Candidate Tracker Pearson metadata', () => {
+  it('labels a retained cancelled registration on its card and in its booking details', async () => {
+    mocks.rows[0].status = 'cancelled';
+    render(<CandidateTrackerPremium />);
+    const card = screen.getByRole('button', { name: /Synthetic Candidate/ });
+    expect(card).toHaveTextContent('Cancelled');
+    fireEvent.click(card);
+    await screen.findByText('Booking status');
+    expect(screen.getAllByText('Cancelled')).toHaveLength(2);
+  });
+  it('edits personal contact and notes on an imported booking without changing its source fields or owner', async () => {
+    mocks.rows[0].pearson_registration_id = 'synthetic-import-registration';
+    mocks.rows[0].user_id = 'original-import-owner';
+    render(<CandidateTrackerPremium />);
+    fireEvent.click(screen.getByRole('button', { name: /Synthetic Candidate/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit Entry' }));
+    expect(screen.getByPlaceholderText('e.g. John Doe')).toBeDisabled();
+    expect(screen.getByText('Update booking names and appointments through the Pearson monthly report.')).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText('+91...'), { target: { value: 'updated-personal-contact' } });
+    fireEvent.change(screen.getByPlaceholderText('City, State'), { target: { value: 'Updated personal address' } });
+    fireEvent.change(screen.getByPlaceholderText('Additional requirements...'), { target: { value: 'Updated staff notes' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+    expect(mocks.update).toHaveBeenCalledWith({ id: 'synthetic-candidate', updates: { phone: 'updated-personal-contact', address: 'Updated personal address', notes: 'Updated staff notes' } }, expect.anything());
+  });
+  it('omits the existing record owner from ordinary manual booking updates', async () => {
+    mocks.rows[0].user_id = 'original-owner';
+    render(<CandidateTrackerPremium />);
+    fireEvent.click(screen.getByRole('button', { name: /Synthetic Candidate/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit Entry' }));
+    fireEvent.change(screen.getByPlaceholderText('Additional requirements...'), { target: { value: 'Updated ordinary notes' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+    expect(mocks.update).toHaveBeenCalled();
+    expect(mocks.update.mock.calls[0][0].updates).not.toHaveProperty('user_id');
+  });
   it.each(['Synthetic@example.test', 'SYN-EXAM', 'Synthetic exam title', 'Synthetic exam owner', '10:30:00', '00123  456'])('searches %s and shows the report values alongside personal contact', async query => {
     render(<CandidateTrackerPremium />);
     fireEvent.change(screen.getByPlaceholderText('Search candidates...'), { target: { value: query } });
@@ -56,6 +89,6 @@ describe('Candidate Tracker Pearson metadata', () => {
     await waitFor(() => expect(mocks.create).toHaveBeenCalled());
     const payload = mocks.create.mock.calls[0][0];
     for (const field of ['email', 'exam_code', 'exam_title', 'exam_owner', 'exam_end_time', 'pearson_source_phone']) expect(payload).not.toHaveProperty(field);
-    expect(payload).toMatchObject({ full_name: 'Manual Candidate', client_name: 'PROMETRIC', branch_location: 'cochin' });
+    expect(payload).toMatchObject({ full_name: 'Manual Candidate', client_name: 'PROMETRIC', branch_location: 'cochin', user_id: 'test-staff' });
   });
 });

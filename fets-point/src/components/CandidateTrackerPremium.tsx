@@ -1,4 +1,5 @@
-import { useState, useMemo, memo, useEffect } from 'react'
+import { useState, useMemo, memo, useEffect, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Users, Plus, Search, Edit, UserCheck, UserX, Phone, X, Calendar,
@@ -36,9 +37,10 @@ interface Candidate {
   examOwner?: string
   examEndTime?: string
   pearsonSourcePhone?: string
+  pearsonRegistrationId?: string
   examDate?: Date
   examName?: string
-  status: 'registered' | 'completed' | 'no_show'
+  status: 'registered' | 'checked_in' | 'in_progress' | 'completed' | 'no_show' | 'cancelled'
   rosterNumber?: string
   examPart?: string
   examStartTime?: string
@@ -54,6 +56,15 @@ const CLIENT_LOGOS: Record<string, string> = {
   'PSI': '/client-logos/psi.png',
   'ITTS': '/client-logos/itts.png',
   'PEARSON VUE': '/client-logos/pearson_vue.png'
+}
+
+const CANDIDATE_STATUS_LABELS: Record<Candidate['status'], string> = {
+  registered: 'Registered', checked_in: 'Checked in', in_progress: 'In progress',
+  completed: 'Completed', no_show: 'No show', cancelled: 'Cancelled'
+}
+
+function CandidateModalPortal({ children }: { children: ReactNode }) {
+  return createPortal(children, document.body)
 }
 
 // Simple Clean Card Component
@@ -74,6 +85,7 @@ const CandidateCard = memo(({ candidate, onClick }: any) => {
         </div>
         <div className="text-left overflow-hidden">
           <div className="text-sm font-bold text-slate-800 truncate">{candidate.fullName}</div>
+          {candidate.status === 'cancelled' && <span className="inline-block text-[10px] font-bold text-rose-700">Cancelled</span>}
           <div className="text-[10px] font-medium text-slate-400 uppercase tracking-wider truncate">
             {candidate.clientName} • {candidate.examName}
           </div>
@@ -112,6 +124,7 @@ export function CandidateTrackerPremium() {
   const [showModal, setShowModal] = useState(false)
   const [isEdit, setIsEdit] = useState(false)
   const [selectedCandidate, setSelectedCandidate] = useState<any>(null)
+  const editingPearsonImport = isEdit && Boolean(selectedCandidate?.pearsonRegistrationId)
 
   const [formData, setFormData] = useState({
     fullName: '', phone: '', address: '',
@@ -143,6 +156,7 @@ export function CandidateTrackerPremium() {
     id: c.id, fullName: c.full_name, address: c.address, phone: c.phone || '',
     email: c.email || '', examCode: c.exam_code || '', examTitle: c.exam_title || '',
     examOwner: c.exam_owner || '', examEndTime: c.exam_end_time || '', pearsonSourcePhone: c.pearson_source_phone ?? '',
+    pearsonRegistrationId: c.pearson_registration_id || '',
     examDate: c.exam_date ? new Date(`${formatDateForIST(c.exam_date)}T12:00:00`) : undefined,
     examName: c.exam_name || 'General Exam',
     status: (c.status as Candidate['status']) || 'registered',
@@ -221,7 +235,9 @@ export function CandidateTrackerPremium() {
 
     const targetBranch = isEdit ? selectedCandidate.branchLocation : activeBranch;
     if (!['calicut','cochin'].includes(targetBranch)) return toast.error('Choose Calicut or Cochin before adding a candidate');
-    const payload: any = {
+    const payload: any = editingPearsonImport ? {
+      phone: formData.phone, address: formData.address, notes: formData.notes
+    } : {
       full_name: formData.fullName,
       phone: formData.phone,
       address: formData.address,
@@ -232,8 +248,7 @@ export function CandidateTrackerPremium() {
       exam_name: formData.examName,
       client_name: formData.clientName.trim().toUpperCase(),
       notes: formData.notes,
-      branch_location: targetBranch,
-      user_id: user?.id
+      branch_location: targetBranch
     }
 
     if (isEdit) {
@@ -244,6 +259,7 @@ export function CandidateTrackerPremium() {
         }
       })
     } else {
+      payload.user_id = user?.id;
       payload.status = 'registered';
       payload.confirmation_number = `FETS-${Math.floor(100000 + Math.random() * 900000)}`;
       createMutation.mutate(payload, {
@@ -305,7 +321,7 @@ export function CandidateTrackerPremium() {
   return (
     <div className="min-h-screen -mt-32 pt-56 bg-[#e0e5ec]" style={{ fontFamily: "'Montserrat', sans-serif" }}>
       {/* Functional Notification Banner Spacer */}
-      <div className="h-6 -mx-8 -mt-8 mb-8"></div>
+      <div className="h-6 -mt-8 mb-8"></div>
 
       <div className="max-w-[1800px] mx-auto px-6">
         {/* Executive Header - Neumorphic */}
@@ -548,6 +564,7 @@ export function CandidateTrackerPremium() {
                         <tr key={candidate.id} className="hover:bg-slate-50 transition-colors group">
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-slate-900">
                             {candidate.fullName}
+                            {candidate.status === 'cancelled' && <small className="block text-rose-700">Cancelled</small>}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-slate-600">
                             {candidate.phone || 'N/A'}
@@ -603,7 +620,7 @@ export function CandidateTrackerPremium() {
       {/* Candidate Detail Modal */}
       <AnimatePresence>
         {showDetailModal && selectedCandidate && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-[#002147]/40 backdrop-blur-sm">
+          <CandidateModalPortal><div role="dialog" aria-modal="true" aria-label="Candidate details" className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-[#002147]/40 backdrop-blur-sm">
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -636,6 +653,10 @@ export function CandidateTrackerPremium() {
 
               <div className="p-8 space-y-6">
                 <div className="grid grid-cols-2 gap-6">
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Booking status</label>
+                    <p className="font-bold text-slate-800">{CANDIDATE_STATUS_LABELS[selectedCandidate.status] || selectedCandidate.status}</p>
+                  </div>
                   <div>
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Phone Number</label>
                     <p className="font-bold text-slate-800">{selectedCandidate.phone || 'N/A'}</p>
@@ -695,14 +716,14 @@ export function CandidateTrackerPremium() {
                 </button>
               </div>
             </motion.div>
-          </div>
+          </div></CandidateModalPortal>
         )}
       </AnimatePresence>
 
       {/* Modal - Clean and Simple like the image */}
       <AnimatePresence>
         {showModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <CandidateModalPortal><div role="dialog" aria-modal="true" aria-label={isEdit ? 'Update candidate' : 'New registration'} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -729,6 +750,7 @@ export function CandidateTrackerPremium() {
               </div>
 
               <div className="p-10">
+                {editingPearsonImport && <p className="mb-6 text-sm text-slate-600">Update booking names and appointments through the Pearson monthly report.</p>}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2 uppercase tracking-wide">
@@ -737,6 +759,7 @@ export function CandidateTrackerPremium() {
                     <input
                       type="text"
                       placeholder="e.g. John Doe"
+                      disabled={editingPearsonImport}
                       value={formData.fullName}
                       onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400"
@@ -756,12 +779,13 @@ export function CandidateTrackerPremium() {
                     />
                   </div>
 
-                  {([{key:'rosterNumber',label:'Provider roster / confirmation ID',type:'text'},{key:'examPart',label:'Exam part',type:'text'},{key:'examStartTime',label:'Exam start time · IST',type:'time'}] as const).map(field=><label key={field.key} className="block text-sm font-medium text-gray-700 mb-2">{field.label}<input type={field.type} value={formData[field.key]} onChange={e=>setFormData({...formData,[field.key]:e.target.value})} className="mt-2 w-full px-4 py-3 border border-gray-300 rounded-lg font-normal focus:outline-none focus:ring-2 focus:ring-yellow-400"/></label>)}
+                  {([{key:'rosterNumber',label:'Provider roster / confirmation ID',type:'text'},{key:'examPart',label:'Exam part',type:'text'},{key:'examStartTime',label:'Exam start time · IST',type:'time'}] as const).map(field=><label key={field.key} className="block text-sm font-medium text-gray-700 mb-2">{field.label}<input type={field.type} disabled={editingPearsonImport} value={formData[field.key]} onChange={e=>setFormData({...formData,[field.key]:e.target.value})} className="mt-2 w-full px-4 py-3 border border-gray-300 rounded-lg font-normal focus:outline-none focus:ring-2 focus:ring-yellow-400"/></label>)}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2 uppercase tracking-wide">
                       Client Name
                     </label>
                     <select
+                      disabled={editingPearsonImport}
                       value={formData.clientName}
                       onChange={(e) => setFormData({ ...formData, clientName: e.target.value, examName: '' })}
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400"
@@ -795,6 +819,7 @@ export function CandidateTrackerPremium() {
 
                       return clientExams.length > 0 ? (
                         <select
+                          disabled={editingPearsonImport}
                           value={formData.examName}
                           onChange={(e) => setFormData({ ...formData, examName: e.target.value })}
                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400"
@@ -811,6 +836,7 @@ export function CandidateTrackerPremium() {
                         <input
                           type="text"
                           placeholder="e.g. TOEFL iBT"
+                          disabled={editingPearsonImport}
                           value={formData.examName}
                           onChange={(e) => setFormData({ ...formData, examName: e.target.value })}
                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400"
@@ -825,6 +851,7 @@ export function CandidateTrackerPremium() {
                     </label>
                     <input
                       type="date"
+                      disabled={editingPearsonImport}
                       value={formData.examDate}
                       onChange={(e) => setFormData({ ...formData, examDate: e.target.value })}
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400"
@@ -874,7 +901,7 @@ export function CandidateTrackerPremium() {
                 </button>
               </div>
             </motion.div>
-          </div>
+          </div></CandidateModalPortal>
         )}
       </AnimatePresence>
     </div>

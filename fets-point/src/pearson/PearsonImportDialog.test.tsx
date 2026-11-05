@@ -10,7 +10,7 @@ vi.mock('./parse', () => ({ parsePearsonWorkbook: mocks.parse }));
 
 const row: PearsonRow = { source_row: 4, date: '2026-11-20', start_time: '09:00:00', end_time: '10:30:00', full_name: 'Synthetic Candidate', email: 'synthetic@example.test', phone: ' 0123 456 ', exam_owner: 'Example Owner', exam_code: 'EX-1', exam_title: 'Example Exam' };
 const receipt = { import_id: 'import-1', saved: 1, inserted: 0, updated: 1, sessions: 1, cancellation_reviews: 0, already_applied: false, file_hash: 'a'.repeat(64) };
-const preview = (): PearsonPreview => ({ preview_id: 'preview-1', expires_at: '2099-11-06T00:00:00Z', branch: 'cochin', from: '2026-11-01', through: '2026-11-30', rows: [{ ...row, match_kind: 'review', candidate_id: null, changes: ['Appointment changed'], possible_candidates: [{ id: 'candidate-1', full_name: 'Prior Synthetic Candidate', date: '2026-11-19', start_time: '08:00:00', email: row.email, exam_code: row.exam_code }] }], sessions: [{ group_key: 'group-1', date: row.date, exam_owner: row.exam_owner, start_time: row.start_time, end_time: row.end_time, candidate_count: 1, calendar_id: null, match_kind: 'review', possible_sessions: [{ id: 42, exam_name: 'Prior Example Owner', start_time: '08:00:00', end_time: '09:30:00', candidate_count: 1 }] }], missing: [], warnings: [], counts: { incoming: 1, new: 0, existing: 0, review: 1, sessions: 1, missing: 0 } });
+const preview = (): PearsonPreview => ({ preview_id: 'preview-1', expires_at: '2099-11-06T00:00:00Z', branch: 'cochin', from: '2026-11-01', through: '2026-11-30', rows: [{ ...row, match_kind: 'review', candidate_id: null, changes: [], possible_candidates: [{ id: 'candidate-1', full_name: 'Prior Synthetic Candidate', date: '2026-11-19', start_time: '08:00:00', email: row.email, exam_code: row.exam_code }] }], sessions: [{ group_key: 'group-1', date: row.date, exam_owner: row.exam_owner, start_time: row.start_time, end_time: row.end_time, candidate_count: 1, calendar_id: null, match_kind: 'review', possible_sessions: [{ id: 42, exam_name: 'Prior Example Owner', date: '2026-11-19', start_time: '08:00:00', end_time: '09:30:00', candidate_count: 1 }] }], missing: [], warnings: [], counts: { incoming: 1, new: 0, existing: 0, review: 1, sessions: 1, missing: 0 } });
 const missing = { id: 'review-1', candidate_id: 'missing-1', full_name: 'Missing Synthetic Candidate', date: '2026-11-25', start_time: '11:00:00', exam_code: 'EX-2', status: 'pending', updated_at: '2026-11-05T10:00:00Z', has_progress: false };
 
 beforeEach(() => {
@@ -41,11 +41,15 @@ describe('Pearson monthly review', () => {
     fireEvent.click(screen.getByLabelText('This file is a complete snapshot of the selected coverage'));
     await review();
     expect(screen.getByText(/2026-11-20.*1 booking/)).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /#42.*2026-11-19/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Apply Pearson import' })).toBeDisabled();
     fireEvent.change(screen.getByLabelText('Booking resolution for row 4'), { target: { value: 'candidate-1' } });
     expect(screen.getByRole('button', { name: 'Apply Pearson import' })).toBeDisabled();
     fireEvent.change(screen.getByLabelText('Session resolution for group-1'), { target: { value: '42' } });
     expect(screen.getByText('1 proposed update · 0 unchanged bookings')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '1 bookings · 0 new · 1 existing · 0 need review' })).toBeInTheDocument();
+    expect(screen.getByText('Reviewed existing booking — source details will be updated')).toBeInTheDocument();
+    expect(screen.getByText('Prior appointment: 2026-11-19 08:00:00 · Prior Synthetic Candidate')).toBeInTheDocument();
     const loaded = vi.fn(); window.addEventListener('fets-data-loaded', loaded);
     fireEvent.click(screen.getByRole('button', { name: 'Apply Pearson import' }));
     await screen.findByText(/0 added · 1 updated/);
@@ -56,9 +60,25 @@ describe('Pearson monthly review', () => {
   });
   it('allows an explicit new booking and new calendar session decision', async () => {
     show(); await review(); resolve('new', 'new');
+    expect(screen.getByRole('heading', { name: '1 bookings · 1 new · 0 existing · 0 need review' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Apply Pearson import' }));
     await screen.findByText(/0 added · 1 updated/);
     expect(mocks.rpc).toHaveBeenCalledWith('apply_pearson_roster', { p_preview_id: 'preview-1', p_candidate_bindings: [{ source_row: 4, candidate_id: null }], p_session_bindings: [{ group_key: 'group-1', calendar_id: null }] });
+  });
+  it('removes a potentially missing original only after explicitly binding the incoming booking to it', async () => {
+    mocks.rpc.mockImplementation(async (name: string) => ({ data: name === 'preview_pearson_roster' ? { ...preview(), missing: [{ ...missing, candidate_id: 'candidate-1' }], counts: { ...preview().counts, missing: 1 } } : [], error: null }));
+    show(); await review();
+    expect(within(screen.getByRole('region', { name: 'Potential missing bookings' })).getByText(/Missing Synthetic Candidate/)).toBeInTheDocument();
+    expect(screen.getByText(/1 potentially missing booking/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Booking resolution for row 4'), { target: { value: 'candidate-1' } });
+    expect(screen.queryByRole('region', { name: 'Potential missing bookings' })).toBeNull();
+    expect(screen.getByText(/0 potentially missing bookings/)).toBeInTheDocument();
+  });
+  it('keeps the original visible as potentially missing when the report row is explicitly a new booking', async () => {
+    mocks.rpc.mockImplementation(async (name: string) => ({ data: name === 'preview_pearson_roster' ? { ...preview(), missing: [{ ...missing, candidate_id: 'candidate-1' }], counts: { ...preview().counts, missing: 1 } } : [], error: null }));
+    show(); await review(); resolve('new', 'new');
+    expect(within(screen.getByRole('region', { name: 'Potential missing bookings' })).getByText(/Missing Synthetic Candidate/)).toBeInTheDocument();
+    expect(screen.getByText(/1 potentially missing booking/)).toBeInTheDocument();
   });
   it.each(['Coverage from · inclusive', 'Coverage through · inclusive', 'Source snapshot as of', 'Centre', 'This file is a complete snapshot of the selected coverage'])('clears the reviewed preview when %s changes', async label => {
     show(); await review(); resolve();
