@@ -1,14 +1,33 @@
 packages:
   - fets-point
 
+# Which dependencies are allowed to run install scripts.
+#
+# This was previously stated in three places that disagreed: .npmrc listed only
+# cpu-features and ssh2, this file set @google/genai and protobufjs to false
+# with an empty onlyBuiltDependencies, and .pnpm-approve-builds.json approved
+# both — but pinned to @google/genai@2.20.0 while 2.32.0 is what installs.
+# The result was that `pnpm install` exited 1 on ERR_PNPM_IGNORED_BUILDS and
+# took `pnpm run build` down with it, so the project could not be built from a
+# clean checkout at all.
+#
+# onlyBuiltDependencies is the single list pnpm actually reads. Keep it here.
 allowBuilds:
-  '@google/genai': false
+  '@google/genai': true
   core-js: true
   cpu-features: true
   esbuild: true
   msw: true
-  protobufjs: false
+  protobufjs: true
   sharp: true
   ssh2: true
 
-onlyBuiltDependencies: []
+onlyBuiltDependencies:
+  - '@google/genai'
+  - core-js
+  - cpu-features
+  - esbuild
+  - msw
+  - protobufjs
+  - sharp
+  - ssh2

@@ -1,8 +1,30 @@
+# Install-script permissions for this package.
+#
+# This file previously carried pnpm's own unfilled placeholder text —
+#   '@google/genai': set this to true or false
+#   protobufjs: set this to true or false
+# — which pnpm reads as unresolved and reports as ERR_PNPM_IGNORED_BUILDS.
+# That is why the build failed no matter what the workspace-root .npmrc or
+# pnpm-workspace.yaml said: this nested file wins for this package.
+#
+# It also listed esbuild and msw under ignoredBuiltDependencies while allowing
+# them above, which is a contradiction. That list is gone.
 allowBuilds:
+  '@google/genai': true
   core-js: true
+  cpu-features: true
   esbuild: true
   msw: true
+  protobufjs: true
   sharp: true
-ignoredBuiltDependencies:
+  ssh2: true
+
+onlyBuiltDependencies:
+  - '@google/genai'
+  - core-js
+  - cpu-features
   - esbuild
   - msw
+  - protobufjs
+  - sharp
+  - ssh2
