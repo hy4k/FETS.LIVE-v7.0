@@ -1,6 +1,6 @@
 # FETS AI: complete workspace operations and verified knowledge
 
-Status: proposed operation expansion for owner review. No expanded permissions or new tools have been applied. The separately requested knowledge update has been published through the existing authenticated administrator rules.
+Status: owner selected adding unsupported operations and preparing sensitive changes for review. No expanded permissions or new tools have been applied. The separately requested knowledge update has been published through the existing authenticated administrator rules.
 
 ## Intended outcome
 
@@ -18,7 +18,7 @@ The assistant acts as the signed-in person. Administrator operations remain admi
 
 ## Operation map
 
-The ordinary-operation default below is execution after an explicit request while controls are ON, with questions only for missing or ambiguous details. The owner's policy for the listed review-sensitive actions is pending.
+The ordinary-operation default below is execution after an explicit request while controls are ON, with questions only for missing or ambiguous details. The owner selected preparation for review for the listed sensitive actions. A model response, chat confirmation or stored memory cannot itself approve their execution.
 
 | Module | Candidate operations | Role and scope | Existing workflow/checks to preserve | Review-sensitive actions and recovery |
 |---|---|---|---|---|
@@ -61,9 +61,11 @@ Deliver by module, enabling only operations that pass their contract tests, perm
 
 Preserve the running frontend/configuration and previous backend source before rollout. Inspect current production again before each deploy. Publish a capability list generated from the installed registry and current permissions, so Knowledge and the UI do not claim unimplemented operations.
 
-## Owner decisions required
+## Owner decisions recorded
 
-1. Does full access primarily mean all unsupported operations, fewer repeated confirmations, or both? Pending answer.
-2. For deletions, approvals, attendance corrections, account-role changes and external publishing, prepare for review or execute after an explicit instruction? Pending answer. Recommended initial default is a preview/review for these actions.
+1. Add unsupported operations. Preserve the current working actions and their confirmation behaviour.
+2. Prepare deletions, approvals, attendance corrections, account-role changes and external publishing for review.
+3. A sensitive draft must show the exact target, original and proposed values, affected records, required authority and recovery limits. The signed-in person applies it through a deliberate app action after review. The model has no callable approval/confirmation tool and cannot edit its own permissions, tool policy, code, server configuration or credentials.
+4. The first concrete unsupported operation/example is requested to bind the initial connector to a specific workflow and its existing checks. Existing six actions, OFF control, audit records and rollback artifacts remain in place while this is specified.
 
 Implementation details such as registry filenames, test-fixture structure, pagination sizes and UI layout are left to the builder. They do not change the authority described here.
