@@ -1,15 +1,10 @@
-import { PAGES, SOURCES } from './catalog.ts';
+import { PAGES, SOURCES, WRITE_TOOLS } from './catalog.ts';
 import { scopeFor, systemPrompt, runTool } from './core.ts';
 import { checked, conversationMessages, ensureConversation, loadSettings, ownConversation, permittedTools, pinnedContext, saveMessage, selectedModel, statusFor, uuid, type Environment } from './runtime.ts';
 import { managementAction } from './management.ts';
 import { generateAnswer, providerRequest } from './providers.ts';
-
-export function requestIntent(message:string){
- const operation=/\b(create|add|log|record|file|raise|update|change|edit|modify|assign|schedule|reschedule|move|cancel|close|mark|set|save)\b|സൃഷ്ടിക്ക|ചേർക്ക|രേഖപ്പെടുത്ത|മാറ്റുക|അപ്ഡേറ്റ്/i;
- const question=/^\s*(?:please\s+)?(?:how|why|what|who|when|where|explain|summari[sz]e|show|list|read|find|compare|tell me)\b/i;
- const andAction=/\b(?:and|then|also)\s+(?:please\s+)?(?:create|add|log|record|raise|update|change|assign|schedule|close|mark|set)\b/i;
- return {writes:operation.test(message)&&(!question.test(message)||andAction.test(message)),memory:/\b(remember|memorise|memorize|save.{0,30}(?:memory|preference|instruction)|update.{0,30}memory)\b|ഓർമ്മ|ഓർക്ക/i.test(message)};
-}
+import { conversationIntent } from './intent.ts';
+export { requestIntent } from './intent.ts';
 export function createHandler(env:Environment,clientFactory:(authorization:string)=>any,fetcher?:typeof fetch){
  const origins=(env.FETS_AI_ALLOWED_ORIGINS||'https://fets.live,http://localhost:3000,http://localhost:4173').split(',').map(s=>s.trim());
  return async(req:Request)=>{
@@ -41,10 +36,18 @@ export function createHandler(env:Environment,clientFactory:(authorization:strin
    if(input.requestId!==undefined&&!uuid(input.requestId))return json({error:'Use a valid request ID.'},400);
    const requestId=input.requestId||crypto.randomUUID();
    const settings=await loadSettings(db,env);
+   const execute=(intent:ReturnType<typeof conversationIntent>,name:string,args:Record<string,unknown>)=>{
+    let target=scope;
+    if(intent.writes&&intent.targetBranch&&!intent.ambiguousCentre){
+     try{target=scopeFor(scope.userId,intent.targetBranch,members||[]);}
+     catch{return Promise.resolve(WRITE_TOOLS.includes(name)?{type:'action-result',tool:name,status:'blocked',message:`You do not have assistant access to ${intent.targetBranch}. Choose a centre in your trusted membership.`}:{error:'The requested centre is outside your trusted membership.'});}
+    }
+    return runTool(db,target,name,args,{requestId,allowWrites:Boolean(input.requestId)&&intent.writes,allowMemory:intent.memory,allowedWriteTools:intent.allowedTools,requiresCentre:intent.ambiguousCentre});
+   };
    if(input.action==='tool'){
     const quota=await db.rpc('fets_ai_reserve_usage',{request_kind:'tool'});if(quota.error)return json({error:quota.error.message},429);
-    const intent=requestIntent(typeof input.message==='string'?input.message:'');
-    try{return json({result:await runTool(db,scope,input.name,input.args||{},{requestId,allowWrites:Boolean(input.requestId)&&intent.writes,allowMemory:intent.memory})});}
+    const intent=conversationIntent(typeof input.message==='string'?input.message:'');
+    try{return json({result:await execute(intent,input.name,input.args||{})});}
     catch(e){return json({result:{error:(e as Error).message}});}
    }
    const memory=await pinnedContext(db,scope);
@@ -68,8 +71,11 @@ export function createHandler(env:Environment,clientFactory:(authorization:strin
    const quota=await db.rpc('fets_ai_reserve_usage',{request_kind:'chat'});if(quota.error)return json({error:quota.error.message},429);
    const history=(await conversationMessages(db,scope,conversation.id,24)).filter((m:any)=>m.request_id!==requestId);
    await saveMessage(db,scope,conversation.id,requestId,'user',input.message);
-   const intent=requestIntent(input.message);
-   const answer=await generateAnswer({provider,model:selectedModel(settings),key,system:systemPrompt(scope,page,memory.block+policy),history,message:input.message,tools,maxIterations:settings.max_tool_iterations,fetcher,execute:(name,args)=>runTool(db,scope,name,args,{requestId,allowWrites:Boolean(input.requestId)&&intent.writes,allowMemory:intent.memory})});
+   const intent=conversationIntent(input.message,history);
+   const pending=intent.continuation?`\nSERVER-IDENTIFIED UNFINISHED USER REQUEST: ${JSON.stringify({request:intent.directive,tools:intent.allowedTools,centre:intent.targetBranch||scope.branch})}. The current message supplies its missing details. Complete only that request; do not require the user to repeat the create/update command.\n`:'';
+   const target=intent.writes&&intent.targetBranch&&!intent.ambiguousCentre?`\nUSER-REQUESTED RECORD CENTRE: ${intent.targetBranch}. Preserve the conversation viewing scope separately.\n`:'';
+   const chatTools=tools.filter(tool=>!WRITE_TOOLS.includes(tool.name)||(intent.writes&&intent.allowedTools.includes(tool.name)));
+   const answer=await generateAnswer({provider,model:selectedModel(settings),key,system:systemPrompt(scope,page,memory.block+policy+pending+target),history,message:input.message,tools:chatTools,maxIterations:settings.max_tool_iterations,fetcher,execute:(name,args)=>execute(intent,name,args)});
    const reply={...answer,conversationId:conversation.id};
    try{await saveMessage(db,scope,conversation.id,requestId,'assistant',answer.text,{...answer,reply});}
    catch(e){if(!answer.actions.some((a:any)=>a.status==='succeeded'))throw e;reply.text+='\nThe actions completed, but conversation history could not be saved. Keep the record IDs shown below.';}
