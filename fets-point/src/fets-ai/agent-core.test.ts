@@ -13,10 +13,10 @@ describe('assistant access scope',()=>{
   });
   it('always scopes fresh reads and caps records at 40',async()=>{
     const calls:unknown[][]=[];
-    const query:any={select:(...args:unknown[])=>{calls.push(['select',...args]);return query;},eq:(...args:unknown[])=>{calls.push(['eq',...args]);return query;},ilike:(...args:unknown[])=>{calls.push(['ilike',...args]);return query;},gte:(...args:unknown[])=>{calls.push(['gte',...args]);return query;},lte:(...args:unknown[])=>{calls.push(['lte',...args]);return query;},order:(...args:unknown[])=>{calls.push(['order',...args]);return query;},range:async(...args:unknown[])=>{calls.push(['range',...args]);return {data:Array.from({length:41},(_,id)=>({id})),error:null};}};
+    const query:any={select:(...args:unknown[])=>{calls.push(['select',...args]);return query;},eq:(...args:unknown[])=>{calls.push(['eq',...args]);return query;},ilike:(...args:unknown[])=>{calls.push(['ilike',...args]);return query;},gte:(...args:unknown[])=>{calls.push(['gte',...args]);return query;},lt:(...args:unknown[])=>{calls.push(['lt',...args]);return query;},lte:(...args:unknown[])=>{calls.push(['lte',...args]);return query;},order:(...args:unknown[])=>{calls.push(['order',...args]);return query;},range:async(...args:unknown[])=>{calls.push(['range',...args]);return {data:Array.from({length:41},(_,id)=>({id})),error:null};}};
     const db={from:(table:string)=>{calls.push(['from',table]);return query;}};
     const result:any=await runTool(db,scopeFor(user,'cochin',[member]),'read_workspace',{source:'calendar',from:'2026-09-29'});
-    expect(calls).toContainEqual(['ilike','branch_location','%cochin%']);
+    expect(calls).toContainEqual(['ilike','branch_location','cochin']);
     expect(calls).toContainEqual(['range',0,40]);
     expect(result.records).toHaveLength(40);
     expect(result.truncated).toBe(true);
