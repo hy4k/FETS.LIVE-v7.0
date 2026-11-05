@@ -1,0 +1,19 @@
+# AI session clarification and centre targeting
+
+Deployed authenticated `fets-ai-agent` version 7 from commit `9fda620c9730f558f88bc1f55a2a1808876d28fb`. The existing frontend, server configuration, account permissions and SQL schema are unchanged.
+
+The reported conversation began with an explicit instruction to create a Calicut ITTS session, followed by the requested exam name, MRCS. The backend incorrectly required a new create command on the clarification turn. When that command was repeated, it passed the global viewing scope to the centre-only database operation and returned a misleading membership error. Read-only inspection confirmed the caller already had verified, active wildcard administrator membership and Calicut access.
+
+The backend now reconstructs an unfinished explicit command from the caller's owned conversation. A missing detail can complete that command without another confirmation. It retains the requested operation and centre for up to 30 minutes and retires the request after success, cancellation, manual completion, an unrelated read request or expiry. Quoted reference instructions cannot start authority or choose a centre, and task descriptions do not authorize unrelated calendar operations. Missing centre details in All centres produce a centre-selection request. Explicitly named centres are checked against current trusted membership before routing; the existing atomic SQL role, allowlist, current write controls, version and replay gates remain authoritative.
+
+The implementation recognizes clarification requests with and without question marks, including the actual Gemini wording, `Please provide the exam name, and I will create the session for you.`, plus date, centre and candidate-count questions. Applicable directives come only from the owned conversation, never caller-supplied history or retrieved policy text.
+
+Verification:
+
+- The complete suite finished with 232 passed, 5 pre-existing failures and 1 deliberately skipped paid-provider check. All 96 focused AI checks passed. The unchanged failures are `useCalendarSessions` / Prometric client mapping, and four `useChat` cases: sending a message, returning an existing direct conversation, creating a direct conversation, and handling its error. These same failures were recorded before this repair.
+- The opt-in real-Gemini run passed all 21 handler checks using a separate Node test configuration and an isolated database fixture. The exact two-turn session workflow produced one create-session call for Calicut / ITTS / MRCS / 6 November 2026 / 10:00–15:00 / 11 candidates. No production database or calendar record was written by this test.
+- Independent review findings received failing regressions and fixes. Final narrow rechecks found no remaining blocker; backend TypeScript and whitespace checks passed.
+- All eight installed source files were compared byte for byte; JWT verification remains enabled. A live anonymous request executed the deployed function and was denied correctly. The public Intelligence URL returns HTTP 200; the frontend container identity, image, configuration and release metadata match the pre-fix snapshot.
+- Existing live SQL authorization independently confirms Calicut super-administrator access. Operational writes remain ON, with calendar creation allowed for that role. Read-only checks found the ITTS client and no matching Calicut MRCS session on 6 November at inspection time. The failed attempts created no session; this repair does not submit the user's calendar entry automatically.
+
+Private verification receipts, full test logs and the previous version-6 source are retained at `/opt/fets-releases/20261105T084943Z-ai-session-fix`. Restore `edge-function.before.json` through the function deployment tool with JWT verification enabled if rollback is required. The website's existing image rollback remains available in its original release directory.

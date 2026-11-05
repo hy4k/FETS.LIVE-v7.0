@@ -50,7 +50,7 @@ type Props = {
   navigate: (page: string) => void;
   openDrawer: (drawer: string) => void;
   openChat: (person: DeskPerson) => void;
-  renderPanel: (panel: DeskPanel) => React.ReactNode;
+  renderPanel: (panel: DeskPanel, requestKind?: string) => React.ReactNode;
 };
 
 type CoverAura = 'solar' | 'noir' | 'emerald' | 'velvet';
@@ -164,6 +164,7 @@ export default function MyDeskHome(props: Props) {
 function SocialProfileDesk({ user, people, openChat, renderPanel, repository }: Props) {
   const coverInputId = useId();
   const avatarInputId = useId();
+  const [requestKind, setRequestKind] = useState('leave');
 
   const [tab, setTab] = useState<ActiveTab>(() => {
     const w = window as any;
@@ -871,7 +872,30 @@ function SocialProfileDesk({ user, people, openChat, renderPanel, repository }: 
                   : 'MY GROWTH & CERTIFICATIONS'}
             </span>
           </div>
-          {renderPanel(tab)}
+          {tab === 'requests' && (
+            <div className="pd-request-tabs" role="group" aria-label="Application type" style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 18 }}>
+              {[
+                ['leave', 'Leave'],
+                ['halfday', 'Half-day leave'],
+                ['swap', 'Shift swap'],
+                ['ot', 'Overtime / TOIL Pay'],
+                ['toil', 'TOIL day off'],
+                ['emergency_duty', 'Emergency duty'],
+                ['reimbursement', 'Reimbursement'],
+              ].map(([kind, label]) => (
+                <button
+                  key={kind}
+                  type="button"
+                  className="pd-link"
+                  aria-pressed={requestKind === kind}
+                  onClick={() => setRequestKind(kind)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+          {renderPanel(tab, tab === 'requests' ? requestKind : undefined)}
         </section>
       )}
     </div>

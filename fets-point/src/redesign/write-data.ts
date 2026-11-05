@@ -11,7 +11,7 @@
   views reflect the change without a refetch.
 */
 import { supabase } from "../lib/supabase";
-import { loadOtClaims } from "./live-data";
+import { loadOtClaims, loadApplications, ensureMonth } from "./live-data";
 
 const F = () => window.FETS;
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -271,7 +271,7 @@ export async function dbDeleteVault(id: any) {
 }
 
 /* ---------------- leave_requests (staff requests) ---------------- */
-export async function dbSetRosterById(pid: string, date: string, shiftCode: string, branch?: string) {
+export async function dbSetRosterById(pid: string, date: string, shiftCode: string, branch?: string, sourceShift?: any) {
   try {
     const { data: ex } = await supabase.from("roster_schedules").select("id").eq("profile_id", pid).eq("date", date).maybeSingle();
     let scheduleBranch = branch;
@@ -285,10 +285,16 @@ export async function dbSetRosterById(pid: string, date: string, shiftCode: stri
     }
     if (scheduleBranch === "global") scheduleBranch = "calicut";
 
+    const timing = sourceShift === undefined ? {} : {
+      shift_label: sourceShift?.shift_label || null,
+      shift_start: sourceShift?.shift_start || null,
+      shift_end: sourceShift?.shift_end || null,
+      grace_minutes: sourceShift?.grace_minutes || 0,
+    };
     if (ex && (ex as any).id) {
-      await supabase.from("roster_schedules").update({ shift_code: shiftCode, branch_location: scheduleBranch }).eq("id", (ex as any).id);
+      await supabase.from("roster_schedules").update({ shift_code: shiftCode, branch_location: scheduleBranch, ...timing }).eq("id", (ex as any).id);
     } else {
-      await supabase.from("roster_schedules").insert([{ profile_id: pid, date: date, shift_code: shiftCode, status: 'confirmed', branch_location: scheduleBranch }]);
+      await supabase.from("roster_schedules").insert([{ profile_id: pid, date: date, shift_code: shiftCode, status: 'confirmed', branch_location: scheduleBranch, ...timing }]);
     }
   } catch (e) {
     console.error("dbSetRosterById error:", e);
@@ -463,8 +469,8 @@ export async function dbResolveStaffRequest(reqId: string, status: "Approved" | 
         const branchA = shiftA ? shiftA.branch_location : (F()._profileBranch && F()._profileBranch[pidA]) || "calicut";
         const branchB = shiftB ? shiftB.branch_location : (F()._profileBranch && F()._profileBranch[pidB]) || "calicut";
 
-        await dbSetRosterById(pidA, dateA, codeB, branchB);
-        await dbSetRosterById(pidB, dateB, codeA, branchA);
+        await dbSetRosterById(pidA, dateA, codeB, branchB, shiftB || null);
+        await dbSetRosterById(pidB, dateB, codeA, branchA, shiftA || null);
       }
     }
 
@@ -593,7 +599,7 @@ export async function dbAddOtClaim(claim: any) {
     return data;
   } catch (e) {
     console.error("dbAddOtClaim error:", e);
-    rtoast("Sync failed — saved locally", "alert");
+    rtoast(e.message || "Claim was not saved. Please try again.", "alert");
     return null;
   }
 }
@@ -893,7 +899,7 @@ export async function dbUpdateOtClaim(claimId: string, claim: any) {
     return data;
   } catch (e) {
     console.error("dbUpdateOtClaim error:", e);
-    rtoast("Sync failed — saved locally", "alert");
+    rtoast(e.message || "Claim was not saved. Please try again.", "alert");
     return null;
   }
 }
@@ -1357,6 +1363,7 @@ export async function dbSubmitApplication(app: {
   kind: string;
   request_date?: string;
   leave_type?: string;
+  half_day_period?: string;
   swap_with_name?: string;
   swap_with_id?: string;
   swap_date?: string;
@@ -1375,6 +1382,14 @@ export async function dbSubmitApplication(app: {
   const targetName = app.swap_with_name || "";
   const targetId = app.swap_with_id || (f._staffIdByName && targetName ? f._staffIdByName[targetName] : null);
   const targetUserId = (f._staffUserIdByName && targetName ? f._staffUserIdByName[targetName] : null) || (f._profileIdToUserId && targetId ? f._profileIdToUserId[targetId] : null) || targetId;
+
+  // Half-day and swap requests use a server-validated roster snapshot.
+  if (app.kind === 'swap' || (app.kind === 'leave' && app.leave_type === 'Half-day')) {
+    const {data:result,error}=await supabase.rpc('desk_request_submit',{p_kind:app.kind,p_date:app.request_date,p_partner:app.kind==='swap'?targetId:null,p_swap_date:app.kind==='swap'?app.swap_date:null,p_period:app.half_day_period||null,p_reason:app.reason||''});
+    const data=Array.isArray(result)?result[0]:result;
+    if(error||!data){rtoast(error?.message||'The application was not saved. Try again.','alert');return null;}
+    await loadApplications(f);rtoast('Application submitted');notifyAdminsOfApplication(data);return data;
+  }
 
   // ── 1. Insert into staff_applications (canonical table, UUID id) ──────────
   const saRow: any = {
@@ -1534,6 +1549,14 @@ export async function dbResolveApplication(appId: string, status: "approved" | "
   const app = (f._applications || []).find((a: any) => String(a.id) === String(appId)) ||
               storedApps.find((a: any) => String(a.id) === String(appId));
 
+  if(app?.workflow_version===1){
+    const {data:result,error}=await supabase.rpc('desk_request_resolve',{p_id:appId,p_status:status,p_version:app.version,p_reply:adminReply||''});
+    const data=Array.isArray(result)?result[0]:result;
+    if(error||!data){rtoast(error?.message||'Could not resolve this request. Refresh and try again.','alert');return false;}
+    await loadApplications(f);await ensureMonth(new Date(data.request_date+'T12:00:00'));if(data.swap_date)await ensureMonth(new Date(data.swap_date+'T12:00:00'));
+    window.dispatchEvent(new Event('fets-roster-changed'));rtoast('Request '+status);notifyApplicantOfResolution(data,status,adminReply);return true;
+  }
+
   // ── Update staff_applications (UUID — always the canonical source) ──────────
   let dbUpdated = false;
   try {
@@ -1626,13 +1649,15 @@ export async function dbResolveApplication(appId: string, status: "approved" | "
         // Read all 4 current shift codes from DB
         let codeA_onDateA = "D", codeB_onDateA = "D";
         let codeA_onDateB = "D", codeB_onDateB = "D";
+        let hoursA_A = null, hoursB_A = null, hoursA_B = null, hoursB_B = null;
         try {
           const [rA_A, rB_A, rA_B, rB_B] = await Promise.all([
-            supabase.from("roster_schedules").select("shift_code").eq("profile_id", applicantId).eq("date", dateA).maybeSingle(),
-            supabase.from("roster_schedules").select("shift_code").eq("profile_id", partnerId).eq("date", dateA).maybeSingle(),
-            supabase.from("roster_schedules").select("shift_code").eq("profile_id", applicantId).eq("date", dateB).maybeSingle(),
-            supabase.from("roster_schedules").select("shift_code").eq("profile_id", partnerId).eq("date", dateB).maybeSingle()
+            supabase.from("roster_schedules").select("*").eq("profile_id", applicantId).eq("date", dateA).maybeSingle(),
+            supabase.from("roster_schedules").select("*").eq("profile_id", partnerId).eq("date", dateA).maybeSingle(),
+            supabase.from("roster_schedules").select("*").eq("profile_id", applicantId).eq("date", dateB).maybeSingle(),
+            supabase.from("roster_schedules").select("*").eq("profile_id", partnerId).eq("date", dateB).maybeSingle()
           ]);
+          [hoursA_A, hoursB_A, hoursA_B, hoursB_B] = [rA_A.data, rB_A.data, rA_B.data, rB_B.data];
           if (rA_A.data?.shift_code) codeA_onDateA = rA_A.data.shift_code;
           if (rB_A.data?.shift_code) codeB_onDateA = rB_A.data.shift_code;
           if (rA_B.data?.shift_code) codeA_onDateB = rA_B.data.shift_code;
@@ -1643,14 +1668,14 @@ export async function dbResolveApplication(appId: string, status: "approved" | "
         const branchB = (f._profileBranch && f._profileBranch[partnerId]) || "calicut";
 
         // On dateA: Person A gets Person B's code, Person B gets Person A's code
-        await dbSetRosterById(applicantId, dateA, codeB_onDateA, branchA);
-        await dbSetRosterById(partnerId,   dateA, codeA_onDateA, branchB);
+        await dbSetRosterById(applicantId, dateA, codeB_onDateA, branchA, hoursB_A);
+        await dbSetRosterById(partnerId,   dateA, codeA_onDateA, branchB, hoursA_A);
         applyRosterChange(applicantName, dateA, codeB_onDateA);
         applyRosterChange(partnerName,   dateA, codeA_onDateA);
 
         // On dateB: Person A gets Person B's code, Person B gets Person A's code
-        await dbSetRosterById(applicantId, dateB, codeB_onDateB, branchA);
-        await dbSetRosterById(partnerId,   dateB, codeA_onDateB, branchB);
+        await dbSetRosterById(applicantId, dateB, codeB_onDateB, branchA, hoursB_B);
+        await dbSetRosterById(partnerId,   dateB, codeA_onDateB, branchB, hoursA_B);
         applyRosterChange(applicantName, dateB, codeB_onDateB);
         applyRosterChange(partnerName,   dateB, codeA_onDateB);
       }

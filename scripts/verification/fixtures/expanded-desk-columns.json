@@ -1,0 +1,72 @@
+[
+  {
+    "table_name": "desk_journal_entries",
+    "column_name": "user_id",
+    "data_type": "uuid",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "desk_journal_entries",
+    "column_name": "entry_date",
+    "data_type": "date",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "desk_journal_entries",
+    "column_name": "note",
+    "data_type": "text",
+    "column_default": "''::text",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "desk_journal_entries",
+    "column_name": "mood",
+    "data_type": "text",
+    "column_default": "''::text",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "desk_journal_entries",
+    "column_name": "version",
+    "data_type": "integer",
+    "column_default": "1",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "desk_journal_entries",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "column_default": "now()",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "desk_preferences",
+    "column_name": "user_id",
+    "data_type": "uuid",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "desk_preferences",
+    "column_name": "cover",
+    "data_type": "text",
+    "column_default": "'peach'::text",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "desk_preferences",
+    "column_name": "version",
+    "data_type": "integer",
+    "column_default": "1",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "desk_preferences",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "column_default": "now()",
+    "is_nullable": "NO"
+  }
+]

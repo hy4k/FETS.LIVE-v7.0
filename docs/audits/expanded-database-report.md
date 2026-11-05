@@ -1,0 +1,9 @@
+# Expanded database and backend verification
+
+The 84-name immutable registry and SQL registry have byte-equivalent JSON definitions. User Management authority uses verified active linked accounts, protected stored roles and boolean permissions. Super administrators have all named application capabilities; ordinary users retain centre and personal/conversation ownership boundaries. Existing allowed_tools data is preserved. Reviews cannot be written by clients or applied by model tools.
+
+The additive migration adds private request replay storage, own review storage/RLS and exact RPC entry points, protects role/permission changes before Actionables profile synchronization, and preserves last-manager rules. It does not seed or rewrite business records. Existing staff creation source is restored from the already hardened deployed version; that endpoint is not redeployed.
+
+Validation: `node scripts/verification/verify-expanded-database.mjs` passed all seven final assertion groups. The fixture uses actual live column/default metadata (including sequences), 101 real constraints plus NOT NULL, real chat/desk/attendance routines and domain triggers. All directly executable branches and database-applicable reviewed branches have a successful isolated mutation; denials cover inactive/unverified users, cross-centre/owner access, stale snapshots, changed comments, expiry, controls OFF, revoked permissions, replay mismatch, self-escalation, protected roster effects, open breaks, closed fields and own non-security profile edits.
+
+Root fixed an unused PL/pgSQL variable that made title updates ambiguous, and completed the ordinary own-profile permission case after the delegated run was interrupted. Final evidence: `/tmp/fets-expanded-db-final.log`. Production publication and data preservation are recorded separately in the release report.

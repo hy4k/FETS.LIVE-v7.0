@@ -1,0 +1,44 @@
+[
+  {
+    "table_name": "incident_comments",
+    "column_name": "id",
+    "data_type": "bigint",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "incident_comments",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "column_default": "now()",
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "incident_comments",
+    "column_name": "body",
+    "data_type": "text",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "incident_comments",
+    "column_name": "incident_id",
+    "data_type": "uuid",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "incident_comments",
+    "column_name": "author_id",
+    "data_type": "uuid",
+    "column_default": null,
+    "is_nullable": "NO"
+  },
+  {
+    "table_name": "incident_comments",
+    "column_name": "author_full_name",
+    "data_type": "text",
+    "column_default": null,
+    "is_nullable": "NO"
+  }
+]

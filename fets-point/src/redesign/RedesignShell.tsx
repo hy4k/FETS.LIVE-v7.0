@@ -1,6 +1,11 @@
 // @ts-nocheck
 import './planning-pages.css';
 import DutyWorkspace from './DutyWorkspace';
+import RosterWorkspace from '../roster-workspace/RosterWorkspace';
+import { overtimeMinutes, effectiveShift, timing as rosterTiming } from '../roster-workspace/model';
+import MyTime from '../desk-workspace/MyTime';
+import SwapInvitations from '../desk-workspace/SwapInvitations';
+import '../desk-workspace/desk.css';
 import { shiftRepository } from './shift-repository';
 import { useWorkspaceCapabilities } from './useWorkspaceCapabilities';
 import { monday as dutyMonday } from './shift-plan';
@@ -6619,637 +6624,7 @@ function RosterAttendanceControls({ branch }) {
 }
 
 export function RosterPage({ branch, setActive }) {
-  const [activeRosterTab, setActiveRosterTab] = React.useState("duty"); // duty | time | shift | swap | review
-  const [view, setView] = React.useState("days");   // days | analysis
-  const win = useMonthWindow();
-  const [quickOpen, setQuickOpen] = React.useState(false);
-  const [dayDrawer, setDayDrawer] = React.useState(null);
-  const [showHours, setShowHours] = React.useState(false);
-  const isAdmin = F().user.role === "Super Admin";
-  const [tick, setTick] = React.useState(0);
-  const [workLogs, setWorkLogs] = React.useState<any[] | null>(null);
-
-  React.useEffect(() => {
-    const handler = () => setTick((t) => t + 1);
-    window.addEventListener("fets-roster-changed", handler);
-    return () => window.removeEventListener("fets-roster-changed", handler);
-  }, []);
-
-  React.useEffect(() => {
-    if (activeRosterTab === "work") {
-      ATT.attHistory(45).then(setWorkLogs);
-    }
-  }, [activeRosterTab, tick]);
-
-  const reqsAll = F().staffReqList().filter((r) => branch === "global" || r.branch === branch);
-  const onDutyToday = window.branchRoster(0, branch).length;
-  const poolSize = branch === "global"
-    ? Object.values(F().STAFF || {}).reduce((sum, names) => sum + names.length, 0)
-    : (F().STAFF[branch] || []).length;
-  const offs = win.offsets;
-  const avgCover = Math.round(offs.reduce((a, o) => a + window.branchRoster(o, branch).length, 0) / offs.length);
-  const busy = windowStats(offs, branch).busiest;
-  const wide = true;
-  const gap = "calc(28px * var(--density))";
-  useLiveSync(win.offsets.map((o) => F().ISO(o)));
-
-  // Review Desk state
-  const [reviewMonth, setReviewMonth] = React.useState(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-  });
-  const [reviewData, setReviewData] = React.useState([]);
-  const [loadingReview, setLoadingReview] = React.useState(false);
-
-  const loadReviewData = async () => {
-    setLoadingReview(true);
-    try {
-      const start = `${reviewMonth}-01`;
-      const [y, m] = reviewMonth.split("-").map(Number);
-      const nextY = m === 12 ? y + 1 : y;
-      const nextM = m === 12 ? 1 : m + 1;
-      const end = `${nextY}-${String(nextM).padStart(2, '0')}-01`;
-
-      const { data, error } = await supabase
-        .from("staff_attendance")
-        .select("*, staff:staff_profiles!staff_attendance_staff_id_fkey(full_name, branch_assigned)")
-        .gte("date", start)
-        .lt("date", end)
-        .order("date", { ascending: true });
-      
-      if (error) throw error;
-      setReviewData(data || []);
-    } catch (err) {
-      console.error("Error loading review data:", err);
-    } finally {
-      setLoadingReview(false);
-    }
-  };
-
-  React.useEffect(() => {
-    if (activeRosterTab === "review") {
-      loadReviewData();
-    }
-  }, [reviewMonth, activeRosterTab, tick]);
-
-  const divider = (
-    <div style={{ height: 1, background: "var(--hairline)", margin: "4px 0" }} />
-  );
-
-  const meName = F()._meName || (F().user && F().user.name);
-
-  // Aggregated review stats helper
-  const parseNotesObj = (n) => { try { return typeof n === "string" ? JSON.parse(n) : n || {}; } catch (e) { return {}; } };
-  const padNum = (num) => String(num).padStart(2, '0');
-
-  // Group by branch & staff for Review Desk
-  const branchStats = {};
-  const staffStats = {};
-
-  reviewData.forEach(row => {
-    const staffName = row.staff?.full_name || row.staff_name || "Unknown Staff";
-    const br = row.branch_location || row.staff?.branch_assigned || "unassigned";
-    const isLate = row.status === "late";
-    const isPresent = row.status === "present" || isLate;
-    
-    let workedMins = 0;
-    if (row.check_in) {
-      const checkOutVal = row.check_out || (row.date === ATT.attDateStr() ? new Date().toTimeString().slice(0, 5) : row.check_in);
-      const [ih, im] = row.check_in.split(':').map(Number);
-      const [oh, om] = checkOutVal.split(':').map(Number);
-      const notes = parseNotesObj(row.notes);
-      const breakMins = notes.breakMins || 0;
-      workedMins = Math.max(0, (oh * 60 + om) - (ih * 60 + im) - breakMins);
-    }
-    
-    const notes = parseNotesObj(row.notes);
-    const breakMins = notes.breakMins || 0;
-
-    if (!branchStats[br]) {
-      branchStats[br] = { workedMins: 0, shiftsCount: 0, lateCount: 0 };
-    }
-    if (isPresent) {
-      branchStats[br].shiftsCount++;
-      branchStats[br].workedMins += workedMins;
-      if (isLate) branchStats[br].lateCount++;
-    }
-
-    if (!staffStats[staffName]) {
-      staffStats[staffName] = { name: staffName, branch: br, shiftsCount: 0, lateCount: 0, breakMins: 0, workedMins: 0 };
-    }
-    if (isPresent) {
-      staffStats[staffName].shiftsCount++;
-      staffStats[staffName].workedMins += workedMins;
-      staffStats[staffName].breakMins += breakMins;
-      if (isLate) staffStats[staffName].lateCount++;
-    }
-  });
-
-  const [sortKey, setSortKey] = React.useState("shiftsCount");
-  const [sortAsc, setSortAsc] = React.useState(false);
-
-  const sortedStaff = React.useMemo(() => {
-    return Object.values(staffStats).sort((a: any, b: any) => {
-      let valA = a[sortKey];
-      let valB = b[sortKey];
-      if (typeof valA === "string") {
-        return sortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
-      }
-      return sortAsc ? valA - valB : valB - valA;
-    });
-  }, [staffStats, sortKey, sortAsc]);
-
-  const toggleSort = (key) => {
-    if (sortKey === key) {
-      setSortAsc(!sortAsc);
-    } else {
-      setSortKey(key);
-      setSortAsc(false);
-    }
-  };
-
-  // Work Desk Metrics
-  const monthlyOffsets = Array.from({ length: 30 }, (_, i) => i - 5);
-  let workedDays = 0;
-  let restDays = 0;
-  let leaveDays = 0;
-  
-  const ov = F().rosterGet(meName) || {};
-  monthlyOffsets.forEach((o) => {
-    const c = ov[o];
-    const code = c ? (typeof c === "string" ? c : c.code) : F().rosterOn(F().ISO(o), branch).includes(meName) ? "D" : "RD";
-    if (["D", "E", "HD"].includes(code)) workedDays++;
-    if (code === "RD") restDays++;
-    if (code === "L") leaveDays++;
-  });
-  
-  const toilBalance = F()._meToilBalance || 0;
-  const toilEarned = F()._meToilEarned || 0;
-  const toilRedeemed = F()._meToilRedeemed || 0;
-  const totalMonthOt = F()._meTotalMonthOt || 0;
-
-  const totalDays = workedDays + restDays + leaveDays;
-  const workedPercent = totalDays > 0 ? Math.round((workedDays / totalDays) * 100) : 0;
-  const restPercent = totalDays > 0 ? Math.round((restDays / totalDays) * 100) : 0;
-  const leavePercent = totalDays > 0 ? Math.round((leaveDays / totalDays) * 100) : 0;
-
-  // Daily Attendance log view for Time Desk
-  const DailyAttendanceLog = () => {
-    const [logDate, setLogDate] = React.useState(ATT.attDateStr());
-    const [rows, setRows] = React.useState<any[] | null>(null);
-    const [searchQ, setSearchQ] = React.useState("");
-
-    React.useEffect(() => { 
-      setRows(null); 
-      ATT.attAllForDate(logDate).then(setRows); 
-    }, [logDate]);
-
-    const totalWorked = (rows || []).reduce((a, r) => a + (r.worked || 0), 0);
-    const activeStaffCount = (rows || []).filter(r => r.check_in && !r.check_out).length;
-
-    const filtered = (rows || []).filter(r => 
-      !searchQ.trim() || String(r.name).toLowerCase().includes(searchQ.toLowerCase())
-    );
-
-    return (
-      <div className="glass rise" style={{ borderRadius: "var(--radius)", padding: "20px 22px", display: "flex", flexDirection: "column", gap: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
-          <SectionLabel style={{ margin: 0 }} right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>centre logs</span>}>Daily Attendance</SectionLabel>
-          <input 
-            type="date" 
-            value={logDate} 
-            onChange={(e) => setLogDate(e.target.value)} 
-            style={{ 
-              background: "var(--inset)", 
-              border: "1px solid var(--hairline)", 
-              borderRadius: 10, 
-              color: "var(--ink)", 
-              fontFamily: "var(--font)", 
-              fontSize: 13, 
-              padding: "6px 12px",
-              outline: "none"
-            }} 
-          />
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-          <div className="inset" style={{ padding: "10px 12px", borderRadius: 10, textAlign: "center" }}>
-            <div style={{ fontSize: 9, color: "var(--ink-4)", fontWeight: 700, textTransform: "uppercase" }}>Total Present</div>
-            <div style={{ fontSize: 16, fontWeight: 800, color: "var(--ink)", marginTop: 4 }}>{rows ? rows.length : 0}</div>
-          </div>
-          <div className="inset" style={{ padding: "10px 12px", borderRadius: 10, textAlign: "center" }}>
-            <div style={{ fontSize: 9, color: "var(--ink-4)", fontWeight: 700, textTransform: "uppercase" }}>Active Shifts</div>
-            <div style={{ fontSize: 16, fontWeight: 800, color: "var(--accent)", marginTop: 4 }}>{activeStaffCount}</div>
-          </div>
-          <div className="inset" style={{ padding: "10px 12px", borderRadius: 10, textAlign: "center" }}>
-            <div style={{ fontSize: 9, color: "var(--ink-4)", fontWeight: 700, textTransform: "uppercase" }}>Hours Worked</div>
-            <div style={{ fontSize: 16, fontWeight: 800, color: "var(--v-ielts)", marginTop: 4 }}>{Math.floor(totalWorked / 60)}h</div>
-          </div>
-        </div>
-
-        <div style={{ position: "relative" }}>
-          <Icon name="search" size={13} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--ink-4)" }} />
-          <input 
-            type="text" 
-            placeholder="Search staff logs..." 
-            value={searchQ} 
-            onChange={(e) => setSearchQ(e.target.value)} 
-            style={{
-              background: "var(--inset)",
-              border: "1px solid var(--hairline)",
-              borderRadius: 10,
-              color: "var(--ink)",
-              fontFamily: "var(--font)",
-              fontSize: 12.5,
-              padding: "8px 12px 8px 30px",
-              width: "100%",
-              outline: "none",
-              boxSizing: "border-box"
-            }}
-          />
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 320, overflowY: "auto", paddingRight: 4 }}>
-          {!rows ? (
-            <div style={{ textAlign: "center", padding: 24, color: "var(--ink-4)", fontSize: 13 }}>Loading team logs...</div>
-          ) : filtered.length === 0 ? (
-            <div style={{ textAlign: "center", padding: 24, color: "var(--ink-4)", fontSize: 13 }}>No records found.</div>
-          ) : (
-            filtered.map((r, i) => {
-              const isActive = r.check_in && !r.check_out;
-              const isLate = String(r.status).toLowerCase() === "late";
-              return (
-                <div key={i} className="glass-2" style={{
-                  borderRadius: 12,
-                  padding: "12px 14px",
-                  border: "1px solid var(--hairline)",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  gap: 12
-                }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <Avatar name={r.name} size={32} />
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>{r.name}</div>
-                      <div style={{ fontSize: 10.5, color: "var(--ink-3)", textTransform: "capitalize", marginTop: 2 }}>
-                        {r.branch || "unassigned"}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      {isLate && (
-                        <span style={{ fontSize: 8.5, fontWeight: 750, textTransform: "uppercase", padding: "1px 5px", borderRadius: 4, background: "rgba(253,203,110,0.12)", color: "#C2860F" }}>L</span>
-                      )}
-                      {isActive ? (
-                        <span style={{ fontSize: 9.5, fontWeight: 750, textTransform: "uppercase", padding: "2px 7px", borderRadius: 99, background: "rgba(0,184,148,0.12)", color: "var(--ok)", display: "inline-flex", alignItems: "center", gap: 4 }}>
-                          <span style={{ width: 6, height: 6, borderRadius: 999, background: "var(--ok)", display: "inline-block" }} className="pulse" /> On Shift
-                        </span>
-                      ) : (
-                        <span style={{ fontSize: 12, color: "var(--ink-2)", fontFamily: "monospace" }}>
-                          {r.check_in || "—"} - {r.check_out || "—"}
-                        </span>
-                      )}
-                    </div>
-                    <div className="mono" style={{ fontSize: 11, color: "var(--accent)", fontWeight: 700 }}>
-                      {r.worked ? ATT.attFmtMins(r.worked) : "—"} {r.breakMins > 0 && `(${r.breakMins}m break)`}
-                    </div>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  return (
-    <div className="planning-roster" style={{
-      maxWidth: 1600,
-      margin: "0 auto",
-      padding: "clamp(22px,3.2vw,40px) clamp(14px,3vw,30px) 80px",
-      display: "flex",
-      flexDirection: "column",
-      gap: "20px",
-      position: "relative",
-    } as React.CSSProperties}>
-      <RosterStyleBlock />
-
-      <header className="planning-header">
-        <div><span className="planning-eyebrow">FETS / PEOPLE & PLANNING</span><h1>A team in rhythm<span>.</span></h1><p>Plan ahead. Share responsibility. Make every shift count.</p></div>
-        <div className="planning-stamp"><Icon name="users" size={22} /><span>{capBranch(branch)}<small>Your people, in one place</small></span></div>
-      </header>
-      <section className="planning-summary" aria-label="Roster summary">
-        <div><span>On the roster today</span><strong>{onDutyToday}</strong><small>Scheduled, not attendance</small></div>
-        <div><span>People in the team</span><strong>{poolSize}</strong><small>Every person has a part to play</small></div>
-        <div><span>Average daily cover</span><strong>{avgCover}</strong><small>In the selected month</small></div>
-        <aside><span>PLAN ONE MONTH AHEAD</span><h2>One team. Clear ownership.</h2><p>Choose weekly leads, rotate duties and name break cover.</p><button onClick={() => setActive("handover")}>Open The Shift ↗</button></aside>
-      </section>
-      <div className="planning-attendance"><span>Here for your shift? <small>Check in and manage your breaks.</small></span><RosterAttendanceControls branch={branch} /></div>
-
-      {/* Resolution alerts removed — staff see application status in My Desk → ApplicationsHub */
-      null}
-      {/* Desk tabs & tools — calendar-style toolbar card */}
-      <div style={{
-        display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12,
-        background: "var(--panel-3)", border: "1px solid var(--hairline)", borderRadius: 14, padding: "10px 14px",
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "center", background: "var(--inset)", border: "1px solid var(--hairline)", borderRadius: 10, padding: 3 }}>
-            {[
-              { id: "duty", label: "Duty Roster", icon: "layers" },
-              { id: "time", label: "Attendance Analytics", icon: "clock" },
-              ...(isAdmin ? [{ id: "review", label: "Review Desk", icon: "check" }] : [])
-            ].map((t) => {
-              const isActive = activeRosterTab === t.id;
-              return (
-                <button
-                  key={t.id}
-                  onClick={() => setActiveRosterTab(t.id)}
-                  className="tap"
-                  style={{
-                    display: "flex", alignItems: "center", gap: 7, padding: "8px 15px",
-                    borderRadius: 8, border: "none", cursor: "pointer", fontFamily: "var(--font)",
-                    fontSize: 12.5, fontWeight: 750, transition: "all 0.2s",
-                    background: isActive ? "var(--accent)" : "transparent",
-                    color: isActive ? "var(--accent-ink)" : "var(--ink-3)",
-                    boxShadow: isActive ? "0 2px 8px color-mix(in oklch, var(--accent) 35%, transparent)" : "none",
-                  }}
-                >
-                  <Icon name={t.icon} size={13} /> {t.label}
-                </button>
-              );
-            })}
-          </div>
-          {activeRosterTab === "duty" && view === "days" && <RangeNav win={win} unit="month" />}
-        </div>
-        {activeRosterTab === "duty" && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <Segmented value={view} onChange={setView} size="sm" options={[
-              { value: "days", label: "Monthly Grid" }, { value: "analysis", label: "Overview" },
-            ]} />
-            {isAdmin && (
-              <button onClick={() => setQuickOpen(true)} className="tap" title="Quick add roster (6+1 pattern)"
-                style={{ display: "inline-flex", alignItems: "center", gap: 7, height: 36, padding: "0 14px", borderRadius: 10,
-                  cursor: "pointer", border: "none", fontFamily: "var(--font)", fontSize: 12, fontWeight: 750, color: "var(--accent-ink)", background: "var(--accent)" }}>
-                <Icon name="plus" size={14} /> Quick add
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-
-      {divider}
-
-      {/* Desk Subviews */}
-      {activeRosterTab === "duty" && (
-        <section style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-
-          {view === "days" && <RosterGrid key={branch} offsets={win.offsets} branch={branch} />}
-          {view === "analysis" && (
-            <React.Fragment>
-              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                <StatPill value={onDutyToday} label="On duty today" />
-                <StatPill value={poolSize} label="Staff in pool" tone="var(--v-cma)" />
-                <StatPill value={avgCover} unit="/day" label="Avg cover this month" tone="var(--v-prometric)" />
-                <StatPill value={busy.n} unit={`· ${busy.label}`} label="Busiest day" tone="var(--v-ielts)" />
-              </div>
-              <RosterAnalysis offsets={offs} branch={branch} />
-            </React.Fragment>
-          )}
-          {view === "days" && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>
-                {window.FETS.isAdmin
-                  ? "Tap any cell to change shift · Quick add fills a 6+1 week block"
-                  : "Your shift schedule — editing is restricted to the administrator"}
-              </span>
-            </div>
-          )}
-        </section>
-      )}
-
-      {activeRosterTab === "time" && (
-        <section style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          {/* Header Banner for Attendance Analytics */}
-          <div style={{ 
-            background: "linear-gradient(135deg, rgba(27,181,172,0.12), rgba(242,153,74,0.12))", 
-            border: "1px solid rgba(27,181,172,0.25)", 
-            borderRadius: 20, 
-            padding: "20px 24px", 
-            display: "flex", 
-            alignItems: "center", 
-            justify: "space-between" 
-          }}>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.2em", color: "#1BB5AC" }}>Operations & Analytics</div>
-              <h2 style={{ fontSize: 22, fontWeight: 900, color: "var(--ink)", margin: "4px 0 0 0", tracking: "-0.02em" }}>Attendance Analytics</h2>
-              <p style={{ fontSize: 12, color: "var(--ink-3)", margin: "4px 0 0 0" }}>Clean attendance tracking: View personal self-attendance history and daily team attendance logs.</p>
-            </div>
-          </div>
-
-          {/* Clean 2-Feature Layout: 1. Self Attendance | 2. Daily Team Attendance */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: 20 }}>
-            <ShiftHistory />
-            <DailyAttendanceLog />
-          </div>
-        </section>
-      )}
-
-      {/* shift & swap tabs removed — all applications exclusively in My Desk → ApplicationsHub */}
-
-      {activeRosterTab === "review" && (
-        <section style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          <SectionLabel right={<span className="mono" style={{ fontSize: 11, color: "var(--ink-4)" }}>performance & presence study</span>}>Centre & Staff Monthly Review</SectionLabel>
-          
-          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-            <input type="month" value={reviewMonth} onChange={(e) => setReviewMonth(e.target.value)} style={{ background: "var(--inset)", border: "1px solid var(--hairline)", borderRadius: 10, color: "var(--ink)", fontFamily: "var(--font)", fontSize: 14, padding: "8px 12px", outline: "none" }} />
-            <div style={{ flex: 1 }} />
-            <button onClick={loadReviewData} disabled={loadingReview} className="tap glass-2" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 10, cursor: "pointer", border: "1px solid var(--hairline)", color: "var(--ink-2)", fontSize: 12, fontWeight: 700 }}>
-              <Icon name="refresh" size={13} /> {loadingReview ? "Loading..." : "Refresh"}
-            </button>
-          </div>
-
-          {loadingReview ? (
-            <div style={{ color: "var(--ink-4)", fontSize: 14, padding: 24, textAlign: "center" }}>Loading monthly records...</div>
-          ) : (
-            <React.Fragment>
-              {/* Leaderboard Podium & Weekly Spotlight */}
-              {sortedStaff.length > 0 && (
-                <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: 20 }} className="review-dashboard-grid">
-                  {/* Leaderboard Podium Card */}
-                  <div className="glass rise" style={{ padding: 24, borderRadius: "var(--radius)", display: "flex", flexDirection: "column", gap: 16 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <SectionLabel style={{ margin: 0 }} right={<span className="mono" style={{ fontSize: 11, color: "var(--warn)" }}>top performers</span>}>Monthly Leaderboard</SectionLabel>
-                      <Icon name="award" size={16} style={{ color: "var(--warn)" }} />
-                    </div>
-                    
-                    {/* Podium Grid */}
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr 1fr", gap: 12, alignItems: "end", padding: "16px 0 10px 0", minHeight: 180 }}>
-                      {/* Rank 2 */}
-                      {sortedStaff[1] && (
-                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-                          <Avatar name={sortedStaff[1].name} size={42} />
-                          <div style={{ fontSize: 12, fontWeight: 750, color: "var(--ink)", textAlign: "center" }}>{sortedStaff[1].name.split(" ")[0]}</div>
-                          <div className="mono" style={{ fontSize: 10.5, color: "var(--ink-3)" }}>{ATT.attFmtMins(sortedStaff[1].workedMins)}</div>
-                          <div style={{ height: 50, width: "100%", background: "var(--glass-2)", border: "1px solid var(--hairline)", borderBottom: "none", borderRadius: "8px 8px 0 0", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            <span style={{ fontSize: 13, fontWeight: 850, color: "var(--ink-3)" }}>2nd</span>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Rank 1 */}
-                      {sortedStaff[0] && (
-                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-                          <div style={{ position: "relative" }}>
-                            <Avatar name={sortedStaff[0].name} size={54} />
-                            <div style={{ position: "absolute", top: -14, left: "50%", transform: "translateX(-50%)", fontSize: 14 }}>👑</div>
-                          </div>
-                          <div style={{ fontSize: 13.5, fontWeight: 850, color: "var(--accent)", textAlign: "center" }}>{sortedStaff[0].name.split(" ")[0]}</div>
-                          <div className="mono" style={{ fontSize: 11, color: "var(--accent)", fontWeight: 750 }}>{ATT.attFmtMins(sortedStaff[0].workedMins)}</div>
-                          <div style={{ height: 75, width: "100%", background: "color-mix(in oklch, var(--warn) 10%, var(--glass-2))", border: "1px solid var(--warn)", borderBottom: "none", borderRadius: "10px 10px 0 0", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            <span style={{ fontSize: 16, fontWeight: 900, color: "var(--warn)" }}>1st</span>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Rank 3 */}
-                      {sortedStaff[2] && (
-                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-                          <Avatar name={sortedStaff[2].name} size={38} />
-                          <div style={{ fontSize: 11.5, fontWeight: 750, color: "var(--ink)", textAlign: "center" }}>{sortedStaff[2].name.split(" ")[0]}</div>
-                          <div className="mono" style={{ fontSize: 10, color: "var(--ink-3)" }}>{ATT.attFmtMins(sortedStaff[2].workedMins)}</div>
-                          <div style={{ height: 35, width: "100%", background: "var(--glass-2)", border: "1px solid var(--hairline)", borderBottom: "none", borderRadius: "6px 6px 0 0", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            <span style={{ fontSize: 12, fontWeight: 800, color: "var(--ink-4)" }}>3rd</span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Spotlight Card */}
-                  <div className="glass rise" style={{ padding: 24, borderRadius: "var(--radius)", display: "flex", flexDirection: "column", gap: 14 }}>
-                    <SectionLabel style={{ margin: 0 }} right={<span className="mono" style={{ fontSize: 11, color: "var(--ok)" }}>excellence</span>}>Spotlight Staff</SectionLabel>
-                    
-                    {(() => {
-                      const perfectPresence = [...sortedStaff]
-                        .filter(s => s.shiftsCount >= 5)
-                        .sort((a, b) => (a.lateCount - b.lateCount) || (b.shiftsCount - a.shiftsCount))[0] || sortedStaff[0];
-                      
-                      if (!perfectPresence) return <div style={{ color: "var(--ink-4)", fontSize: 12 }}>No records.</div>;
-                      
-                      return (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 12, height: "100%", justifyContent: "center" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                            <Avatar name={perfectPresence.name} size={42} />
-                            <div>
-                              <div style={{ fontSize: 14, fontWeight: 750, color: "var(--ink)" }}>{perfectPresence.name}</div>
-                              <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2, textTransform: "capitalize" }}>{perfectPresence.branch} Centre</div>
-                            </div>
-                          </div>
-                          
-                          <div className="inset" style={{ padding: "10px 12px", borderRadius: 10 }}>
-                            <div style={{ fontSize: 10, color: "var(--ink-4)", fontWeight: 700, textTransform: "uppercase" }}>Monthly Highlight</div>
-                            <div style={{ fontSize: 12.5, fontWeight: 650, color: "var(--ink-2)", marginTop: 6 }}>
-                              Completed <strong style={{ color: "var(--accent)" }}>{perfectPresence.shiftsCount} shifts</strong> with <strong style={{ color: "var(--ok)" }}>{perfectPresence.lateCount} lates</strong>. Outstanding punctuality!
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                </div>
-              )}
-
-              {/* Centre-wise stats */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
-                {Object.keys(branchStats).length === 0 ? (
-                  <div style={{ gridColumn: "1 / -1", color: "var(--ink-4)", fontSize: 13, padding: 12, textAlign: "center" }}>No activity recorded for this period.</div>
-                ) : (
-                  Object.entries(branchStats).map(([brName, stats]: [string, any]) => {
-                    const lateRate = stats.shiftsCount > 0 ? Math.round((stats.lateCount / stats.shiftsCount) * 100) : 0;
-                    const avgMins = stats.shiftsCount > 0 ? Math.round(stats.workedMins / stats.shiftsCount) : 0;
-                    return (
-                      <div key={brName} className="glass" style={{ padding: "16px 18px", borderRadius: "var(--radius)" }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: "1px" }}>{brName} Centre</div>
-                        <div style={{ fontSize: 24, fontWeight: 800, color: "var(--accent)", marginTop: 6 }}>{stats.shiftsCount} Shifts</div>
-                        <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
-                          <div>Lates: <strong style={{ color: lateRate > 15 ? "var(--warn)" : "var(--ok)" }}>{stats.lateCount}</strong> ({lateRate}% rate)</div>
-                          <div>Worked: <strong>{ATT.attFmtMins(stats.workedMins)}</strong> (Avg: {ATT.attFmtMins(avgMins)}/sh)</div>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-
-              {/* Staff-wise list */}
-              {Object.keys(staffStats).length > 0 && (
-                <div className="glass" style={{ borderRadius: "var(--radius)", padding: "10px 4px", overflow: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
-                    <thead>
-                      <tr style={{ borderBottom: "1px solid var(--hairline)" }}>
-                        <th onClick={() => toggleSort("name")} style={{ textAlign: "left", padding: "12px 14px", fontSize: 10, color: "var(--ink-4)", cursor: "pointer", textTransform: "uppercase" }}>
-                          Staff {sortKey === "name" && (sortAsc ? "▲" : "▼")}
-                        </th>
-                        <th onClick={() => toggleSort("branch")} style={{ textAlign: "left", padding: "12px 14px", fontSize: 10, color: "var(--ink-4)", cursor: "pointer", textTransform: "uppercase" }}>
-                          Home Branch {sortKey === "branch" && (sortAsc ? "▲" : "▼")}
-                        </th>
-                        <th onClick={() => toggleSort("shiftsCount")} style={{ textAlign: "right", padding: "12px 14px", fontSize: 10, color: "var(--ink-4)", cursor: "pointer", textTransform: "uppercase" }}>
-                          Shifts {sortKey === "shiftsCount" && (sortAsc ? "▲" : "▼")}
-                        </th>
-                        <th onClick={() => toggleSort("lateCount")} style={{ textAlign: "right", padding: "12px 14px", fontSize: 10, color: "var(--ink-4)", cursor: "pointer", textTransform: "uppercase" }}>
-                          Lates {sortKey === "lateCount" && (sortAsc ? "▲" : "▼")}
-                        </th>
-                        <th onClick={() => toggleSort("breakMins")} style={{ textAlign: "right", padding: "12px 14px", fontSize: 10, color: "var(--ink-4)", cursor: "pointer", textTransform: "uppercase" }}>
-                          Breaks {sortKey === "breakMins" && (sortAsc ? "▲" : "▼")}
-                        </th>
-                        <th onClick={() => toggleSort("workedMins")} style={{ textAlign: "right", padding: "12px 14px", fontSize: 10, color: "var(--ink-4)", cursor: "pointer", textTransform: "uppercase" }}>
-                          Worked Hours {sortKey === "workedMins" && (sortAsc ? "▲" : "▼")}
-                        </th>
-                        <th style={{ textAlign: "right", padding: "12px 14px", fontSize: 10, color: "var(--ink-4)", textTransform: "uppercase" }}>
-                          Avg Shift
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sortedStaff.map((s: any, idx) => {
-                        const avgMins = s.shiftsCount > 0 ? Math.round(s.workedMins / s.shiftsCount) : 0;
-                        return (
-                          <tr key={idx} className="hover-lift-subtle" style={{ borderBottom: "1px solid var(--hairline)", verticalAlign: "middle" }}>
-                            <td style={{ padding: "12px 14px", fontSize: 13, fontWeight: 700, color: "var(--ink)", display: "flex", alignItems: "center", gap: 8 }}>
-                              <Avatar name={s.name} size={24} />
-                              <span>{s.name}</span>
-                            </td>
-                            <td style={{ padding: "12px 14px", fontSize: 12.5, color: "var(--ink-3)", textTransform: "capitalize" }}>{s.branch}</td>
-                            <td style={{ padding: "12px 14px", fontSize: 13, color: "var(--ink)", textAlign: "right", fontWeight: 600 }}>{s.shiftsCount}</td>
-                            <td style={{ padding: "12px 14px", fontSize: 13, color: s.lateCount > 0 ? "var(--warn)" : "var(--ok)", textAlign: "right", fontWeight: 650 }}>{s.lateCount}</td>
-                            <td style={{ padding: "12px 14px", fontSize: 12, color: "var(--ink-3)", textAlign: "right", fontFamily: "monospace" }}>{s.breakMins ? `${s.breakMins}m` : "—"}</td>
-                            <td style={{ padding: "12px 14px", fontSize: 13, color: "var(--accent)", textAlign: "right", fontWeight: 700, fontFamily: "monospace" }}>{ATT.attFmtMins(s.workedMins)}</td>
-                            <td style={{ padding: "12px 14px", fontSize: 12.5, color: "var(--ink-2)", textAlign: "right", fontFamily: "monospace" }}>{ATT.attFmtMins(avgMins)}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </React.Fragment>
-          )}
-        </section>
-      )}
-
-      {isAdmin && quickOpen && <QuickAddRoster branch={branch} onClose={() => setQuickOpen(false)} />}
-      <Drawer open={!!dayDrawer} onClose={() => setDayDrawer(null)} icon="users"
-        title={dayDrawer ? `${window.P_WDL[dayDrawer.getDay()]}, ${window.P_MO[dayDrawer.getMonth()]} ${dayDrawer.getDate()}` : ""}
-        sub={`${capBranch(branch)} · coverage detail`}>
-        {dayDrawer && <DayDetailPanel date={dayDrawer} branch={branch} />}
-      </Drawer>
-    </div>
-  );
+  return <RosterWorkspace branch={branch} meId={F()._meId} canEdit={Boolean(F().isAdmin && String(F().user?.email || '').toLowerCase() === 'mithun@fets.in')} />;
 }
 
 Object.assign(window, { CalendarPage, RosterPage });
@@ -10244,14 +9619,15 @@ function AppKindSelector({ selected, onChange, adminMode }) {
   );
 }
 
-function AppForm({ onSubmitted }) {
+function AppForm({ onSubmitted, initialKind }) {
   const F = () => window.FETS;
-  const [kind, setKind] = React.useState("leave");
+  const [kind, setKind] = React.useState(initialKind === "halfday" ? "leave" : initialKind || "leave");
   const [submitting, setSubmitting] = React.useState(false);
 
   // Leave fields
   const [date, setDate] = React.useState("");
-  const [leaveType, setLeaveType] = React.useState("Full-day");
+  const [leaveType, setLeaveType] = React.useState(initialKind === "halfday" ? "Half-day" : "Full-day");
+  const [halfDayPeriod,setHalfDayPeriod]=React.useState("first");
   const [reason, setReason] = React.useState("");
 
   // Swap fields
@@ -10273,6 +9649,29 @@ function AppForm({ onSubmitted }) {
   const [otDate, setOtDate] = React.useState("");
   const [otStart, setOtStart] = React.useState("17:00");
   const [otEnd, setOtEnd] = React.useState("19:00");
+  const [otRoster, setOtRoster] = React.useState(null);
+  const [otRosterLoading, setOtRosterLoading] = React.useState(false);
+  React.useEffect(() => {
+    let cancelled = false;
+    setOtRoster(null);
+    if (!otDate || !F()._meId) return;
+    setOtRosterLoading(true);
+    supabase.from("roster_schedules").select("*").eq("profile_id", F()._meId).eq("date", otDate).maybeSingle().then(({data, error}) => {
+      if (cancelled) return;
+      setOtRosterLoading(false);
+      if (!error && data) {
+        const row = effectiveShift(data);
+        setOtRoster(row);
+        if (row.shift_end) { setOtStart(row.shift_end.slice(0,5)); setOtEnd(""); }
+      }
+    });
+    return () => { cancelled = true; };
+  }, [otDate]);
+  const requestedOt = (() => {
+    try { return otRoster ? overtimeMinutes(otStart, otEnd, otRoster) / 60 : null; }
+    catch { return null; }
+  })();
+
 
   const inpStyle = {
     padding: "10px 12px", borderRadius: 10, border: "1.5px solid #C4DBF6",
@@ -10286,14 +9685,17 @@ function AppForm({ onSubmitted }) {
     setSubmitting(true);
     if (kind === "ot") {
       // Overtime and paid TOIL go into the claims the payroll already reads.
-      const hours = otType === "hours" ? otHoursFrom(otStart, otEnd) : 0;
+      if (otType === "hours" && (otRosterLoading || requestedOt === null || requestedOt <= 0)) {
+        toast("Choose a rostered date and company-requested hours outside that shift.", "alert"); setSubmitting(false); return;
+      }
+      const hours = otType === "hours" ? requestedOt : 0;
       const res = await DB.dbAddOtClaim({ date: otDate, start_time: otType === "hours" ? otStart : undefined, end_time: otType === "hours" ? otEnd : undefined, ot_hours: hours, toil_payout: otType === "toil", notes: reason });
       setSubmitting(false);
       if (res) { setOtDate(""); setOtStart("17:00"); setOtEnd("19:00"); setReason(""); window.dispatchEvent(new Event("fets-ot-claims-changed")); onSubmitted?.(); }
       return;
     }
     let payload = { kind, reason };
-    if (kind === "leave")          payload = { ...payload, request_date: date, leave_type: leaveType };
+    if (kind === "leave")          payload = { ...payload, request_date: date, leave_type: leaveType, half_day_period: leaveType === "Half-day" ? halfDayPeriod : null };
     if (kind === "toil")           payload = { ...payload, request_date: date, leave_type: "TOIL" };
     if (kind === "swap")           payload = { ...payload, request_date: swapDate, swap_with_name: swapWith, swap_date: swapPartnerDate };
     if (kind === "emergency_duty") payload = { ...payload, request_date: emergDate, new_shift_code: newShift, leave_type: "Emergency" };
@@ -10309,17 +9711,17 @@ function AppForm({ onSubmitted }) {
   const kindMeta = APP_KINDS.find(a => a.k === kind);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <AppKindSelector selected={kind} onChange={setKind} />
-      <div style={{ borderRadius: 16, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 18, background: "#E7E3D4", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
+    <div className="pd-application-form" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {!initialKind && <AppKindSelector selected={kind} onChange={setKind} />}
+      <div className="pd-application-card" style={{ borderRadius: 16, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 18, background: "#E7E3D4", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, borderBottom: "1px solid #C4DBF6", paddingBottom: 14 }}>
           <div style={{ width: 34, height: 34, borderRadius: 10, display: "grid", placeItems: "center",
             background: `color-mix(in srgb, ${kindMeta?.color} 18%, #E7E3D4)`, color: kindMeta?.color }}>
             <Icon name={kindMeta?.icon} size={16} />
           </div>
           <div>
-            <div style={{ fontSize: 14.5, fontWeight: 750, color: "#2c3e50" }}>New {kindMeta?.label} Application</div>
-            <div style={{ fontSize: 11, color: "#8590AA", marginTop: 1 }}>Fill in the details and submit — Super Admin will be notified immediately.</div>
+            <div style={{ fontSize: 14.5, fontWeight: 750, color: "#2c3e50" }}>{initialKind === "halfday" ? "Half-day leave request" : `New ${kindMeta?.label} request`}</div>
+            <div style={{ fontSize: 11, color: "#8590AA", marginTop: 1 }}>Submit the details for management review.</div>
           </div>
         </div>
 
@@ -10336,6 +9738,8 @@ function AppForm({ onSubmitted }) {
             </div>
           )}
 
+          {kind === "leave" && leaveType === "Half-day" && <label style={labelStyle}>Which half are you requesting off?<select value={halfDayPeriod} onChange={e=>setHalfDayPeriod(e.target.value)} style={inpStyle}><option value="first">First half off · work the second half</option><option value="second">Second half off · work the first half</option></select><span className="pd-half-note">Half of your rostered shift. For an 8 AM–5 PM shift, each half is 4½ hours. Your remaining working hours will be shown for approval.</span></label>}
+
           {/* Overtime / paid TOIL */}
           {kind === "ot" && (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
@@ -10349,7 +9753,7 @@ function AppForm({ onSubmitted }) {
               {otType === "hours" && <>
                 <label style={labelStyle}>From<input type="time" value={otStart} onChange={e => setOtStart(e.target.value)} required style={inpStyle} /></label>
                 <label style={labelStyle}>To<input type="time" value={otEnd} onChange={e => setOtEnd(e.target.value)} required style={inpStyle} /></label>
-                <div style={{ ...labelStyle, gridColumn: "1 / -1" }}><span style={{ fontWeight: 500 }}>{otHoursFrom(otStart, otEnd).toFixed(2)} hours · paid at the OT rate once approved. The roster shows the hours on that day.</span></div>
+                <div style={{ ...labelStyle, gridColumn: "1 / -1" }}><span style={{ fontWeight: 500 }}>Roster: {otRosterLoading ? "Loading…" : otRoster ? rosterTiming(otRoster) : "Select a rostered day"}. Outside shift: {requestedOt === null ? "—" : requestedOt.toFixed(2)} hours. Company-requested time only; payment requires approval.</span></div>
               </>}
               {otType === "toil" && <div style={{ ...labelStyle, gridColumn: "1 / -1" }}><span style={{ fontWeight: 500 }}>Paid at 1.5× the daily rate once approved. The roster marks the day <b>TP</b>.</span></div>}
             </div>
@@ -10376,6 +9780,8 @@ function AppForm({ onSubmitted }) {
               <label style={labelStyle}>Their Date (that you'll take)<input type="date" value={swapPartnerDate} onChange={e => setSwapPartnerDate(e.target.value)} required style={inpStyle} /></label>
             </div>
           )}
+
+          {kind === 'swap' && <p className='pd-half-note'>On approval, your saved roster entries and your colleague’s entries exchange on both selected dates. Your colleague must agree first; management then reviews the change.</p>}
 
           {/* Emergency Duty */}
           {kind === "emergency_duty" && (
@@ -10482,7 +9888,7 @@ function MyApplicationsList({ range }) {
       {apps.map(app => {
         const km = APP_KINDS.find(a => a.k === app.kind);
         let detail = "";
-        if (app.kind === "leave")          detail = `${app.leave_type || "Full-day"} · ${app.request_date || ""}`;
+        if (app.kind === "leave")          detail = `${app.leave_type || "Full-day"} · ${app.request_date || ""}${app.half_day_period ? " · " + app.half_day_period + " half off" : ""}`;
         if (app.kind === "toil")           detail = `TOIL day off · ${app.request_date || ""}`;
         if (app.kind === "swap")           detail = `${app.request_date} ↔ ${app.swap_with_name} (${app.swap_date || ""})`;
         if (app.kind === "emergency_duty") detail = `${app.request_date} → ${app.new_shift_code} shift`;
@@ -10497,6 +9903,7 @@ function MyApplicationsList({ range }) {
               <div style={{ fontSize: 13, fontWeight: 700, color: "#2c3e50" }}>{km?.label || app.kind}</div>
               <div style={{ fontSize: 11, color: "#8590AA", marginTop: 2 }}>{detail}</div>
               {app.reason && <div style={{ fontSize: 11, color: "#8590AA", marginTop: 3, fontStyle: "italic" }}>"{app.reason}"</div>}
+              {app.workflow_version===1 && app.kind==='swap' && app.status==='pending' && <div style={{fontSize:11,color:"#54715b",marginTop:5}}>Colleague: {app.partner_reply||"awaiting reply"} · Management approval required</div>}
               {app.admin_reply && app.status !== "pending" && (
                 <div style={{ fontSize: 11, color: app.status === "approved" ? "#3B8BEB" : "#B23850", marginTop: 4, fontWeight: 600 }}>
                   Admin: "{app.admin_reply}"
@@ -10532,8 +9939,9 @@ function AdminApplicationsInbox({ filter, setFilter, range, setRange }) {
   const doResolve = async () => {
     if (!replyModal) return;
     setResolving(true);
-    await DB.dbResolveApplication(replyModal.app.id, replyModal.action === "approve" ? "approved" : "rejected", replyText);
+    const result=await DB.dbResolveApplication(replyModal.app.id, replyModal.action === "approve" ? "approved" : "rejected", replyText);
     setResolving(false);
+    if(result===false)return;
     setReplyModal(null);
     setReplyText("");
   };
@@ -10570,7 +9978,7 @@ function AdminApplicationsInbox({ filter, setFilter, range, setRange }) {
           {filtered.map(app => {
             const km = APP_KINDS.find(a => a.k === app.kind);
             let detail = "";
-            if (app.kind === "leave")          detail = `${app.leave_type || "Full-day"} · ${app.request_date || ""}`;
+            if (app.kind === "leave")          detail = `${app.leave_type || "Full-day"} · ${app.request_date || ""}${app.half_day_period ? " · " + app.half_day_period + " half off" : ""}`;
             if (app.kind === "toil")           detail = `TOIL day off · ${app.request_date || ""}`;
             if (app.kind === "swap")           detail = `${app.request_date} ↔ ${app.swap_with_name} (${app.swap_date || ""})`;
             if (app.kind === "emergency_duty") detail = `${app.request_date} → ${app.new_shift_code} shift`;
@@ -10589,12 +9997,14 @@ function AdminApplicationsInbox({ filter, setFilter, range, setRange }) {
                     <span style={{ fontSize: 10, color: "#8590AA", marginLeft: "auto" }}>{app.created_at ? new Date(app.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : ""}</span>
                   </div>
                   <div style={{ fontSize: 12, color: "#2c3e50", fontWeight: 600 }}>{detail}</div>
+                  {app.workflow_version===1 && app.kind==='swap' && <div style={{fontSize:12,marginTop:8,color:'#54715b'}}>Colleague: {app.partner_reply||'awaiting reply'}. The roster changes only after management approval.</div>}
+                  {app.workflow_version===1 && app.half_day_period && app.roster_snapshot?.[0] && <div style={{fontSize:12,marginTop:8,color:'#54715b'}}>Original shift: {app.roster_snapshot[0].shift_start?.slice(0,5)}–{app.roster_snapshot[0].shift_end?.slice(0,5)}. {app.half_day_period==='first'?'First':'Second'} half requested off.</div>}
                   {app.reason && <div style={{ fontSize: 11, color: "#8590AA", marginTop: 3, fontStyle: "italic" }}>"{app.reason}"</div>}
                   {app.admin_reply && <div style={{ fontSize: 11, color: "#8590AA", marginTop: 3 }}>Reply: "{app.admin_reply}"</div>}
                 </div>
                 {app.status === "pending" && (
                   <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                    <button onClick={() => { setReplyModal({ app, action: "approve" }); setReplyText(""); }} className="tap"
+                    <button disabled={app.workflow_version===1&&app.kind==="swap"&&app.partner_reply!=="accepted"} onClick={() => { setReplyModal({ app, action: "approve" }); setReplyText(""); }} className="tap"
                       style={{ padding: "8px 16px", borderRadius: 9, border: "none", background: "#3B8BEB", color: "#fff", fontSize: 12, fontWeight: 700, fontFamily: "var(--font)", cursor: "pointer" }}>
                       <Icon name="check" size={13} /> Approve
                     </button>
@@ -10650,16 +10060,18 @@ function AdminApplicationsInbox({ filter, setFilter, range, setRange }) {
   );
 }
 
-function ApplicationsHub({ isSuperAdmin }) {
-  const [tab, setTab] = React.useState(isSuperAdmin ? "inbox" : "apply");
+function ApplicationsHub({ isSuperAdmin, initialKind }) {
+  const [tab, setTab] = React.useState(initialKind ? "apply" : isSuperAdmin ? "inbox" : "apply");
   const [filter, setFilter] = React.useState("pending");
   const [range, setRange] = React.useState(histDefaultRange);
   const [, refreshHub] = React.useReducer(n => n + 1, 0);
   React.useEffect(() => {
     loadOtClaims(window.FETS).then(refreshHub).catch(() => undefined);
+    const sync=()=>{if(!document.hidden)void loadApplications(window.FETS).then(refreshHub);};
+    sync();const poll=setInterval(sync,30000);
     const h = () => refreshHub();
     window.addEventListener("fets-ot-claims-changed", h);
-    return () => window.removeEventListener("fets-ot-claims-changed", h);
+    return () => {clearInterval(poll);window.removeEventListener("fets-ot-claims-changed", h);};
   }, []);
   const pendingCount = (window.FETS._applications || []).filter(a => a.status === "pending").length
     + (isSuperAdmin ? (window.FETS._otClaims || []).filter(c => c.status === "pending").length : 0);
@@ -10689,9 +10101,9 @@ function ApplicationsHub({ isSuperAdmin }) {
           </div>
         </div>
         {/* Tab pills */}
-        <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+        <div className="pd-request-tabs" style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
           {TABS.map(t => (
-            <button key={t.k} onClick={() => setTab(t.k)} className="tap"
+            <button key={t.k} onClick={() => setTab(t.k)} aria-pressed={tab===t.k} className="tap"
               style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 16px", borderRadius: 20, fontSize: 12.5, fontWeight: 700, fontFamily: "var(--font)", cursor: "pointer",
                 border: "none",
                 background: tab === t.k ? "#3B8BEB" : "#E7E3D4",
@@ -10706,7 +10118,7 @@ function ApplicationsHub({ isSuperAdmin }) {
       </div>
 
       {/* Content */}
-      {tab === "apply" && <AppForm onSubmitted={() => setTab(isSuperAdmin ? "inbox" : "mine")} />}
+      {tab === "apply" && <AppForm initialKind={initialKind} onSubmitted={() => setTab(isSuperAdmin ? "inbox" : "mine")} />}
       {tab === "mine" && <><HistoryRange range={range} setRange={setRange} /><MyApplicationsList range={range} /><OtClaimsPanel admin={false} filter="all" range={range} /></>}
       {tab === "inbox" && <><AdminApplicationsInbox filter={filter} setFilter={setFilter} range={range} setRange={setRange} /><OtClaimsPanel admin filter={filter} range={range} /></>}
     </div>
@@ -10838,9 +10250,9 @@ function MyDeskPage({ branch, setActive, setDrawer, bridge }) {
     navigate={page => page === "profile" && bridge ? bridge("profile") : setActive(page)}
     openDrawer={setDrawer}
     openChat={person => window.dispatchEvent(new CustomEvent("fets-open-chat", { detail: person }))}
-    renderPanel={panel => {
-      if (panel === "time") return <LeaveModule />;
-      if (panel === "requests") return <ApplicationsHub isSuperAdmin={Boolean(F.isAdmin)} />;
+    renderPanel={(panel, kind) => {
+      if (panel === "time") return <MyTime profileId={ownProfile?.id} />;
+      if (panel === "requests") return <><SwapInvitations profileId={ownProfile?.id} /><ApplicationsHub key={kind || "all"} isSuperAdmin={Boolean(F.isAdmin)} initialKind={kind} /></>;
       if (panel === "handovers") return <HandoverInbox />;
       if (panel === "checklist") return <ChecklistModule />;
       if (panel === "growth") return <CertsModule />;
