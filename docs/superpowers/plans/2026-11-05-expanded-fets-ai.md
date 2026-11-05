@@ -35,7 +35,9 @@
 - [x] Inspect the active agent version, stored controls and tool catalog without changing them.
 - [x] Verify existing capability and workflow entrypoints, including Actionables institution deletion and protected chat operations.
 - [x] Record the owner's selected scope and review policy.
-- [ ] Record one concrete unsupported operation/example and choose its existing app workflow as the first connector.
+- [x] Record the owner's clarification: all modules; ordinary-user access follows User Management, with all application access intended for super administrators. No module-priority question remains.
+- [x] Produce the read-only per-workflow permission/capability map and record unresolved UI/server authority differences.
+- [ ] Independent human operator reviews and explicitly authorizes the named operation contracts and any authority reconciliation before implementation or activation.
 - [ ] Define exact input fields, target IDs, required role/centre/ownership, record version, allowed side effects, expected saved result and recovery limits for that connector.
 - [ ] Verify those requirements from current source and live metadata; unresolved authority blocks that connector only.
 
@@ -74,4 +76,4 @@ Repeat the same connector contract and verification for the remaining requested 
 
 ## Current state
 
-Only scope recording, read-only inspection and planning have occurred for this expansion. Production agent version 7, current permissions and the seven published knowledge guides are unchanged. The first concrete operation/example is requested; no new execution authority or deployment has been introduced.
+Only scope recording, read-only inspection and planning have occurred for this expansion. Production agent version 7, current permissions and the seven published knowledge guides are unchanged. The owner selected all modules and User Management permission parity, with super-administrator all-access as the intended policy. The read-only capability map is ready for independent human operator review. No connector, approval endpoint, new execution authority or deployment has been introduced.
