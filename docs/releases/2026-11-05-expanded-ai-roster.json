@@ -1,0 +1,35 @@
+{
+  "release": "20261105T111345Z-expanded-ai-roster",
+  "frontend_commit": "7df58680f6fdb805721ff3d827c77e7db0e51a6e",
+  "frontend_image": "sha256:d78ecb42b8a7014610448c138f62a3fff7c6fe8004feed273facdd6c5afb3acb",
+  "previous_image": "sha256:6de71149755b744d1154d623068ee975097f230c22763273eb41459a341c2558",
+  "index_sha256": "8f91b0ba8f1928ded3cd8204e2231d84cd5a9d07c382177c61b1052829d74437",
+  "edge_function": {
+    "version": 8,
+    "verify_jwt": true,
+    "bundle_sha256": "40038c28f477edc3109144d3930bbd41e871bbe2aecc3bdcd5ec2e2967123e28",
+    "source_files_verified": 10
+  },
+  "migration": "20261105113411_expanded_ai_operations",
+  "knowledge": {
+    "same_documents": 7,
+    "version": 2,
+    "search_verified": true
+  },
+  "checks": {
+    "focused_tests_passed": 305,
+    "real_provider_fixture_tests_passed": 23,
+    "isolated_browser_checks": 40,
+    "public_files_routes": 56,
+    "public_viewports": 2,
+    "new_security_advisories": 0,
+    "business_data_fingerprints_preserved": true
+  },
+  "capabilities": {
+    "named_operations": 84,
+    "ordinary_direct": 33,
+    "database_review": 8,
+    "module_review": 43
+  },
+  "verified_at": "2026-11-05T11:43:52.390152+00:00"
+}
