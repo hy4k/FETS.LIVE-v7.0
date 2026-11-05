@@ -39,8 +39,8 @@ try {
  await db.exec(expanded.slice(expanded.indexOf('create or replace function fets_ai_private.member_active'),expanded.indexOf('create table public.fets_ai_reviews')));
  await db.exec('grant usage on schema fets_ai_private to authenticated;revoke all on all functions in schema fets_ai_private from public;grant execute on all functions in schema fets_ai_private to authenticated');
  for(const f of ['20260929195737_calendar_candidate_roster.sql','20260930024000_reconcile_calendar_roster_validation.sql','20261001074500_roster_exam_provider_guard.sql'])await db.exec(readFileSync('supabase/migrations/'+f,'utf8'));
- const migration=readdirSync('supabase/migrations').find(f=>f.endsWith('_pearson_monthly_registration_import.sql'));
- await db.exec(readFileSync('supabase/migrations/'+migration,'utf8'));
+ const migration=process.env.PEARSON_TEST_MIGRATION || 'supabase/migrations/'+readdirSync('supabase/migrations').find(f=>f.endsWith('_pearson_monthly_registration_import.sql'));
+ await db.exec(readFileSync(migration,'utf8'));
  await staff();
  const first=await preview([row(1),row(2)]);
  assert.deepEqual(first.counts,{incoming:2,new:2,existing:0,review:0,sessions:1,missing:0});
@@ -242,10 +242,16 @@ try {
  assert.equal((await one('select candidate_count n from calendar_sessions where id=$1',[tracked.pearson_calendar_session_id])).n,0);
  assert.equal((await one("select count(*)::int n from calendar_sessions where date between '2027-11-01' and '2027-11-30'")).n,2);
  console.log('PASS reschedule leaves unbound manual attendee counted on original slot, then delete reconciles without extra session');
-
-
-
-
-
-
+ // A month-sized report must not re-expand every candidate choice for every
+ // Calendar row inside every group; that shape exceeds the request budget.
+ const monthly=Array.from({length:451},(_,n)=>{const group=n%238,day=1+Math.floor(group/8),hour=8+group%8;return row(5000+n,{date:'2027-12-'+String(day).padStart(2,'0'),start_time:String(hour).padStart(2,'0')+':00:00',end_time:String(hour+1).padStart(2,'0')+':00:00',exam_owner:'Monthly Scale Owner'});});
+ const slots=[...new Map(monthly.map(r=>[r.date+'|'+r.start_time,r])).values()];
+ await owner();
+ await q("insert into calendar_sessions(client_name,exam_name,date,branch_location,start_time,end_time,candidate_count,user_id,status) select 'PEARSON VUE',r.exam_owner,r.date::date,'cochin',r.start_time::time,r.end_time::time,0,$2,'scheduled' from jsonb_to_recordset($1::jsonb) r(exam_owner text,date text,start_time text,end_time text)",[JSON.stringify(slots),uid]);
+ await staff();const monthlyStarted=performance.now();
+ p=await preview(monthly,{from:'2027-12-01',through:'2027-12-31',asof:'2026-11-05'});
+ assert.equal(p.rows.length,451);assert.equal(p.sessions.length,238);
+ assert.ok(p.sessions.every(s=>s.match_kind==='review'&&s.possible_sessions.length>0));
+ assert.ok(performance.now()-monthlyStarted<15000,'Monthly preview exceeded its 15-second request budget');
+ console.log('PASS complete 451-booking/238-session preview within the 15-second request budget');
 } catch(error) { console.error(error.message, error.where || "", error.position ? error.query?.slice(Math.max(0,Number(error.position)-120),Number(error.position)+100): ""); process.exitCode=1; } finally { await db.close(); }

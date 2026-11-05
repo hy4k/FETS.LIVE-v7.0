@@ -103,8 +103,8 @@ create function fets_pearson_private.preview_core(
 ) returns jsonb language plpgsql security definer set search_path='' as $$
 declare
  r jsonb;current_candidate jsonb;s jsonb;options jsonb;session_options jsonb;output_rows jsonb:='[]';output_sessions jsonb:='[]';missing jsonb:='[]';warnings jsonb:='[]';
- snap jsonb;canonical text;prior fets_pearson_private.imports;pid uuid:=gen_random_uuid();expiry timestamptz:=clock_timestamp()+interval '30 minutes';
- chosen uuid;sid bigint;kind text;group_id text;groups record;exact_count integer;changes jsonb;result jsonb;n_new integer:=0;n_existing integer:=0;n_review integer:=0;
+ snap jsonb;canonical text;prior_sessions jsonb:='{}';prior_ids bigint[];prior fets_pearson_private.imports;pid uuid:=gen_random_uuid();expiry timestamptz:=clock_timestamp()+interval '30 minutes';
+ chosen uuid;sid bigint;kind text;groups record;exact_count integer;changes jsonb;result jsonb;n_new integer:=0;n_existing integer:=0;n_review integer:=0;
 begin
  if p_branch is null or p_branch not in ('cochin','calicut') or p_from is null or p_through is null or p_complete is null or p_source_as_of is null
   or p_from>p_through or p_through-p_from>366 or p_source_as_of>(clock_timestamp() at time zone 'Asia/Kolkata')::date then raise exception 'Invalid centre, coverage or source-as-of date';end if;
@@ -157,12 +157,24 @@ begin
   end if;
   output_rows:=output_rows||jsonb_build_array(r||jsonb_build_object('candidate_id',chosen,'match_kind',kind,'possible_candidates',options,'changes',changes));
  end loop;
+ -- Build reviewed reschedule choices once. Correlating this expansion to every
+ -- Calendar row inside every source group makes a monthly preview cubic.
+ if exists(select 1 from fets_pearson_private.memberships where branch=p_branch) then
+  select coalesce(jsonb_object_agg(group_id,calendar_ids),'{}') into prior_sessions from (
+   select fets_pearson_private.group_key(rv.value) group_id,jsonb_agg(distinct m.calendar_id) calendar_ids
+   from jsonb_array_elements(output_rows) rv(value)
+   cross join lateral (
+    select (rv.value->>'candidate_id')::uuid candidate_id where rv.value->>'candidate_id' is not null
+    union select (choice.value->>'id')::uuid from jsonb_array_elements(rv.value->'possible_candidates') choice(value)
+   ) choices
+   join fets_pearson_private.memberships m on m.candidate_id=choices.candidate_id and m.branch=p_branch
+   group by 1
+  ) prior_groups;
+ end if;
  for groups in select fets_pearson_private.group_key(value) key,min(value->>'date') as day,min(value->>'exam_owner') owner,min((value->>'start_time')::time) start,min((value->>'end_time')::time) finish,count(*) n from jsonb_array_elements(p_rows) group by 1 order by 1 loop
+  select coalesce(array_agg(value::bigint),'{}') into prior_ids from jsonb_array_elements_text(coalesce(prior_sessions->groups.key,'[]'));
   select coalesce(jsonb_agg(jsonb_build_object('id',s.id,'date',s.date,'exam_name',s.exam_name,'start_time',s.start_time,'end_time',s.end_time,'candidate_count',s.candidate_count) order by s.id),'[]') into session_options
-  from public.calendar_sessions s where s.branch_location=p_branch and upper(s.client_name)='PEARSON VUE' and (s.date=groups.day::date or exists(
-   select 1 from fets_pearson_private.memberships m join jsonb_array_elements(output_rows) rv(value) on
-    rv.value->>'candidate_id'=m.candidate_id::text or exists(select 1 from jsonb_array_elements(rv.value->'possible_candidates') choice where choice->>'id'=m.candidate_id::text)
-   where m.calendar_id=s.id and fets_pearson_private.group_key(rv.value)=groups.key));
+  from public.calendar_sessions s where s.branch_location=p_branch and upper(s.client_name)='PEARSON VUE' and (s.date=groups.day::date or s.id=any(prior_ids));
   select m.calendar_id into sid from fets_pearson_private.sessions m join public.calendar_sessions s on s.id=m.calendar_id where m.branch=p_branch and m.group_key=groups.key;
   if sid is not null then kind:='exact';
   elsif jsonb_array_length(session_options)>0 then kind:='review';
