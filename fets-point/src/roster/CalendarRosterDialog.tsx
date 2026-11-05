@@ -7,13 +7,14 @@ import { parseRosterFile, normaliseRosterTime, type ExtraAliases } from './parse
 import { PROVIDERS, type RosterPreview, type RosterRow } from './types';
 import { expectedProvider, loadRosterContext, possibleLegacyMatch, projectedGroups, rosterMatch, saveRoster } from './roster-api';
 import './calendar-roster.css';
+import PearsonImportDialog from '../pearson/PearsonImportDialog';
 
 type Props={mode:'upload'|'manual';day:string;branch:string;onClose:()=>void};
 const blank={full_name:'',roster_number:'',phone:'',exam_part:''};
 const aliasFields=['roster_number','full_name','first_name','last_name','exam_name','part','phone','exam_start_time'] as const;
 export default function CalendarRosterDialog({mode:initialMode,day:initialDay,branch:initialBranch,onClose}:Props){
   const queryClient=useQueryClient();
-  const [mode,setMode]=useState(initialMode),[day,setDay]=useState(initialDay),[branch,setBranch]=useState(initialBranch==='cochin'?'cochin':'calicut');
+  const [mode,setMode]=useState<'upload'|'manual'|'pearson'>(initialMode),[day,setDay]=useState(initialDay),[branch,setBranch]=useState(initialBranch==='cochin'?'cochin':'calicut');
   const [provider,setProvider]=useState<string>('PROMETRIC'),[exam,setExam]=useState(''),[time,setTime]=useState('');
   const [file,setFile]=useState<File|null>(null),[manual,setManual]=useState(blank),[aliasText,setAliasText]=useState<Record<string,string>>({});
   const [preview,setPreview]=useState<RosterPreview|null>(null),[context,setContext]=useState<Awaited<ReturnType<typeof loadRosterContext>>|null>(null);
@@ -21,7 +22,7 @@ export default function CalendarRosterDialog({mode:initialMode,day:initialDay,br
   const generation=useRef(0),dialog=useRef<HTMLElement>(null);
   const reset=()=>{generation.current++;setPreview(null);setContext(null);setError('');setSuccess('');setBusy(false);};
   useEffect(()=>{const previous=document.activeElement as HTMLElement|null;dialog.current?.querySelector<HTMLButtonElement>('button')?.focus();return()=>{generation.current++;previous?.focus();};},[]);
-  useEffect(()=>{const key=(e:KeyboardEvent)=>{if(e.key==='Escape'&&!saving)onClose();};window.addEventListener('keydown',key);return()=>window.removeEventListener('keydown',key);},[saving,onClose]);
+  useEffect(()=>{const key=(e:KeyboardEvent)=>{if(e.key==='Escape'&&!saving&&mode!=='pearson')onClose();};window.addEventListener('keydown',key);return()=>window.removeEventListener('keydown',key);},[saving,onClose,mode]);
   const rows=useMemo(()=>preview?.rows.filter(r=>selected.has(r.roster_number))||[],[preview,selected]);
   const groups=useMemo(()=>context?projectedGroups(rows,context.candidates,context.sessions,provider):[],[rows,context,provider]);
   const updates=rows.filter(r=>context&&rosterMatch(r,context.candidates,provider)).length;
@@ -47,13 +48,14 @@ export default function CalendarRosterDialog({mode:initialMode,day:initialDay,br
   const save=async()=>{
     if(!preview||preview.counts.errors||!rows.length||saving)return;
     setSaving(true);setError('');
-    try{const result=await saveRoster(day,branch,provider,mode,rows);setSuccess(`${result.inserted} added · ${result.updated} updated. Calendar totals recalculated.`);setPreview(null);setContext(null);
+    try{const result=await saveRoster(day,branch,provider,mode==='manual'?'manual':'upload',rows);setSuccess(`${result.inserted} added · ${result.updated} updated. Calendar totals recalculated.`);setPreview(null);setContext(null);
       await Promise.all([queryClient.invalidateQueries({queryKey:['candidates']}),queryClient.invalidateQueries({queryKey:['sessions','calendar']}),queryClient.invalidateQueries({queryKey:['dashboardStats']}),queryClient.invalidateQueries({queryKey:['upcomingSchedule']})]);window.dispatchEvent(new Event('fets-data-loaded'));
     }catch(e){setError((e as {message?:string})?.message||'Nothing was saved. Please try again.');}finally{setSaving(false);}
   };
+  if(mode==='pearson')return <PearsonImportDialog day={day} branch={initialBranch==='cochin'||initialBranch==='calicut'?branch:''} onClose={onClose} onModeChange={next=>{reset();setMode(next);}}/>;
   return createPortal(<div className="calendar-roster-backdrop"><section ref={dialog} className="calendar-roster-dialog" role="dialog" aria-modal="true" aria-label="Candidate roster">
     <header><div><span className="cr-eyebrow">ONE ROSTER · ONE SOURCE</span><h2>Bring the day’s candidates together.</h2><p>Save once to Candidate Tracker. Calendar totals stay in step.</p></div><button aria-label="Close candidate roster" disabled={saving} onClick={onClose}><X size={22}/></button></header>
-    <div className="cr-content"><nav aria-label="Roster entry method"><button aria-pressed={mode==='upload'} disabled={saving} onClick={()=>{reset();setMode('upload');}}><Upload size={17}/> Upload roster</button><button aria-pressed={mode==='manual'} disabled={saving} onClick={()=>{reset();setMode('manual');}}><UserPlus size={17}/> Add by hand</button></nav>
+    <div className="cr-content"><nav aria-label="Roster entry method"><button aria-pressed={mode==='upload'} disabled={saving} onClick={()=>{reset();setMode('upload');}}><Upload size={17}/> Upload roster</button><button aria-pressed={mode==='manual'} disabled={saving} onClick={()=>{reset();setMode('manual');}}><UserPlus size={17}/> Add by hand</button><button disabled={saving} onClick={()=>{reset();setMode('pearson');}}><FileSpreadsheet size={17}/> Pearson monthly report</button></nav>
     <fieldset disabled={saving}><div className="cr-fields"><label>Exam date<input type="date" value={day} onChange={e=>{reset();setDay(e.target.value);}}/></label><label>Centre<select value={branch} onChange={e=>{reset();setBranch(e.target.value);}}><option value="calicut">Calicut</option><option value="cochin">Cochin</option></select></label><label>Provider<select value={provider} onChange={e=>{reset();setProvider(e.target.value);}}>{PROVIDERS.map(p=><option key={p}>{p}</option>)}</select></label><label>{mode==='upload'?'Exam name when missing from file':'Exam name'}<input value={exam} placeholder="e.g. CMA US" onChange={e=>{reset();setExam(e.target.value);}}/></label><label>{mode==='upload'?'Start time when missing · IST':'Start time · IST'}<input type="time" value={time} onChange={e=>{reset();setTime(e.target.value);}}/></label></div>
     {mode==='upload'?<><label className="cr-file"><FileSpreadsheet size={27}/><span><strong>{file?.name||'Choose a candidate roster'}</strong><small>CSV, XLSX or legacy XLS · up to 20 MB · 2,000 candidates per save</small></span><input aria-label="Roster file" type="file" accept=".csv,.xlsx,.xls" onChange={e=>{reset();const f=e.target.files?.[0]||null;if(f&&!/\.(csv|xlsx|xls)$/i.test(f.name)){setError('Choose a CSV, XLSX or XLS file.');setFile(null);}else setFile(f);}}/></label><details className="cr-aliases"><summary>Custom column headings</summary><p>Use these when a provider uses different headers. Your mappings take priority over built-in names.</p><div className="cr-fields">{aliasFields.map(field=><label key={field}>{field.replace(/_/g,' ')}<input placeholder="Header names, separated by commas" value={aliasText[field]||''} onChange={e=>{reset();setAliasText(a=>({...a,[field]:e.target.value}));}}/></label>)}</div></details></>:<div className="cr-fields">{(['full_name','roster_number','phone','exam_part'] as const).map(field=><label key={field}>{({full_name:'Full name',roster_number:'Provider roster / confirmation ID',phone:'Phone · optional',exam_part:'Exam part · optional'})[field]}<input value={manual[field]} onChange={e=>{reset();setManual(m=>({...m,[field]:e.target.value}));}}/></label>)}</div>}
     <button className="cr-primary" disabled={busy} onClick={review}>{busy?<Loader2 size={16} className="animate-spin"/>:<ArrowRight size={16}/>} Preview {mode==='upload'?'roster':'candidate'}</button></fieldset>

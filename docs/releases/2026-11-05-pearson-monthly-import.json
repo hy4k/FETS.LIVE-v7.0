@@ -1,0 +1,51 @@
+{
+  "status": "deployed-and-verified",
+  "release": "20261105T170118Z-pearson-monthly",
+  "frontend_commit": "ad5d6a530420c52417d6c463b45f8206e03108ee",
+  "image": "sha256:48c9b0d2b95400cce8ba8e42cb77505530aee8d0fca5b93b82c50c640edaa6e2",
+  "previous_image": "sha256:d78ecb42b8a7014610448c138f62a3fff7c6fe8004feed273facdd6c5afb3acb",
+  "index_sha256": "7226f3dea3c8d954b9e40e8fbc29f794a5c7714b47e4a69e9c225f8a1d69b841",
+  "migration": "20261105175410_pearson_monthly_registration_import",
+  "migration_sha256": "dd3f4b2fd8cccc59bc1c618b33fa5fa3e4311d6cb7cc97ea2506d19a88b8ed19",
+  "scope": {
+    "branch": "cochin",
+    "provider": "PEARSON VUE",
+    "from": "2026-11-01",
+    "through": "2026-11-30"
+  },
+  "source_sha256": "a9d1fde2a8d0746c657672161e8b9632e283e4a9d477c388891ea7ab52c79eb9",
+  "result": {
+    "saved": 451,
+    "inserted": 416,
+    "updated": 35,
+    "calendar_sessions": 238,
+    "calendar_candidates": 451,
+    "emails_present": 450,
+    "exam_codes_present": 451,
+    "cancellation_reviews": 0
+  },
+  "verification": {
+    "source_fields_match": true,
+    "existing_candidate_ids_and_history_preserved": 35,
+    "existing_calendar_ids_preserved": 238,
+    "unrelated_rows_preserved": true,
+    "same_file_retry_no_mutation": true,
+    "postgres_groups": 14,
+    "synthetic_browser_checks": 72,
+    "browser_viewports": [
+      1440,
+      390
+    ],
+    "typescript": "passed",
+    "frontend_full_suite": {
+      "passed": 479,
+      "pre_existing_failures": 5,
+      "skipped": 2
+    },
+    "public_routes_assets": 57,
+    "new_security_advisors": 0,
+    "runtime_configuration_preserved": true
+  },
+  "rollback_directory": "/opt/fets-releases/20261105T170118Z-pearson-monthly",
+  "private_artifacts": "/root/.codex/artifacts/pearson-review-20261105"
+}
