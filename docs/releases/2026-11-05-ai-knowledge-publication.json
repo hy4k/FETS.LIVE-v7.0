@@ -1,0 +1,62 @@
+{
+  "published": true,
+  "verified_date": "2026-11-05",
+  "source_commit": "9f54322ec05626d838889e09c0b1c7bb003bbb1b",
+  "guides": [
+    {
+      "id": "789218f8-791a-469a-b480-edd9872356b0",
+      "title": "FETS Live workspace navigation and centre selection",
+      "version": 1,
+      "status": "published",
+      "content_md5": "8c48a52a72958791e5f136768d31711e"
+    },
+    {
+      "id": "2776c581-dd9a-4cba-b357-e023ea55e1c4",
+      "title": "Calendar sessions, clients, candidates and India time",
+      "version": 1,
+      "status": "published",
+      "content_md5": "7326f79414fd35c40c7edc5b8fccb999"
+    },
+    {
+      "id": "d30b93cb-8058-4d4a-9b8c-59bdd2672cd5",
+      "title": "Cases, assigned tasks and saved action receipts",
+      "version": 1,
+      "status": "published",
+      "content_md5": "de4b581af3d45f8340f7486cb8d64b38"
+    },
+    {
+      "id": "245079b6-45f1-4031-b4dc-ba0db80afc97",
+      "title": "Roster, attendance, leave, overtime and approvals",
+      "version": 1,
+      "status": "published",
+      "content_md5": "a06ed93ec83c1f9fb8b92b1a5f1c5b65"
+    },
+    {
+      "id": "91870ad4-eac6-4b4b-aeee-c61a96e16243",
+      "title": "Shift opening and closing reports, handovers and evidence",
+      "version": 1,
+      "status": "published",
+      "content_md5": "f6d2a80701efe191f990aedd9d7140f0"
+    },
+    {
+      "id": "e7f5de04-e9d5-4895-8701-b240714e7aaa",
+      "title": "Institution Actionables, stages, duties, results and handover",
+      "version": 1,
+      "status": "published",
+      "content_md5": "ad95cb4b38b13827b02bd3bd5b7a7593"
+    },
+    {
+      "id": "2da7a371-8f62-441f-8827-5571b355472c",
+      "title": "FETS AI capabilities, memory, knowledge, controls and activity",
+      "version": 1,
+      "status": "published",
+      "content_md5": "aa80c7f740df1d80827f95f0bf319c48"
+    }
+  ],
+  "existing_reference_preserved": true,
+  "all_guides_searchable": true,
+  "permissions_changed": false,
+  "backend_changed": false,
+  "frontend_changed": false,
+  "publication_method": "Owner-requested administrative publication using transaction-local owner actor context, authenticated role, existing verified-admin RLS and version/editor trigger; no Auth sessions, memberships, grants or policies created."
+}
