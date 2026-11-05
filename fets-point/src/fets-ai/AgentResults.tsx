@@ -1,16 +1,19 @@
 import { Check, ExternalLink } from "lucide-react";
 import { type AgentReply, type HandoverProposal } from "./fets-ai-api";
 import { offerHandoverDraft } from "./handover-draft";
+import { ReviewCard, type ReviewScope } from "./ReviewCard";
 const safePath = (path?: string) =>
   path?.startsWith("/") && !path.startsWith("//") ? path : undefined;
 export function AgentResults({
   reply,
   navigate,
   onReview,
+  reviewScope,
 }: {
   reply: Partial<AgentReply>;
   navigate?: (page: string) => void;
   onReview?: (draft: HandoverProposal) => void;
+  reviewScope?: ReviewScope;
 }) {
   const jump = (page: string) => {
     if (navigate) {
@@ -81,7 +84,9 @@ export function AgentResults({
           ))}
         </div>
       )}
-      {reply.actions?.map((action, i) => (
+      {reply.actions?.map((action, i) => action.type === "change-review" ? (
+        <ReviewCard key={action.id} review={action} scope={reviewScope} />
+      ) : (
         <div
           key={i}
           className={`fets-ai-action fets-ai-action-${action.status} border rounded-xl p-3 text-sm`}
@@ -100,7 +105,9 @@ export function AgentResults({
         </div>
       ))}
       {reply.proposals?.map((proposal, i) =>
-        proposal.type === "handover-draft" ? (
+        proposal.type === "change-review" ? (
+          <ReviewCard key={proposal.id} review={proposal} scope={reviewScope} />
+        ) : proposal.type === "handover-draft" ? (
           <div className="fets-ai-proposal border rounded-xl p-3" key={i}>
             <strong>Handover draft · {proposal.day}</strong>
             <p>{proposal.summary}</p>

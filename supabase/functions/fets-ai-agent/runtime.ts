@@ -1,3 +1,4 @@
+import { OPERATION_DEFINITIONS } from './operation-definitions.ts';
 import { TOOL_DECLARATIONS, WRITE_TOOLS } from './catalog.ts';
 import type { Scope } from './core.ts';
 
@@ -13,8 +14,7 @@ export async function loadSettings(db:any,env:Environment):Promise<Settings>{
  return {...row,gemini_model:!row.gemini_model||/^gemini-1\.5-/.test(row.gemini_model)?env.GEMINI_TEXT_MODEL||'gemini-3.1-pro-preview':row.gemini_model,claude_model:row.claude_model||'claude-sonnet-4-6',max_tool_iterations:Math.max(1,Math.min(12,Number(row.max_tool_iterations)||8)),allowed_tools:row.allowed_tools||{}};
 }
 export function permittedTools(settings:Settings,scope:Scope){
- const allow=settings.allowed_tools[scope.role||(scope.admin?'super_admin':'staff')]||settings.allowed_tools.staff||[];
- return TOOL_DECLARATIONS[0].functionDeclarations.filter(tool=>!WRITE_TOOLS.includes(tool.name)||(settings.autonomous_enabled&&!settings.kill_switch&&(allow.includes('*')||allow.includes(tool.name))));
+ return TOOL_DECLARATIONS[0].functionDeclarations.filter(tool=>!WRITE_TOOLS.includes(tool.name)||(settings.autonomous_enabled&&!settings.kill_switch&&Boolean(scope.operations?.includes(tool.name))));
 }
 export async function pinnedContext(db:any,scope:Scope){
  const filter=`scope.eq.global,and(scope.eq.user,scope_ref.eq.${scope.userId})${scope.branch==='global'?'':`,and(scope.eq.branch,scope_ref.eq.${scope.branch})`}`;
@@ -55,5 +55,5 @@ export async function statusFor(db:any,scope:Scope,env:Environment){
  const providers={gemini:Boolean(env.GEMINI_API_KEY),claude:Boolean(env.ANTHROPIC_API_KEY)};
  const [documents,conversations,memory]=await Promise.all([db.from('fets_ai_documents').select('id').limit(1),db.from('fets_ai_conversations').select('id').limit(1),pinnedContext(db,scope)]);
  const databaseReady=!documents.error&&!conversations.error;
- return {ready:databaseReady&&providers[settings.provider],databaseReady,modelReady:providers[settings.provider],admin:scope.admin,branch:scope.branch,provider:settings.provider,settings,providers,textModel:selectedModel(settings),liveModel:env.GEMINI_LIVE_MODEL||'gemini-3.1-flash-live-preview',liveReady:databaseReady&&providers.gemini,writesEnabled:settings.autonomous_enabled&&!settings.kill_switch,allowedActions:permittedTools(settings,scope).filter(t=>WRITE_TOOLS.includes(t.name)).map(t=>t.name),memoryCount:memory.memories.length};
+ return {ready:databaseReady&&providers[settings.provider],databaseReady,modelReady:providers[settings.provider],admin:scope.admin,branch:scope.branch,provider:settings.provider,settings,providers,textModel:selectedModel(settings),liveModel:env.GEMINI_LIVE_MODEL||'gemini-3.1-flash-live-preview',liveReady:databaseReady&&providers.gemini,writesEnabled:settings.autonomous_enabled&&!settings.kill_switch,allowedActions:permittedTools(settings,scope).filter(t=>WRITE_TOOLS.includes(t.name)).map(t=>t.name),allowedOperations:OPERATION_DEFINITIONS.filter(o=>permittedTools(settings,scope).some(t=>t.name===o.name)).map(o=>({name:o.name,label:o.label,module:o.module,review:o.review,applyMode:o.applyMode})),modules:scope.modules||[],capabilities:scope.operations||[],memoryCount:memory.memories.length};
 }

@@ -1,0 +1,3676 @@
+{
+  "inspected_at_utc": "2026-11-05T10:44:11.258382+00:00",
+  "project_id": "qqewusetilxxfvfkmsed",
+  "account": "Primary",
+  "connection_id": "link_6ac746dca4a481919da903ffe67bb168",
+  "working_tree_base": "84e1f1bd042e7dd41d540f77ac413308b4580440",
+  "referenced_ui_commit": "5f017e59dd1f4ab937bbb60d775f03e133e929af",
+  "referenced_deployed_ai_commit": "9fda620c9730f558f88bc1f55a2a1808876d28fb",
+  "method": "Read-only local UI/source inspection plus live information_schema.columns, pg_constraint/pg_get_constraintdef, pg_trigger/pg_get_triggerdef, pg_proc/pg_get_functiondef, pg_policies and pg_class grants/RLS metadata. No business rows, raw permission values, credentials, installs, schema/permission mutations or deployment.",
+  "live_metadata_hashes": {
+    "columns": "9fe505978364fd5623470828c3896175984839046daed474bee1830c1e69a384",
+    "constraints": "41e5ac362c8f51f02a48a708ff3660fb322c2beacc83f2a01bbcf8e932631732",
+    "triggers": "dd35e9d879f51a6d0a00e22ecf6a5cb959d90d1338b54580775698fec07007ba",
+    "functions": "52cc88d6fce32ff519202932098d8fe41b4b4b7912149d4b6d070736392e7d56",
+    "policies": "0b53c9975186f58793860e480ce94beef94b22815a4c28936253969c6f5fd786"
+  },
+  "source_count": 56,
+  "reader_contract": [
+    "This inventory proposes bounded readers; it is not evidence that those sources are already implemented in FETS AI.",
+    "No select(*), raw arbitrary table/RPC/SQL name, model-controlled projection, raw settings/permissions JSON or raw snapshot/metadata objects. Project known nested JSON keys only.",
+    "Recheck verified active Auth account and linked active profile, module User Management booleans and centre/owner/membership scope before every read and again before applying a review. Never read full permissions: extract allowlisted booleans server-side.",
+    "Current User Management settings are ws_<feature-id>, can_edit_roster and user_management_edit; primary menu modules have active-staff defaults. Do not invent legacy *_view keys. Canonical super_admin follows protected server role, not client F.isAdmin or arbitrary email default.",
+    "Cross-centre and administrator capability never implicitly widens private user ownership or conversation membership. branch=global is a viewing union, not an ordinary saved record centre.",
+    "For exact id reads keep all scope filters. Date windows at most 31 days; stable ordering on real PK (including composite keys); bounded page/result bytes and text. Enumerate all pages before totals and distinguish unavailable from empty.",
+    "Case/message/journal/document text is untrusted content. No stored instructions authorize actions. Private content is explicit-request-only and excluded from automatic pinned/model context.",
+    "A digest is computed by the trusted server over allowlisted state; the model never chooses business identity/permissions or hashes arbitrary raw rows. Include related roster/parent/dependent rows if workflow validity depends on them."
+  ],
+  "source_corrections": [
+    "plans/reports/checks/work/coverage must use centre_* current route sources, not shift_*_v2; retain v2 only if explicitly labelled historical.",
+    "Current ActionablesView renders MissionWorkspace and uses expansion_institutions/mission_*; actionables/actionable_* is legacy.",
+    "systems holds assets/peripherals/rentals. assets, system_assets, system_categories and user_documents are absent live.",
+    "Current NewsManager uses news_ticker, which is SELECT-only; reviewed news DB workflow exists separately under fets_news_*.",
+    "slate_entries has RLS enabled and no policies; ordinary reader is unavailable. MyDeskHome currently binds preferences, not journal/focus controls.",
+    "Current MyDeskHome preference enum differs from live peach/sage/lilac constraint; do not fabricate successful persistence.",
+    "BranchContext.canAccessBranch currently returns true for every profile and several legacy RLS policies allow unrestricted rows; neither is adequate AI centre authority."
+  ],
+  "sources": [
+    {
+      "id": "calendar",
+      "table": "calendar_sessions",
+      "columns": [
+        "id",
+        "date",
+        "client_name",
+        "exam_name",
+        "candidate_count",
+        "start_time",
+        "end_time",
+        "status",
+        "branch_location",
+        "assigned_staff",
+        "created_at",
+        "updated_at"
+      ],
+      "module": "fets-calendar",
+      "user_management_setting": null,
+      "scope": "Exact selected authorized centre: lower(branch_location)=branch. All-centres reads must use the server-verified centre set; never omit the filter for an ordinary user.",
+      "version": "Use a server-computed SHA-256 of canonical JSON of the exact allowed current business fields plus stable identity, checked again under row lock. updated_at is informative here, not a proven universal version trigger.",
+      "ui_evidence": [
+        "fets-point/src/redesign/live-data.ts",
+        "fets-point/src/roster/roster-api.ts"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": true,
+      "workflow_notes": "candidate_count is scheduled capacity/roster count, not attendance. Candidate roster import can synchronize calendar totals; preserve save_calendar_roster workflow. Session id is bigint, not UUID."
+    },
+    {
+      "id": "candidate_metadata",
+      "table": "candidates",
+      "columns": [
+        "id",
+        "exam_date",
+        "status",
+        "exam_name",
+        "client_name",
+        "exam_part",
+        "exam_start_time",
+        "branch_location",
+        "created_at",
+        "updated_at"
+      ],
+      "module": "candidate-tracker",
+      "user_management_setting": "ws_candidate-tracker",
+      "scope": "Exact selected authorized centre: lower(branch_location)=branch. All-centres reads must use the server-verified centre set; never omit the filter for an ordinary user.",
+      "version": "Use a server-computed SHA-256 of canonical JSON of the exact allowed current business fields plus stable identity, checked again under row lock. updated_at is informative here, not a proven universal version trigger.",
+      "ui_evidence": [
+        "fets-point/src/roster/roster-api.ts",
+        "fets-point/src/services/api.service.ts"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": true,
+      "workflow_notes": "Default excludes name, phone, confirmation/roster identifiers, address, notes, locker key and attachments. Registration, proof checks and roster imports stay in their workflows. Candidate mutation triggers validate exam provider and synchronize calendar."
+    },
+    {
+      "id": "clients",
+      "table": "clients",
+      "columns": [
+        "id",
+        "name",
+        "color",
+        "created_at",
+        "updated_at"
+      ],
+      "module": "fets-calendar",
+      "user_management_setting": null,
+      "scope": "Shared catalogue; no centre owner. Require active verified staff and the indicated module capability.",
+      "version": "Use a server-computed SHA-256 of canonical JSON of the exact allowed current business fields plus stable identity, checked again under row lock. updated_at is informative here, not a proven universal version trigger.",
+      "ui_evidence": [
+        "fets-point/src/components/ClientControl.tsx"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": true,
+      "workflow_notes": "Client catalogue is shared. ClientControl deletes client_exams before deleting client; FK also cascades. Calendar catalogue reads need no invented client-directory permission. Catalogue management must use User Management authority.",
+      "write_module": "user-management",
+      "write_setting": "ws_user-management",
+      "write_authority": "user_management_edit or canonical super_admin"
+    },
+    {
+      "id": "programmes",
+      "table": "client_exams",
+      "columns": [
+        "id",
+        "client_id",
+        "name",
+        "locations",
+        "created_at"
+      ],
+      "module": "fets-calendar",
+      "user_management_setting": null,
+      "scope": "Shared catalogue; no centre owner. Require active verified staff and the indicated module capability.",
+      "version": "Use a server-computed SHA-256 of canonical JSON of the exact allowed current business fields plus stable identity, checked again under row lock. updated_at is informative here, not a proven universal version trigger.",
+      "ui_evidence": [
+        "fets-point/src/components/ClientControl.tsx"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": true,
+      "workflow_notes": "locations=[] means all locations in current UI; never reinterpret empty as inaccessible. For centre programme availability use locations empty OR selected centre in locations; shared catalogue discovery may list all with locations. FK client_id -> clients.id ON DELETE CASCADE."
+    },
+    {
+      "id": "incidents",
+      "table": "incidents",
+      "columns": [
+        "id",
+        "title",
+        "description",
+        "severity",
+        "status",
+        "category",
+        "assigned_to",
+        "user_id",
+        "is_todo_task",
+        "todo_type",
+        "due_date",
+        "completed_at",
+        "branch_location",
+        "notes",
+        "system_id",
+        "created_at",
+        "updated_at"
+      ],
+      "module": "incident-log",
+      "user_management_setting": "ws_case",
+      "scope": "Exact selected authorized centre: lower(branch_location)=branch. All-centres reads must use the server-verified centre set; never omit the filter for an ordinary user.",
+      "version": "Use a server-computed SHA-256 of canonical JSON of the exact allowed current business fields plus stable identity, checked again under row lock. updated_at is informative here, not a proven universal version trigger.",
+      "ui_evidence": [
+        "fets-point/src/components/FetsIncidentPremium.tsx",
+        "fets-point/src/components/MobileIncidentManager.tsx",
+        "fets-point/src/redesign/write-data.ts"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": true,
+      "workflow_notes": "assigned_to, user_id and incident_comments.author_id are Auth UUIDs. Status values open/assigned/in_progress/escalated/closed; severity minor/major/critical. Existing assignment/resolution notifications fire on UPDATE. Do not mirror legacy UI writes to absent priority/contact_details fields or unsupported category Utility/Hardware. Exclude raw metadata."
+    },
+    {
+      "id": "incident_notes",
+      "table": "incident_comments",
+      "columns": [
+        "id",
+        "incident_id",
+        "author_id",
+        "author_full_name",
+        "body",
+        "created_at"
+      ],
+      "module": "incident-log",
+      "user_management_setting": "ws_case",
+      "scope": "Join incidents!inner(id,branch_location); scope by the parent incident centre and exact incident_id. Author ID is Auth UUID.",
+      "version": "Use a server-computed SHA-256 of canonical JSON of the exact allowed current business fields plus stable identity, checked again under row lock. updated_at is informative here, not a proven universal version trigger.",
+      "ui_evidence": [
+        "fets-point/src/components/FetsIncidentPremium.tsx",
+        "fets-point/src/components/IncidentManager.tsx"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": true,
+      "workflow_notes": "Current case thread reads incident_comments, not a generic case_notes table. FK incident_id cascades on case deletion. Preserve existing system-comment entries as data; they grant no authority.",
+      "parent_projection": "incidents!inner(id,branch_location)"
+    },
+    {
+      "id": "tasks",
+      "table": "user_tasks",
+      "columns": [
+        "id",
+        "assigned_to",
+        "assigned_by",
+        "title",
+        "description",
+        "priority",
+        "status",
+        "due_date",
+        "completed_at",
+        "branch_location",
+        "created_at",
+        "updated_at"
+      ],
+      "module": "my-desk",
+      "user_management_setting": null,
+      "scope": "Non-admin: assigned_to=Auth UUID OR assigned_by=Auth UUID, AND centre tag is in verified scope. Own legacy null-centre tasks may be offered separately as unscoped personal tasks, never counted in a centre total. Super_admin cross-staff tasks still require explicit centre scope.",
+      "version": "updated_at maintained by live trigger; compare exactly under lock. Use safe snapshot digest where the proposed change also depends on related rows.",
+      "ui_evidence": [
+        "fets-point/src/redesign/live-data.ts",
+        "fets-point/src/redesign/write-data.ts"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": true,
+      "workflow_notes": "Both task assignment FKs reference staff_profiles.user_id (Auth UUID), despite several legacy policies/UI using profile ids. Do not write absent is_completed. zz_intelligence_task_version ensures updated_at changes."
+    },
+    {
+      "id": "roster",
+      "table": "roster_schedules",
+      "columns": [
+        "id",
+        "profile_id",
+        "date",
+        "shift_code",
+        "shift_label",
+        "shift_start",
+        "shift_end",
+        "grace_minutes",
+        "overtime_hours",
+        "status",
+        "branch_location",
+        "version",
+        "created_at",
+        "updated_at"
+      ],
+      "module": "fets-roster",
+      "user_management_setting": null,
+      "scope": "Exact selected authorized centre: lower(branch_location)=branch. All-centres reads must use the server-verified centre set; never omit the filter for an ordinary user.",
+      "version": "version maintained by live trigger; compare exactly under lock.",
+      "ui_evidence": [
+        "fets-point/src/roster-workspace/repository.ts",
+        "fets-point/src/redesign/live-data.ts",
+        "fets-point/src/redesign/shift-repository.ts"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": true,
+      "workflow_notes": "profile_id -> staff_profiles.id. Unique(profile_id,date). Preserve custom label/hours/grace. roster_timing_guard increments version, clears hours for nonworking codes and legacy authenticated code-only changes; notify_shift_change sends notifications. Overtime approvals can update this row and affect payroll. Prefer reviewed changes with source snapshots. Restored roster UI derives D1/D2 from saved actual hours; those are display labels, not database shift codes.",
+      "write_authority": "can_edit_roster or canonical super_admin",
+      "safe_join": "staff_profiles(id,full_name,branch_assigned)"
+    },
+    {
+      "id": "roster_types",
+      "table": "roster_shift_types",
+      "columns": [
+        "id",
+        "branch_location",
+        "shift_label",
+        "shift_code",
+        "shift_start",
+        "shift_end",
+        "grace_minutes",
+        "archived",
+        "created_at"
+      ],
+      "module": "fets-roster",
+      "user_management_setting": null,
+      "scope": "Exact selected authorized centre: lower(branch_location)=branch. All-centres reads must use the server-verified centre set; never omit the filter for an ordinary user.",
+      "version": "Use a server-computed SHA-256 of canonical JSON of the exact allowed current business fields plus stable identity, checked again under row lock. updated_at is informative here, not a proven universal version trigger.",
+      "ui_evidence": [
+        "fets-point/src/redesign/RedesignShell.tsx"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": true,
+      "workflow_notes": "Live shift-code constraint is D/HD; valid end>start; grace 0..60; centre calicut/cochin. No updated_at column.",
+      "write_authority": "can_edit_roster or canonical super_admin"
+    },
+    {
+      "id": "plans",
+      "table": "centre_day_plans",
+      "columns": [
+        "id",
+        "branch",
+        "day",
+        "lead_id",
+        "plan",
+        "status",
+        "version",
+        "created_by",
+        "updated_at"
+      ],
+      "module": "handover",
+      "user_management_setting": null,
+      "scope": "branch = selected authorized centre; additionally preserve fets_duty_private.can_read(branch). Global selection is a verified union of authorized centres.",
+      "version": "version maintained by live trigger; compare exactly under lock.",
+      "ui_evidence": [
+        "fets-point/src/redesign/DutyWorkspace.tsx",
+        "fets-point/src/redesign/shift-repository.ts",
+        "fets-point/src/redesign/TheShift.tsx"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": true,
+      "workflow_notes": "Current UI source. Published plans are immutable. Live plan_guard requires 6 continuous 90-minute blocks 08:00\u201317:00, confirmed roster hours, 3 different owners per block, 2 planned breaks per owner, named cover. This differs from flexible shift_days_v2. Publishing/correction belongs to current module review.",
+      "json_projection": {
+        "plan": [
+          "actingLead",
+          "availability[].staff",
+          "availability[].start",
+          "availability[].end",
+          "availability[].confirmed",
+          "blocks[].start",
+          "blocks[].end",
+          "blocks[].owners.front",
+          "blocks[].owners.floor",
+          "blocks[].owners.control",
+          "blocks[].duties.front",
+          "blocks[].duties.floor",
+          "blocks[].duties.control",
+          "breaks[].staff",
+          "breaks[].start",
+          "breaks[].end",
+          "breaks[].cover",
+          "breaks[].note"
+        ]
+      },
+      "write_authority": "current resolved day lead/planner or canonical super_admin, as enforced by existing guards"
+    },
+    {
+      "id": "lead_weeks",
+      "table": "centre_lead_weeks",
+      "columns": [
+        "branch",
+        "week_start",
+        "lead_id",
+        "version",
+        "updated_at"
+      ],
+      "module": "handover",
+      "user_management_setting": null,
+      "scope": "branch = selected authorized centre; additionally preserve fets_duty_private.can_read(branch). Global selection is a verified union of authorized centres.",
+      "version": "version maintained by live trigger; compare exactly under lock.",
+      "ui_evidence": [
+        "fets-point/src/redesign/shift-repository.ts"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": true,
+      "workflow_notes": "Composite PK(branch,week_start), Monday only. Lead must be rostered in that centre during the week. No id column; reader must not order/filter by an invented id."
+    },
+    {
+      "id": "checks",
+      "table": "centre_duty_events",
+      "columns": [
+        "id",
+        "plan_id",
+        "block",
+        "lane",
+        "kind",
+        "due",
+        "actor_id",
+        "note",
+        "created_at"
+      ],
+      "module": "handover",
+      "user_management_setting": null,
+      "scope": "Parent centre_day_plans!inner(id,branch,day); parent.branch = selected authorized centre; preserve can_read(parent.branch). Never fetch child records without the inner parent filter.",
+      "version": "Append-only event identity; digest parent plan+ordered changes+event set for workflow dependencies.",
+      "ui_evidence": [
+        "fets-point/src/redesign/shift-repository.ts",
+        "fets-point/src/redesign/DutyWorkspace.tsx"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": true,
+      "workflow_notes": "Restrict kind to walk/dvr. Live event_guard requires current due window, assigned owner/break cover and current roster; cannot backfill missed checks. Physical attestation stays in module.",
+      "fixed_filter": {
+        "kind": [
+          "walk",
+          "dvr"
+        ]
+      },
+      "parent_projection": "centre_day_plans!inner(id,branch,day)"
+    },
+    {
+      "id": "work",
+      "table": "centre_duty_events",
+      "columns": [
+        "id",
+        "plan_id",
+        "block",
+        "lane",
+        "kind",
+        "due",
+        "actor_id",
+        "note",
+        "created_at"
+      ],
+      "module": "handover",
+      "user_management_setting": null,
+      "scope": "Parent centre_day_plans!inner(id,branch,day); parent.branch = selected authorized centre; preserve can_read(parent.branch). Never fetch child records without the inner parent filter.",
+      "version": "Append-only event identity; digest the parent and ordered relevant event set.",
+      "ui_evidence": [
+        "fets-point/src/redesign/shift-repository.ts",
+        "fets-point/src/redesign/DutyWorkspace.tsx"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": true,
+      "workflow_notes": "Restrict kind to submit/verify/return/support. Owner submits only after block end, same date, with note. Independent lead/super_admin reviews; cannot self-review. Submitted day report closes this workflow.",
+      "fixed_filter": {
+        "kind": [
+          "submit",
+          "verify",
+          "return",
+          "support"
+        ]
+      },
+      "parent_projection": "centre_day_plans!inner(id,branch,day)"
+    },
+    {
+      "id": "coverage",
+      "table": "centre_duty_changes",
+      "columns": [
+        "id",
+        "plan_id",
+        "kind",
+        "block",
+        "lane",
+        "staff_id",
+        "starts",
+        "ends",
+        "shift_start",
+        "shift_end",
+        "reason",
+        "actor_id",
+        "created_at"
+      ],
+      "module": "handover",
+      "user_management_setting": null,
+      "scope": "Parent centre_day_plans!inner(id,branch,day); parent.branch = selected authorized centre; preserve can_read(parent.branch). Never fetch child records without the inner parent filter.",
+      "version": "Append-only; digest parent+ordered coverage changes.",
+      "ui_evidence": [
+        "fets-point/src/redesign/shift-repository.ts",
+        "fets-point/src/redesign/CoverageEditor.tsx"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": true,
+      "workflow_notes": "Current lead/super_admin only. Changes start in a future minute, rostered replacement must cover full period and avoid breaks. Acting lead lasts to 17:00. No rewrite of past ownership; no changes after final report.",
+      "parent_projection": "centre_day_plans!inner(id,branch,day)"
+    },
+    {
+      "id": "reports",
+      "table": "centre_duty_reports",
+      "columns": [
+        "id",
+        "plan_id",
+        "branch",
+        "day",
+        "summary",
+        "followups",
+        "recognition",
+        "submitted_by",
+        "created_at",
+        "acknowledged_at",
+        "acknowledged_by"
+      ],
+      "module": "handover",
+      "user_management_setting": null,
+      "scope": "branch = selected authorized centre; additionally preserve fets_duty_private.can_read(branch). Global selection is a verified union of authorized centres.",
+      "version": "Immutable submission; digest full safe current report plus linked snapshot dependencies. Acknowledgement is a separate guarded transition.",
+      "ui_evidence": [
+        "fets-point/src/redesign/shift-repository.ts",
+        "fets-point/src/redesign/TheShift.tsx"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": true,
+      "workflow_notes": "Only lead/super_admin can submit a published plan, after 17:00 IST. Server snapshots plan/events/coverage/tasks and closes day updates. Acknowledgement super_admin only. Do not send raw snapshot JSON by default; read the bounded current sources and use the stored snapshot only through a separate safe projection."
+    },
+    {
+      "id": "responsibilities",
+      "table": "centre_responsibilities",
+      "columns": [
+        "id",
+        "branch",
+        "area",
+        "title",
+        "details",
+        "frequency",
+        "weekday",
+        "monthday",
+        "owner_id",
+        "backup_id",
+        "position",
+        "active",
+        "expected_result",
+        "due_minute",
+        "priority",
+        "created_at",
+        "updated_at",
+        "updated_by"
+      ],
+      "module": "handover",
+      "user_management_setting": null,
+      "scope": "branch = selected authorized centre; additionally preserve fets_duty_private.can_read(branch). Global selection is a verified union of authorized centres.",
+      "version": "updated_at maintained by live trigger; compare exactly under lock. Use safe snapshot digest where the proposed change also depends on related rows.",
+      "ui_evidence": [
+        "fets-point/src/redesign/shift-blueprint-repository.ts",
+        "fets-point/src/redesign/TheShift.tsx"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": true,
+      "workflow_notes": "Blueprint rows use staff profile IDs for owner/backup. Day jobs derive due rows and fall back to backup when owner is off; missing work rows are not proof of no responsibility. blueprint_guard stamps actor and timestamp; preserve centre.",
+      "write_authority": "leads_day(branch,current IST day) or existing planner/super_admin workflow"
+    },
+    {
+      "id": "day_tasks",
+      "table": "centre_day_tasks",
+      "columns": [
+        "id",
+        "branch",
+        "day",
+        "responsibility_id",
+        "title",
+        "assigned_to",
+        "status",
+        "note",
+        "carried_from",
+        "created_by",
+        "created_at",
+        "done_by",
+        "done_at",
+        "updated_at",
+        "verified_by",
+        "verified_at",
+        "instructions",
+        "expected_result",
+        "due_minute",
+        "priority",
+        "started_at",
+        "completion_note",
+        "support_category",
+        "review_note",
+        "rework_count",
+        "version"
+      ],
+      "module": "handover",
+      "user_management_setting": null,
+      "scope": "branch = selected authorized centre; additionally preserve fets_duty_private.can_read(branch). Global selection is a verified union of authorized centres.",
+      "version": "version maintained by live trigger; compare exactly under lock.",
+      "ui_evidence": [
+        "fets-point/src/redesign/shift-blueprint-repository.ts",
+        "fets-point/src/redesign/TheShift.tsx"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": true,
+      "workflow_notes": "All staff identity fields are profile UUIDs. Owner-only start/completion with nonempty completion_note; leader controls contract/reassignment/carry/skip. Independent lead verifies/returns with note; edited or reassigned completed work reopens. Report submission locks tasks. Triggers preserve attribution, increment version, reset evidence and append activity. Carry operation must preserve both source/carried copy atomically."
+    },
+    {
+      "id": "task_activity",
+      "table": "centre_task_activity",
+      "columns": [
+        "id",
+        "task_id",
+        "branch",
+        "day",
+        "actor_id",
+        "kind",
+        "created_at"
+      ],
+      "module": "handover",
+      "user_management_setting": null,
+      "scope": "branch = selected authorized centre; additionally preserve fets_duty_private.can_read(branch). Global selection is a verified union of authorized centres.",
+      "version": "Append-only metadata; digest current task version plus event identity.",
+      "ui_evidence": [
+        "fets-point/src/redesign/shift-blueprint-repository.ts"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": true,
+      "workflow_notes": "Exclude raw before_state/after_state. Task trigger creates assigned/reassigned/returned/verified/completed/support_requested/resumed/reopened/started/not_needed events; do not create synthetic activity."
+    },
+    {
+      "id": "daily_reports",
+      "table": "centre_daily_reports",
+      "columns": [
+        "id",
+        "branch",
+        "day",
+        "kind",
+        "overall",
+        "exam_client",
+        "expected_sessions",
+        "expected_candidates",
+        "attended",
+        "no_shows",
+        "checks",
+        "issues",
+        "action_taken",
+        "pending",
+        "manager_attention",
+        "submitted_by",
+        "updated_by",
+        "submitted_at",
+        "updated_at"
+      ],
+      "module": "handover",
+      "user_management_setting": null,
+      "scope": "branch = selected authorized centre; additionally preserve fets_duty_private.can_read(branch). Global selection is a verified union of authorized centres.",
+      "version": "updated_at maintained by live trigger; compare exactly under lock. Use safe snapshot digest where the proposed change also depends on related rows.",
+      "ui_evidence": [
+        "fets-point/src/redesign/DailyOperationsReports.tsx",
+        "fets-point/src/redesign/DutyWorkspace.tsx"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": true,
+      "workflow_notes": "Separate current morning/evening operations reports, not centre_duty_reports. Unique(branch,day,kind). No future dates. All checklist entries yes/no. Failed/non-green needs issues; no green if checks fail. Evening attended/no_shows required and individually/together cannot exceed expected. Immutable day/kind/original author. Live branch constraint permits only calicut/cochin.",
+      "json_projection": {
+        "checks": [
+          "systems",
+          "cctv",
+          "rooms",
+          "roster",
+          "duties",
+          "monitoring",
+          "checkin",
+          "cpr",
+          "records",
+          "signedout",
+          "closing"
+        ]
+      }
+    },
+    {
+      "id": "legacy_shift_days",
+      "table": "shift_days_v2",
+      "columns": [
+        "id",
+        "branch",
+        "day",
+        "lead_id",
+        "status",
+        "version",
+        "published_at",
+        "updated_at"
+      ],
+      "module": "handover",
+      "user_management_setting": null,
+      "scope": "branch = selected authorized centre; additionally preserve fets_duty_private.can_read(branch). Global selection is a verified union of authorized centres.",
+      "version": "version maintained by live trigger; compare exactly under lock.",
+      "ui_evidence": [
+        "supabase/functions/fets-ai-agent/catalog.ts"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": false,
+      "workflow_notes": "Exists live and is the previously deployed AI source, but current DutyWorkspace route does not consume it. Do not label these current UI plans or silently fall back when centre_day_plans is empty. Keep explicitly labelled historical-only if retained."
+    },
+    {
+      "id": "attendance",
+      "table": "staff_attendance",
+      "columns": [
+        "id",
+        "staff_id",
+        "date",
+        "check_in",
+        "check_out",
+        "status",
+        "branch_location",
+        "created_at",
+        "updated_at"
+      ],
+      "module": "attn-admin",
+      "user_management_setting": "ws_attn-admin",
+      "scope": "Exact selected authorized centre: lower(branch_location)=branch. All-centres reads must use the server-verified centre set; never omit the filter for an ordinary user. For own My Desk attendance additionally staff_id=current profile id. Cross-staff reads require ws_attn-admin; own reads require my-desk capability.",
+      "version": "updated_at maintained by live trigger; compare exactly under lock. Use safe snapshot digest where the proposed change also depends on related rows.",
+      "ui_evidence": [
+        "fets-point/src/desk-workspace/time-repository.ts",
+        "fets-point/src/redesign/attendance-data.ts",
+        "fets-point/src/redesign/RedesignShell.tsx"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": true,
+      "workflow_notes": "Exclude notes, which stores JSON/device/location/break details. attendance_roster_status calculates late status from current roster start+grace; notes updates can recalculate status. Physical self-check-in/out stays in existing attendance flow; no fabricated proxy attendance."
+    },
+    {
+      "id": "applications",
+      "table": "staff_applications",
+      "columns": [
+        "id",
+        "kind",
+        "status",
+        "applicant_id",
+        "branch",
+        "request_date",
+        "leave_type",
+        "swap_with_id",
+        "swap_date",
+        "new_shift_code",
+        "resolved_by",
+        "resolved_at",
+        "created_at",
+        "workflow_version",
+        "half_day_period",
+        "partner_reply",
+        "partner_replied_at",
+        "version"
+      ],
+      "module": "my-desk",
+      "user_management_setting": null,
+      "scope": "Own applicant_id=current profile id OR (kind=swap AND swap_with_id=current profile id). Review inbox additionally requires roster authority and exact authorized branch. Do not use same-name matching.",
+      "version": "version maintained by live trigger; compare exactly under lock.",
+      "ui_evidence": [
+        "fets-point/src/redesign/live-data.ts",
+        "fets-point/src/redesign/RedesignShell.tsx",
+        "fets-point/src/redesign/write-data.ts"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": true,
+      "workflow_notes": "Default excludes amount/expense_type/receipt_note/reason/admin_reply/roster_snapshot. Locally restored ApplicationsHub uses validated workflow_version=1 submit/resolve for swaps/half-day; other legacy request kinds retain their existing route. Modern version=1 submit/partner reply/resolve functions enforce roster snapshots, future dates, partner acceptance and exact existing roster administrator gate. Never collapse these versions or generically approve. Explicit own request may reveal reason/reply via separately reviewed projection.",
+      "private_columns_explicit_only": [
+        "reason",
+        "admin_reply"
+      ],
+      "write_authority": "existing My Desk workflow; approval via current authorized roster review, not generic status UPDATE"
+    },
+    {
+      "id": "legacy_applications",
+      "table": "leave_requests",
+      "columns": [
+        "id",
+        "user_id",
+        "request_type",
+        "requested_date",
+        "swap_with_user_id",
+        "swap_date",
+        "status",
+        "approved_by",
+        "approved_at",
+        "created_at",
+        "updated_at"
+      ],
+      "module": "my-desk",
+      "user_management_setting": null,
+      "scope": "Own user_id=Auth UUID OR swap_with_user_id=Auth UUID. Manager inbox must require roster authority and join owning staff_profiles(user_id,branch_assigned) for verified centre.",
+      "version": "Use a server-computed SHA-256 of canonical JSON of the exact allowed current business fields plus stable identity, checked again under row lock. updated_at is informative here, not a proven universal version trigger.",
+      "ui_evidence": [
+        "fets-point/src/redesign/live-data.ts",
+        "fets-point/src/redesign/write-data.ts"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": true,
+      "workflow_notes": "Fallback only when staff_applications unavailable, not a second set to double-count. IDs reference staff_profiles.user_id (Auth UUID), not profile id. reason may contain serialized reimbursement and private request data; omit. notify_leave_status emits status notification; UI approval separately writes roster cells."
+    },
+    {
+      "id": "ot_claims",
+      "table": "staff_ot_claims",
+      "columns": [
+        "id",
+        "profile_id",
+        "date",
+        "start_time",
+        "end_time",
+        "ot_hours",
+        "status",
+        "created_at",
+        "updated_at"
+      ],
+      "module": "staff-ot",
+      "user_management_setting": "ws_staff-ot",
+      "scope": "Own profile_id=current profile id; cross-staff only with ws_staff-ot AND staff_profiles!inner(id,branch_assigned) restricted to authorized centre. Claim has no branch column.",
+      "version": "Use a server-computed SHA-256 of canonical JSON of the exact allowed current business fields plus stable identity, checked again under row lock. updated_at is informative here, not a proven universal version trigger.",
+      "ui_evidence": [
+        "fets-point/src/redesign/live-data.ts",
+        "fets-point/src/redesign/write-data.ts",
+        "fets-point/src/redesign/RedesignShell.tsx"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": true,
+      "workflow_notes": "Unique(profile_id,date). Exclude notes/toil_payout/default financial details. ot_claim_roster_hours validates time outside custom roster; approval UI separately updates roster overtime/TP status, TOIL balances and notifications. Payroll reads roster. Use current workflow handoff for approval/payout and do not bypass side effects.",
+      "parent_projection": "staff_profiles!inner(id,branch_assigned)"
+    },
+    {
+      "id": "payroll_handoff",
+      "table": null,
+      "columns": [],
+      "module": "staff-ot",
+      "user_management_setting": "ws_staff-ot",
+      "scope": "No model-readable payroll rows or permissions blob.",
+      "version": "No projection.",
+      "ui_evidence": [
+        "fets-point/src/redesign/payroll.ts",
+        "fets-point/src/redesign/live-data.ts",
+        "fets-point/src/redesign/write-data.ts"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": false,
+      "workflow_notes": "Payroll lives partly under staff_profiles.permissions.monthly_payroll, alongside other financial keys/rates; table-level permissions read would expose it. Existing payroll UI owns calculation/review/publication. Return module handoff only."
+    },
+    {
+      "id": "institutions",
+      "table": "expansion_institutions",
+      "columns": [
+        "id",
+        "name",
+        "district",
+        "lab_seat_capacity",
+        "stage",
+        "assigned_staff_id",
+        "has_dual_isp",
+        "has_static_ip",
+        "has_ups_generator",
+        "has_cctv_coverage",
+        "has_air_conditioning",
+        "has_secure_candidate_storage",
+        "is_acca_ready",
+        "website",
+        "actionables_reference",
+        "created_at",
+        "updated_at"
+      ],
+      "module": "actionables",
+      "user_management_setting": null,
+      "scope": "Shared active-staff mission; no branch column and district is not a centre. Preserve fets_is_active_staff() and current actionables project scope. Do not add an invented branch filter.",
+      "version": "updated_at maintained by live trigger; compare exactly under lock. Use safe snapshot digest where the proposed change also depends on related rows.",
+      "ui_evidence": [
+        "fets-point/src/redesign/ActionablesView.tsx",
+        "fets-point/src/redesign/MissionWorkspace.tsx"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": true,
+      "workflow_notes": "Current institution UI. Default excludes address, private primary contact fields and free-text notes; contact edits require explicit institution workflow. New institution trigger seeds stages. mission_delete_institution deletes duties before institution (duty FK otherwise SET NULL); related results cascade. Keep delete a reviewed operation.",
+      "private_columns_explicit_only": [
+        "address",
+        "primary_contact_name",
+        "primary_contact_phone",
+        "primary_contact_email",
+        "primary_contact_role",
+        "notes"
+      ]
+    },
+    {
+      "id": "institution_stages",
+      "table": "mission_institution_stages",
+      "columns": [
+        "id",
+        "institution_id",
+        "stage_key",
+        "position",
+        "title",
+        "instructions",
+        "contact_script",
+        "completion_note",
+        "completed_at",
+        "completed_by",
+        "created_at"
+      ],
+      "module": "actionables",
+      "user_management_setting": null,
+      "scope": "Join parent expansion_institutions!inner(id); shared authorized mission scope, exact institution id for edits.",
+      "version": "Use a server-computed SHA-256 of canonical JSON of the exact allowed current business fields plus stable identity, checked again under row lock. updated_at is informative here, not a proven universal version trigger. Include ordered dependent duty ids/statuses when completing/reopening/deleting stage.",
+      "ui_evidence": [
+        "fets-point/src/redesign/MissionWorkspace.tsx"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": true,
+      "workflow_notes": "Unique(institution_id,position) and (institution_id,stage_key). Open duties prevent stage completion. Handover completion requires all institution duties done and earlier stages complete. Completion stamps profile id/time; reopening a non-handover stage can reopen delivery. No updated_at column."
+    },
+    {
+      "id": "mission_duties",
+      "table": "mission_work_items",
+      "columns": [
+        "id",
+        "institution_id",
+        "institution_stage_id",
+        "title",
+        "district",
+        "owner_id",
+        "due_date",
+        "due_at",
+        "status",
+        "blocker",
+        "instructions",
+        "impact",
+        "report_to_id",
+        "report_instructions",
+        "created_by",
+        "created_at",
+        "updated_by",
+        "updated_at",
+        "reference_task_key",
+        "source_team"
+      ],
+      "module": "actionables",
+      "user_management_setting": null,
+      "scope": "Shared authorized mission; no branch. For personal due duties additionally owner_id=current profile id. Parent institution scope must remain visible for institution-bound items.",
+      "version": "updated_at maintained by live trigger; compare exactly under lock. Use safe snapshot digest where the proposed change also depends on related rows.",
+      "ui_evidence": [
+        "fets-point/src/redesign/MissionWorkspace.tsx",
+        "fets-point/src/redesign/shift-blueprint-repository.ts"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": true,
+      "workflow_notes": "owner_id profile UUID; report_to_id Auth UUID. New/changed owner and recipient must be active; stage must belong to same institution. due_at sets due_date in IST. Results are authoritative for status/blocker; use result workflow rather than only updating duty status. New/reopened duties can reopen stage/delivery."
+    },
+    {
+      "id": "mission_results",
+      "table": "mission_task_updates",
+      "columns": [
+        "id",
+        "work_item_id",
+        "content",
+        "status",
+        "follow_up_date",
+        "follow_up_at",
+        "reported",
+        "report_to_id",
+        "report_method",
+        "author_id",
+        "edited_by",
+        "created_at",
+        "updated_at"
+      ],
+      "module": "actionables",
+      "user_management_setting": null,
+      "scope": "Join mission_work_items!inner(id,institution_id) then authorized parent institution; exact work_item_id for history.",
+      "version": "updated_at maintained by live trigger; compare exactly under lock. Use safe snapshot digest where the proposed change also depends on related rows. Compare dependent parent duty version and latest result set for destructive/status changes.",
+      "ui_evidence": [
+        "fets-point/src/redesign/MissionWorkspace.tsx"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": true,
+      "workflow_notes": "Trigger stamps profile author/editor and derives report_to_id/report_method from duty. follow_up_at -> IST follow_up_date. Latest result ORDER BY created_at DESC,id DESC updates duty status/blocker; delete recomputes and can reopen stage/delivery. reported is human assertion of external reporting; no automatic message send."
+    },
+    {
+      "id": "systems",
+      "table": "systems",
+      "columns": [
+        "id",
+        "branch_location",
+        "system_type",
+        "name",
+        "status",
+        "last_checked",
+        "created_at",
+        "updated_at",
+        "last_os_update",
+        "supported_clients",
+        "serial_number",
+        "is_rented",
+        "rent_start_date",
+        "rent_end_date",
+        "it_item_type",
+        "category_name"
+      ],
+      "module": "system-manager",
+      "user_management_setting": "ws_system-manager",
+      "scope": "Exact selected authorized centre: lower(branch_location)=branch. All-centres reads must use the server-verified centre set; never omit the filter for an ordinary user.",
+      "version": "Use a server-computed SHA-256 of canonical JSON of the exact allowed current business fields plus stable identity, checked again under row lock. updated_at is informative here, not a proven universal version trigger.",
+      "ui_evidence": [
+        "fets-point/src/components/SystemManager.tsx"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": true,
+      "workflow_notes": "Assets/peripherals/rentals are rows in systems, not an assets table. Omit ip_address, raw specs and installed_software JSON by default; a reviewed diagnostic projection could select named non-secret fields. System action UI separately inserts system_logs. Auto incident path also marks fault/logs and must preserve both effects."
+    },
+    {
+      "id": "assets",
+      "table": "systems",
+      "columns": [
+        "id",
+        "branch_location",
+        "system_type",
+        "name",
+        "status",
+        "serial_number",
+        "is_rented",
+        "rent_start_date",
+        "rent_end_date",
+        "it_item_type",
+        "category_name",
+        "created_at",
+        "updated_at"
+      ],
+      "module": "system-manager",
+      "user_management_setting": "ws_system-manager",
+      "scope": "Exact selected authorized centre: lower(branch_location)=branch. All-centres reads must use the server-verified centre set; never omit the filter for an ordinary user.",
+      "version": "Use a server-computed SHA-256 of canonical JSON of the exact allowed current business fields plus stable identity, checked again under row lock. updated_at is informative here, not a proven universal version trigger.",
+      "ui_evidence": [
+        "fets-point/src/components/SystemManager.tsx"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": true,
+      "workflow_notes": "Same source as systems, with fixed system_type IN(peripheral,rented). No assets/system_assets table. Transfer needs source and destination centre authority and a location_transfer system log.",
+      "fixed_filter": {
+        "system_type": [
+          "peripheral",
+          "rented"
+        ]
+      }
+    },
+    {
+      "id": "system_logs",
+      "table": "system_logs",
+      "columns": [
+        "id",
+        "system_id",
+        "log_type",
+        "user_id",
+        "created_at"
+      ],
+      "module": "system-manager",
+      "user_management_setting": "ws_system-manager",
+      "scope": "systems!inner(id,branch_location); parent system centre is in authorized scope.",
+      "version": "Use a server-computed SHA-256 of canonical JSON of the exact allowed current business fields plus stable identity, checked again under row lock. updated_at is informative here, not a proven universal version trigger.",
+      "ui_evidence": [
+        "fets-point/src/components/SystemManager.tsx"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": true,
+      "workflow_notes": "Default excludes description: auto-incident descriptions can contain internal IP/diagnostics. Explicit permitted log detail needs separately redacted description projection. system_id FK cascades on deletion. System operations write logs in application code, not a DB trigger.",
+      "parent_projection": "systems!inner(id,branch_location)"
+    },
+    {
+      "id": "lost_found",
+      "table": "lost_found_items",
+      "columns": [
+        "id",
+        "description",
+        "found_date",
+        "found_location",
+        "status",
+        "returned_date",
+        "branch_location",
+        "created_at",
+        "category",
+        "item_type",
+        "reference_no",
+        "found_by_staff_id",
+        "perishable",
+        "locker"
+      ],
+      "module": "system-manager",
+      "user_management_setting": "ws_system-manager",
+      "scope": "Exact selected authorized centre: lower(branch_location)=branch. All-centres reads must use the server-verified centre set; never omit the filter for an ordinary user.",
+      "version": "Use a server-computed SHA-256 of canonical JSON of the exact allowed current business fields plus stable identity, checked again under row lock. updated_at is informative here, not a proven universal version trigger.",
+      "ui_evidence": [
+        "fets-point/src/components/LostAndFound.tsx",
+        "fets-point/src/redesign/live-data.ts",
+        "fets-point/src/redesign/write-data.ts"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": true,
+      "workflow_notes": "Exclude candidate_details/contact_info/returned_to_name/returned_to_contact/returned_to_id_proof/image_url/exam_details/cctv_dvr_no. Actual top-level lost-and-found route currently opens TeamChatWorkspace; lost item component/drawer remains separate. Return/claim requires identity/physical handoff in existing workflow."
+    },
+    {
+      "id": "announcements",
+      "table": "news_ticker",
+      "columns": [
+        "id",
+        "content",
+        "priority",
+        "branch_location",
+        "expires_at",
+        "is_active",
+        "created_by",
+        "created_at"
+      ],
+      "module": "news-manager",
+      "user_management_setting": "ws_news-manager",
+      "scope": "is_active=true AND (expires_at IS NULL OR expires_at>now) AND fets_news_private.can_read(coalesce(branch_location,global)); selected-centre read may include global announcements.",
+      "version": "Use a server-computed SHA-256 of canonical JSON of the exact allowed current business fields plus stable identity, checked again under row lock. updated_at is informative here, not a proven universal version trigger.",
+      "ui_evidence": [
+        "fets-point/src/hooks/useNewsManager.ts",
+        "fets-point/src/components/NewsManager.tsx"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": true,
+      "workflow_notes": "Current UI source, but live authenticated and service_role grants are SELECT only. Legacy UI insert/update/delete cannot be made to work by AI fallback. Reviewed fets_news_* workflow is separate; return unavailable/handoff honestly for legacy publishing."
+    },
+    {
+      "id": "news_posts",
+      "table": "fets_news_posts",
+      "columns": [
+        "id",
+        "draft_id",
+        "kind",
+        "document",
+        "source_label",
+        "source_date",
+        "source_url",
+        "approved_by",
+        "published_at",
+        "supersedes_id",
+        "state",
+        "withdrawn_at",
+        "withdrawal_reason"
+      ],
+      "module": "news-manager",
+      "user_management_setting": "ws_news-manager",
+      "scope": "Require fets_news_private.can_read(document->>branch). Normal live feed additionally state=live and expiry valid. Restrict document.branch to selected centre or global.",
+      "version": "Use a server-computed SHA-256 of canonical JSON of the exact allowed current business fields plus stable identity, checked again under row lock. updated_at is informative here, not a proven universal version trigger.",
+      "ui_evidence": [
+        "fets-point/src/components/NewsManager.tsx (DB workflow not currently consumed here)"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": true,
+      "workflow_notes": "Existing reviewed DB workflow. Published content immutable except reasoned withdrawal/supersession. Publish must use signed-in configured approver and verified source/draft; never treat successful draft as published.",
+      "json_projection": {
+        "document": [
+          "title",
+          "summary",
+          "body",
+          "action",
+          "why",
+          "branch",
+          "client_id",
+          "programme_id",
+          "priority",
+          "requires_ack",
+          "effective_on",
+          "expires_at",
+          "related_page"
+        ]
+      }
+    },
+    {
+      "id": "news_drafts",
+      "table": "fets_news_drafts",
+      "columns": [
+        "id",
+        "source_id",
+        "kind",
+        "document",
+        "status",
+        "revision_of",
+        "version",
+        "review_note",
+        "created_by",
+        "updated_by",
+        "created_at",
+        "updated_at"
+      ],
+      "module": "news-manager",
+      "user_management_setting": "ws_news-manager",
+      "scope": "Require both ws_news-manager and fets_news_private.editor(); do not equate module access or super_admin alone with configured approver. Filter safe document branch.",
+      "version": "version maintained by live trigger; compare exactly under lock.",
+      "ui_evidence": [
+        "fets-point/src/components/NewsManager.tsx (DB workflow not currently consumed here)"
+      ],
+      "explicit_request_only": true,
+      "reader_candidate": true,
+      "workflow_notes": "Draft identity/source immutable; published draft immutable; collector creates unpublished drafts only. Deletion is forbidden; reject retains history.",
+      "json_projection": {
+        "document": [
+          "title",
+          "summary",
+          "body",
+          "action",
+          "why",
+          "branch",
+          "client_id",
+          "programme_id",
+          "priority",
+          "requires_ack",
+          "effective_on",
+          "expires_at",
+          "related_page"
+        ]
+      }
+    },
+    {
+      "id": "news_sources",
+      "table": "fets_news_sources",
+      "columns": [
+        "id",
+        "kind",
+        "source_label",
+        "domain",
+        "source_date",
+        "public_url",
+        "verification",
+        "collected_at"
+      ],
+      "module": "news-manager",
+      "user_management_setting": "ws_news-manager",
+      "scope": "Require ws_news-manager AND configured editor; sources have no centre and must be accessed through the permitted news workflow.",
+      "version": "Use a server-computed SHA-256 of canonical JSON of the exact allowed current business fields plus stable identity, checked again under row lock. updated_at is informative here, not a proven universal version trigger.",
+      "ui_evidence": [
+        "fets-point/src/components/NewsManager.tsx (DB workflow not currently consumed here)"
+      ],
+      "explicit_request_only": true,
+      "reader_candidate": true,
+      "workflow_notes": "Metadata only. Exclude sender/private_reference/external_key/excerpt. Immutable collector records; collector must satisfy approved domain/source URL/future-date guards."
+    },
+    {
+      "id": "journal",
+      "table": "desk_journal_entries",
+      "columns": [
+        "user_id",
+        "entry_date",
+        "version",
+        "updated_at"
+      ],
+      "module": "my-desk",
+      "user_management_setting": null,
+      "scope": "user_id = authenticated Auth UUID, including super_admin; selected centre never widens personal ownership.",
+      "version": "version maintained by live trigger; compare exactly under lock.",
+      "ui_evidence": [
+        "fets-point/src/redesign/desk-data.ts",
+        "fets-point/src/redesign/MyDeskHome.tsx"
+      ],
+      "explicit_request_only": true,
+      "reader_candidate": true,
+      "workflow_notes": "Metadata only by default; note/mood require explicit own-entry request. Repository exists but current social MyDeskHome does not bind journal controls. desk_save_journal is the versioned owner workflow; never hydrate another user journal for admin.",
+      "private_columns_explicit_only": [
+        "note",
+        "mood"
+      ]
+    },
+    {
+      "id": "desk_preferences",
+      "table": "desk_preferences",
+      "columns": [
+        "user_id",
+        "cover",
+        "version",
+        "updated_at"
+      ],
+      "module": "my-desk",
+      "user_management_setting": null,
+      "scope": "user_id = authenticated Auth UUID, including super_admin; selected centre never widens personal ownership.",
+      "version": "version maintained by live trigger; compare exactly under lock.",
+      "ui_evidence": [
+        "fets-point/src/redesign/desk-data.ts",
+        "fets-point/src/redesign/MyDeskHome.tsx"
+      ],
+      "explicit_request_only": true,
+      "reader_candidate": true,
+      "workflow_notes": "Composite personal setting with no id. Current UI chooses solar/noir/emerald/velvet but live constraint only peach/sage/lilac; these current UI values cannot be assumed persistable. No source/schema mutation made by this audit."
+    },
+    {
+      "id": "desk_focus",
+      "table": "desk_focus_sessions",
+      "columns": [
+        "user_id",
+        "id",
+        "duration_minutes",
+        "completed_at",
+        "created_at"
+      ],
+      "module": "my-desk",
+      "user_management_setting": null,
+      "scope": "user_id = authenticated Auth UUID, including super_admin; selected centre never widens personal ownership.",
+      "version": "Immutable focus record key(user_id,id), on-conflict ignore duplicate.",
+      "ui_evidence": [
+        "fets-point/src/redesign/desk-data.ts"
+      ],
+      "explicit_request_only": true,
+      "reader_candidate": true,
+      "workflow_notes": "Repository exists; current social MyDeskHome does not bind focus records. Explicit personal data only."
+    },
+    {
+      "id": "slate",
+      "table": "slate_entries",
+      "columns": [
+        "id",
+        "user_id",
+        "title",
+        "category",
+        "is_starred",
+        "is_pinned",
+        "created_at",
+        "updated_at"
+      ],
+      "module": "my-desk",
+      "user_management_setting": null,
+      "scope": "user_id = authenticated Auth UUID, including super_admin; selected centre never widens personal ownership.",
+      "version": "Use a server-computed SHA-256 of canonical JSON of the exact allowed current business fields plus stable identity, checked again under row lock. updated_at is informative here, not a proven universal version trigger.",
+      "ui_evidence": [
+        "fets-point/src/components/Slate.tsx"
+      ],
+      "explicit_request_only": true,
+      "reader_candidate": false,
+      "workflow_notes": "Live RLS enabled with zero policies: authenticated reads are denied even to owner. Do not service-bypass. content/mood private and excluded by default. No current Slate mount found in App/RedesignShell.",
+      "private_columns_explicit_only": [
+        "content",
+        "mood"
+      ]
+    },
+    {
+      "id": "personal_documents_handoff",
+      "table": null,
+      "columns": [],
+      "module": "my-desk",
+      "user_management_setting": null,
+      "scope": "user_id = authenticated Auth UUID, including super_admin; selected centre never widens personal ownership.",
+      "version": "No verified dedicated table.",
+      "ui_evidence": [
+        "fets-point/src/redesign/MyDeskHome.tsx",
+        "fets-point/src/components/Slate.tsx"
+      ],
+      "explicit_request_only": true,
+      "reader_candidate": false,
+      "workflow_notes": "No user_documents table exists. Avoid treating fets_vault content/file_url as generic safe documents. Only explicit user-provided document content or separately approved published knowledge can be read."
+    },
+    {
+      "id": "conversations",
+      "table": "conversations",
+      "columns": [
+        "id",
+        "name",
+        "is_group",
+        "created_by",
+        "created_at",
+        "updated_at"
+      ],
+      "module": "fets-chat",
+      "user_management_setting": "ws_fets-chat",
+      "scope": "Require ws_fets-chat and actual conversation_members membership for current Auth/profile identity, using chat_is_member; no super_admin membership bypass and no centre-based substitute. Explicit conversation id for content.",
+      "version": "updated_at maintained by live trigger; compare exactly under lock. Use safe snapshot digest where the proposed change also depends on related rows.",
+      "ui_evidence": [
+        "fets-point/src/components/Chat/chat-api.ts",
+        "fets-point/src/components/Chat/TeamChatWorkspace.tsx"
+      ],
+      "explicit_request_only": true,
+      "reader_candidate": true,
+      "workflow_notes": "Metadata only; omit last_message_preview and default activity details. conversation created_by/member user_id/message sender_id are staff profile IDs (FK verified). chat_ids_of supports legacy Auth/profile equivalence. Private conversation content is never auto-context."
+    },
+    {
+      "id": "conversation_members",
+      "table": "conversation_members",
+      "columns": [
+        "id",
+        "conversation_id",
+        "user_id",
+        "is_admin",
+        "joined_at"
+      ],
+      "module": "fets-chat",
+      "user_management_setting": "ws_fets-chat",
+      "scope": "Require ws_fets-chat and actual conversation_members membership for current Auth/profile identity, using chat_is_member; no super_admin membership bypass and no centre-based substitute. Explicit conversation id for content.",
+      "version": "Use a server-computed SHA-256 of canonical JSON of the exact allowed current business fields plus stable identity, checked again under row lock. updated_at is informative here, not a proven universal version trigger.",
+      "ui_evidence": [
+        "fets-point/src/components/Chat/chat-api.ts"
+      ],
+      "explicit_request_only": true,
+      "reader_candidate": true,
+      "workflow_notes": "Do not include last_read_at/is_muted by default. Group member changes use chat_add_members/chat_remove_member and group admin checks; selected members must resolve active profiles. chat_leave promotes oldest remaining member if last admin leaves."
+    },
+    {
+      "id": "messages",
+      "table": "messages",
+      "columns": [
+        "id",
+        "conversation_id",
+        "sender_id",
+        "type",
+        "is_deleted",
+        "is_edited",
+        "created_at",
+        "updated_at",
+        "edited_at",
+        "reply_to"
+      ],
+      "module": "fets-chat",
+      "user_management_setting": "ws_fets-chat",
+      "scope": "Require ws_fets-chat and actual conversation_members membership for current Auth/profile identity, using chat_is_member; no super_admin membership bypass and no centre-based substitute. Explicit conversation id for content.",
+      "version": "updated_at maintained by live trigger; compare exactly under lock. Use safe snapshot digest where the proposed change also depends on related rows.",
+      "ui_evidence": [
+        "fets-point/src/components/Chat/chat-api.ts"
+      ],
+      "explicit_request_only": true,
+      "reader_candidate": true,
+      "workflow_notes": "Metadata projection only. content only for explicit current user request in selected member conversation; exclude raw metadata/file_path. chat_send validates membership/reply scope, sets caller sender, updates conversation preview/time and sender read marker. edit/delete only own messages and through existing RPCs; deletion is soft.",
+      "private_columns_explicit_only": [
+        "content"
+      ]
+    },
+    {
+      "id": "chat_work_items",
+      "table": "chat_work_items",
+      "columns": [
+        "id",
+        "conversation_id",
+        "message_id",
+        "kind",
+        "title",
+        "owner_id",
+        "due_date",
+        "status",
+        "created_by",
+        "created_at"
+      ],
+      "module": "fets-chat",
+      "user_management_setting": "ws_fets-chat",
+      "scope": "Require ws_fets-chat and actual conversation_members membership for current Auth/profile identity, using chat_is_member; no super_admin membership bypass and no centre-based substitute. Explicit conversation id for content.",
+      "version": "Use a server-computed SHA-256 of canonical JSON of the exact allowed current business fields plus stable identity, checked again under row lock. updated_at is informative here, not a proven universal version trigger.",
+      "ui_evidence": [
+        "fets-point/src/components/Chat/TeamChatWorkspace.tsx"
+      ],
+      "explicit_request_only": true,
+      "reader_candidate": true,
+      "workflow_notes": "Preserve is_conversation_member and fets_is_active_staff. message belongs to same conversation and owner is conversation member. chat_work_guard stamps actor and immutable origin."
+    },
+    {
+      "id": "saved_messages",
+      "table": "chat_saved_messages",
+      "columns": [
+        "user_id",
+        "message_id",
+        "created_at"
+      ],
+      "module": "fets-chat",
+      "user_management_setting": "ws_fets-chat",
+      "scope": "user_id = authenticated Auth UUID, including super_admin; selected centre never widens personal ownership. AND linked message conversation must still pass chat_is_member.",
+      "version": "Append-only saved key; recheck linked membership.",
+      "ui_evidence": [
+        "fets-point/src/components/Chat/TeamChatWorkspace.tsx"
+      ],
+      "explicit_request_only": true,
+      "reader_candidate": true,
+      "workflow_notes": "Own saved-message metadata only. Message content still requires explicit selected-conversation access; saved rows grant no enduring access after leaving a group."
+    },
+    {
+      "id": "staff",
+      "table": "staff_profiles",
+      "columns": [
+        "id",
+        "user_id",
+        "full_name",
+        "branch_assigned",
+        "is_active",
+        "is_online"
+      ],
+      "module": "profile",
+      "user_management_setting": null,
+      "scope": "Active staff only (is_active=true); ordinary readers must retain verified directory centre scope, optionally shared global/all assigned staff. Admin global directory is an explicit authorized scope. Always return only this minimal directory whitelist.",
+      "version": "Use a server-computed SHA-256 of canonical JSON of the exact allowed current business fields plus stable identity, checked again under row lock. updated_at is informative here, not a proven universal version trigger.",
+      "ui_evidence": [
+        "fets-point/src/redesign/MyDeskHome.tsx",
+        "fets-point/src/redesign/live-data.ts"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": true,
+      "workflow_notes": "ID is profile UUID; user_id is Auth UUID. Online flag is reported UI state, not attendance. Exclude permissions, emails/phones, rates/fets_cash, push_token, notes/remarks and private growth/certification data. Profile security trigger maintains protected actionables membership; never bypass it."
+    },
+    {
+      "id": "profile_metadata",
+      "table": "staff_profiles",
+      "columns": [
+        "id",
+        "user_id",
+        "full_name",
+        "role",
+        "department",
+        "position",
+        "branch_assigned",
+        "is_active",
+        "created_at",
+        "updated_at"
+      ],
+      "module": "profile",
+      "user_management_setting": null,
+      "scope": "Resolve the current active staff_profiles.id from user_id = authenticated Auth UUID; never accept a model-supplied actor ID.; own profile row only unless explicit staff-management module authority and centre scope.",
+      "version": "Use a server-computed SHA-256 of canonical JSON of the exact allowed current business fields plus stable identity, checked again under row lock. updated_at is informative here, not a proven universal version trigger.",
+      "ui_evidence": [
+        "fets-point/src/components/FetsProfile.tsx",
+        "fets-point/src/components/UserManagement.tsx"
+      ],
+      "explicit_request_only": true,
+      "reader_candidate": true,
+      "workflow_notes": "Metadata only; no raw permissions or payroll/rate values. Role/account/access changes require separate reviewed/handoff operations with protected server authority. Do not allow current user actor/profile identity changes."
+    },
+    {
+      "id": "delegations",
+      "table": "staff_branch_delegations",
+      "columns": [
+        "id",
+        "profile_id",
+        "allowed_branch",
+        "start_date",
+        "end_date",
+        "created_at"
+      ],
+      "module": "branch-delegation",
+      "user_management_setting": "ws_branch-delegation",
+      "scope": "Own profile_id for visibility; managing other delegations needs ws_branch-delegation plus existing administrator authority. Current active interval is start_date<=IST date<=end_date; requested allowed_branch must be explicitly authorized.",
+      "version": "Use a server-computed SHA-256 of canonical JSON of the exact allowed current business fields plus stable identity, checked again under row lock. updated_at is informative here, not a proven universal version trigger.",
+      "ui_evidence": [
+        "fets-point/src/App.tsx",
+        "fets-point/src/redesign/live-data.ts",
+        "fets-point/src/redesign/write-data.ts"
+      ],
+      "explicit_request_only": true,
+      "reader_candidate": true,
+      "workflow_notes": "Delegation changes access and are sensitive reviewed/module-handoff actions. Read data is not authority to grant. Legacy RLS allows authenticated ALL, so backend operation must independently authorize. No updated_at/version column."
+    },
+    {
+      "id": "vault_metadata",
+      "table": "fets_vault",
+      "columns": [
+        "id",
+        "user_id",
+        "title",
+        "category",
+        "type",
+        "priority",
+        "is_confidential",
+        "is_deleted",
+        "created_at",
+        "updated_at"
+      ],
+      "module": "access-hub",
+      "user_management_setting": "ws_access-hub",
+      "scope": "user_id = authenticated Auth UUID, including super_admin; selected centre never widens personal ownership. Require ws_access-hub; metadata access never grants other staff vault ownership.",
+      "version": "Use a server-computed SHA-256 of canonical JSON of the exact allowed current business fields plus stable identity, checked again under row lock. updated_at is informative here, not a proven universal version trigger.",
+      "ui_evidence": [
+        "fets-point/src/components/AccessHub.tsx",
+        "fets-point/src/redesign/live-data.ts"
+      ],
+      "explicit_request_only": true,
+      "reader_candidate": true,
+      "workflow_notes": "Metadata only. Exclude username/password/prof_email/prof_email_password/url/other_urls/notes/tags/contact_numbers/custom_fields/description/content/file_url/site_id/author_id. Secret entry, viewing and credential workflow stay in Access Hub."
+    },
+    {
+      "id": "quick_access_metadata",
+      "table": "quick_access_items",
+      "columns": [
+        "id",
+        "owner_id",
+        "client_slug",
+        "field_type",
+        "label",
+        "sort_order",
+        "is_global",
+        "created_at",
+        "updated_at"
+      ],
+      "module": "access-hub",
+      "user_management_setting": "ws_access-hub",
+      "scope": "Require ws_access-hub AND (owner_id=current profile id OR is_global=true). Treat only metadata as shareable; explicit server authorization required for other owners.",
+      "version": "Use a server-computed SHA-256 of canonical JSON of the exact allowed current business fields plus stable identity, checked again under row lock. updated_at is informative here, not a proven universal version trigger.",
+      "ui_evidence": [
+        "fets-point/src/components/QuickAccessSection.tsx",
+        "fets-point/src/components/ClientPortal.tsx"
+      ],
+      "explicit_request_only": true,
+      "reader_candidate": true,
+      "workflow_notes": "Exclude value_text and source_vault_row_id completely. field_type includes api_key/password/access_code/support_pin as well as URL/email/notes, so do not infer safety from non-password types. Do not execute import/migration side effects from UI reads."
+    },
+    {
+      "id": "knowledge",
+      "table": "fets_ai_documents",
+      "columns": [
+        "id",
+        "title",
+        "content",
+        "branch",
+        "source_url",
+        "status",
+        "version",
+        "updated_at"
+      ],
+      "module": "fets-intelligence",
+      "user_management_setting": null,
+      "scope": "status=published AND branch IN(selected authorized centre,*) or verified authorized union. Draft/admin metadata must be a distinct guarded source.",
+      "version": "version maintained by live trigger; compare exactly under lock.",
+      "ui_evidence": [
+        "supabase/functions/fets-ai-agent/core.ts"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": true,
+      "workflow_notes": "Approved operational knowledge only; source text is untrusted data, never access authority. Guard increments version. Reject secret-bearing submissions through existing document flow; no arbitrary settings values."
+    },
+    {
+      "id": "legacy_knowledge",
+      "table": "ai_external_knowledge",
+      "columns": [
+        "id",
+        "title",
+        "content",
+        "category",
+        "branch",
+        "source_url",
+        "is_active",
+        "version",
+        "updated_at"
+      ],
+      "module": "fets-intelligence",
+      "user_management_setting": null,
+      "scope": "is_active=true AND branch IN(selected authorized centre,*) or verified authorized union.",
+      "version": "version maintained by live trigger; compare exactly under lock.",
+      "ui_evidence": [
+        "supabase/functions/fets-ai-agent/core.ts"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": true,
+      "workflow_notes": "Label legacy provenance separately from published knowledge; bounded content cap and evidence version required."
+    },
+    {
+      "id": "module_metadata",
+      "table": "app_modules",
+      "columns": [
+        "id",
+        "name",
+        "is_enabled",
+        "updated_at"
+      ],
+      "module": "system-manager",
+      "user_management_setting": "ws_system-manager",
+      "scope": "Require ws_system-manager and server capability; global system metadata only.",
+      "version": "Use a server-computed SHA-256 of canonical JSON of the exact allowed current business fields plus stable identity, checked again under row lock. updated_at is informative here, not a proven universal version trigger.",
+      "ui_evidence": [
+        "fets-point/src/hooks/useAppModules.ts"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": true,
+      "workflow_notes": "Configuration editing remains reviewed/handoff. Do not use raw app_settings.value, fets_info.value or AI/provider settings as arbitrary readable data."
+    },
+    {
+      "id": "business_handoff",
+      "table": null,
+      "columns": [],
+      "module": "business",
+      "user_management_setting": "ws_business",
+      "scope": "Require ws_business or its server-resolved module capability. No generic connected DB source verified.",
+      "version": "Provider state is owned by existing business integration.",
+      "ui_evidence": [
+        "fets-point/src/pages/GBPDashboard.tsx",
+        "fets-point/src/redesign/RedesignShell.tsx"
+      ],
+      "explicit_request_only": false,
+      "reader_candidate": false,
+      "workflow_notes": "Reviews/publishing/account linking/provider tokens are outside generic source reads; existing module must perform authenticated provider workflows. Do not fabricate published/replied status."
+    }
+  ],
+  "live_trigger_evidence": [
+    {
+      "table_name": "ai_external_knowledge",
+      "tgname": "intelligence_knowledge_guard",
+      "definition": "CREATE TRIGGER intelligence_knowledge_guard BEFORE INSERT OR UPDATE ON public.ai_external_knowledge FOR EACH ROW EXECUTE FUNCTION fets_ai_private.knowledge_guard()",
+      "function_name": "knowledge_guard"
+    },
+    {
+      "table_name": "candidates",
+      "tgname": "candidates_exam_provider_guard",
+      "definition": "CREATE TRIGGER candidates_exam_provider_guard BEFORE INSERT OR UPDATE OF client_name, exam_name ON public.candidates FOR EACH ROW EXECUTE FUNCTION fets_roster_private.validate_exam_provider()",
+      "function_name": "validate_exam_provider"
+    },
+    {
+      "table_name": "candidates",
+      "tgname": "candidates_roster_delete_sync",
+      "definition": "CREATE TRIGGER candidates_roster_delete_sync AFTER DELETE ON public.candidates REFERENCING OLD TABLE AS roster_old FOR EACH STATEMENT EXECUTE FUNCTION fets_roster_private.sync_changed_roster()",
+      "function_name": "sync_changed_roster"
+    },
+    {
+      "table_name": "candidates",
+      "tgname": "candidates_roster_insert_sync",
+      "definition": "CREATE TRIGGER candidates_roster_insert_sync AFTER INSERT ON public.candidates REFERENCING NEW TABLE AS roster_new FOR EACH STATEMENT EXECUTE FUNCTION fets_roster_private.sync_changed_roster()",
+      "function_name": "sync_changed_roster"
+    },
+    {
+      "table_name": "candidates",
+      "tgname": "candidates_roster_update_sync",
+      "definition": "CREATE TRIGGER candidates_roster_update_sync AFTER UPDATE ON public.candidates REFERENCING OLD TABLE AS roster_old NEW TABLE AS roster_new FOR EACH STATEMENT EXECUTE FUNCTION fets_roster_private.sync_changed_roster()",
+      "function_name": "sync_changed_roster"
+    },
+    {
+      "table_name": "centre_daily_reports",
+      "tgname": "centre_daily_reports_guard",
+      "definition": "CREATE TRIGGER centre_daily_reports_guard BEFORE INSERT OR UPDATE ON public.centre_daily_reports FOR EACH ROW EXECUTE FUNCTION fets_duty_private.daily_report_guard()",
+      "function_name": "daily_report_guard"
+    },
+    {
+      "table_name": "centre_day_plans",
+      "tgname": "centre_plan_guard",
+      "definition": "CREATE TRIGGER centre_plan_guard BEFORE INSERT OR UPDATE ON public.centre_day_plans FOR EACH ROW EXECUTE FUNCTION fets_duty_private.plan_guard()",
+      "function_name": "plan_guard"
+    },
+    {
+      "table_name": "centre_day_tasks",
+      "tgname": "centre_day_task_contract_guard",
+      "definition": "CREATE TRIGGER centre_day_task_contract_guard BEFORE INSERT OR UPDATE ON public.centre_day_tasks FOR EACH ROW EXECUTE FUNCTION fets_duty_private.task_contract_guard()",
+      "function_name": "task_contract_guard"
+    },
+    {
+      "table_name": "centre_day_tasks",
+      "tgname": "centre_day_task_guard",
+      "definition": "CREATE TRIGGER centre_day_task_guard BEFORE INSERT OR UPDATE ON public.centre_day_tasks FOR EACH ROW EXECUTE FUNCTION fets_duty_private.day_task_guard()",
+      "function_name": "day_task_guard"
+    },
+    {
+      "table_name": "centre_day_tasks",
+      "tgname": "centre_day_task_review_guard",
+      "definition": "CREATE TRIGGER centre_day_task_review_guard BEFORE INSERT OR DELETE OR UPDATE ON public.centre_day_tasks FOR EACH ROW EXECUTE FUNCTION fets_duty_private.day_task_review_guard()",
+      "function_name": "day_task_review_guard"
+    },
+    {
+      "table_name": "centre_day_tasks",
+      "tgname": "centre_task_activity",
+      "definition": "CREATE TRIGGER centre_task_activity AFTER INSERT OR DELETE OR UPDATE ON public.centre_day_tasks FOR EACH ROW EXECUTE FUNCTION fets_duty_private.task_activity()",
+      "function_name": "task_activity"
+    },
+    {
+      "table_name": "centre_duty_changes",
+      "tgname": "centre_change_guard",
+      "definition": "CREATE TRIGGER centre_change_guard BEFORE INSERT ON public.centre_duty_changes FOR EACH ROW EXECUTE FUNCTION fets_duty_private.change_guard()",
+      "function_name": "change_guard"
+    },
+    {
+      "table_name": "centre_duty_events",
+      "tgname": "centre_event_guard",
+      "definition": "CREATE TRIGGER centre_event_guard BEFORE INSERT ON public.centre_duty_events FOR EACH ROW EXECUTE FUNCTION fets_duty_private.event_guard()",
+      "function_name": "event_guard"
+    },
+    {
+      "table_name": "centre_duty_reports",
+      "tgname": "centre_report_guard",
+      "definition": "CREATE TRIGGER centre_report_guard BEFORE INSERT OR UPDATE ON public.centre_duty_reports FOR EACH ROW EXECUTE FUNCTION fets_duty_private.report_guard()",
+      "function_name": "report_guard"
+    },
+    {
+      "table_name": "centre_duty_reports",
+      "tgname": "centre_report_task_reviews",
+      "definition": "CREATE TRIGGER centre_report_task_reviews BEFORE INSERT ON public.centre_duty_reports FOR EACH ROW EXECUTE FUNCTION fets_duty_private.report_task_reviews()",
+      "function_name": "report_task_reviews"
+    },
+    {
+      "table_name": "centre_lead_weeks",
+      "tgname": "centre_lead_guard",
+      "definition": "CREATE TRIGGER centre_lead_guard BEFORE INSERT OR UPDATE ON public.centre_lead_weeks FOR EACH ROW EXECUTE FUNCTION fets_duty_private.lead_guard()",
+      "function_name": "lead_guard"
+    },
+    {
+      "table_name": "centre_responsibilities",
+      "tgname": "centre_blueprint_guard",
+      "definition": "CREATE TRIGGER centre_blueprint_guard BEFORE INSERT OR UPDATE ON public.centre_responsibilities FOR EACH ROW EXECUTE FUNCTION fets_duty_private.blueprint_guard()",
+      "function_name": "blueprint_guard"
+    },
+    {
+      "table_name": "chat_work_items",
+      "tgname": "chat_work_guard",
+      "definition": "CREATE TRIGGER chat_work_guard BEFORE INSERT OR UPDATE ON public.chat_work_items FOR EACH ROW EXECUTE FUNCTION chat_work_guard()",
+      "function_name": "chat_work_guard"
+    },
+    {
+      "table_name": "conversations",
+      "tgname": "update_conversations_updated_at",
+      "definition": "CREATE TRIGGER update_conversations_updated_at BEFORE UPDATE ON public.conversations FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()",
+      "function_name": "update_updated_at_column"
+    },
+    {
+      "table_name": "expansion_institutions",
+      "tgname": "expansion_institutions_updated_at",
+      "definition": "CREATE TRIGGER expansion_institutions_updated_at BEFORE UPDATE ON public.expansion_institutions FOR EACH ROW EXECUTE FUNCTION set_updated_at()",
+      "function_name": "set_updated_at"
+    },
+    {
+      "table_name": "expansion_institutions",
+      "tgname": "mission_catalogue_origin_guard",
+      "definition": "CREATE TRIGGER mission_catalogue_origin_guard BEFORE INSERT OR DELETE OR UPDATE ON public.expansion_institutions FOR EACH ROW EXECUTE FUNCTION mission_catalogue_origin_guard()",
+      "function_name": "mission_catalogue_origin_guard"
+    },
+    {
+      "table_name": "expansion_institutions",
+      "tgname": "mission_new_institution_stages",
+      "definition": "CREATE TRIGGER mission_new_institution_stages AFTER INSERT ON public.expansion_institutions FOR EACH ROW EXECUTE FUNCTION mission_new_institution_stages()",
+      "function_name": "mission_new_institution_stages"
+    },
+    {
+      "table_name": "fets_ai_documents",
+      "tgname": "fets_ai_document_version",
+      "definition": "CREATE TRIGGER fets_ai_document_version BEFORE INSERT OR UPDATE ON public.fets_ai_documents FOR EACH ROW EXECUTE FUNCTION fets_duty_private.fets_ai_document_version()",
+      "function_name": "fets_ai_document_version"
+    },
+    {
+      "table_name": "fets_news_drafts",
+      "tgname": "news_draft_guard",
+      "definition": "CREATE TRIGGER news_draft_guard BEFORE INSERT OR DELETE OR UPDATE ON public.fets_news_drafts FOR EACH ROW EXECUTE FUNCTION fets_news_private.draft_guard()",
+      "function_name": "draft_guard"
+    },
+    {
+      "table_name": "fets_news_posts",
+      "tgname": "news_post_guard",
+      "definition": "CREATE TRIGGER news_post_guard BEFORE INSERT OR DELETE OR UPDATE ON public.fets_news_posts FOR EACH ROW EXECUTE FUNCTION fets_news_private.post_guard()",
+      "function_name": "post_guard"
+    },
+    {
+      "table_name": "fets_news_sources",
+      "tgname": "news_source_guard",
+      "definition": "CREATE TRIGGER news_source_guard BEFORE INSERT OR DELETE OR UPDATE ON public.fets_news_sources FOR EACH ROW EXECUTE FUNCTION fets_news_private.source_guard()",
+      "function_name": "source_guard"
+    },
+    {
+      "table_name": "incidents",
+      "tgname": "trigger_notify_incident_assignment",
+      "definition": "CREATE TRIGGER trigger_notify_incident_assignment AFTER UPDATE ON public.incidents FOR EACH ROW EXECUTE FUNCTION notify_incident_assignment()",
+      "function_name": "notify_incident_assignment"
+    },
+    {
+      "table_name": "incidents",
+      "tgname": "trigger_notify_incident_resolved",
+      "definition": "CREATE TRIGGER trigger_notify_incident_resolved AFTER UPDATE ON public.incidents FOR EACH ROW EXECUTE FUNCTION notify_incident_resolved()",
+      "function_name": "notify_incident_resolved"
+    },
+    {
+      "table_name": "leave_requests",
+      "tgname": "trigger_notify_leave_status",
+      "definition": "CREATE TRIGGER trigger_notify_leave_status AFTER UPDATE ON public.leave_requests FOR EACH ROW EXECUTE FUNCTION notify_leave_status()",
+      "function_name": "notify_leave_status"
+    },
+    {
+      "table_name": "messages",
+      "tgname": "update_conversation_on_new_message",
+      "definition": "CREATE TRIGGER update_conversation_on_new_message AFTER INSERT ON public.messages FOR EACH ROW EXECUTE FUNCTION update_conversation_last_message()",
+      "function_name": "update_conversation_last_message"
+    },
+    {
+      "table_name": "messages",
+      "tgname": "update_messages_updated_at",
+      "definition": "CREATE TRIGGER update_messages_updated_at BEFORE UPDATE ON public.messages FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()",
+      "function_name": "update_updated_at_column"
+    },
+    {
+      "table_name": "mission_institution_stages",
+      "tgname": "mission_project_stage_scope_guard",
+      "definition": "CREATE TRIGGER mission_project_stage_scope_guard BEFORE UPDATE ON public.mission_institution_stages FOR EACH ROW EXECUTE FUNCTION mission_project_stage_scope_guard()",
+      "function_name": "mission_project_stage_scope_guard"
+    },
+    {
+      "table_name": "mission_institution_stages",
+      "tgname": "mission_reopen_delivery",
+      "definition": "CREATE TRIGGER mission_reopen_delivery AFTER UPDATE ON public.mission_institution_stages FOR EACH ROW EXECUTE FUNCTION mission_reopen_delivery()",
+      "function_name": "mission_reopen_delivery"
+    },
+    {
+      "table_name": "mission_institution_stages",
+      "tgname": "mission_stage_completion_guard",
+      "definition": "CREATE TRIGGER mission_stage_completion_guard BEFORE INSERT OR UPDATE ON public.mission_institution_stages FOR EACH ROW EXECUTE FUNCTION mission_stage_completion_guard()",
+      "function_name": "mission_stage_completion_guard"
+    },
+    {
+      "table_name": "mission_task_updates",
+      "tgname": "mission_sync_task_result",
+      "definition": "CREATE TRIGGER mission_sync_task_result AFTER INSERT OR DELETE OR UPDATE ON public.mission_task_updates FOR EACH ROW EXECUTE FUNCTION mission_sync_task_result()",
+      "function_name": "mission_sync_task_result"
+    },
+    {
+      "table_name": "mission_task_updates",
+      "tgname": "mission_task_update_guard",
+      "definition": "CREATE TRIGGER mission_task_update_guard BEFORE INSERT OR UPDATE ON public.mission_task_updates FOR EACH ROW EXECUTE FUNCTION mission_task_update_guard()",
+      "function_name": "mission_task_update_guard"
+    },
+    {
+      "table_name": "mission_work_items",
+      "tgname": "mission_reference_task_guard",
+      "definition": "CREATE TRIGGER mission_reference_task_guard BEFORE INSERT OR UPDATE ON public.mission_work_items FOR EACH ROW EXECUTE FUNCTION mission_reference_task_guard()",
+      "function_name": "mission_reference_task_guard"
+    },
+    {
+      "table_name": "mission_work_items",
+      "tgname": "mission_reopen_stage_for_work",
+      "definition": "CREATE TRIGGER mission_reopen_stage_for_work AFTER INSERT OR UPDATE ON public.mission_work_items FOR EACH ROW EXECUTE FUNCTION mission_reopen_stage_for_work()",
+      "function_name": "mission_reopen_stage_for_work"
+    },
+    {
+      "table_name": "mission_work_items",
+      "tgname": "mission_simple_task_guard",
+      "definition": "CREATE TRIGGER mission_simple_task_guard BEFORE INSERT OR UPDATE ON public.mission_work_items FOR EACH ROW EXECUTE FUNCTION mission_simple_task_guard()",
+      "function_name": "mission_simple_task_guard"
+    },
+    {
+      "table_name": "roster_schedules",
+      "tgname": "roster_timing_guard",
+      "definition": "CREATE TRIGGER roster_timing_guard BEFORE INSERT OR UPDATE ON public.roster_schedules FOR EACH ROW EXECUTE FUNCTION roster_timing_guard()",
+      "function_name": "roster_timing_guard"
+    },
+    {
+      "table_name": "roster_schedules",
+      "tgname": "trigger_notify_shift_change",
+      "definition": "CREATE TRIGGER trigger_notify_shift_change AFTER UPDATE ON public.roster_schedules FOR EACH ROW EXECUTE FUNCTION notify_shift_change()",
+      "function_name": "notify_shift_change"
+    },
+    {
+      "table_name": "shift_days_v2",
+      "tgname": "shift_day_guard_v2",
+      "definition": "CREATE TRIGGER shift_day_guard_v2 BEFORE INSERT OR UPDATE ON public.shift_days_v2 FOR EACH ROW EXECUTE FUNCTION fets_duty_private.shift_day_guard_v2()",
+      "function_name": "shift_day_guard_v2"
+    },
+    {
+      "table_name": "shift_days_v2",
+      "tgname": "shift_day_history_v2",
+      "definition": "CREATE TRIGGER shift_day_history_v2 AFTER INSERT OR UPDATE ON public.shift_days_v2 FOR EACH ROW EXECUTE FUNCTION fets_duty_private.shift_day_history_v2()",
+      "function_name": "shift_day_history_v2"
+    },
+    {
+      "table_name": "staff_applications",
+      "tgname": "desk_application_guard",
+      "definition": "CREATE TRIGGER desk_application_guard BEFORE INSERT OR UPDATE ON public.staff_applications FOR EACH ROW EXECUTE FUNCTION desk_workspace_private.application_guard()",
+      "function_name": "application_guard"
+    },
+    {
+      "table_name": "staff_attendance",
+      "tgname": "attendance_roster_status",
+      "definition": "CREATE TRIGGER attendance_roster_status BEFORE INSERT OR UPDATE ON public.staff_attendance FOR EACH ROW EXECUTE FUNCTION attendance_roster_status()",
+      "function_name": "attendance_roster_status"
+    },
+    {
+      "table_name": "staff_attendance",
+      "tgname": "set_staff_attendance_updated_at",
+      "definition": "CREATE TRIGGER set_staff_attendance_updated_at BEFORE UPDATE ON public.staff_attendance FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()",
+      "function_name": "update_updated_at_column"
+    },
+    {
+      "table_name": "staff_ot_claims",
+      "tgname": "ot_claim_roster_hours",
+      "definition": "CREATE TRIGGER ot_claim_roster_hours BEFORE INSERT OR UPDATE ON public.staff_ot_claims FOR EACH ROW EXECUTE FUNCTION ot_claim_roster_hours()",
+      "function_name": "ot_claim_roster_hours"
+    },
+    {
+      "table_name": "staff_profiles",
+      "tgname": "actionables_profile_security_guard",
+      "definition": "CREATE TRIGGER actionables_profile_security_guard AFTER INSERT OR DELETE OR UPDATE ON public.staff_profiles FOR EACH ROW EXECUTE FUNCTION fets_actionables_private.profile_security_guard()",
+      "function_name": "profile_security_guard"
+    },
+    {
+      "table_name": "user_tasks",
+      "tgname": "update_user_tasks_updated_at",
+      "definition": "CREATE TRIGGER update_user_tasks_updated_at BEFORE UPDATE ON public.user_tasks FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()",
+      "function_name": "update_updated_at_column"
+    },
+    {
+      "table_name": "user_tasks",
+      "tgname": "zz_intelligence_task_version",
+      "definition": "CREATE TRIGGER zz_intelligence_task_version BEFORE UPDATE ON public.user_tasks FOR EACH ROW EXECUTE FUNCTION fets_ai_private.task_version()",
+      "function_name": "task_version"
+    }
+  ],
+  "live_constraint_evidence": [
+    {
+      "table_name": "calendar_sessions",
+      "conname": "calendar_sessions_status_check",
+      "contype": "c",
+      "definition": "CHECK ((status = ANY (ARRAY['scheduled'::text, 'in_progress'::text, 'completed'::text, 'cancelled'::text])))"
+    },
+    {
+      "table_name": "calendar_sessions",
+      "conname": "sessions_branch_location_check",
+      "contype": "c",
+      "definition": "CHECK ((branch_location = ANY (ARRAY['calicut'::text, 'cochin'::text])))"
+    },
+    {
+      "table_name": "candidates",
+      "conname": "candidates_roster_source_check",
+      "contype": "c",
+      "definition": "CHECK ((source = ANY (ARRAY['upload'::text, 'manual'::text, 'tracker'::text])))"
+    },
+    {
+      "table_name": "candidates",
+      "conname": "candidates_status_check",
+      "contype": "c",
+      "definition": "CHECK ((status = ANY (ARRAY['registration'::text, 'registered'::text, 'checked_in'::text, 'in_progress'::text, 'completed'::text, 'no_show'::text, 'cancelled'::text])))"
+    },
+    {
+      "table_name": "candidates",
+      "conname": "candidates_confirmation_number_key",
+      "contype": "u",
+      "definition": "UNIQUE (confirmation_number)"
+    },
+    {
+      "table_name": "centre_daily_reports",
+      "conname": "centre_daily_reports_action_taken_check",
+      "contype": "c",
+      "definition": "CHECK ((length(action_taken) <= 2000))"
+    },
+    {
+      "table_name": "centre_daily_reports",
+      "conname": "centre_daily_reports_attended_check",
+      "contype": "c",
+      "definition": "CHECK (((attended >= 0) AND (attended <= 5000)))"
+    },
+    {
+      "table_name": "centre_daily_reports",
+      "conname": "centre_daily_reports_branch_check",
+      "contype": "c",
+      "definition": "CHECK ((branch = ANY (ARRAY['calicut'::text, 'cochin'::text])))"
+    },
+    {
+      "table_name": "centre_daily_reports",
+      "conname": "centre_daily_reports_check",
+      "contype": "c",
+      "definition": "CHECK ((((kind = 'morning'::text) AND (attended IS NULL) AND (no_shows IS NULL)) OR ((kind = 'evening'::text) AND (attended IS NOT NULL) AND (no_shows IS NOT NULL))))"
+    },
+    {
+      "table_name": "centre_daily_reports",
+      "conname": "centre_daily_reports_check1",
+      "contype": "c",
+      "definition": "CHECK (((attended IS NULL) OR (expected_candidates IS NULL) OR (attended <= expected_candidates)))"
+    },
+    {
+      "table_name": "centre_daily_reports",
+      "conname": "centre_daily_reports_check2",
+      "contype": "c",
+      "definition": "CHECK (((no_shows IS NULL) OR (expected_candidates IS NULL) OR (no_shows <= expected_candidates)))"
+    },
+    {
+      "table_name": "centre_daily_reports",
+      "conname": "centre_daily_reports_check3",
+      "contype": "c",
+      "definition": "CHECK (((attended IS NULL) OR (no_shows IS NULL) OR (expected_candidates IS NULL) OR ((attended + no_shows) <= expected_candidates)))"
+    },
+    {
+      "table_name": "centre_daily_reports",
+      "conname": "centre_daily_reports_checks_check",
+      "contype": "c",
+      "definition": "CHECK ((jsonb_typeof(checks) = 'object'::text))"
+    },
+    {
+      "table_name": "centre_daily_reports",
+      "conname": "centre_daily_reports_exam_client_check",
+      "contype": "c",
+      "definition": "CHECK (((length(btrim(exam_client)) >= 1) AND (length(btrim(exam_client)) <= 160)))"
+    },
+    {
+      "table_name": "centre_daily_reports",
+      "conname": "centre_daily_reports_expected_candidates_check",
+      "contype": "c",
+      "definition": "CHECK (((expected_candidates >= 0) AND (expected_candidates <= 5000)))"
+    },
+    {
+      "table_name": "centre_daily_reports",
+      "conname": "centre_daily_reports_expected_sessions_check",
+      "contype": "c",
+      "definition": "CHECK (((expected_sessions >= 0) AND (expected_sessions <= 30)))"
+    },
+    {
+      "table_name": "centre_daily_reports",
+      "conname": "centre_daily_reports_issues_check",
+      "contype": "c",
+      "definition": "CHECK ((length(issues) <= 2000))"
+    },
+    {
+      "table_name": "centre_daily_reports",
+      "conname": "centre_daily_reports_kind_check",
+      "contype": "c",
+      "definition": "CHECK ((kind = ANY (ARRAY['morning'::text, 'evening'::text])))"
+    },
+    {
+      "table_name": "centre_daily_reports",
+      "conname": "centre_daily_reports_no_shows_check",
+      "contype": "c",
+      "definition": "CHECK (((no_shows >= 0) AND (no_shows <= 5000)))"
+    },
+    {
+      "table_name": "centre_daily_reports",
+      "conname": "centre_daily_reports_overall_check",
+      "contype": "c",
+      "definition": "CHECK ((overall = ANY (ARRAY['green'::text, 'yellow'::text, 'red'::text])))"
+    },
+    {
+      "table_name": "centre_daily_reports",
+      "conname": "centre_daily_reports_pending_check",
+      "contype": "c",
+      "definition": "CHECK ((length(pending) <= 2000))"
+    },
+    {
+      "table_name": "centre_daily_reports",
+      "conname": "centre_daily_reports_submitted_by_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (submitted_by) REFERENCES staff_profiles(id)"
+    },
+    {
+      "table_name": "centre_daily_reports",
+      "conname": "centre_daily_reports_updated_by_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (updated_by) REFERENCES staff_profiles(id)"
+    },
+    {
+      "table_name": "centre_daily_reports",
+      "conname": "centre_daily_reports_branch_day_kind_key",
+      "contype": "u",
+      "definition": "UNIQUE (branch, day, kind)"
+    },
+    {
+      "table_name": "centre_day_plans",
+      "conname": "centre_day_plans_branch_check",
+      "contype": "c",
+      "definition": "CHECK (((branch = lower(branch)) AND (branch <> ALL (ARRAY['global'::text, '*'::text, 'all'::text]))))"
+    },
+    {
+      "table_name": "centre_day_plans",
+      "conname": "centre_day_plans_plan_check",
+      "contype": "c",
+      "definition": "CHECK (((jsonb_typeof(plan) = 'object'::text) AND (octet_length((plan)::text) <= 30000)))"
+    },
+    {
+      "table_name": "centre_day_plans",
+      "conname": "centre_day_plans_status_check",
+      "contype": "c",
+      "definition": "CHECK ((status = ANY (ARRAY['draft'::text, 'published'::text])))"
+    },
+    {
+      "table_name": "centre_day_plans",
+      "conname": "centre_day_plans_version_check",
+      "contype": "c",
+      "definition": "CHECK ((version > 0))"
+    },
+    {
+      "table_name": "centre_day_plans",
+      "conname": "centre_day_plans_created_by_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (created_by) REFERENCES auth.users(id)"
+    },
+    {
+      "table_name": "centre_day_plans",
+      "conname": "centre_day_plans_lead_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (lead_id) REFERENCES staff_profiles(id)"
+    },
+    {
+      "table_name": "centre_day_plans",
+      "conname": "centre_day_plans_branch_day_key",
+      "contype": "u",
+      "definition": "UNIQUE (branch, day)"
+    },
+    {
+      "table_name": "centre_day_tasks",
+      "conname": "centre_day_tasks_branch_check",
+      "contype": "c",
+      "definition": "CHECK (((branch = lower(branch)) AND (branch <> ALL (ARRAY['global'::text, '*'::text, 'all'::text]))))"
+    },
+    {
+      "table_name": "centre_day_tasks",
+      "conname": "centre_day_tasks_completion_note_check",
+      "contype": "c",
+      "definition": "CHECK ((length(completion_note) <= 2000))"
+    },
+    {
+      "table_name": "centre_day_tasks",
+      "conname": "centre_day_tasks_due_minute_check",
+      "contype": "c",
+      "definition": "CHECK (((due_minute >= 0) AND (due_minute <= 1439)))"
+    },
+    {
+      "table_name": "centre_day_tasks",
+      "conname": "centre_day_tasks_expected_result_check",
+      "contype": "c",
+      "definition": "CHECK ((length(expected_result) <= 2000))"
+    },
+    {
+      "table_name": "centre_day_tasks",
+      "conname": "centre_day_tasks_instructions_check",
+      "contype": "c",
+      "definition": "CHECK ((length(instructions) <= 2000))"
+    },
+    {
+      "table_name": "centre_day_tasks",
+      "conname": "centre_day_tasks_note_check",
+      "contype": "c",
+      "definition": "CHECK ((length(note) <= 2000))"
+    },
+    {
+      "table_name": "centre_day_tasks",
+      "conname": "centre_day_tasks_priority_check",
+      "contype": "c",
+      "definition": "CHECK ((priority = ANY (ARRAY['normal'::text, 'important'::text])))"
+    },
+    {
+      "table_name": "centre_day_tasks",
+      "conname": "centre_day_tasks_review_note_check",
+      "contype": "c",
+      "definition": "CHECK ((length(review_note) <= 2000))"
+    },
+    {
+      "table_name": "centre_day_tasks",
+      "conname": "centre_day_tasks_rework_count_check",
+      "contype": "c",
+      "definition": "CHECK ((rework_count >= 0))"
+    },
+    {
+      "table_name": "centre_day_tasks",
+      "conname": "centre_day_tasks_status_check",
+      "contype": "c",
+      "definition": "CHECK ((status = ANY (ARRAY['open'::text, 'done'::text, 'blocked'::text, 'carried'::text, 'skipped'::text])))"
+    },
+    {
+      "table_name": "centre_day_tasks",
+      "conname": "centre_day_tasks_support_category_check",
+      "contype": "c",
+      "definition": "CHECK ((support_category = ANY (ARRAY[''::text, 'clarity'::text, 'training'::text, 'workload'::text, 'equipment'::text, 'dependency'::text, 'other'::text])))"
+    },
+    {
+      "table_name": "centre_day_tasks",
+      "conname": "centre_day_tasks_title_check",
+      "contype": "c",
+      "definition": "CHECK (((length(btrim(title)) >= 1) AND (length(btrim(title)) <= 200)))"
+    },
+    {
+      "table_name": "centre_day_tasks",
+      "conname": "centre_day_tasks_version_check",
+      "contype": "c",
+      "definition": "CHECK ((version > 0))"
+    },
+    {
+      "table_name": "centre_day_tasks",
+      "conname": "centre_day_tasks_assigned_to_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (assigned_to) REFERENCES staff_profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "centre_day_tasks",
+      "conname": "centre_day_tasks_carried_from_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (carried_from) REFERENCES centre_day_tasks(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "centre_day_tasks",
+      "conname": "centre_day_tasks_created_by_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (created_by) REFERENCES staff_profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "centre_day_tasks",
+      "conname": "centre_day_tasks_done_by_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (done_by) REFERENCES staff_profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "centre_day_tasks",
+      "conname": "centre_day_tasks_responsibility_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (responsibility_id) REFERENCES centre_responsibilities(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "centre_day_tasks",
+      "conname": "centre_day_tasks_verified_by_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (verified_by) REFERENCES staff_profiles(id)"
+    },
+    {
+      "table_name": "centre_day_tasks",
+      "conname": "centre_day_tasks_branch_day_responsibility_id_key",
+      "contype": "u",
+      "definition": "UNIQUE (branch, day, responsibility_id)"
+    },
+    {
+      "table_name": "centre_duty_changes",
+      "conname": "centre_duty_changes_block_check",
+      "contype": "c",
+      "definition": "CHECK (((block >= 0) AND (block <= 5)))"
+    },
+    {
+      "table_name": "centre_duty_changes",
+      "conname": "centre_duty_changes_check",
+      "contype": "c",
+      "definition": "CHECK ((((ends >= 481) AND (ends <= 1020)) AND (ends > starts)))"
+    },
+    {
+      "table_name": "centre_duty_changes",
+      "conname": "centre_duty_changes_check1",
+      "contype": "c",
+      "definition": "CHECK ((((shift_end >= 1) AND (shift_end <= 1440)) AND (shift_end > shift_start)))"
+    },
+    {
+      "table_name": "centre_duty_changes",
+      "conname": "centre_duty_changes_check2",
+      "contype": "c",
+      "definition": "CHECK ((((kind = 'coverage'::text) AND (block IS NOT NULL) AND (lane IS NOT NULL)) OR ((kind = 'lead'::text) AND (block IS NULL) AND (lane IS NULL))))"
+    },
+    {
+      "table_name": "centre_duty_changes",
+      "conname": "centre_duty_changes_kind_check",
+      "contype": "c",
+      "definition": "CHECK ((kind = ANY (ARRAY['coverage'::text, 'lead'::text])))"
+    },
+    {
+      "table_name": "centre_duty_changes",
+      "conname": "centre_duty_changes_lane_check",
+      "contype": "c",
+      "definition": "CHECK ((lane = ANY (ARRAY['front'::text, 'floor'::text, 'control'::text])))"
+    },
+    {
+      "table_name": "centre_duty_changes",
+      "conname": "centre_duty_changes_reason_check",
+      "contype": "c",
+      "definition": "CHECK (((length(TRIM(BOTH FROM reason)) >= 5) AND (length(TRIM(BOTH FROM reason)) <= 2000)))"
+    },
+    {
+      "table_name": "centre_duty_changes",
+      "conname": "centre_duty_changes_shift_start_check",
+      "contype": "c",
+      "definition": "CHECK (((shift_start >= 0) AND (shift_start <= 1439)))"
+    },
+    {
+      "table_name": "centre_duty_changes",
+      "conname": "centre_duty_changes_starts_check",
+      "contype": "c",
+      "definition": "CHECK (((starts >= 480) AND (starts <= 1019)))"
+    },
+    {
+      "table_name": "centre_duty_changes",
+      "conname": "centre_duty_changes_actor_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (actor_id) REFERENCES staff_profiles(id)"
+    },
+    {
+      "table_name": "centre_duty_changes",
+      "conname": "centre_duty_changes_plan_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (plan_id) REFERENCES centre_day_plans(id)"
+    },
+    {
+      "table_name": "centre_duty_changes",
+      "conname": "centre_duty_changes_staff_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (staff_id) REFERENCES staff_profiles(id)"
+    },
+    {
+      "table_name": "centre_duty_events",
+      "conname": "centre_duty_events_block_check",
+      "contype": "c",
+      "definition": "CHECK (((block >= 0) AND (block <= 5)))"
+    },
+    {
+      "table_name": "centre_duty_events",
+      "conname": "centre_duty_events_due_check",
+      "contype": "c",
+      "definition": "CHECK (((due >= 0) AND (due <= 1440)))"
+    },
+    {
+      "table_name": "centre_duty_events",
+      "conname": "centre_duty_events_kind_check",
+      "contype": "c",
+      "definition": "CHECK ((kind = ANY (ARRAY['walk'::text, 'dvr'::text, 'submit'::text, 'verify'::text, 'return'::text, 'support'::text])))"
+    },
+    {
+      "table_name": "centre_duty_events",
+      "conname": "centre_duty_events_lane_check",
+      "contype": "c",
+      "definition": "CHECK ((lane = ANY (ARRAY['front'::text, 'floor'::text, 'control'::text])))"
+    },
+    {
+      "table_name": "centre_duty_events",
+      "conname": "centre_duty_events_note_check",
+      "contype": "c",
+      "definition": "CHECK ((length(note) <= 2000))"
+    },
+    {
+      "table_name": "centre_duty_events",
+      "conname": "centre_duty_events_actor_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (actor_id) REFERENCES staff_profiles(id)"
+    },
+    {
+      "table_name": "centre_duty_events",
+      "conname": "centre_duty_events_plan_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (plan_id) REFERENCES centre_day_plans(id)"
+    },
+    {
+      "table_name": "centre_duty_reports",
+      "conname": "centre_duty_reports_followups_check",
+      "contype": "c",
+      "definition": "CHECK (((length(TRIM(BOTH FROM followups)) >= 1) AND (length(TRIM(BOTH FROM followups)) <= 4000)))"
+    },
+    {
+      "table_name": "centre_duty_reports",
+      "conname": "centre_duty_reports_recognition_check",
+      "contype": "c",
+      "definition": "CHECK ((length(recognition) <= 2000))"
+    },
+    {
+      "table_name": "centre_duty_reports",
+      "conname": "centre_duty_reports_summary_check",
+      "contype": "c",
+      "definition": "CHECK (((length(TRIM(BOTH FROM summary)) >= 1) AND (length(TRIM(BOTH FROM summary)) <= 4000)))"
+    },
+    {
+      "table_name": "centre_duty_reports",
+      "conname": "centre_duty_reports_acknowledged_by_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (acknowledged_by) REFERENCES staff_profiles(id)"
+    },
+    {
+      "table_name": "centre_duty_reports",
+      "conname": "centre_duty_reports_plan_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (plan_id) REFERENCES centre_day_plans(id)"
+    },
+    {
+      "table_name": "centre_duty_reports",
+      "conname": "centre_duty_reports_submitted_by_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (submitted_by) REFERENCES staff_profiles(id)"
+    },
+    {
+      "table_name": "centre_duty_reports",
+      "conname": "centre_duty_reports_branch_day_key",
+      "contype": "u",
+      "definition": "UNIQUE (branch, day)"
+    },
+    {
+      "table_name": "centre_duty_reports",
+      "conname": "centre_duty_reports_plan_id_key",
+      "contype": "u",
+      "definition": "UNIQUE (plan_id)"
+    },
+    {
+      "table_name": "centre_lead_weeks",
+      "conname": "centre_lead_weeks_branch_check",
+      "contype": "c",
+      "definition": "CHECK (((branch = lower(branch)) AND (branch <> ALL (ARRAY['global'::text, '*'::text, 'all'::text]))))"
+    },
+    {
+      "table_name": "centre_lead_weeks",
+      "conname": "centre_lead_weeks_version_check",
+      "contype": "c",
+      "definition": "CHECK ((version > 0))"
+    },
+    {
+      "table_name": "centre_lead_weeks",
+      "conname": "centre_lead_weeks_week_start_check",
+      "contype": "c",
+      "definition": "CHECK ((EXTRACT(isodow FROM week_start) = (1)::numeric))"
+    },
+    {
+      "table_name": "centre_lead_weeks",
+      "conname": "centre_lead_weeks_lead_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (lead_id) REFERENCES staff_profiles(id)"
+    },
+    {
+      "table_name": "centre_responsibilities",
+      "conname": "centre_responsibilities_area_check",
+      "contype": "c",
+      "definition": "CHECK ((area = ANY (ARRAY['exam'::text, 'infrastructure'::text, 'office'::text, 'candidates'::text, 'reports'::text, 'growth'::text])))"
+    },
+    {
+      "table_name": "centre_responsibilities",
+      "conname": "centre_responsibilities_branch_check",
+      "contype": "c",
+      "definition": "CHECK (((branch = lower(branch)) AND (branch <> ALL (ARRAY['global'::text, '*'::text, 'all'::text]))))"
+    },
+    {
+      "table_name": "centre_responsibilities",
+      "conname": "centre_responsibilities_check",
+      "contype": "c",
+      "definition": "CHECK (((frequency <> 'weekly'::text) OR (weekday IS NOT NULL)))"
+    },
+    {
+      "table_name": "centre_responsibilities",
+      "conname": "centre_responsibilities_check1",
+      "contype": "c",
+      "definition": "CHECK (((frequency <> 'monthly'::text) OR (monthday IS NOT NULL)))"
+    },
+    {
+      "table_name": "centre_responsibilities",
+      "conname": "centre_responsibilities_check2",
+      "contype": "c",
+      "definition": "CHECK (((owner_id IS NULL) OR (backup_id IS NULL) OR (owner_id <> backup_id)))"
+    },
+    {
+      "table_name": "centre_responsibilities",
+      "conname": "centre_responsibilities_details_check",
+      "contype": "c",
+      "definition": "CHECK ((length(details) <= 2000))"
+    },
+    {
+      "table_name": "centre_responsibilities",
+      "conname": "centre_responsibilities_due_minute_check",
+      "contype": "c",
+      "definition": "CHECK (((due_minute >= 0) AND (due_minute <= 1439)))"
+    },
+    {
+      "table_name": "centre_responsibilities",
+      "conname": "centre_responsibilities_expected_result_check",
+      "contype": "c",
+      "definition": "CHECK ((length(expected_result) <= 2000))"
+    },
+    {
+      "table_name": "centre_responsibilities",
+      "conname": "centre_responsibilities_frequency_check",
+      "contype": "c",
+      "definition": "CHECK ((frequency = ANY (ARRAY['daily'::text, 'weekly'::text, 'monthly'::text, 'as_needed'::text])))"
+    },
+    {
+      "table_name": "centre_responsibilities",
+      "conname": "centre_responsibilities_monthday_check",
+      "contype": "c",
+      "definition": "CHECK (((monthday >= 1) AND (monthday <= 31)))"
+    },
+    {
+      "table_name": "centre_responsibilities",
+      "conname": "centre_responsibilities_priority_check",
+      "contype": "c",
+      "definition": "CHECK ((priority = ANY (ARRAY['normal'::text, 'important'::text])))"
+    },
+    {
+      "table_name": "centre_responsibilities",
+      "conname": "centre_responsibilities_title_check",
+      "contype": "c",
+      "definition": "CHECK (((length(btrim(title)) >= 1) AND (length(btrim(title)) <= 160)))"
+    },
+    {
+      "table_name": "centre_responsibilities",
+      "conname": "centre_responsibilities_weekday_check",
+      "contype": "c",
+      "definition": "CHECK (((weekday >= 1) AND (weekday <= 7)))"
+    },
+    {
+      "table_name": "centre_responsibilities",
+      "conname": "centre_responsibilities_backup_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (backup_id) REFERENCES staff_profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "centre_responsibilities",
+      "conname": "centre_responsibilities_owner_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (owner_id) REFERENCES staff_profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "centre_responsibilities",
+      "conname": "centre_responsibilities_updated_by_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (updated_by) REFERENCES staff_profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "chat_saved_messages",
+      "conname": "chat_saved_messages_message_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "chat_saved_messages",
+      "conname": "chat_saved_messages_user_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "chat_work_items",
+      "conname": "chat_work_items_kind_check",
+      "contype": "c",
+      "definition": "CHECK ((kind = ANY (ARRAY['follow_up'::text, 'decision'::text])))"
+    },
+    {
+      "table_name": "chat_work_items",
+      "conname": "chat_work_items_status_check",
+      "contype": "c",
+      "definition": "CHECK ((status = ANY (ARRAY['open'::text, 'done'::text])))"
+    },
+    {
+      "table_name": "chat_work_items",
+      "conname": "chat_work_items_title_check",
+      "contype": "c",
+      "definition": "CHECK (((length(btrim(title)) >= 1) AND (length(btrim(title)) <= 2000)))"
+    },
+    {
+      "table_name": "chat_work_items",
+      "conname": "chat_work_items_conversation_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "chat_work_items",
+      "conname": "chat_work_items_created_by_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (created_by) REFERENCES auth.users(id)"
+    },
+    {
+      "table_name": "chat_work_items",
+      "conname": "chat_work_items_message_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "chat_work_items",
+      "conname": "chat_work_items_owner_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (owner_id) REFERENCES staff_profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "client_exams",
+      "conname": "client_exams_client_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "clients",
+      "conname": "clients_name_key",
+      "contype": "u",
+      "definition": "UNIQUE (name)"
+    },
+    {
+      "table_name": "conversation_members",
+      "conname": "conversation_members_conversation_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "conversation_members",
+      "conname": "conversation_members_user_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (user_id) REFERENCES staff_profiles(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "conversation_members",
+      "conname": "conversation_members_conversation_id_user_id_key",
+      "contype": "u",
+      "definition": "UNIQUE (conversation_id, user_id)"
+    },
+    {
+      "table_name": "conversations",
+      "conname": "conversations_created_by_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (created_by) REFERENCES staff_profiles(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "desk_focus_sessions",
+      "conname": "desk_focus_sessions_duration_minutes_check",
+      "contype": "c",
+      "definition": "CHECK ((duration_minutes = ANY (ARRAY[25, 50])))"
+    },
+    {
+      "table_name": "desk_focus_sessions",
+      "conname": "desk_focus_sessions_user_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "desk_journal_entries",
+      "conname": "desk_journal_entries_mood_check",
+      "contype": "c",
+      "definition": "CHECK ((mood = ANY (ARRAY[''::text, 'bright'::text, 'steady'::text, 'focused'::text, 'slow'::text])))"
+    },
+    {
+      "table_name": "desk_journal_entries",
+      "conname": "desk_journal_entries_note_check",
+      "contype": "c",
+      "definition": "CHECK ((char_length(note) <= 2000))"
+    },
+    {
+      "table_name": "desk_journal_entries",
+      "conname": "desk_journal_entries_version_check",
+      "contype": "c",
+      "definition": "CHECK ((version > 0))"
+    },
+    {
+      "table_name": "desk_journal_entries",
+      "conname": "desk_journal_entries_user_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "desk_preferences",
+      "conname": "desk_preferences_cover_check",
+      "contype": "c",
+      "definition": "CHECK ((cover = ANY (ARRAY['peach'::text, 'sage'::text, 'lilac'::text])))"
+    },
+    {
+      "table_name": "desk_preferences",
+      "conname": "desk_preferences_version_check",
+      "contype": "c",
+      "definition": "CHECK ((version > 0))"
+    },
+    {
+      "table_name": "desk_preferences",
+      "conname": "desk_preferences_user_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "expansion_institutions",
+      "conname": "expansion_institutions_actionables_reference_check",
+      "contype": "c",
+      "definition": "CHECK (((actionables_reference IS NULL) OR (jsonb_typeof(actionables_reference) = 'object'::text)))"
+    },
+    {
+      "table_name": "expansion_institutions",
+      "conname": "expansion_institutions_assigned_staff_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (assigned_staff_id) REFERENCES auth.users(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "fets_news_drafts",
+      "conname": "fets_news_drafts_kind_check",
+      "contype": "c",
+      "definition": "CHECK ((kind = ANY (ARRAY['client'::text, 'industry'::text, 'internal'::text])))"
+    },
+    {
+      "table_name": "fets_news_drafts",
+      "conname": "fets_news_drafts_status_check",
+      "contype": "c",
+      "definition": "CHECK ((status = ANY (ARRAY['draft'::text, 'review'::text, 'published'::text, 'rejected'::text])))"
+    },
+    {
+      "table_name": "fets_news_drafts",
+      "conname": "fets_news_drafts_created_by_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (created_by) REFERENCES staff_profiles(id)"
+    },
+    {
+      "table_name": "fets_news_drafts",
+      "conname": "fets_news_drafts_revision_of_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (revision_of) REFERENCES fets_news_posts(id)"
+    },
+    {
+      "table_name": "fets_news_drafts",
+      "conname": "fets_news_drafts_source_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (source_id) REFERENCES fets_news_sources(id)"
+    },
+    {
+      "table_name": "fets_news_drafts",
+      "conname": "fets_news_drafts_updated_by_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (updated_by) REFERENCES staff_profiles(id)"
+    },
+    {
+      "table_name": "fets_news_posts",
+      "conname": "fets_news_posts_kind_check",
+      "contype": "c",
+      "definition": "CHECK ((kind = ANY (ARRAY['client'::text, 'industry'::text, 'internal'::text])))"
+    },
+    {
+      "table_name": "fets_news_posts",
+      "conname": "fets_news_posts_state_check",
+      "contype": "c",
+      "definition": "CHECK ((state = ANY (ARRAY['live'::text, 'superseded'::text, 'withdrawn'::text])))"
+    },
+    {
+      "table_name": "fets_news_posts",
+      "conname": "fets_news_posts_approved_by_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (approved_by) REFERENCES staff_profiles(id)"
+    },
+    {
+      "table_name": "fets_news_posts",
+      "conname": "fets_news_posts_draft_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (draft_id) REFERENCES fets_news_drafts(id)"
+    },
+    {
+      "table_name": "fets_news_posts",
+      "conname": "fets_news_posts_supersedes_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (supersedes_id) REFERENCES fets_news_posts(id)"
+    },
+    {
+      "table_name": "fets_news_posts",
+      "conname": "fets_news_posts_draft_id_key",
+      "contype": "u",
+      "definition": "UNIQUE (draft_id)"
+    },
+    {
+      "table_name": "fets_news_posts",
+      "conname": "fets_news_posts_supersedes_id_key",
+      "contype": "u",
+      "definition": "UNIQUE (supersedes_id)"
+    },
+    {
+      "table_name": "fets_news_sources",
+      "conname": "fets_news_sources_excerpt_check",
+      "contype": "c",
+      "definition": "CHECK (((length(excerpt) >= 1) AND (length(excerpt) <= 20000)))"
+    },
+    {
+      "table_name": "fets_news_sources",
+      "conname": "fets_news_sources_external_key_check",
+      "contype": "c",
+      "definition": "CHECK (((length(external_key) >= 1) AND (length(external_key) <= 2000)))"
+    },
+    {
+      "table_name": "fets_news_sources",
+      "conname": "fets_news_sources_kind_check",
+      "contype": "c",
+      "definition": "CHECK ((kind = ANY (ARRAY['client'::text, 'industry'::text])))"
+    },
+    {
+      "table_name": "fets_news_sources",
+      "conname": "fets_news_sources_source_label_check",
+      "contype": "c",
+      "definition": "CHECK (((length(source_label) >= 1) AND (length(source_label) <= 200)))"
+    },
+    {
+      "table_name": "fets_news_sources",
+      "conname": "fets_news_sources_verification_check",
+      "contype": "c",
+      "definition": "CHECK (((length(verification) >= 1) AND (length(verification) <= 2000)))"
+    },
+    {
+      "table_name": "fets_news_sources",
+      "conname": "fets_news_sources_kind_external_key_key",
+      "contype": "u",
+      "definition": "UNIQUE (kind, external_key)"
+    },
+    {
+      "table_name": "fets_vault",
+      "conname": "fets_vault_author_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (author_id) REFERENCES staff_profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "fets_vault",
+      "conname": "fets_vault_user_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "incident_comments",
+      "conname": "incident_comments_author_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (author_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "incident_comments",
+      "conname": "incident_comments_incident_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (incident_id) REFERENCES incidents(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "incidents",
+      "conname": "incidents_category_check",
+      "contype": "c",
+      "definition": "CHECK ((category = ANY (ARRAY['computer'::text, 'equipment'::text, 'property'::text, 'staff'::text, 'candidate'::text, 'client'::text, 'utility'::text, 'other'::text, 'roster'::text, 'calendar'::text, 'facility'::text, 'systems'::text, 'network'::text, 'exam'::text, 'assets'::text, 'vendor'::text])))"
+    },
+    {
+      "table_name": "incidents",
+      "conname": "incidents_severity_check",
+      "contype": "c",
+      "definition": "CHECK ((severity = ANY (ARRAY['critical'::text, 'major'::text, 'minor'::text])))"
+    },
+    {
+      "table_name": "incidents",
+      "conname": "incidents_status_check",
+      "contype": "c",
+      "definition": "CHECK ((status = ANY (ARRAY['open'::text, 'assigned'::text, 'in_progress'::text, 'escalated'::text, 'closed'::text])))"
+    },
+    {
+      "table_name": "incidents",
+      "conname": "incidents_assigned_to_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (assigned_to) REFERENCES auth.users(id)"
+    },
+    {
+      "table_name": "incidents",
+      "conname": "incidents_system_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (system_id) REFERENCES systems(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "incidents",
+      "conname": "incidents_user_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id)"
+    },
+    {
+      "table_name": "leave_requests",
+      "conname": "leave_requests_request_type_check",
+      "contype": "c",
+      "definition": "CHECK ((request_type = ANY (ARRAY['leave'::text, 'half_day'::text, 'shift_swap'::text, 'off_day_swap'::text])))"
+    },
+    {
+      "table_name": "leave_requests",
+      "conname": "leave_requests_status_check",
+      "contype": "c",
+      "definition": "CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])))"
+    },
+    {
+      "table_name": "leave_requests",
+      "conname": "leave_requests_approved_by_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (approved_by) REFERENCES staff_profiles(user_id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "leave_requests",
+      "conname": "leave_requests_swap_with_user_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (swap_with_user_id) REFERENCES staff_profiles(user_id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "leave_requests",
+      "conname": "leave_requests_user_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (user_id) REFERENCES staff_profiles(user_id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "lost_found_items",
+      "conname": "lost_found_items_found_by_staff_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (found_by_staff_id) REFERENCES staff_profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "lost_found_items",
+      "conname": "lost_found_items_found_by_user_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (found_by_user_id) REFERENCES auth.users(id)"
+    },
+    {
+      "table_name": "messages",
+      "conname": "messages_conversation_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "messages",
+      "conname": "messages_reply_to_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (reply_to) REFERENCES messages(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "messages",
+      "conname": "messages_sender_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (sender_id) REFERENCES staff_profiles(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "mission_institution_stages",
+      "conname": "mission_institution_stages_completion_note_check",
+      "contype": "c",
+      "definition": "CHECK ((length(completion_note) <= 4000))"
+    },
+    {
+      "table_name": "mission_institution_stages",
+      "conname": "mission_institution_stages_contact_script_check",
+      "contype": "c",
+      "definition": "CHECK ((length(contact_script) <= 4000))"
+    },
+    {
+      "table_name": "mission_institution_stages",
+      "conname": "mission_institution_stages_instructions_check",
+      "contype": "c",
+      "definition": "CHECK ((length(instructions) <= 6000))"
+    },
+    {
+      "table_name": "mission_institution_stages",
+      "conname": "mission_institution_stages_position_check",
+      "contype": "c",
+      "definition": "CHECK ((\"position\" > 0))"
+    },
+    {
+      "table_name": "mission_institution_stages",
+      "conname": "mission_institution_stages_title_check",
+      "contype": "c",
+      "definition": "CHECK (((length(btrim(title)) >= 1) AND (length(btrim(title)) <= 150)))"
+    },
+    {
+      "table_name": "mission_institution_stages",
+      "conname": "mission_institution_stages_completed_by_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (completed_by) REFERENCES staff_profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "mission_institution_stages",
+      "conname": "mission_institution_stages_institution_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (institution_id) REFERENCES expansion_institutions(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "mission_institution_stages",
+      "conname": "mission_institution_stages_institution_id_position_key",
+      "contype": "u",
+      "definition": "UNIQUE (institution_id, \"position\")"
+    },
+    {
+      "table_name": "mission_institution_stages",
+      "conname": "mission_institution_stages_institution_id_stage_key_key",
+      "contype": "u",
+      "definition": "UNIQUE (institution_id, stage_key)"
+    },
+    {
+      "table_name": "mission_task_updates",
+      "conname": "mission_task_updates_content_check",
+      "contype": "c",
+      "definition": "CHECK (((length(btrim(content)) >= 1) AND (length(btrim(content)) <= 4000)))"
+    },
+    {
+      "table_name": "mission_task_updates",
+      "conname": "mission_task_updates_status_check",
+      "contype": "c",
+      "definition": "CHECK ((status = ANY (ARRAY['open'::text, 'in_progress'::text, 'blocked'::text, 'done'::text])))"
+    },
+    {
+      "table_name": "mission_task_updates",
+      "conname": "mission_task_updates_author_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (author_id) REFERENCES staff_profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "mission_task_updates",
+      "conname": "mission_task_updates_edited_by_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (edited_by) REFERENCES staff_profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "mission_task_updates",
+      "conname": "mission_task_updates_report_to_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (report_to_id) REFERENCES auth.users(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "mission_task_updates",
+      "conname": "mission_task_updates_work_item_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (work_item_id) REFERENCES mission_work_items(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "mission_work_items",
+      "conname": "mission_work_items_district_check",
+      "contype": "c",
+      "definition": "CHECK ((district = ANY (ARRAY['Kottayam'::text, 'Ernakulam'::text, 'Thrissur'::text, 'Calicut'::text, 'Kannur'::text])))"
+    },
+    {
+      "table_name": "mission_work_items",
+      "conname": "mission_work_items_impact_check",
+      "contype": "c",
+      "definition": "CHECK ((length(impact) <= 1000))"
+    },
+    {
+      "table_name": "mission_work_items",
+      "conname": "mission_work_items_reference_task_key_check",
+      "contype": "c",
+      "definition": "CHECK (((reference_task_key >= 1) AND (reference_task_key <= 5)))"
+    },
+    {
+      "table_name": "mission_work_items",
+      "conname": "mission_work_items_status_check",
+      "contype": "c",
+      "definition": "CHECK ((status = ANY (ARRAY['open'::text, 'in_progress'::text, 'blocked'::text, 'done'::text])))"
+    },
+    {
+      "table_name": "mission_work_items",
+      "conname": "mission_work_items_title_check",
+      "contype": "c",
+      "definition": "CHECK (((length(btrim(title)) >= 1) AND (length(btrim(title)) <= 2000)))"
+    },
+    {
+      "table_name": "mission_work_items",
+      "conname": "mission_work_items_created_by_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (created_by) REFERENCES auth.users(id)"
+    },
+    {
+      "table_name": "mission_work_items",
+      "conname": "mission_work_items_institution_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (institution_id) REFERENCES expansion_institutions(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "mission_work_items",
+      "conname": "mission_work_items_institution_stage_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (institution_stage_id) REFERENCES mission_institution_stages(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "mission_work_items",
+      "conname": "mission_work_items_owner_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (owner_id) REFERENCES staff_profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "mission_work_items",
+      "conname": "mission_work_items_report_to_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (report_to_id) REFERENCES auth.users(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "mission_work_items",
+      "conname": "mission_work_items_updated_by_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (updated_by) REFERENCES auth.users(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "news_ticker",
+      "conname": "news_ticker_created_by_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (created_by) REFERENCES staff_profiles(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "quick_access_items",
+      "conname": "quick_access_items_client_slug_check",
+      "contype": "c",
+      "definition": "CHECK ((client_slug = ANY (ARRAY['prometric'::text, 'pearson'::text, 'psi'::text, 'celpip'::text, 'itts'::text, 'fets'::text])))"
+    },
+    {
+      "table_name": "quick_access_items",
+      "conname": "quick_access_items_field_type_check",
+      "contype": "c",
+      "definition": "CHECK ((field_type = ANY (ARRAY['url'::text, 'login_id'::text, 'password'::text, 'email'::text, 'contact_phone'::text, 'site_code'::text, 'access_code'::text, 'api_key'::text, 'support_pin'::text, 'notes'::text, 'other'::text])))"
+    },
+    {
+      "table_name": "quick_access_items",
+      "conname": "quick_access_items_owner_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (owner_id) REFERENCES staff_profiles(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "roster_schedules",
+      "conname": "roster_shift_times_valid",
+      "contype": "c",
+      "definition": "CHECK (((((shift_start IS NULL) AND (shift_end IS NULL)) OR ((shift_start IS NOT NULL) AND (shift_end IS NOT NULL) AND (shift_end > shift_start))) AND ((grace_minutes >= 0) AND (grace_minutes <= 60)) AND (char_length(COALESCE(shift_label, ''::text)) <= 50)))"
+    },
+    {
+      "table_name": "roster_schedules",
+      "conname": "roster_schedules_profile_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (profile_id) REFERENCES staff_profiles(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "roster_schedules",
+      "conname": "roster_schedules_profile_id_date_key",
+      "contype": "u",
+      "definition": "UNIQUE (profile_id, date)"
+    },
+    {
+      "table_name": "roster_shift_types",
+      "conname": "roster_shift_types_branch_location_check",
+      "contype": "c",
+      "definition": "CHECK ((branch_location = ANY (ARRAY['calicut'::text, 'cochin'::text])))"
+    },
+    {
+      "table_name": "roster_shift_types",
+      "conname": "roster_shift_types_check",
+      "contype": "c",
+      "definition": "CHECK ((shift_end > shift_start))"
+    },
+    {
+      "table_name": "roster_shift_types",
+      "conname": "roster_shift_types_grace_minutes_check",
+      "contype": "c",
+      "definition": "CHECK (((grace_minutes >= 0) AND (grace_minutes <= 60)))"
+    },
+    {
+      "table_name": "roster_shift_types",
+      "conname": "roster_shift_types_shift_code_check",
+      "contype": "c",
+      "definition": "CHECK ((shift_code = ANY (ARRAY['D'::text, 'HD'::text])))"
+    },
+    {
+      "table_name": "roster_shift_types",
+      "conname": "roster_shift_types_shift_label_check",
+      "contype": "c",
+      "definition": "CHECK (((char_length(btrim(shift_label)) >= 1) AND (char_length(btrim(shift_label)) <= 50)))"
+    },
+    {
+      "table_name": "shift_days_v2",
+      "conname": "shift_days_v2_branch_check",
+      "contype": "c",
+      "definition": "CHECK ((branch = ANY (ARRAY['calicut'::text, 'cochin'::text])))"
+    },
+    {
+      "table_name": "shift_days_v2",
+      "conname": "shift_days_v2_plan_check",
+      "contype": "c",
+      "definition": "CHECK (((jsonb_typeof(plan) = 'object'::text) AND (octet_length((plan)::text) <= 200000)))"
+    },
+    {
+      "table_name": "shift_days_v2",
+      "conname": "shift_days_v2_status_check",
+      "contype": "c",
+      "definition": "CHECK ((status = ANY (ARRAY['draft'::text, 'published'::text, 'closed'::text])))"
+    },
+    {
+      "table_name": "shift_days_v2",
+      "conname": "shift_days_v2_created_by_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (created_by) REFERENCES auth.users(id)"
+    },
+    {
+      "table_name": "shift_days_v2",
+      "conname": "shift_days_v2_lead_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (lead_id) REFERENCES staff_profiles(id)"
+    },
+    {
+      "table_name": "shift_days_v2",
+      "conname": "shift_days_v2_branch_day_key",
+      "contype": "u",
+      "definition": "UNIQUE (branch, day)"
+    },
+    {
+      "table_name": "slate_entries",
+      "conname": "slate_entries_category_check",
+      "contype": "c",
+      "definition": "CHECK ((category = ANY (ARRAY['note'::text, 'idea'::text, 'task'::text, 'reflection'::text, 'dream'::text, 'memo'::text, 'journal'::text, 'quote'::text])))"
+    },
+    {
+      "table_name": "staff_applications",
+      "conname": "staff_applications_half_day_period_check",
+      "contype": "c",
+      "definition": "CHECK ((half_day_period = ANY (ARRAY['first'::text, 'second'::text])))"
+    },
+    {
+      "table_name": "staff_applications",
+      "conname": "staff_applications_kind_check",
+      "contype": "c",
+      "definition": "CHECK ((kind = ANY (ARRAY['leave'::text, 'toil'::text, 'swap'::text, 'emergency_duty'::text, 'reimbursement'::text])))"
+    },
+    {
+      "table_name": "staff_applications",
+      "conname": "staff_applications_partner_reply_check",
+      "contype": "c",
+      "definition": "CHECK ((partner_reply = ANY (ARRAY['accepted'::text, 'declined'::text])))"
+    },
+    {
+      "table_name": "staff_applications",
+      "conname": "staff_applications_status_check",
+      "contype": "c",
+      "definition": "CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])))"
+    },
+    {
+      "table_name": "staff_applications",
+      "conname": "staff_applications_applicant_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (applicant_id) REFERENCES staff_profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "staff_applications",
+      "conname": "staff_applications_resolved_by_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (resolved_by) REFERENCES staff_profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "staff_applications",
+      "conname": "staff_applications_swap_with_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (swap_with_id) REFERENCES staff_profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "staff_attendance",
+      "conname": "staff_attendance_status_check",
+      "contype": "c",
+      "definition": "CHECK ((status = ANY (ARRAY['present'::text, 'absent'::text, 'late'::text, 'half_day'::text])))"
+    },
+    {
+      "table_name": "staff_attendance",
+      "conname": "staff_attendance_staff_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (staff_id) REFERENCES staff_profiles(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "staff_attendance",
+      "conname": "staff_attendance_staff_id_date_key",
+      "contype": "u",
+      "definition": "UNIQUE (staff_id, date)"
+    },
+    {
+      "table_name": "staff_branch_delegations",
+      "conname": "staff_branch_delegations_profile_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (profile_id) REFERENCES staff_profiles(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "staff_ot_claims",
+      "conname": "staff_ot_claims_profile_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (profile_id) REFERENCES staff_profiles(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "staff_ot_claims",
+      "conname": "unique_profile_date_claim",
+      "contype": "u",
+      "definition": "UNIQUE (profile_id, date)"
+    },
+    {
+      "table_name": "staff_profiles",
+      "conname": "staff_profiles_base_centre_check",
+      "contype": "c",
+      "definition": "CHECK ((base_centre = ANY (ARRAY['calicut'::text, 'cochin'::text])))"
+    },
+    {
+      "table_name": "staff_profiles",
+      "conname": "staff_profiles_status_check",
+      "contype": "c",
+      "definition": "CHECK ((status = ANY (ARRAY['active'::text, 'inactive'::text, 'on_leave'::text])))"
+    },
+    {
+      "table_name": "staff_profiles",
+      "conname": "staff_profiles_user_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "staff_profiles",
+      "conname": "staff_profiles_email_key",
+      "contype": "u",
+      "definition": "UNIQUE (email)"
+    },
+    {
+      "table_name": "staff_profiles",
+      "conname": "staff_profiles_user_id_key",
+      "contype": "u",
+      "definition": "UNIQUE (user_id)"
+    },
+    {
+      "table_name": "system_logs",
+      "conname": "system_logs_system_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (system_id) REFERENCES systems(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "systems",
+      "conname": "systems_status_check",
+      "contype": "c",
+      "definition": "CHECK ((status = ANY (ARRAY['operational'::text, 'maintenance'::text, 'fault'::text])))"
+    },
+    {
+      "table_name": "systems",
+      "conname": "systems_system_type_check",
+      "contype": "c",
+      "definition": "CHECK ((system_type = ANY (ARRAY['admin'::text, 'server'::text, 'workstation'::text, 'peripheral'::text, 'rented'::text])))"
+    },
+    {
+      "table_name": "user_tasks",
+      "conname": "user_tasks_ai_branch_check",
+      "contype": "c",
+      "definition": "CHECK (((branch_location IS NULL) OR (branch_location = ANY (ARRAY['cochin'::text, 'calicut'::text])))) NOT VALID"
+    },
+    {
+      "table_name": "user_tasks",
+      "conname": "user_tasks_assigned_by_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (assigned_by) REFERENCES staff_profiles(user_id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "user_tasks",
+      "conname": "user_tasks_assigned_to_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (assigned_to) REFERENCES staff_profiles(user_id) ON DELETE CASCADE"
+    }
+  ],
+  "live_function_definition_hashes": [
+    {
+      "schema": "desk_workspace_private",
+      "name": "actor",
+      "args": "",
+      "sha256": "b3bea8b677fc4fe70f05c49143e5437e35702ddbca35ef93a57ad7e4a6380bea"
+    },
+    {
+      "schema": "desk_workspace_private",
+      "name": "application_guard",
+      "args": "",
+      "sha256": "82b80f570e0a2820e6eb2c63dc3db615c8977762bc5b519958c4da3ce83a1443"
+    },
+    {
+      "schema": "desk_workspace_private",
+      "name": "request_resolve",
+      "args": "p_id uuid, p_status text, p_version bigint, p_reply text",
+      "sha256": "aa3e458e676ba5d6ad434a82033e91358a04e11acf9437411cf7d6d14cbf4796"
+    },
+    {
+      "schema": "desk_workspace_private",
+      "name": "request_submit",
+      "args": "p_kind text, p_date date, p_partner uuid, p_swap_date date, p_period text, p_reason text",
+      "sha256": "f59d4602935896a57c4f5ab17f7e561ee592407f84bb63e74045052f26f64bc5"
+    },
+    {
+      "schema": "desk_workspace_private",
+      "name": "swap_reply",
+      "args": "p_id uuid, p_accept boolean, p_version bigint",
+      "sha256": "ffc99f8d7c60eccb3989b0734bda793c19af3ed117efcee3ebbacb7453a60096"
+    },
+    {
+      "schema": "fets_actionables_private",
+      "name": "me",
+      "args": "",
+      "sha256": "016062252a9f2e01fa44cae07a9a1a3fd920937818b9e174c21e034958b39841"
+    },
+    {
+      "schema": "fets_actionables_private",
+      "name": "profile_security_guard",
+      "args": "",
+      "sha256": "bdd58d71989257a56b5d0a3873f1379af2fb71abca5f60a5e590cdfb6d89ba11"
+    },
+    {
+      "schema": "fets_ai_private",
+      "name": "knowledge_guard",
+      "args": "",
+      "sha256": "bb04425eea26107d0c97d95558c56d0b046ea097c50f2063e1a06444d654616b"
+    },
+    {
+      "schema": "fets_ai_private",
+      "name": "task_version",
+      "args": "",
+      "sha256": "b4a2fc8e5d1af78fcd0d612e387ff480a281c76611ee77256892659f2e116f97"
+    },
+    {
+      "schema": "fets_duty_private",
+      "name": "blueprint_guard",
+      "args": "",
+      "sha256": "cb714e72b639c76dbb109c06dc53e244e91c446779f3e49a35b0fc75d2580982"
+    },
+    {
+      "schema": "fets_duty_private",
+      "name": "can_plan",
+      "args": "b text",
+      "sha256": "41ded5717bc96676d20b02d9a3484a31e5be059828c4e87c163dd0a1c220e783"
+    },
+    {
+      "schema": "fets_duty_private",
+      "name": "can_read",
+      "args": "b text",
+      "sha256": "344bc8a327500d13b27014f54f5ff07aa89b59a44a7b1353217c41902dff0599"
+    },
+    {
+      "schema": "fets_duty_private",
+      "name": "change_guard",
+      "args": "",
+      "sha256": "a8368f971bdc3ad5802e397515e7bb0c98212ea7cb634f7160b6269b2574bf52"
+    },
+    {
+      "schema": "fets_duty_private",
+      "name": "daily_report_guard",
+      "args": "",
+      "sha256": "8235bdefa6cb954c45dce06c0e396938dbaadea63cfc56b96f34a8e8eb59d78c"
+    },
+    {
+      "schema": "fets_duty_private",
+      "name": "day_task_guard",
+      "args": "",
+      "sha256": "0544c0a31dd13c770b9aa8e1b55aff7ce2b23a175e8be19c755500f6a6ba3bdb"
+    },
+    {
+      "schema": "fets_duty_private",
+      "name": "day_task_review_guard",
+      "args": "",
+      "sha256": "e98a738407b4ee683e05ff1bb82b3d3bd369a410faf56fb471c76123ce449862"
+    },
+    {
+      "schema": "fets_duty_private",
+      "name": "event_guard",
+      "args": "",
+      "sha256": "5c50e6903cc8d1f8651ac1c8ad9ec057ff6cb5a36c9b0550bce0468d4e37c247"
+    },
+    {
+      "schema": "fets_duty_private",
+      "name": "fets_ai_document_version",
+      "args": "",
+      "sha256": "fec0405bd9ee440d35c192e985579e0afd0e801e10bc3565b271e4faae94bd4b"
+    },
+    {
+      "schema": "fets_duty_private",
+      "name": "is_admin",
+      "args": "",
+      "sha256": "01a385744fa454c26551a845afd77774628b1c9bc5407404be7bf1c9684df701"
+    },
+    {
+      "schema": "fets_duty_private",
+      "name": "lead_guard",
+      "args": "",
+      "sha256": "61a3c7f5a09d753a4f585186d943ee506012c2406be10e0e7a0fa35eff716a4a"
+    },
+    {
+      "schema": "fets_duty_private",
+      "name": "me",
+      "args": "",
+      "sha256": "3a6cebea8287f625066fab7bddde5b75bc6f5bcd05d9614db41eedd7482487c3"
+    },
+    {
+      "schema": "fets_duty_private",
+      "name": "plan_guard",
+      "args": "",
+      "sha256": "a75b086a175f218100857f50e96a85cdf1930b26ebb3eaa26b400535aa277e90"
+    },
+    {
+      "schema": "fets_duty_private",
+      "name": "report_guard",
+      "args": "",
+      "sha256": "bf9735ca4e768c2dd9cb17fb90df311b8246449c0ab6d49ae40e7deb16615c0e"
+    },
+    {
+      "schema": "fets_duty_private",
+      "name": "report_task_reviews",
+      "args": "",
+      "sha256": "94afff50446ea41425c40a5cde607054685242df568ef0e4356f0b79b95b2046"
+    },
+    {
+      "schema": "fets_duty_private",
+      "name": "shift_day_guard_v2",
+      "args": "",
+      "sha256": "d19e7ea819020673c2abffbe19a14a848d9f1caf8ecd2cfe32342f1dfb1a6948"
+    },
+    {
+      "schema": "fets_duty_private",
+      "name": "shift_day_history_v2",
+      "args": "",
+      "sha256": "a2f3cc19fff87ba5bb83069569492dc2a36bb81bbe60b5946f414a717c82f06b"
+    },
+    {
+      "schema": "fets_duty_private",
+      "name": "task_activity",
+      "args": "",
+      "sha256": "fc94a11e9c1e3a64a7c219f476fe4f998837b7c1d5d5369be4561b70d4db0a75"
+    },
+    {
+      "schema": "fets_duty_private",
+      "name": "task_contract_guard",
+      "args": "",
+      "sha256": "5ea383ee864735c4d315fff18a0f5b071cabba5ed017bec3294a6261b87267ff"
+    },
+    {
+      "schema": "fets_news_private",
+      "name": "actor",
+      "args": "",
+      "sha256": "03bfd3cd32334fc043da1003efa0e28a5850141062d41bf9bd198d246b183af9"
+    },
+    {
+      "schema": "fets_news_private",
+      "name": "can_read",
+      "args": "b text",
+      "sha256": "2cf2e3a801fc0da40e34fd52348a7ab9fbd936320ac41749c4170c026c5eb7f6"
+    },
+    {
+      "schema": "fets_news_private",
+      "name": "draft_guard",
+      "args": "",
+      "sha256": "fef01ea6394e638ad3ec4d05a311d8cff71c2f679076f4c750a46a43801471e3"
+    },
+    {
+      "schema": "fets_news_private",
+      "name": "editor",
+      "args": "",
+      "sha256": "397fda2e673f1906278fc543041630c6737e53ac31123caedd42cab877b3c4cc"
+    },
+    {
+      "schema": "fets_news_private",
+      "name": "post_guard",
+      "args": "",
+      "sha256": "6a536304c3e6c784c0b38d33d605f6f391e9acf7b9a7360b2824b66b36952c34"
+    },
+    {
+      "schema": "fets_news_private",
+      "name": "source_guard",
+      "args": "",
+      "sha256": "31d5e5e7388f8a56e07bf3d085963fcfac97a79d366e60ae134fff8df368c690"
+    },
+    {
+      "schema": "public",
+      "name": "attendance_roster_status",
+      "args": "",
+      "sha256": "425c1786ac02b03ec2c21ba937a4f8e6e9f064795f572ab6a485cfdd68ae8efc"
+    },
+    {
+      "schema": "public",
+      "name": "chat_ids_of",
+      "args": "p_user uuid",
+      "sha256": "5fb16e2e3cc09625cc3689679d9276e219f0b3364b0931197e568c417f1dd464"
+    },
+    {
+      "schema": "public",
+      "name": "chat_is_member",
+      "args": "p_conversation uuid",
+      "sha256": "772baafe6e29d8ffd970c86dabd276c6e691f0e972ae94d5dd3af32c624f8bc3"
+    },
+    {
+      "schema": "public",
+      "name": "chat_work_guard",
+      "args": "",
+      "sha256": "d7e6eadab7ac5564a0fa361ed0c2f6fc8de05a51b97cb9954f76053e809272b5"
+    },
+    {
+      "schema": "public",
+      "name": "mission_catalogue_origin_guard",
+      "args": "",
+      "sha256": "234d7fbcd8197be94c89ea23a1bc755841291c550b5724291bffe947eb8d75ac"
+    },
+    {
+      "schema": "public",
+      "name": "mission_delete_institution",
+      "args": "p_institution_id uuid",
+      "sha256": "08f1911fb593aca90e60d236032f08dd69d85508c9373f5d302c36f0b801ae8f"
+    },
+    {
+      "schema": "public",
+      "name": "mission_new_institution_stages",
+      "args": "",
+      "sha256": "d762680a650b8ad95923575c3d8ff08e60fa3a33b196bfeed7ba840331b1f0eb"
+    },
+    {
+      "schema": "public",
+      "name": "mission_project_stage_scope_guard",
+      "args": "",
+      "sha256": "a8897cbe014999229143ca31e237e8d9369ab689e91a48585958a3f5329f1538"
+    },
+    {
+      "schema": "public",
+      "name": "mission_reference_task_guard",
+      "args": "",
+      "sha256": "f5517cbe4981d688208456646724eb84b38f6c81efafb5d5ce496aff73582d5c"
+    },
+    {
+      "schema": "public",
+      "name": "mission_reopen_delivery",
+      "args": "",
+      "sha256": "28a6eb671fb93a76186069dd8c9b6143a5e96cfcd57aefe204cfafa4fce12748"
+    },
+    {
+      "schema": "public",
+      "name": "mission_reopen_stage_for_work",
+      "args": "",
+      "sha256": "f401d3f7023389e3c88c2e6f205375d76f13f8dc079083f24736caafd065ab4f"
+    },
+    {
+      "schema": "public",
+      "name": "mission_simple_task_guard",
+      "args": "",
+      "sha256": "5606aef855f817c00213308a7cad9f0b3d2388ccfeb55bef55a39c64555c835d"
+    },
+    {
+      "schema": "public",
+      "name": "mission_stage_completion_guard",
+      "args": "",
+      "sha256": "d5accf03c42cd83c26616c9e620e08edcd2f8082d471e712205a72c345be4027"
+    },
+    {
+      "schema": "public",
+      "name": "mission_sync_task_result",
+      "args": "",
+      "sha256": "b871afb2437488a3af9e32f9b95091b6062a2aee89a7938c91e6b7acfb3d239c"
+    },
+    {
+      "schema": "public",
+      "name": "mission_task_update_guard",
+      "args": "",
+      "sha256": "ae5010401db80c974518a7ea1f7daf2a4927b392c84c87631f40be59692797be"
+    },
+    {
+      "schema": "public",
+      "name": "notify_incident_assignment",
+      "args": "",
+      "sha256": "fde9d01341385d17d3a7fec490207a130b33c37725ed5a20efc66203b22ab041"
+    },
+    {
+      "schema": "public",
+      "name": "notify_incident_resolved",
+      "args": "",
+      "sha256": "45015f2f552fc42c6a7d36cd22dac3e258e6849d0746a398b81fe084b9db3900"
+    },
+    {
+      "schema": "public",
+      "name": "notify_leave_status",
+      "args": "",
+      "sha256": "a337c25b6cadbee18c1f71863b07c3000eb0eda6ac22cf93afdc211e9ba8177d"
+    },
+    {
+      "schema": "public",
+      "name": "notify_shift_change",
+      "args": "",
+      "sha256": "2d7e9f33640a8515164801fac8734a50081caff4cc9c7deb8f891e0198144a61"
+    },
+    {
+      "schema": "public",
+      "name": "ot_claim_roster_hours",
+      "args": "",
+      "sha256": "b21fba3208d0f6c2fbed0fa937525e317cbb2c52699cee0a5ad28dc97ceb0cb8"
+    },
+    {
+      "schema": "public",
+      "name": "roster_timing_guard",
+      "args": "",
+      "sha256": "69c48b1f1398366e2333b56c249cc81b32da4c6270d99e6d81d2f55776c1b439"
+    },
+    {
+      "schema": "public",
+      "name": "update_conversation_last_message",
+      "args": "",
+      "sha256": "47e2634d4c2e6940ed918147b12a3f9f78f0ce7973556203f6bd8514edeb786c"
+    }
+  ],
+  "restoration_note": "Inventory began against main5f/current HEAD. During the same task, the locally restored roster/OT flow from 1a114e2 changed only UI/read adapters, not live schema. See roster-restoration.md. Current Shift route remains centre tables."
+}

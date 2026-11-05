@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Newspaper, Sparkles, Activity, FileText,
   Settings as SettingsIcon, AlertCircle, Users, Calendar,
-  Bot, ArrowUp, Zap
+  Bot, ArrowUp, Zap, ClipboardCheck
 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useBranch } from '../hooks/useBranch'
@@ -16,6 +16,7 @@ import { type AgentStatus } from '../fets-ai/fets-ai-api'
 import { useAgentConversation } from '../fets-ai/useAgentConversation'
 import { useAgentResource } from '../fets-ai/useAgentResource'
 import { AgentResults } from '../fets-ai/AgentResults'
+import { ReviewsPanel } from '../fets-ai/ReviewsPanel'
 import { ConversationControls } from '../fets-ai/ConversationControls'
 import { Markdown } from './fetsai/Markdown'
 import { NewsManager } from './NewsManager'
@@ -72,6 +73,7 @@ export function FetsIntelligence({ initialTab = 'chat', initialQuery }: FetsAIPr
   const tabs = [
     { id: 'gemini-live', label: 'Gemini 3.1 Live', icon: Sparkles },
     { id: 'chat', label: 'Assistant', icon: Sparkles },
+    { id: 'reviews', label: 'Reviews', icon: ClipboardCheck },
     { id: 'news', label: 'Broadcasts', icon: Newspaper },
     { id: 'exam-stats', label: 'Telemetry', icon: Activity },
     { id: 'knowledge', label: 'Knowledge', icon: FileText },
@@ -203,7 +205,7 @@ export function FetsIntelligence({ initialTab = 'chat', initialQuery }: FetsAIPr
                             style={msg.role === 'user' ? { background: 'linear-gradient(135deg,#4F46E5,#7C3AED)' } : undefined}>
                             {msg.role === 'user'
                               ? <p className="text-[15px] leading-relaxed whitespace-pre-wrap font-medium">{msg.content}</p>
-                              : <div className="text-[15px]"><Markdown content={msg.content} />{msg.metadata&&<AgentResults reply={msg.metadata}/>}</div>}
+                              : <div className="text-[15px]"><Markdown content={msg.content} />{msg.metadata&&<AgentResults reply={msg.metadata} reviewScope={{userId:user?.id||'',branch:activeBranch}}/>}</div>}
                           </div>
                           <div className={`text-[10px] mt-1.5 font-semibold ${msg.role === 'user' ? 'text-right text-slate-400' : 'text-slate-400'}`}>
                             {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -241,6 +243,13 @@ export function FetsIntelligence({ initialTab = 'chat', initialQuery }: FetsAIPr
                     </button>
                   </form>
                 </div>
+              </motion.div>
+            )}
+
+            {activeTab === 'reviews' && (
+              <motion.div key="reviews" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+                className="flex-1 bg-white/85 backdrop-blur-xl border border-white rounded-[24px] shadow-sm p-4 md:p-6">
+                <ReviewsPanel userId={user?.id||''} branch={activeBranch} />
               </motion.div>
             )}
 

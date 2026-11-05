@@ -13,6 +13,7 @@ describe('model tool execution and confirmed outcomes',()=>{
   expect(second.contents.at(-1).parts[0].functionResponse.id).toBe('call-1');
   expect(result.actions).toEqual([{type:'action-result',tool:'create_incident',status:'succeeded',recordId:'real-1'}]);
  });
+ it('encodes closed Gemini tools as JSON Schema rather than unsupported OpenAPI fields',async()=>{const fetcher=vi.fn().mockResolvedValue(new Response(JSON.stringify({candidates:[{content:{parts:[{text:'Ready'}]}}]})));await generateAnswer({...base,tools:[{...base.tools[0],parameters:{...base.tools[0].parameters,additionalProperties:false}}],fetcher,execute:vi.fn()});const tool=JSON.parse(fetcher.mock.calls[0][1].body).tools[0].functionDeclarations[0];expect(tool.parameters).toBeUndefined();expect(tool.parametersJsonSchema).toMatchObject({type:'object',additionalProperties:false});});
  it('retains confirmed results if the model fails after the database saved',async()=>{
   const fetcher=vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({candidates:[{content:{role:'model',parts:[{functionCall:{name:'create_incident',args:{title:'AC'}}}]}}]}))).mockRejectedValueOnce(new Error('timeout'));
   const result=await generateAnswer({...base,fetcher,execute:async()=>({type:'action-result',tool:'create_incident',status:'succeeded',recordId:'real'})});

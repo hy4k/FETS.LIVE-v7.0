@@ -15,6 +15,24 @@ export async function knowledgeRows(db:any,scope:Scope){
 }
 export async function managementAction(db:any,scope:Scope,env:Environment,input:any):Promise<any|null>{
  switch(input.action){
+ case 'reviews':{
+  let q=db.from('fets_ai_reviews').select('id,operation,label,module,path,branch,status,apply_mode,record_id,before_values,proposed_values,summary,expires_at,created_at,decided_at,result');
+  if(scope.branch!=='global')q=q.eq('branch',scope.branch);
+  return {reviews:(checked(await q.order('created_at',{ascending:false}).limit(80),'Reviews could not be loaded')||[]).map(reviewRow)};
+ }
+ case 'review':{
+  let q=db.from('fets_ai_reviews').select('id,operation,label,module,path,branch,status,apply_mode,record_id,before_values,proposed_values,summary,expires_at,created_at,decided_at,result').eq('id',id(input.reviewId));
+  if(scope.branch!=='global')q=q.eq('branch',scope.branch);
+  const row=checked(await q.maybeSingle(),'Review could not be loaded');if(!row)throw new Error('This review is unavailable to your account and centre.');
+  return {review:reviewRow(row)};
+ }
+ case 'review-decide':{
+  if(!['apply','cancel'].includes(input.decision))throw new Error('Choose Apply or Cancel.');
+  const current=await managementAction(db,scope,env,{action:'review',reviewId:input.reviewId});
+  const row=checked(await db.rpc('fets_ai_review',{p_id:current.review.id,p_decision:input.decision}),'This review could not be decided');
+  return {review:reviewRow(row)};
+ }
+
  case 'settings-update':{
   admin(scope);const changes=input.changes;
   const allowed=['provider','gemini_model','claude_model','kill_switch','autonomous_enabled','max_tool_iterations'];
@@ -84,3 +102,5 @@ export async function managementAction(db:any,scope:Scope,env:Environment,input:
  default:return null;
  }
 }
+
+export function reviewRow(row:any){if(row?.type==='change-review')return row;return {type:'change-review',id:row.id,operation:row.operation,label:row.label,module:row.module,path:row.path,branch:row.branch,status:row.status,applyMode:row.apply_mode,recordId:row.record_id,before:row.before_values||{},proposed:row.proposed_values||{},summary:row.summary,expiresAt:row.expires_at,createdAt:row.created_at,result:row.result};}

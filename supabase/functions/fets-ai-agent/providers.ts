@@ -1,6 +1,7 @@
 export type Tool={name:string;description:string;parameters:Record<string,any>};
 type Options={provider:'gemini'|'claude';model:string;key:string;system:string;history:{role:string;content:string}[];message:string;tools:Tool[];maxIterations:number;execute:(name:string,args:Record<string,unknown>)=>Promise<any>;fetcher?:typeof fetch};
 function schema(value:any):any{if(Array.isArray(value))return value.map(schema);if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).map(([k,v])=>[k,k==='type'&&typeof v==='string'?v.toLowerCase():schema(v)]));return value;}
+export const geminiTools=(tools:Tool[])=>tools.map(t=>({name:t.name,description:t.description,parametersJsonSchema:schema(t.parameters)}));
 export async function providerRequest(url:string,headers:Record<string,string>,body:unknown,key:string,fetcher=fetch){
  let response:Response;
  try{response=await fetcher(url,{method:'POST',headers:{'Content-Type':'application/json',...headers},body:JSON.stringify(body),signal:AbortSignal.timeout(55000)});}catch(e){throw new Error((e as Error).name==='TimeoutError'?'The model took too long to respond. Saved actions remain recorded. Try a narrower question.':'The model connection failed. Please retry.');}
@@ -19,7 +20,7 @@ export async function generateAnswer(options:Options){
  try{
   for(let turn=0;turn<options.maxIterations;turn++){
    const data=provider==='gemini'
-    ?await providerRequest(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{'x-goog-api-key':key},{systemInstruction:{parts:[{text:system}]},contents,tools:[{functionDeclarations:tools}],generationConfig:{maxOutputTokens:4096}},key,options.fetcher)
+    ?await providerRequest(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{'x-goog-api-key':key},{systemInstruction:{parts:[{text:system}]},contents,tools:[{functionDeclarations:geminiTools(tools)}],generationConfig:{maxOutputTokens:4096}},key,options.fetcher)
     :await providerRequest('https://api.anthropic.com/v1/messages',{'x-api-key':key,'anthropic-version':'2023-06-01'},{model,system,messages:contents,max_tokens:4096,tools:tools.map(t=>({name:t.name,description:t.description,input_schema:schema(t.parameters)}))},key,options.fetcher);
    const content=provider==='gemini'?data.candidates?.[0]?.content:{role:'assistant',content:data.content};
    const parts=provider==='gemini'?content?.parts:content?.content;
@@ -41,5 +42,5 @@ export async function generateAnswer(options:Options){
    contents.push(provider==='gemini'?{role:'user',parts:answers}:{role:'user',content:answers});
   }
   return result('The request reached its tool limit. Completed actions are shown below; ask a narrower follow-up for the remaining work.');
- }catch(e){if(actions.some(a=>a.status==='succeeded'))return result(`The saved actions below completed. I could not finish the explanation: ${(e as Error).message}`);throw e;}
+ }catch(e){if(actions.some(a=>a.status==='succeeded')||proposals.some(p=>p.type==='change-review'))return result(`Review the saved action receipts and prepared reviews below. I could not finish the explanation: ${(e as Error).message}`);throw e;}
 }

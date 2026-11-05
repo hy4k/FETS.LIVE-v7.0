@@ -69,9 +69,9 @@ export function SettingsPanel({
               <strong>Autonomous Writes</strong>
             </div>
             <p className="text-xs text-slate-500 mt-2">
-              When ON, explicit permitted case, task and calendar requests can
-              save records. Role and centre access still apply. OFF blocks
-              operational writes on the server.
+              When ON, requested changes follow your access in User Management.
+              Sensitive changes are prepared for your review; some finish in their existing module.
+              OFF blocks operational writes on the server.
             </p>
           </div>
           <button
@@ -103,8 +103,9 @@ export function SettingsPanel({
             : "Read-only — operational writes disabled"}
         </p>
         <p className="text-xs text-slate-500 mt-2">
-          Allowed actions: {status.allowedActions?.join(", ") || "None"}
+          Available actions: {status.allowedActions?.length || 0}
         </p>
+        {!!status.allowedOperations?.length && <details className="mt-3 text-sm"><summary className="cursor-pointer font-semibold">View your available actions</summary><ul className="mt-3 space-y-2">{status.allowedOperations.map(operation=><li className="flex flex-wrap justify-between gap-2" key={operation.name}><span>{operation.label}</span><small className="text-slate-500">{operation.applyMode==='module'?'Complete in module':operation.review?'Review required':'Ready'}</small></li>)}</ul></details>}
       </div>
       <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
         <div className="flex gap-2 mb-3">

@@ -41,6 +41,25 @@ export type ActionResult = {
   title?: string;
   message?: string;
   replayed?: boolean;
+  record?: Record<string, unknown>;
+};
+export type ChangeReview = {
+  type: "change-review";
+  id: string;
+  operation: string;
+  label: string;
+  module: string;
+  path: string;
+  branch: string;
+  status: "pending" | "applied" | "cancelled" | "expired" | "stale" | "blocked";
+  applyMode: "database" | "module";
+  recordId?: string;
+  before: Record<string, unknown>;
+  proposed: Record<string, unknown>;
+  summary: string;
+  expiresAt: string;
+  createdAt?: string;
+  result?: ActionResult;
 };
 export type MemoryRow = {
   id: string;
@@ -77,6 +96,7 @@ export type AgentReply = {
   evidence: SourceEvidence[];
   proposals: (
     | HandoverProposal
+    | ChangeReview
     | {
         type: "navigation";
         page: string;
@@ -87,7 +107,7 @@ export type AgentReply = {
   model: string;
   conversationId?: string;
   provider?: string;
-  actions?: ActionResult[];
+  actions?: (ActionResult | ChangeReview)[];
 };
 export type AgentStatus = {
   ready: boolean;
@@ -111,6 +131,7 @@ export type AgentStatus = {
   };
   writesEnabled?: boolean;
   allowedActions?: string[];
+  allowedOperations?: {name:string;label:string;module:string;review:boolean;applyMode:'database'|'module'}[];
   memoryCount?: number;
 };
 export async function agentRequest<T>(

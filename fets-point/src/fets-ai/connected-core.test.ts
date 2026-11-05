@@ -1,14 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 import { loadSettings, pinnedContext, ownConversation, permittedTools } from '../../../supabase/functions/fets-ai-agent/runtime';
 import { runTool, scopeFor } from '../../../supabase/functions/fets-ai-agent/core';
-import { SOURCES, TOOL_DECLARATIONS } from '../../../supabase/functions/fets-ai-agent/catalog';
+import { SOURCES, TOOL_DECLARATIONS, WRITE_TOOLS, PAGES } from '../../../supabase/functions/fets-ai-agent/catalog';
 
 const user='00000000-0000-4000-8000-000000000001';
-const scope=scopeFor(user,'cochin',[{user_id:user,branch:'*',role:'super_admin',profile_id:user}]);
+const scope={...scopeFor(user,'cochin',[{user_id:user,branch:'*',role:'super_admin',profile_id:user}]),modules:PAGES.map(p=>p.id),operations:WRITE_TOOLS};
+const access={userId:user,profileId:user,branch:'cochin',admin:true,modules:scope.modules,operations:scope.operations,centres:['cochin','calicut']};
 const settings={provider:'gemini',gemini_model:'gemini-3.1-pro-preview',claude_model:'claude-sonnet-4-6',kill_switch:false,autonomous_enabled:true,max_tool_iterations:8,allowed_tools:{super_admin:['*'],staff:['read_table','aggregate','search_memory']}};
 function database(rows:Record<string,any>,errors:Record<string,string>={}) {
  const calls:any[]=[];
- const db={from:(table:string)=>{
+ const db={rpc:async()=>({data:access,error:null}),from:(table:string)=>{
    calls.push(['from',table]);
    let query:any;
    query=new Proxy({}, {get:(_,key)=>key==='then'?(resolve:any)=>resolve({data:(Object.hasOwn(rows,table)?rows[table]:[]),error:errors[table]?{message:errors[table]}:null}):(...args:any[])=>{calls.push([table,key,...args]);return query;}});
@@ -47,17 +48,17 @@ describe('connected AI controls and persisted context',()=>{
  });
  it('does not expose write tools when the switch is off or staff has only read aliases',()=>{
   expect(permittedTools({...settings,kill_switch:true},scope).some((t:any)=>t.name==='create_incident')).toBe(false);
-  expect(permittedTools(settings,{...scope,admin:false,role:'staff'}).some((t:any)=>t.name==='create_incident')).toBe(false);
+  expect(permittedTools(settings,{...scope,admin:false,role:'staff',operations:[]}).some((t:any)=>t.name==='create_incident')).toBe(false);
   expect(permittedTools(settings,scope).some((t:any)=>t.name==='create_incident')).toBe(true);
  });
  it('routes real writes through the atomic database gate with a stable request identity',async()=>{
   const requestId='00000000-0000-4000-8000-000000000002';
-  const rpc=vi.fn().mockResolvedValue({data:{type:'action-result',status:'succeeded',recordId:'real-id'},error:null});
-  await expect(runTool({rpc},scope,'create_incident',{title:'AC',description:'AC failed',severity:'major'},{requestId})).resolves.toMatchObject({status:'succeeded',recordId:'real-id'});
-  expect(rpc).toHaveBeenCalledWith('fets_ai_execute_action',{p_tool:'create_incident',p_args:{title:'AC',description:'AC failed',severity:'major'},p_branch:'cochin',p_request_id:requestId});
+  const rpc=vi.fn().mockImplementation(async(name)=>({data:name==='fets_ai_access'?access:{type:'action-result',status:'succeeded',recordId:'real-id'},error:null}));
+  await expect(runTool({rpc},scope,'create_incident',{title:'AC',description:'AC failed',severity:'major'},{requestId,allowWrites:true})).resolves.toMatchObject({status:'succeeded',recordId:'real-id'});
+  expect(rpc).toHaveBeenCalledWith('fets_ai_operation',{p_operation:'create_incident',p_values:{title:'AC',description:'AC failed',severity:'major'},p_branch:'cochin',p_request_id:requestId});
  });
  it('reads the current Shift plan, actual roster hours, and staff presence',()=>{
-  expect(SOURCES.plans.table).toBe('shift_days_v2');
+  expect(SOURCES.plans.table).toBe('centre_day_plans');
   expect(SOURCES.roster.columns).toContain('shift_start');
   expect(SOURCES.roster.columns).toContain('overtime_hours');
   expect(SOURCES.staff.columns).toContain('is_online');

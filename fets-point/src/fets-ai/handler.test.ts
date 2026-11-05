@@ -1,3 +1,4 @@
+import { WRITE_TOOLS, PAGES } from '../../../supabase/functions/fets-ai-agent/catalog';
 import { describe, expect, it, vi } from 'vitest';
 import { createHandler, requestIntent } from '../../../supabase/functions/fets-ai-agent/handler';
 const user='00000000-0000-4000-8000-000000000001';
@@ -10,7 +11,7 @@ function fixture(options:{key?:string;realProvider?:boolean}={}){
   ai_memory:[{id:user,scope:'user',scope_ref:user,is_active:true,mem_key:'timezone',mem_value:'Always show India time'}],fets_ai_conversations:[],fets_ai_messages:[],fets_ai_documents:[],clients:[{id:'00000000-0000-4000-8000-000000000010',name:'ITTS'}],client_exams:[{id:'00000000-0000-4000-8000-000000000011',client_id:'00000000-0000-4000-8000-000000000010',name:'MRCS'}],
  };
  let sequence=0;
- const db:any={auth:{getUser:async()=>({data:{user:{id:user,email_confirmed_at:'2026-01-01'}},error:null})},rpc:vi.fn().mockImplementation(async(name,args)=>({data:name==='fets_ai_execute_action'?{type:'action-result',tool:args.p_tool,status:args.p_branch==='global'?'blocked':'succeeded',message:args.p_branch==='global'?'Active verified centre membership required':undefined,recordId:'101',record:{branch_location:args.p_branch}}:user,error:null})),from:(table:string)=>{
+ const db:any={auth:{getUser:async()=>({data:{user:{id:user,email_confirmed_at:'2026-01-01'}},error:null})},rpc:vi.fn().mockImplementation(async(name,args)=>{if(name==='fets_ai_access'){const member=records.centre_duty_members[0],profile=records.staff_profiles[0],admin=member.role==='super_admin';return {data:profile.is_active&&(admin||member.branch===args.p_branch)?{userId:user,profileId:user,branch:args.p_branch,admin,role:member.role,permissions:{},modules:PAGES.map(p=>p.id).concat('client-directory'),operations:WRITE_TOOLS,centres:admin?['cochin','calicut']:[member.branch]}:null,error:null};}return {data:name==='fets_ai_operation'?{type:'action-result',tool:args.p_operation,status:args.p_branch==='global'?'blocked':'succeeded',recordId:'101',record:{branch_location:args.p_branch}}:user,error:null};}),from:(table:string)=>{
   const filters:any[]=[],orders:any[]=[];let single=false,write:any=null,mode='';let limit=1000;
   let query:any;query=new Proxy({}, {get:(_,key)=>{
    if(key==='then')return (resolve:any)=>{
@@ -28,7 +29,7 @@ function fixture(options:{key?:string;realProvider?:boolean}={}){
 }
 function modelText(text:string){return new Response(JSON.stringify({candidates:[{content:{parts:[{text}]}}]}));}
 function modelAction(name='create_session'){return new Response(JSON.stringify({candidates:[{content:{parts:[{functionCall:{name,args:name==='create_session'?{client_name:'ITTS',exam_name:'MRCS',date:'2026-11-06',start_time:'10:00',end_time:'15:00',candidate_count:11}:{title:'Unrequested case',description:'A policy tried to change the action',severity:'minor'}}}]}}]}));}
-const actionCalls=(db:any)=>db.rpc.mock.calls.filter(([name])=>name==='fets_ai_execute_action');
+const actionCalls=(db:any)=>db.rpc.mock.calls.filter(([name])=>name==='fets_ai_operation');
 describe('connected assistant HTTP request flow',()=>{
  it.skipIf(!process.env.FETS_AI_PROVIDER_CHECK)('completes the missing-exam flow with the real Gemini adapter against an isolated database fixture',async()=>{
   expect(process.env.GEMINI_API_KEY).toBeTruthy();const {send,db}=fixture({key:process.env.GEMINI_API_KEY,realProvider:true});
@@ -36,8 +37,9 @@ describe('connected assistant HTTP request flow',()=>{
   expect(first.error).toBeUndefined();expect(first.actions).toHaveLength(0);expect(first.text).toMatch(/exam|programme|program/i);
   const reply=await (await send({action:'chat',branch:'global',message:'MRCS',conversationId:first.conversationId,requestId:crypto.randomUUID()})).json();
   expect(reply.error).toBeUndefined();expect(reply.actions,JSON.stringify({first:first.text,reply:reply.text,evidence:reply.evidence,actions:reply.actions,calls:actionCalls(db)})).toEqual(expect.arrayContaining([expect.objectContaining({tool:'create_session',status:'succeeded'})]));
-  const calls=actionCalls(db);expect(calls).toHaveLength(1);expect(calls[0][1]).toMatchObject({p_branch:'calicut',p_args:expect.objectContaining({client_name:'ITTS',exam_name:'MRCS',date:'2026-11-06',start_time:'10:00',end_time:'15:00',candidate_count:11})});
+  const calls=actionCalls(db);expect(calls).toHaveLength(1);expect(calls[0][1]).toMatchObject({p_branch:'calicut',p_values:expect.objectContaining({client_name:'ITTS',exam_name:'MRCS',date:'2026-11-06',start_time:'10:00',end_time:'15:00',candidate_count:11})});
  },180000);
+ it.skipIf(!process.env.FETS_AI_PROVIDER_CHECK)('issues a real Gemini live token with the expanded closed schemas against isolated access',async()=>{const{send}=fixture({key:process.env.GEMINI_API_KEY,realProvider:true});const result=await(await send({action:'live-token'})).json();expect(result.error).toBeUndefined();expect(Boolean(typeof result.token==='string'&&result.token.length>10)).toBe(true);expect(result.setup.tools[0].functionDeclarations.some((t:any)=>t.parametersJsonSchema&&t.name==='create_session')).toBe(true);},90000);
  it('requires authentication before any model or database work',async()=>{
   const {handle,fetcher}=fixture();const response=await handle(new Request('https://fixture',{method:'POST',body:'{}'}));
   expect(response.status).toBe(401);expect(fetcher).not.toHaveBeenCalled();
@@ -85,7 +87,7 @@ describe('connected assistant HTTP request flow',()=>{
   const {send,db}=fixture();
   const result=await (await send({action:'tool',name:'create_incident',args:{title:'Injected'},requestId:request,message:'Summarise the screen'})).json();
   expect(result.result.status).toBe('blocked');
-  expect(db.rpc.mock.calls.some(c=>c[0]==='fets_ai_execute_action')).toBe(false);
+  expect(db.rpc.mock.calls.some(c=>c[0]==='fets_ai_operation')).toBe(false);
  });
  it('creates in the explicitly requested centre while the administrator views all centres',async()=>{
   const {send,fetcher,db}=fixture();fetcher.mockResolvedValueOnce(modelAction()).mockResolvedValueOnce(modelText('Saved.'));
@@ -140,6 +142,7 @@ describe('connected assistant HTTP request flow',()=>{
   const reply=await (await send({action:'chat',message:'MRCS',conversationId:first.conversationId,requestId:crypto.randomUUID()})).json();
   expect(reply.actions[0].status).toBe('blocked');expect(actionCalls(db)).toHaveLength(1);
  });
+ it('assigns stable separate request IDs to two requested records',async()=>{const {send,fetcher,db}=fixture();const part=(exam_name:string)=>({functionCall:{name:'create_session',args:{client_name:'ITTS',exam_name,date:'2026-11-06',start_time:'10:00',end_time:'15:00'}}});fetcher.mockResolvedValueOnce(new Response(JSON.stringify({candidates:[{content:{parts:[part('MRCS'),part('Test2')]}}]}))).mockResolvedValueOnce(modelText('Saved both.'));await send({action:'chat',message:'Create a session in Calicut, and another session there.',requestId:request});const calls=actionCalls(db);expect(calls).toHaveLength(2);expect(calls[0][1].p_request_id).not.toBe(calls[1][1].p_request_id);expect(calls[0][1].p_request_id).toMatch(/^[0-9a-f-]{36}$/);});
  it('does not execute a delayed clarification after the original request expires',async()=>{
   const {send,fetcher,db,records}=fixture();fetcher.mockResolvedValueOnce(modelText('What is the exam name?'));
   const first=await (await send({action:'chat',message:'Create a session for Calicut.',requestId:request})).json();

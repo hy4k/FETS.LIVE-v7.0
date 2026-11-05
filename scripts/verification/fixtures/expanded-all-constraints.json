@@ -1,0 +1,608 @@
+[
+  {
+    "table_name": "centre_day_tasks",
+    "conname": "centre_day_tasks_assigned_to_fkey",
+    "definition": "FOREIGN KEY (assigned_to) REFERENCES staff_profiles(id) ON DELETE SET NULL",
+    "contype": "f"
+  },
+  {
+    "table_name": "centre_day_tasks",
+    "conname": "centre_day_tasks_branch_check",
+    "definition": "CHECK (((branch = lower(branch)) AND (branch <> ALL (ARRAY['global'::text, '*'::text, 'all'::text]))))",
+    "contype": "c"
+  },
+  {
+    "table_name": "centre_day_tasks",
+    "conname": "centre_day_tasks_branch_day_responsibility_id_key",
+    "definition": "UNIQUE (branch, day, responsibility_id)",
+    "contype": "u"
+  },
+  {
+    "table_name": "centre_day_tasks",
+    "conname": "centre_day_tasks_carried_from_fkey",
+    "definition": "FOREIGN KEY (carried_from) REFERENCES centre_day_tasks(id) ON DELETE SET NULL",
+    "contype": "f"
+  },
+  {
+    "table_name": "centre_day_tasks",
+    "conname": "centre_day_tasks_completion_note_check",
+    "definition": "CHECK ((length(completion_note) <= 2000))",
+    "contype": "c"
+  },
+  {
+    "table_name": "centre_day_tasks",
+    "conname": "centre_day_tasks_created_by_fkey",
+    "definition": "FOREIGN KEY (created_by) REFERENCES staff_profiles(id) ON DELETE SET NULL",
+    "contype": "f"
+  },
+  {
+    "table_name": "centre_day_tasks",
+    "conname": "centre_day_tasks_done_by_fkey",
+    "definition": "FOREIGN KEY (done_by) REFERENCES staff_profiles(id) ON DELETE SET NULL",
+    "contype": "f"
+  },
+  {
+    "table_name": "centre_day_tasks",
+    "conname": "centre_day_tasks_due_minute_check",
+    "definition": "CHECK (((due_minute >= 0) AND (due_minute <= 1439)))",
+    "contype": "c"
+  },
+  {
+    "table_name": "centre_day_tasks",
+    "conname": "centre_day_tasks_expected_result_check",
+    "definition": "CHECK ((length(expected_result) <= 2000))",
+    "contype": "c"
+  },
+  {
+    "table_name": "centre_day_tasks",
+    "conname": "centre_day_tasks_instructions_check",
+    "definition": "CHECK ((length(instructions) <= 2000))",
+    "contype": "c"
+  },
+  {
+    "table_name": "centre_day_tasks",
+    "conname": "centre_day_tasks_note_check",
+    "definition": "CHECK ((length(note) <= 2000))",
+    "contype": "c"
+  },
+  {
+    "table_name": "centre_day_tasks",
+    "conname": "centre_day_tasks_priority_check",
+    "definition": "CHECK ((priority = ANY (ARRAY['normal'::text, 'important'::text])))",
+    "contype": "c"
+  },
+  {
+    "table_name": "centre_day_tasks",
+    "conname": "centre_day_tasks_responsibility_id_fkey",
+    "definition": "FOREIGN KEY (responsibility_id) REFERENCES centre_responsibilities(id) ON DELETE SET NULL",
+    "contype": "f"
+  },
+  {
+    "table_name": "centre_day_tasks",
+    "conname": "centre_day_tasks_review_note_check",
+    "definition": "CHECK ((length(review_note) <= 2000))",
+    "contype": "c"
+  },
+  {
+    "table_name": "centre_day_tasks",
+    "conname": "centre_day_tasks_rework_count_check",
+    "definition": "CHECK ((rework_count >= 0))",
+    "contype": "c"
+  },
+  {
+    "table_name": "centre_day_tasks",
+    "conname": "centre_day_tasks_status_check",
+    "definition": "CHECK ((status = ANY (ARRAY['open'::text, 'done'::text, 'blocked'::text, 'carried'::text, 'skipped'::text])))",
+    "contype": "c"
+  },
+  {
+    "table_name": "centre_day_tasks",
+    "conname": "centre_day_tasks_support_category_check",
+    "definition": "CHECK ((support_category = ANY (ARRAY[''::text, 'clarity'::text, 'training'::text, 'workload'::text, 'equipment'::text, 'dependency'::text, 'other'::text])))",
+    "contype": "c"
+  },
+  {
+    "table_name": "centre_day_tasks",
+    "conname": "centre_day_tasks_title_check",
+    "definition": "CHECK (((length(btrim(title)) >= 1) AND (length(btrim(title)) <= 200)))",
+    "contype": "c"
+  },
+  {
+    "table_name": "centre_day_tasks",
+    "conname": "centre_day_tasks_verified_by_fkey",
+    "definition": "FOREIGN KEY (verified_by) REFERENCES staff_profiles(id)",
+    "contype": "f"
+  },
+  {
+    "table_name": "centre_day_tasks",
+    "conname": "centre_day_tasks_version_check",
+    "definition": "CHECK ((version > 0))",
+    "contype": "c"
+  },
+  {
+    "table_name": "client_exams",
+    "conname": "client_exams_client_id_fkey",
+    "definition": "FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE",
+    "contype": "f"
+  },
+  {
+    "table_name": "clients",
+    "conname": "clients_name_key",
+    "definition": "UNIQUE (name)",
+    "contype": "u"
+  },
+  {
+    "table_name": "conversation_members",
+    "conname": "conversation_members_conversation_id_fkey",
+    "definition": "FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE",
+    "contype": "f"
+  },
+  {
+    "table_name": "conversation_members",
+    "conname": "conversation_members_conversation_id_user_id_key",
+    "definition": "UNIQUE (conversation_id, user_id)",
+    "contype": "u"
+  },
+  {
+    "table_name": "conversation_members",
+    "conname": "conversation_members_user_id_fkey",
+    "definition": "FOREIGN KEY (user_id) REFERENCES staff_profiles(id) ON DELETE CASCADE",
+    "contype": "f"
+  },
+  {
+    "table_name": "conversations",
+    "conname": "conversations_created_by_fkey",
+    "definition": "FOREIGN KEY (created_by) REFERENCES staff_profiles(id) ON DELETE CASCADE",
+    "contype": "f"
+  },
+  {
+    "table_name": "desk_journal_entries",
+    "conname": "desk_journal_entries_mood_check",
+    "definition": "CHECK ((mood = ANY (ARRAY[''::text, 'bright'::text, 'steady'::text, 'focused'::text, 'slow'::text])))",
+    "contype": "c"
+  },
+  {
+    "table_name": "desk_journal_entries",
+    "conname": "desk_journal_entries_note_check",
+    "definition": "CHECK ((char_length(note) <= 2000))",
+    "contype": "c"
+  },
+  {
+    "table_name": "desk_journal_entries",
+    "conname": "desk_journal_entries_user_id_fkey",
+    "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE",
+    "contype": "f"
+  },
+  {
+    "table_name": "desk_journal_entries",
+    "conname": "desk_journal_entries_version_check",
+    "definition": "CHECK ((version > 0))",
+    "contype": "c"
+  },
+  {
+    "table_name": "desk_preferences",
+    "conname": "desk_preferences_cover_check",
+    "definition": "CHECK ((cover = ANY (ARRAY['peach'::text, 'sage'::text, 'lilac'::text])))",
+    "contype": "c"
+  },
+  {
+    "table_name": "desk_preferences",
+    "conname": "desk_preferences_user_id_fkey",
+    "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE",
+    "contype": "f"
+  },
+  {
+    "table_name": "desk_preferences",
+    "conname": "desk_preferences_version_check",
+    "definition": "CHECK ((version > 0))",
+    "contype": "c"
+  },
+  {
+    "table_name": "expansion_institutions",
+    "conname": "expansion_institutions_actionables_reference_check",
+    "definition": "CHECK (((actionables_reference IS NULL) OR (jsonb_typeof(actionables_reference) = 'object'::text)))",
+    "contype": "c"
+  },
+  {
+    "table_name": "expansion_institutions",
+    "conname": "expansion_institutions_assigned_staff_id_fkey",
+    "definition": "FOREIGN KEY (assigned_staff_id) REFERENCES auth.users(id) ON DELETE SET NULL",
+    "contype": "f"
+  },
+  {
+    "table_name": "incident_comments",
+    "conname": "incident_comments_author_id_fkey",
+    "definition": "FOREIGN KEY (author_id) REFERENCES auth.users(id) ON DELETE CASCADE",
+    "contype": "f"
+  },
+  {
+    "table_name": "incident_comments",
+    "conname": "incident_comments_incident_id_fkey",
+    "definition": "FOREIGN KEY (incident_id) REFERENCES incidents(id) ON DELETE CASCADE",
+    "contype": "f"
+  },
+  {
+    "table_name": "lost_found_items",
+    "conname": "lost_found_items_found_by_staff_id_fkey",
+    "definition": "FOREIGN KEY (found_by_staff_id) REFERENCES staff_profiles(id) ON DELETE SET NULL",
+    "contype": "f"
+  },
+  {
+    "table_name": "lost_found_items",
+    "conname": "lost_found_items_found_by_user_id_fkey",
+    "definition": "FOREIGN KEY (found_by_user_id) REFERENCES auth.users(id)",
+    "contype": "f"
+  },
+  {
+    "table_name": "messages",
+    "conname": "messages_conversation_id_fkey",
+    "definition": "FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE",
+    "contype": "f"
+  },
+  {
+    "table_name": "messages",
+    "conname": "messages_reply_to_fkey",
+    "definition": "FOREIGN KEY (reply_to) REFERENCES messages(id) ON DELETE SET NULL",
+    "contype": "f"
+  },
+  {
+    "table_name": "messages",
+    "conname": "messages_sender_id_fkey",
+    "definition": "FOREIGN KEY (sender_id) REFERENCES staff_profiles(id) ON DELETE CASCADE",
+    "contype": "f"
+  },
+  {
+    "table_name": "mission_institution_stages",
+    "conname": "mission_institution_stages_completed_by_fkey",
+    "definition": "FOREIGN KEY (completed_by) REFERENCES staff_profiles(id) ON DELETE SET NULL",
+    "contype": "f"
+  },
+  {
+    "table_name": "mission_institution_stages",
+    "conname": "mission_institution_stages_completion_note_check",
+    "definition": "CHECK ((length(completion_note) <= 4000))",
+    "contype": "c"
+  },
+  {
+    "table_name": "mission_institution_stages",
+    "conname": "mission_institution_stages_contact_script_check",
+    "definition": "CHECK ((length(contact_script) <= 4000))",
+    "contype": "c"
+  },
+  {
+    "table_name": "mission_institution_stages",
+    "conname": "mission_institution_stages_institution_id_fkey",
+    "definition": "FOREIGN KEY (institution_id) REFERENCES expansion_institutions(id) ON DELETE CASCADE",
+    "contype": "f"
+  },
+  {
+    "table_name": "mission_institution_stages",
+    "conname": "mission_institution_stages_institution_id_position_key",
+    "definition": "UNIQUE (institution_id, \"position\")",
+    "contype": "u"
+  },
+  {
+    "table_name": "mission_institution_stages",
+    "conname": "mission_institution_stages_institution_id_stage_key_key",
+    "definition": "UNIQUE (institution_id, stage_key)",
+    "contype": "u"
+  },
+  {
+    "table_name": "mission_institution_stages",
+    "conname": "mission_institution_stages_instructions_check",
+    "definition": "CHECK ((length(instructions) <= 6000))",
+    "contype": "c"
+  },
+  {
+    "table_name": "mission_institution_stages",
+    "conname": "mission_institution_stages_position_check",
+    "definition": "CHECK ((\"position\" > 0))",
+    "contype": "c"
+  },
+  {
+    "table_name": "mission_institution_stages",
+    "conname": "mission_institution_stages_title_check",
+    "definition": "CHECK (((length(btrim(title)) >= 1) AND (length(btrim(title)) <= 150)))",
+    "contype": "c"
+  },
+  {
+    "table_name": "mission_task_updates",
+    "conname": "mission_task_updates_author_id_fkey",
+    "definition": "FOREIGN KEY (author_id) REFERENCES staff_profiles(id) ON DELETE SET NULL",
+    "contype": "f"
+  },
+  {
+    "table_name": "mission_task_updates",
+    "conname": "mission_task_updates_content_check",
+    "definition": "CHECK (((length(btrim(content)) >= 1) AND (length(btrim(content)) <= 4000)))",
+    "contype": "c"
+  },
+  {
+    "table_name": "mission_task_updates",
+    "conname": "mission_task_updates_edited_by_fkey",
+    "definition": "FOREIGN KEY (edited_by) REFERENCES staff_profiles(id) ON DELETE SET NULL",
+    "contype": "f"
+  },
+  {
+    "table_name": "mission_task_updates",
+    "conname": "mission_task_updates_report_to_id_fkey",
+    "definition": "FOREIGN KEY (report_to_id) REFERENCES auth.users(id) ON DELETE SET NULL",
+    "contype": "f"
+  },
+  {
+    "table_name": "mission_task_updates",
+    "conname": "mission_task_updates_status_check",
+    "definition": "CHECK ((status = ANY (ARRAY['open'::text, 'in_progress'::text, 'blocked'::text, 'done'::text])))",
+    "contype": "c"
+  },
+  {
+    "table_name": "mission_task_updates",
+    "conname": "mission_task_updates_work_item_id_fkey",
+    "definition": "FOREIGN KEY (work_item_id) REFERENCES mission_work_items(id) ON DELETE CASCADE",
+    "contype": "f"
+  },
+  {
+    "table_name": "mission_work_items",
+    "conname": "mission_work_items_created_by_fkey",
+    "definition": "FOREIGN KEY (created_by) REFERENCES auth.users(id)",
+    "contype": "f"
+  },
+  {
+    "table_name": "mission_work_items",
+    "conname": "mission_work_items_district_check",
+    "definition": "CHECK ((district = ANY (ARRAY['Kottayam'::text, 'Ernakulam'::text, 'Thrissur'::text, 'Calicut'::text, 'Kannur'::text])))",
+    "contype": "c"
+  },
+  {
+    "table_name": "mission_work_items",
+    "conname": "mission_work_items_impact_check",
+    "definition": "CHECK ((length(impact) <= 1000))",
+    "contype": "c"
+  },
+  {
+    "table_name": "mission_work_items",
+    "conname": "mission_work_items_institution_id_fkey",
+    "definition": "FOREIGN KEY (institution_id) REFERENCES expansion_institutions(id) ON DELETE SET NULL",
+    "contype": "f"
+  },
+  {
+    "table_name": "mission_work_items",
+    "conname": "mission_work_items_institution_stage_id_fkey",
+    "definition": "FOREIGN KEY (institution_stage_id) REFERENCES mission_institution_stages(id) ON DELETE SET NULL",
+    "contype": "f"
+  },
+  {
+    "table_name": "mission_work_items",
+    "conname": "mission_work_items_owner_id_fkey",
+    "definition": "FOREIGN KEY (owner_id) REFERENCES staff_profiles(id) ON DELETE SET NULL",
+    "contype": "f"
+  },
+  {
+    "table_name": "mission_work_items",
+    "conname": "mission_work_items_reference_task_key_check",
+    "definition": "CHECK (((reference_task_key >= 1) AND (reference_task_key <= 5)))",
+    "contype": "c"
+  },
+  {
+    "table_name": "mission_work_items",
+    "conname": "mission_work_items_report_to_id_fkey",
+    "definition": "FOREIGN KEY (report_to_id) REFERENCES auth.users(id) ON DELETE SET NULL",
+    "contype": "f"
+  },
+  {
+    "table_name": "mission_work_items",
+    "conname": "mission_work_items_status_check",
+    "definition": "CHECK ((status = ANY (ARRAY['open'::text, 'in_progress'::text, 'blocked'::text, 'done'::text])))",
+    "contype": "c"
+  },
+  {
+    "table_name": "mission_work_items",
+    "conname": "mission_work_items_title_check",
+    "definition": "CHECK (((length(btrim(title)) >= 1) AND (length(btrim(title)) <= 2000)))",
+    "contype": "c"
+  },
+  {
+    "table_name": "mission_work_items",
+    "conname": "mission_work_items_updated_by_fkey",
+    "definition": "FOREIGN KEY (updated_by) REFERENCES auth.users(id) ON DELETE SET NULL",
+    "contype": "f"
+  },
+  {
+    "table_name": "news_ticker",
+    "conname": "news_ticker_created_by_fkey",
+    "definition": "FOREIGN KEY (created_by) REFERENCES staff_profiles(id) ON DELETE CASCADE",
+    "contype": "f"
+  },
+  {
+    "table_name": "roster_schedules",
+    "conname": "roster_schedules_profile_id_date_key",
+    "definition": "UNIQUE (profile_id, date)",
+    "contype": "u"
+  },
+  {
+    "table_name": "roster_schedules",
+    "conname": "roster_schedules_profile_id_fkey",
+    "definition": "FOREIGN KEY (profile_id) REFERENCES staff_profiles(id) ON DELETE CASCADE",
+    "contype": "f"
+  },
+  {
+    "table_name": "roster_schedules",
+    "conname": "roster_shift_times_valid",
+    "definition": "CHECK (((((shift_start IS NULL) AND (shift_end IS NULL)) OR ((shift_start IS NOT NULL) AND (shift_end IS NOT NULL) AND (shift_end > shift_start))) AND ((grace_minutes >= 0) AND (grace_minutes <= 60)) AND (char_length(COALESCE(shift_label, ''::text)) <= 50)))",
+    "contype": "c"
+  },
+  {
+    "table_name": "shift_handovers",
+    "conname": "shift_handovers_incoming_staff_id_fkey",
+    "definition": "FOREIGN KEY (incoming_staff_id) REFERENCES staff_profiles(id) ON DELETE SET NULL",
+    "contype": "f"
+  },
+  {
+    "table_name": "shift_handovers",
+    "conname": "shift_handovers_outgoing_staff_id_fkey",
+    "definition": "FOREIGN KEY (outgoing_staff_id) REFERENCES staff_profiles(id) ON DELETE SET NULL",
+    "contype": "f"
+  },
+  {
+    "table_name": "shift_handovers",
+    "conname": "shift_handovers_overall_status_check",
+    "definition": "CHECK ((overall_status = ANY (ARRAY['ready'::text, 'minor'::text, 'attention'::text, 'not_ready'::text])))",
+    "contype": "c"
+  },
+  {
+    "table_name": "shift_handovers",
+    "conname": "shift_handovers_status_check",
+    "definition": "CHECK ((status = ANY (ARRAY['pending'::text, 'completed'::text, 'expired'::text, 'cancelled'::text])))",
+    "contype": "c"
+  },
+  {
+    "table_name": "slate_entries",
+    "conname": "slate_entries_category_check",
+    "definition": "CHECK ((category = ANY (ARRAY['note'::text, 'idea'::text, 'task'::text, 'reflection'::text, 'dream'::text, 'memo'::text, 'journal'::text, 'quote'::text])))",
+    "contype": "c"
+  },
+  {
+    "table_name": "staff_applications",
+    "conname": "staff_applications_applicant_id_fkey",
+    "definition": "FOREIGN KEY (applicant_id) REFERENCES staff_profiles(id) ON DELETE SET NULL",
+    "contype": "f"
+  },
+  {
+    "table_name": "staff_applications",
+    "conname": "staff_applications_half_day_period_check",
+    "definition": "CHECK ((half_day_period = ANY (ARRAY['first'::text, 'second'::text])))",
+    "contype": "c"
+  },
+  {
+    "table_name": "staff_applications",
+    "conname": "staff_applications_kind_check",
+    "definition": "CHECK ((kind = ANY (ARRAY['leave'::text, 'toil'::text, 'swap'::text, 'emergency_duty'::text, 'reimbursement'::text])))",
+    "contype": "c"
+  },
+  {
+    "table_name": "staff_applications",
+    "conname": "staff_applications_partner_reply_check",
+    "definition": "CHECK ((partner_reply = ANY (ARRAY['accepted'::text, 'declined'::text])))",
+    "contype": "c"
+  },
+  {
+    "table_name": "staff_applications",
+    "conname": "staff_applications_resolved_by_fkey",
+    "definition": "FOREIGN KEY (resolved_by) REFERENCES staff_profiles(id) ON DELETE SET NULL",
+    "contype": "f"
+  },
+  {
+    "table_name": "staff_applications",
+    "conname": "staff_applications_status_check",
+    "definition": "CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])))",
+    "contype": "c"
+  },
+  {
+    "table_name": "staff_applications",
+    "conname": "staff_applications_swap_with_id_fkey",
+    "definition": "FOREIGN KEY (swap_with_id) REFERENCES staff_profiles(id) ON DELETE SET NULL",
+    "contype": "f"
+  },
+  {
+    "table_name": "staff_attendance",
+    "conname": "staff_attendance_staff_id_date_key",
+    "definition": "UNIQUE (staff_id, date)",
+    "contype": "u"
+  },
+  {
+    "table_name": "staff_attendance",
+    "conname": "staff_attendance_staff_id_fkey",
+    "definition": "FOREIGN KEY (staff_id) REFERENCES staff_profiles(id) ON DELETE CASCADE",
+    "contype": "f"
+  },
+  {
+    "table_name": "staff_attendance",
+    "conname": "staff_attendance_status_check",
+    "definition": "CHECK ((status = ANY (ARRAY['present'::text, 'absent'::text, 'late'::text, 'half_day'::text])))",
+    "contype": "c"
+  },
+  {
+    "table_name": "staff_branch_delegations",
+    "conname": "staff_branch_delegations_profile_id_fkey",
+    "definition": "FOREIGN KEY (profile_id) REFERENCES staff_profiles(id) ON DELETE CASCADE",
+    "contype": "f"
+  },
+  {
+    "table_name": "staff_ot_claims",
+    "conname": "staff_ot_claims_profile_id_fkey",
+    "definition": "FOREIGN KEY (profile_id) REFERENCES staff_profiles(id) ON DELETE CASCADE",
+    "contype": "f"
+  },
+  {
+    "table_name": "staff_ot_claims",
+    "conname": "unique_profile_date_claim",
+    "definition": "UNIQUE (profile_id, date)",
+    "contype": "u"
+  },
+  {
+    "table_name": "staff_profiles",
+    "conname": "staff_profiles_base_centre_check",
+    "definition": "CHECK ((base_centre = ANY (ARRAY['calicut'::text, 'cochin'::text])))",
+    "contype": "c"
+  },
+  {
+    "table_name": "staff_profiles",
+    "conname": "staff_profiles_email_key",
+    "definition": "UNIQUE (email)",
+    "contype": "u"
+  },
+  {
+    "table_name": "staff_profiles",
+    "conname": "staff_profiles_status_check",
+    "definition": "CHECK ((status = ANY (ARRAY['active'::text, 'inactive'::text, 'on_leave'::text])))",
+    "contype": "c"
+  },
+  {
+    "table_name": "staff_profiles",
+    "conname": "staff_profiles_user_id_fkey",
+    "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE",
+    "contype": "f"
+  },
+  {
+    "table_name": "staff_profiles",
+    "conname": "staff_profiles_user_id_key",
+    "definition": "UNIQUE (user_id)",
+    "contype": "u"
+  },
+  {
+    "table_name": "system_logs",
+    "conname": "system_logs_system_id_fkey",
+    "definition": "FOREIGN KEY (system_id) REFERENCES systems(id) ON DELETE CASCADE",
+    "contype": "f"
+  },
+  {
+    "table_name": "systems",
+    "conname": "systems_status_check",
+    "definition": "CHECK ((status = ANY (ARRAY['operational'::text, 'maintenance'::text, 'fault'::text])))",
+    "contype": "c"
+  },
+  {
+    "table_name": "systems",
+    "conname": "systems_system_type_check",
+    "definition": "CHECK ((system_type = ANY (ARRAY['admin'::text, 'server'::text, 'workstation'::text, 'peripheral'::text, 'rented'::text])))",
+    "contype": "c"
+  },
+  {
+    "table_name": "toil_records",
+    "conname": "toil_records_approved_by_fkey",
+    "definition": "FOREIGN KEY (approved_by) REFERENCES staff_profiles(id) ON DELETE SET NULL",
+    "contype": "f"
+  },
+  {
+    "table_name": "toil_records",
+    "conname": "toil_records_staff_id_fkey",
+    "definition": "FOREIGN KEY (staff_id) REFERENCES staff_profiles(id) ON DELETE CASCADE",
+    "contype": "f"
+  },
+  {
+    "table_name": "toil_records",
+    "conname": "toil_records_toil_type_check",
+    "definition": "CHECK ((toil_type = ANY (ARRAY['pending'::text, 'day_off_taken'::text, 'paid'::text, 'cancelled'::text])))",
+    "contype": "c"
+  }
+]
