@@ -4,7 +4,7 @@
 
 Add a reusable Excel upload, following the existing CMA US calendar/candidate upload, for Pearson VUE registrations. A first file covers Cochin, 1–30 November 2026, and is a snapshot as of 5 November. Later refreshed files must update existing bookings, Calendar and Candidate Tracker without appending duplicates or adding counts twice. Store the added email and exam-code columns. No external booking ID is required: assign FETS identifiers and reuse them. User chose to show missing future bookings for cancellation review instead of automatically removing them.
 
-The final clarification concerns initial historical records: the live tracker has35 Pearson rows dated1–5 November, but only8 exact name/date matches to the attachment. User is choosing between importing upcoming/confirmed rows while holding uncertain past rows, or reviewing every existing match before any import. Do not resolve this by overwriting history or guessing identity.
+Confirmed initial import boundary: review ALL existing candidate and calendar matches before ANY import. The live tracker has35 Pearson rows dated1–5 November, but only8 exact name/date matches to the attachment. Prepare a complete private review of all35 existing records, all451 incoming bookings and every calendar-group reconciliation. No safe-subset or upcoming-only import is authorized before the user has reviewed the complete matching result. Do not resolve uncertain identities by overwriting history or guessing.
 
 ## Read-only findings
 
@@ -28,7 +28,7 @@ Current daily importer requires provider roster IDs, has one date per save, drop
 
 ## Builder review decisions
 
-A fresh read-only builder review found no additional user product questions beyond the historical-import choice already pending. The following engineering defaults clarify the existing intent:
+A fresh read-only builder review found no additional user product questions beyond the historical-import choice (now answered: review all before any import). The following engineering defaults clarify the existing intent:
 
 - Unresolved/held registrations do not lower a calendar session total. Reconcile only a fully resolved session membership, otherwise keep the existing session total and expose the difference/review state. Do not create another session merely because some candidate bindings are held.
 - A pending cancellation remains active and counted until an authorized human approves it. Dismiss keeps the booking; reappearance in a later snapshot automatically closes the stale missing-booking review. Approval preserves the record/history and makes its counted membership inactive. Pearson counting uses explicit import/session membership and excludes approved cancelled registrations; other providers retain existing semantics.
