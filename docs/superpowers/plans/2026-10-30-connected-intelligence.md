@@ -33,36 +33,36 @@
 
 **Files:** new migration under `supabase/migrations`, isolated SQL verification under `scripts/verification`.
 **Interfaces:** defined in `docs/superpowers/plans/intelligence-contract.md`.
-- [ ] Write failing isolated checks for private memory/conversations, shared memory publication, idempotency, kill switch, role/centre checks and optimistic updates.
-- [ ] Implement additive persistence, preserve legacy rows, and correct the overly broad legacy policies.
-- [ ] Implement exact typed action RPC and memory RPC; verify all allow/deny boundaries and no generic SQL writes.
-- [ ] Run the isolated database suite and review the migration.
+- [x] Write failing isolated checks for private memory/conversations, shared memory publication, idempotency, kill switch, role/centre checks and optimistic updates.
+- [x] Implement additive persistence, preserve legacy rows, and correct the overly broad legacy policies.
+- [x] Implement exact typed action RPC and memory RPC; verify all allow/deny boundaries and no generic SQL writes.
+- [x] Run the isolated database suite and review the migration.
 
 ## Task 2: Connected agent backend
 
 **Files:** `supabase/functions/fets-ai-agent/{index,core,catalog}.ts`, new runtime/provider/persistence modules, backend tests under `fets-point/src/fets-ai`.
-- [ ] Write failing tests for settings, pinned context, protected history, action routing, returned evidence and current Shift sources.
-- [ ] Implement provider routing, scoped context/history, read and write tools, management actions and live-token memory.
-- [ ] Preserve Gemini thought signatures; limit tool loops and classify errors correctly; persist replies before reporting saved success.
-- [ ] Run backend tests and Edge Function type checks.
+- [x] Write failing tests for settings, pinned context, protected history, action routing, returned evidence and current Shift sources.
+- [x] Implement provider routing, scoped context/history, read and write tools, management actions and live-token memory.
+- [x] Preserve Gemini thought signatures; limit tool loops and classify errors correctly; persist replies before reporting saved success.
+- [x] Run backend tests and Edge Function type checks.
 
 ## Task 3: Intelligence UI and floating companion
 
 **Files:** page, Control/Knowledge/Telemetry panels, client types, shared conversation hook and result rendering, floating companion.
-- [ ] Write failing component tests for working controls, memory CRUD/history restore and actual result/evidence display.
-- [ ] Connect all panels to the active agent API, implement per-account/centre conversation restoration, new chat and history selection.
-- [ ] Display actual provider/writes state; disable unconfigured providers; expose pinned memory management and combined knowledge.
-- [ ] Keep media explicitly permissioned and give live setup the same saved context.
-- [ ] Run focused UI tests and full production TypeScript/build checks.
+- [x] Write failing component tests for working controls, memory CRUD/history restore and actual result/evidence display.
+- [x] Connect all panels to the active agent API, implement per-account/centre conversation restoration, new chat and history selection.
+- [x] Display actual provider/writes state; disable unconfigured providers; expose pinned memory management and combined knowledge.
+- [x] Keep media explicitly permissioned and give live setup the same saved context.
+- [x] Run focused UI tests and full production TypeScript/build checks.
 
 ## Task 4: Review and deployment
 
-- [ ] Review complete diff for authorization, prompt injection, replay races, scope changes, legacy compatibility and leaked fixtures/secrets.
-- [ ] Run isolated SQL, targeted frontend/backend, production build and browser fixtures.
-- [ ] Save the existing Edge Function, schema/policy evidence, current image and effective config.
-- [ ] Apply the reviewed additive migration, deploy the authenticated function, and verify installed code/permissions.
-- [ ] Build a candidate frontend on the existing runtime image, verify it, and switch only Live.
-- [ ] Verify public assets/routes, real compiled module, backend health and rollback artifacts; record exact proof and verification limits.
+- [x] Review complete diff for authorization, prompt injection, replay races, scope changes, legacy compatibility and leaked fixtures/secrets.
+- [x] Run isolated SQL, targeted frontend/backend, production build and browser fixtures.
+- [x] Save the existing Edge Function, schema/policy evidence, current image and effective config.
+- [x] Apply the reviewed additive migration, deploy the authenticated function, and verify installed code/permissions.
+- [x] Build a candidate frontend on the existing runtime image, verify it, and switch only Live.
+- [x] Verify public assets/routes, real compiled module, backend health and rollback artifacts; record exact proof and verification limits.
 
 ## Execution ledger
 
@@ -70,3 +70,6 @@
 - Ruling: User approval of the audit proposal authorizes implementation and its required scoped database changes; the earlier frontend-only deployment constraint applied to the completed OT release.
 - Ruling: Use independently owned database/frontend/backend work areas with the parallel-agent skill; keep the API contract fixed and integrate/review before any production mutation.
 - Ruling: Task creation uses the application's actual auth-user foreign keys; cases use the installed minor/major/critical severity enum; calendar IDs remain database-generated bigint identities.
+
+- Final release (5 November 2026): the production frontend had advanced to main `5f017e5` while implementation was pending. Ported only the reviewed Intelligence changes to that current source, retaining its other updates. Deployed application commit `03839782264c10b887e51dcd527bba8e035fd4d1`; record in `docs/releases/2026-11-05-connected-intelligence.md`.
+- Aligned the migration filename with the production MCP-applied version `20261105070506`; the reviewed SQL bytes and SHA-256 are unchanged.
