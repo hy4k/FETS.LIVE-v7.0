@@ -20,7 +20,7 @@ Production remains Pearson release `20261105T170118Z-pearson-monthly`, frontend 
 ## Pending operational choices
 
 1. One shared workstation pool per centre, or provider/exam-specific reserved pools?
-2. Seat reuse immediately at scheduled end, or10/15-minute checkout/preparation buffer?
+2. When is the workstation first occupied (scheduled start or earlier setup), and when is it released (scheduled end or10/15-minute checkout/preparation buffer)? The first async question only asked about release; clarify setup as part of the same operating rule before implementation.
 3. Simulation flexibility:up to15 minutes earlier/later, later only, or provider/exam-specific limits?
 
 Builder defaults, to be shown to the user: recommendations are simulations for human review; no automatic rescheduling. Existing live/running or completed exams cannot be suggested as movable. Missing-time bookings produce an incomplete-data state. Opening/closing constraints must be explicit planning inputs before an adjustment is labelled feasible; do not infer operational permission from an empty calendar.
@@ -42,6 +42,12 @@ Builder defaults, to be shown to the user: recommendations are simulations for h
 - Load complete scoped data with stable pagination, ignore provider presentation filters when calculating the shared centre total, and surface refresh/error/staleness. A failed/incomplete fetch cannot be labelled safe.
 - A what-if calculation never writes records. If saving/reviewing a selected plan is later included, recheck current source versions and canonical permissions, preserve source provenance and require an atomic reviewed operation; imported-source rules remain intact.
 - Never infer greater physical capacity from daily throughput. Maintenance/unavailable-workstation deductions can be explicit scenario inputs, labelled separately from the confirmed installed totals; persistence is a builder decision only if needed for the requested first version.
+
+## Fresh builder check
+
+The independent design check found that valid start/end fields can still contain a duration copied from an earlier Calendar session by the legacy importer. Therefore source validity is more than syntactic parsing: distinguish exact uploaded appointment ranges, current Calendar-declared ranges and unresolved/inferred durations. Label results as planned booked seats, not measured physical occupancy. A definitive fit/solution must identify its timing assumptions and cannot silently rely on a duration known to be missing or unverified. Duration/source verification is an implementation/data concern, not another generic user approval question.
+
+Count confirmed workstation setup before the exam as well as post-exam turnaround. Fetch previous/next-day source records when buffers or allowed shifts cross midnight. When a suggestion search is bounded/heuristic, report “No solution found within these limits”; only claim no permitted solution exists if the search proves it. Splitting a Calendar group must preserve the unmoved members and their original intervals. Builder review found no other important user questions beyond the three operating rules above.
 
 ## Verification that must drive implementation
 
