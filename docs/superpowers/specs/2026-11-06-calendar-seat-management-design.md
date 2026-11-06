@@ -1,6 +1,6 @@
 # Calendar seat management
 
-Status: implemented and under final verification; rollout evidence is recorded separately. Actual provider-specific limits are pending; unset rules remain fixed rather than guessed.
+Status: implemented, verified and deployed. Receipt: `docs/deployments/2026-11-06-calendar-seat-management.json`. Actual provider-specific limits are pending; unset rules remain fixed rather than guessed.
 
 ## Confirmed purpose
 

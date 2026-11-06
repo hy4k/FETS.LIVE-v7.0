@@ -77,7 +77,7 @@
 ## Task 5: Review, visual verification and guarded rollout — root
 
 - [x] Fresh whole-feature review; reproduce/fix material findings with regression checks.
-- [ ] Read-only live schedule comparison for Calicut13Nov50/40 and Kochi14Nov35/31 and current missing-times cases. No fabricated live records, no actual exam reschedules.
-- [ ] Real-browser synthetic checks at1440/390px for all main controls,global/centre views,rule-save denial/success,suggestion before/after and no body/modal overflow. Show the resulting organisation clearly to the user.
-- [ ] Inspect running frontend/config and save rollback image/metadata before deployment; publish only reviewed additive settings API + Live frontend, verify no business row fingerprints changed.
-- [ ] Verify https://fets.live, public new module exports/routes/assets and runtime invariants. Preserve original .env/compose/nginx and other services. Commit sanitized verification/receipt, draft PR, attach PR.
+- [x] Read-only live schedule comparison for Calicut13Nov50/40 and Kochi14Nov35/31 and current missing-times cases. No fabricated live records, no actual exam reschedules.
+- [x] Real-browser synthetic checks at1440/390px for all main controls,global/centre views,rule-save denial/success,suggestion before/after and no body/modal overflow. Show the resulting organisation clearly to the user.
+- [x] Inspect running frontend/config and save rollback image/metadata before deployment; publish only reviewed additive settings API + Live frontend, verify no business row fingerprints changed.
+- [x] Verify https://fets.live, public new module exports/routes/assets and runtime invariants. Preserve original .env/compose/nginx and other services. Commit sanitized verification/receipt, draft PR, attach PR.
