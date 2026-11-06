@@ -1,6 +1,6 @@
 # Calendar seat management — discovery draft
 
-Status: requirements/design only. No product changes, live booking edits or deployment. Three operational questions are pending with the user; do not silently treat them as answered.
+Status: implementation authorised by the feature request and confirmed operating rules below. No seat-management product changes or deployment yet. Actual provider-specific limits are pending; unset rules remain fixed rather than guessed.
 
 ## Confirmed purpose
 
@@ -17,11 +17,13 @@ Production remains Pearson release `20261105T170118Z-pearson-monthly`, frontend 
 - Read-only November snapshot: Calicut 65 sessions/322 candidates; Cochin 276 sessions/547 candidates. Seventeen positive-count Prometric sessions have start=end:12 in Calicut and5 in Cochin, including current6November rows. No configured exam-duration field was found in `client_exams`; do not invent durations.
 - With a provisional shared pool, zero turnaround and known scheduled intervals, Calicut13November has50 concurrent candidates09:00–13:30 (10 above40). Kochi14November has34 candidates10:00–10:15;34 at11:00–11:15;35 at11:15–11:30;34 at11:30–11:45;32 at11:45–12:15. No missing-time sessions occur on those two dates. These are planning calculations, not measured workstation occupancy or provider-approved reschedules.
 
-## Pending operational choices
+## Confirmed operating rules — 6 November 2026
 
-1. One shared workstation pool per centre, or provider/exam-specific reserved pools?
-2. When is the workstation first occupied (scheduled start or earlier setup), and when is it released (scheduled end or10/15-minute checkout/preparation buffer)? The first async question only asked about release; clarify setup as part of the same operating rule before implementation.
-3. Simulation flexibility:up to15 minutes earlier/later, later only, or provider/exam-specific limits?
+1. One shared workstation pool per centre: Calicut40, Kochi31, all providers counted together.
+2. Seats are available at scheduled end, with no post-exam turnaround buffer. Use scheduled start as the planning occupation start; no additional pre-exam buffer was supplied. This is booked-seat planning, not measured live workstation use.
+3. Timing flexibility depends on the provider/exam. Provide explicit centre-scoped provider rules and exam-code/title overrides; earlier/later limits default to0. A follow-up asks for real limits. Until supplied or configured by an authorised calendar editor, no exam can be shifted. All adjustments are simulations, not writes to bookings.
+
+Implementation choices: store shared rules through a small protected API using existing canonical membership/calendar-edit helpers. Read anonymous exam-code/count details for source-linked Pearson sessions, without names/emails/phones. Calendar counts remain authoritative; source details split a session only when scope/times/counts agree. No database business records or imported times are modified. A simulation window defaults conservatively to the selected day's recorded appointment span and is adjustable explicitly. If only Calendar timing is known, identify that basis; unknown/invalid durations cannot yield a safe fit. Users see both the original and simulated timeline; changing date, centre, input data or rules clears the selected suggestion.
 
 Builder defaults, to be shown to the user: recommendations are simulations for human review; no automatic rescheduling. Existing live/running or completed exams cannot be suggested as movable. Missing-time bookings produce an incomplete-data state. Opening/closing constraints must be explicit planning inputs before an adjustment is labelled feasible; do not infer operational permission from an empty calendar.
 
