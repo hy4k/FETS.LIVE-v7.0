@@ -16,12 +16,16 @@ import {
   formatDateForIST, getCurrentISTDateString,
   isToday as isTodayIST, formatDateForDisplay
 } from '../utils/dateUtils'
-import { validateSessionCapacity, getBranchCapacity } from '../utils/sessionUtils'
+import { validateSessionCapacity } from '../utils/sessionUtils'
 import { useCalendarSessions, useSessionMutations } from '../hooks/useCalendarSessions'
 import { useClients, useClientExams } from '../hooks/useClients'
 import { toast } from 'react-hot-toast'
 import '../styles/calendar-enhancements.css'
+import SeatCalendarBadges from '../seats/SeatCalendarBadges'
+import { analyseDay } from '../seats/engine'
+import { useSeatContext } from '../seats/useSeatContext'
 
+const SeatManagement = lazy(() => import('../seats/SeatManagement'));
 const CalendarRosterDialog = lazy(() => import('../roster/CalendarRosterDialog'));
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -41,7 +45,7 @@ interface Session {
   status?: string
 }
 
-type CalendarViewMode = 'month' | 'week' | 'day'
+type CalendarViewMode = 'month' | 'week' | 'day' | 'seats'
 
 // ─── Lagoon exam palette (distinct, restrained — aqua & sage family) ───────
 const EXAM_COLORS: Record<string, {
@@ -251,9 +255,14 @@ export function FetsCalendarPremium() {
     candidate_count: 1, start_time: '09:00', end_time: '17:00', status: 'scheduled'
   })
 
-  const { data: sessions = [], isLoading: loading, isError, error } = useCalendarSessions(
+  const { data: sessions = [], isLoading: loading, isError, error, isFetching, refetch } = useCalendarSessions(
     currentDate, activeBranch, applyFilter, isGlobalView
   )
+  const seatFrom = new Date(Date.UTC(currentDate.getFullYear(), currentDate.getMonth(), 0)).toISOString().slice(0,10)
+  const seatThrough = new Date(Date.UTC(currentDate.getFullYear(), currentDate.getMonth()+1, 1)).toISOString().slice(0,10)
+  const seatContext = useSeatContext(activeBranch, seatFrom, seatThrough)
+  const seatSessions = useMemo(() => [...sessions, ...(seatContext.data?.adjacent_sessions || [])], [sessions, seatContext.data?.adjacent_sessions])
+  const seatsUnavailable = Boolean(isError || loading || isFetching || seatContext.isLoading || seatContext.isError || seatContext.isFetching || !seatContext.data)
   const { data: dbClients = [] } = useClients()
   const clientsWithOptions = useMemo(() => {
     const list = [...dbClients];
@@ -342,7 +351,7 @@ export function FetsCalendarPremium() {
   const navigate = (dir: 'prev' | 'next') => {
     const delta = dir === 'next' ? 1 : -1
     const d = new Date(currentDate)
-    if (viewMode === 'month') {
+    if (viewMode === 'month' || viewMode === 'seats') {
       d.setDate(1)
       d.setMonth(d.getMonth() + delta)
     } else if (viewMode === 'week') {
@@ -354,7 +363,7 @@ export function FetsCalendarPremium() {
   }
 
   const getHeaderTitle = () => {
-    if (viewMode === 'month')
+    if (viewMode === 'month' || viewMode === 'seats')
       return currentDate.toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' })
     if (viewMode === 'week') {
       const wk = getWeekDays()
@@ -363,6 +372,11 @@ export function FetsCalendarPremium() {
       return `${start} – ${end}`
     }
     return currentDate.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' })
+  }
+
+  const openSeatManagement = (date: string) => {
+    setCurrentDate(new Date(`${date}T12:00:00`))
+    setViewMode('seats')
   }
 
   // ── Modals ────────────────────────────────────────────────────────────────
@@ -546,22 +560,21 @@ export function FetsCalendarPremium() {
           })
           const clientEntries = Array.from(clientMap.values()).sort((a, b) => b.count - a.count)
 
-          const capacity = activeBranch === 'global' ? 100 : getBranchCapacity(activeBranch)
-          const isOverloaded = total >= capacity * 1.5
-          const isPeak = total >= capacity * 0.8
-
-          // SVG progress gauge constants
+          // Every provider uses the same physical centre pool; display filters never reduce demand.
+          const dateStr = formatDateForIST(date)
+          const seatDays = (activeBranch === 'global' ? ['calicut', 'cochin'] as const : activeBranch === 'calicut' || activeBranch === 'cochin' ? [activeBranch] as const : [])
+            .map(branch => analyseDay(seatSessions, branch, dateStr, seatContext.data?.details))
+          const worst = [...seatDays].sort((a,b) => b.peak / b.capacity - a.peak / a.capacity)[0]
+          const capacity = worst?.capacity || 1
+          const peak = seatsUnavailable ? 0 : worst?.peak || 0
+          const isOverloaded = peak > capacity
+          const isPeak = peak === capacity
+          const incomplete = seatsUnavailable || seatDays.some(day => !day.complete)
           const radius = 14
-          const circumference = 2 * Math.PI * radius // ~87.96
-          const pct = Math.min(total / capacity, 1.5)
+          const circumference = 2 * Math.PI * radius
+          const pct = Math.min(peak / capacity, 1)
           const strokeDashoffset = circumference - (pct * circumference)
-          const gaugeColor = isOverloaded 
-            ? '#ef4444' // Red
-            : isPeak 
-            ? 'var(--accent-mint)' // Bronze
-            : total > 0
-            ? 'var(--text-accent)' // Sand
-            : 'transparent'
+          const gaugeColor = isOverloaded ? '#ef4444' : incomplete || isPeak ? '#b7791f' : peak > 0 ? 'var(--text-accent)' : 'transparent'
 
           const DateGauge = () => {
             const displayDate = date.getDate()
@@ -653,11 +666,11 @@ export function FetsCalendarPremium() {
                       className={`h-full transition-all duration-500 ${
                         isOverloaded 
                           ? 'bg-red-500 shadow-[0_0_8px_#ef4444]' 
-                          : isPeak 
+                          : isPeak || incomplete
                           ? 'bg-[var(--accent-mint)] shadow-[0_0_8px_var(--accent-mint)]' 
                           : 'bg-[var(--text-accent)] shadow-[0_0_8px_var(--text-accent)]'
                       }`}
-                      style={{ width: `${Math.min((total / capacity) * 100, 100)}%` }}
+                      style={{ width: `${Math.min((peak / capacity) * 100, 100)}%` }}
                     />
                   </div>
                 )}
@@ -678,6 +691,8 @@ export function FetsCalendarPremium() {
                     </div>
                   )}
                 </div>
+
+                <SeatCalendarBadges sessions={seatSessions} details={seatContext.data?.details} date={dateStr} branch={activeBranch} unavailable={seatsUnavailable} onOpen={openSeatManagement} />
 
                 {/* Client / Session List */}
                 <div className="space-y-1 mt-2">
@@ -1006,11 +1021,12 @@ export function FetsCalendarPremium() {
         <div className="flex flex-wrap items-center justify-between gap-3 mb-5 bg-[var(--card-bg)] rounded-xl border border-[var(--border-color)] px-4 py-3">
           <div className="flex items-center gap-3 flex-wrap">
             {/* View Mode Toggle */}
-            <div className="flex items-center bg-[var(--recessed-bg)] rounded-lg border border-[var(--border-color)] p-0.5">
+            <div className="calendar-view-modes flex items-center bg-[var(--recessed-bg)] rounded-lg border border-[var(--border-color)] p-0.5">
               {([
                 { mode: 'month' as CalendarViewMode, icon: <LayoutGrid size={14} />, label: 'Month' },
                 { mode: 'day'   as CalendarViewMode, icon: <AlignJustify size={14} />, label: 'Day' },
                 { mode: 'week'  as CalendarViewMode, icon: <Columns size={14} />,   label: 'Week' },
+                { mode: 'seats' as CalendarViewMode, icon: <Users size={14} />, label: 'Seat management' },
               ]).map(({ mode, icon, label }) => (
                 <button key={mode}
                   onClick={() => setViewMode(mode)}
@@ -1138,6 +1154,11 @@ export function FetsCalendarPremium() {
         {viewMode === 'month' && <MonthView />}
         {viewMode === 'week' && <WeekView />}
         {viewMode === 'day' && <DayView />}
+        {viewMode === 'seats' && <Suspense fallback={<p role="status">Opening seat management…</p>}>
+          <SeatManagement sessions={sessions} currentDate={currentDate} branch={activeBranch} userId={user?.id || ''}
+            onSelectDate={setCurrentDate} onRefresh={() => { void refetch() }} dataLoading={loading}
+            dataError={isError ? (error as Error)?.message || 'Calendar unavailable' : undefined} isFetching={isFetching} />
+        </Suspense>}
       </div>
       {/* ════════════════════ DAILY DETAILS MODAL ════════════════════ */}
       <AnimatePresence>
@@ -1505,7 +1526,7 @@ export function FetsCalendarPremium() {
       {/* Analysis Modal */}
       <AnimatePresence>
         {showAnalysis && (
-          <CalendarAnalysis onClose={() => setShowAnalysis(false)} activeBranch={activeBranch} />
+          <CalendarAnalysis onClose={() => setShowAnalysis(false)} activeBranch={activeBranch} onOpenSeatManagement={date => { setShowAnalysis(false); if (date) openSeatManagement(date); else setViewMode('seats') }} />
         )}
       </AnimatePresence>
 

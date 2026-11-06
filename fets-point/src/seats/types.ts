@@ -1,6 +1,6 @@
 export type SeatBranch='calicut'|'cochin';
 export type SeatSession={id:number;date:string;branch_location?:string|null;client_name?:string|null;exam_name?:string|null;start_time?:string|null;end_time?:string|null;candidate_count:number|null;status?:string|null;updated_at?:string|null};
-export type SeatDetail={session_id:number;branch_location:SeatBranch;provider:string;date:string;start_time:string;end_time:string;exam_code:string|null;exam_title:string|null;count:number;status:string};
+export type SeatDetail={session_id:number;branch_location:SeatBranch;provider:string|null;date:string|null;start_time:string|null;end_time:string|null;exam_code:string|null;exam_title:string|null;count:number;status:string};
 export type SeatRule={id:string;branch_location:SeatBranch;provider:string;exam_code:string|null;exam_name:string|null;earlier_minutes:number;later_minutes:number;updated_at:string};
 export type SeatIssue={session_id:number|null;kind:string;message:string;blocking:boolean};
 export type SeatAtom={key:string;session_id:number;branch:SeatBranch;date:string;provider:string;exam_code:string|null;exam_name:string;start:number;end:number;count:number;movable:boolean;basis:'source'|'calendar'};
@@ -12,5 +12,5 @@ export type SeatMove={atom_key:string;session_id:number;provider:string;exam_cod
 export type SeatSuggestion={id:string;moves:SeatMove[];day:SeatDay;resolved:boolean;people_moved:number;seat_minutes:number;remaining_excess:number;remaining_overload_seconds:number};
 export type SeatSuggestions={status:'resolved'|'partial'|'none'|'needs_rules'|'incomplete';suggestions:SeatSuggestion[];evaluated:number;limited:boolean;message:string};
 export type SeatSolverOptions={window_start?:string;window_end?:string;now?:string;max_evaluations?:number;max_moves?:number};
-export type SeatContext={rules:SeatRule[];details:SeatDetail[];can_edit_rules:boolean};
+export type SeatContext={rules:SeatRule[];details:SeatDetail[];can_edit_rules:boolean;adjacent_sessions?:SeatSession[]};
 export type SeatRuleInput={branch_location:SeatBranch;provider:string;exam_code:string|null;exam_name:string|null;earlier_minutes:number;later_minutes:number;expected_updated_at:string|null};

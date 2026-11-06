@@ -8,10 +8,10 @@ grant usage on schema fets_calendar_seats_private to authenticated;
 
 create function fets_calendar_seats_private.normalise_provider(p_provider text)
 returns text language sql immutable set search_path='' as $$
- select case upper(trim(p_provider))
-  when 'PROMETRIC' then 'PROMETRIC' when 'CMAUS' then 'PROMETRIC' when 'PRO' then 'PROMETRIC'
+ select case upper(regexp_replace(trim(p_provider),'\s+',' ','g'))
+  when 'PROMETRIC' then 'PROMETRIC' when 'CMAUS' then 'PROMETRIC' when 'CMA US' then 'PROMETRIC' when 'PRO' then 'PROMETRIC'
   when 'PEARSON' then 'PEARSON VUE' when 'VUE' then 'PEARSON VUE' when 'PEARSONVUE' then 'PEARSON VUE'
-  else nullif(upper(trim(p_provider)),'') end
+  else nullif(upper(regexp_replace(trim(p_provider),'\s+',' ','g')),'') end
 $$;
 
 create table fets_calendar_seats_private.rules(
@@ -62,15 +62,14 @@ begin
      (c.exam_date at time zone 'Asia/Kolkata')::date as day,c.exam_start_time as start_time,c.exam_end_time as end_time,
      nullif(upper(trim(c.exam_code)),'') as exam_code,nullif(trim(c.exam_title),'') as exam_title,
      case
-      when coalesce(nullif(lower(trim(c.status)),''),'registered')<>'registered' then lower(trim(c.status))
-      when c.check_out_time is not null then 'completed'
+      when nullif(to_jsonb(c)->>'check_out_time','') is not null or nullif(to_jsonb(c)->>'completed_at','') is not null then 'completed'
       when c.check_in_time is not null then 'checked_in'
       when nullif(trim(c.locker_key),'') is not null then 'in_progress'
-      else 'registered' end as status,
+      else coalesce(nullif(lower(trim(c.status)),''),'registered') end as status,
      count(*)::integer as n
     from public.candidates c join public.calendar_sessions s on s.id=c.pearson_calendar_session_id
     where c.pearson_registration_id is not null and c.pearson_calendar_session_id is not null
-     and c.branch_location=p_branch and s.branch_location=p_branch
+     and ((case when lower(trim(c.branch_location))='kochi' then 'cochin' else lower(trim(c.branch_location)) end)=p_branch or (case when lower(trim(s.branch_location))='kochi' then 'cochin' else lower(trim(s.branch_location)) end)=p_branch)
      and coalesce(lower(trim(c.status)),'registered') not in ('cancelled','canceled')
      -- Preserve disagreements with Calendar rather than borrowing Calendar timing.
      -- Pending missing bookings remain registered until an explicit cancellation.
@@ -79,12 +78,24 @@ begin
      (c.exam_date at time zone 'Asia/Kolkata')::date,c.exam_start_time,c.exam_end_time,
      nullif(upper(trim(c.exam_code)),''),nullif(trim(c.exam_title),''),
      case
-      when coalesce(nullif(lower(trim(c.status)),''),'registered')<>'registered' then lower(trim(c.status))
-      when c.check_out_time is not null then 'completed'
+      when nullif(to_jsonb(c)->>'check_out_time','') is not null or nullif(to_jsonb(c)->>'completed_at','') is not null then 'completed'
       when c.check_in_time is not null then 'checked_in'
       when nullif(trim(c.locker_key),'') is not null then 'in_progress'
-      else 'registered' end
+      else coalesce(nullif(lower(trim(c.status)),''),'registered') end
    ) d),
+  -- One statement snapshot keeps Calendar counts and source groups consistent.
+  'adjacent_sessions',(select coalesce(jsonb_agg(jsonb_build_object(
+   'id',s.id,'date',s.date,'branch_location',s.branch_location,'client_name',s.client_name,'exam_name',s.exam_name,
+   'start_time',s.start_time,'end_time',s.end_time,'candidate_count',s.candidate_count,'status',s.status,'updated_at',s.updated_at)
+   order by s.date,s.start_time,s.id),'[]'::jsonb)
+   from public.calendar_sessions s where
+    ((case when lower(trim(s.branch_location))='kochi' then 'cochin' else lower(trim(s.branch_location)) end)=p_branch or s.branch_location is null or lower(trim(s.branch_location)) not in ('calicut','cochin','kochi')
+     or exists(select 1 from public.candidates c where c.pearson_calendar_session_id=s.id and c.pearson_registration_id is not null
+       and (case when lower(trim(c.branch_location))='kochi' then 'cochin' else lower(trim(c.branch_location)) end)=p_branch and coalesce(lower(trim(c.status)),'registered') not in ('cancelled','canceled')))
+    and (s.date between p_from and p_through or exists(select 1 from public.candidates c
+     where c.pearson_calendar_session_id=s.id and c.pearson_registration_id is not null and (case when lower(trim(c.branch_location))='kochi' then 'cochin' else lower(trim(c.branch_location)) end)=p_branch
+      and coalesce(lower(trim(c.status)),'registered') not in ('cancelled','canceled')
+      and (c.exam_date at time zone 'Asia/Kolkata')::date between p_from and p_through))),
   'can_edit_rules',coalesce(fets_ai_private.permitted('calendar',p_branch),false)
  ) into result;
  return result;

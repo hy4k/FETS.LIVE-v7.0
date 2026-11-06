@@ -1,6 +1,7 @@
-.seat-management { --seat-over: #f59b8e; --seat-full: #e9c16d; --seat-ok: var(--accent-mint, #6fbeb2); color: var(--text-primary, #eef6f3); background: var(--card-bg, #1e373b); border: 1px solid var(--border-color, #42625a); border-radius: 16px; padding: 24px; min-width: 0; font-size: 14px; }
+.seat-management { --color-text-primary: var(--text-primary, #eef6f3); --color-text-secondary: var(--text-secondary, #9dbdb4); --seat-over: #f59b8e; --seat-full: #e9c16d; --seat-ok: var(--accent-mint, #6fbeb2); color: var(--text-primary, #eef6f3); background: var(--card-bg, #1e373b); border: 1px solid var(--border-color, #42625a); border-radius: 16px; padding: 24px; min-width: 0; font-size: 14px; }
 .seat-management *, .seat-management *::before, .seat-management *::after { box-sizing: border-box; }
 .seat-management h2, .seat-management h3, .seat-management h4, .seat-management p, .seat-management figure { margin: 0; }
+.seat-management h2, .seat-management h3, .seat-management h4 { color: var(--text-primary, #eef6f3); }
 .seat-management h2 { font-size: clamp(24px, 3vw, 30px); font-weight: 750; letter-spacing: -.035em; margin: 3px 0 8px; }
 .seat-management h3 { font-size: 17px; font-weight: 700; line-height: 1.4; }
 .seat-management h4 { font-size: 15px; font-weight: 700; }
@@ -115,7 +116,7 @@
 
 body:not(.dark-mode) .fets-calendar-standalone-mint .seat-management,
 body:not(.dark-mode) .fets-calendar-active-page .seat-management,
-[data-theme="light"] .seat-management { --seat-over: #a8382a; --seat-full: #815a0b; --seat-action: var(--text-accent, #2c7d6f); --seat-action-ink: #ffffff; }
+[data-theme="light"] .seat-management { --color-text-primary: var(--text-primary, #eef6f3); --color-text-secondary: var(--text-secondary, #9dbdb4); --seat-over: #a8382a; --seat-full: #815a0b; --seat-action: var(--text-accent, #2c7d6f); --seat-action-ink: #ffffff; }
 body:not(.dark-mode) .fets-calendar-standalone-mint .seat-management input,
 body:not(.dark-mode) .fets-calendar-standalone-mint .seat-management select,
 [data-theme="light"] .seat-management input,

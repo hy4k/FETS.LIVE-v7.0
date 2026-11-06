@@ -49,6 +49,7 @@ describe('useCalendarSessions mapping logic', () => {
       gte: vi.fn().mockReturnThis(),
       lte: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),
+      range: vi.fn().mockReturnThis(),
       // Final mock resolver
       then: vi.fn().mockImplementation((resolve) => {
         return Promise.resolve(resolve({ data: mockSessions, error: null }))

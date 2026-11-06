@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     X,
@@ -23,15 +23,16 @@ import {
     Activity,
     Target
 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { fetchCalendarRange } from '../seats/calendar-data';
+import { analyseDay, formatSeatTime } from '../seats/engine';
 import toast from 'react-hot-toast';
 import { useAuth } from '../hooks/useAuth';
-import { formatDateForIST } from '../utils/dateUtils';
 import { getBranchCapacity } from '../utils/sessionUtils';
 
 interface CalendarAnalysisProps {
     onClose: () => void;
     activeBranch: string;
+    onOpenSeatManagement?: (date?: string) => void;
 }
 
 interface CalendarSession {
@@ -43,6 +44,7 @@ interface CalendarSession {
     candidate_count: number;
     exam_name: string;
     branch_location?: string;
+    status?: string;
 }
 
 interface ClientAnalysis {
@@ -81,9 +83,12 @@ interface OverlapInfo {
     suggestions: string[];
 }
 
-export const CalendarAnalysis: React.FC<CalendarAnalysisProps> = ({ onClose, activeBranch }) => {
+export const CalendarAnalysis: React.FC<CalendarAnalysisProps> = ({ onClose, activeBranch, onOpenSeatManagement }) => {
     const { user } = useAuth();
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState(false);
+    const readVersion = useRef(0);
+    const [seatSessions, setSeatSessions] = useState<CalendarSession[]>([]);
     const [sessions, setSessions] = useState<CalendarSession[]>([]);
     const [currentMonth, setCurrentMonth] = useState(new Date());
     const [rangeEndMonth, setRangeEndMonth] = useState(new Date());
@@ -124,58 +129,23 @@ export const CalendarAnalysis: React.FC<CalendarAnalysisProps> = ({ onClose, act
     };
 
     const fetchSessionData = async () => {
-        setLoading(true);
+        const version = ++readVersion.current;
+        setLoading(true); setLoadError(false);
+        const iso = (date: Date) => `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
         try {
-            const startOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
-            const endOfMonth = new Date(effectiveEndMonth.getFullYear(), effectiveEndMonth.getMonth() + 1, 0);
-
-            let query = supabase
-                .from('calendar_sessions')
-                .select('*')
-                .gte('date', formatDateForIST(startOfMonth))
-                .lte('date', formatDateForIST(endOfMonth))
-                .order('date', { ascending: true })
-                .order('start_time', { ascending: true });
-
-            // Filter by branch if a specific center is selected (not global view)
-            if (!isGlobalView) {
-                query = query.eq('branch_location', activeBranch);
-            }
-
-            const { data, error } = await query;
-
-            if (error) throw error;
-            
-            // For legacy data without branch_location, default to calicut
-            let filteredData = (data as CalendarSession[]) || [];
-            
-            // If specific branch selected but no branch_location column exists, 
-            // handle fallback for legacy Calicut data
-            if (!isGlobalView && activeBranch === 'calicut' && filteredData.length === 0) {
-                // Retry without branch filter for legacy data
-                const fallbackQuery = supabase
-                    .from('calendar_sessions')
-                    .select('*')
-                    .gte('date', formatDateForIST(startOfMonth))
-                    .lte('date', formatDateForIST(endOfMonth))
-                    .order('date', { ascending: true })
-                    .order('start_time', { ascending: true });
-                
-                const { data: fallbackData } = await fallbackQuery;
-                if (fallbackData) {
-                    // Only include sessions without branch_location (legacy) or calicut
-                    filteredData = (fallbackData as CalendarSession[]).filter(
-                        s => !s.branch_location || s.branch_location === 'calicut'
-                    );
-                }
-            }
-            
-            setSessions(filteredData);
-        } catch (error) {
-            console.error('Error fetching session data:', error);
-            toast.error('Failed to load session data');
+            const first = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+            const last = new Date(effectiveEndMonth.getFullYear(), effectiveEndMonth.getMonth()+1, 0);
+            const prior = new Date(first); prior.setDate(prior.getDate()-1);
+            const data = await fetchCalendarRange(iso(prior), iso(last), activeBranch || 'global') as CalendarSession[];
+            if (version !== readVersion.current) return;
+            setSeatSessions(data);
+            setSessions(data.filter(row => row.date >= iso(first)));
+        } catch {
+            if (version !== readVersion.current) return;
+            setSessions([]); setSeatSessions([]); setLoadError(true);
+            toast.error('Failed to load complete session data');
         } finally {
-            setLoading(false);
+            if (version === readVersion.current) setLoading(false);
         }
     };
 
@@ -307,83 +277,27 @@ export const CalendarAnalysis: React.FC<CalendarAnalysisProps> = ({ onClose, act
         return Object.values(clientMap).sort((a, b) => b.totalCandidates - a.totalCandidates);
     }, [sessions]);
 
-    // Calculate overlap analysis from actual concurrent exam timings and branch seat capacity.
-    const overlapAnalysis = useMemo((): OverlapInfo[] => {
-        const branchDateMap: { [key: string]: CalendarSession[] } = {};
-
-        sessions.forEach(session => {
-            const branch = session.branch_location || 'calicut';
-            const key = `${session.date}__${branch}`;
-            if (!branchDateMap[key]) branchDateMap[key] = [];
-            branchDateMap[key].push(session);
-        });
-
-        const overlaps: OverlapInfo[] = [];
-
-        Object.entries(branchDateMap).forEach(([key, daySessions]) => {
-            const [date, branch] = key.split('__');
-            const capacity = getBranchCapacity(branch);
-            const timePoints = Array.from(new Set(daySessions.flatMap(session => [
-                timeToMinutes(session.start_time),
-                timeToMinutes(session.end_time)
-            ]))).sort((a, b) => a - b);
-
-            const conflictPeriods: OverlapInfo['conflictPeriods'] = [];
-
-            for (let i = 0; i < timePoints.length - 1; i++) {
-                const start = timePoints[i];
-                const end = timePoints[i + 1];
-                if (start === end) continue;
-
-                const activeSessions = daySessions.filter(session => {
-                    const sessionStart = timeToMinutes(session.start_time);
-                    const sessionEnd = timeToMinutes(session.end_time);
-                    return sessionStart < end && sessionEnd > start;
-                });
-
-                const concurrentCandidates = activeSessions.reduce((sum, session) => sum + session.candidate_count, 0);
-                if (concurrentCandidates > capacity) {
-                    conflictPeriods.push({
-                        start: minutesToTime(start),
-                        end: minutesToTime(end),
-                        candidates: concurrentCandidates,
-                        capacity,
-                        excessCandidates: concurrentCandidates - capacity,
-                        sessions: activeSessions.sort((a, b) => a.start_time.localeCompare(b.start_time))
-                    });
-                }
-            }
-
-            if (conflictPeriods.length === 0) return;
-
-            const maxLoad = Math.max(...conflictPeriods.map(period => period.candidates));
-            const maxExcess = Math.max(...conflictPeriods.map(period => period.excessCandidates));
-            const conflictingSessions = Array.from(
-                new Map(conflictPeriods.flatMap(period => period.sessions).map(session => [session.id, session])).values()
-            ).sort((a, b) => a.start_time.localeCompare(b.start_time));
-            const firstConflict = conflictPeriods[0];
-
-            overlaps.push({
-                date,
-                branch,
-                sessions: conflictingSessions,
-                conflictPeriods,
-                totalCandidates: maxLoad,
-                capacity,
-                excessCandidates: maxExcess,
-                suggestions: [
-                    `${getBranchLabel(branch)} has ${capacity} seats. During ${firstConflict.start}-${firstConflict.end}, ${firstConflict.candidates} candidates are scheduled at the same time.`,
-                    `Move or stagger at least ${maxExcess} candidate${maxExcess === 1 ? '' : 's'} from the highlighted overlapping time window.`,
-                    'Check the listed exam timings before adding another session in the same interval.'
-                ]
-            });
-        });
-
-        return overlaps.sort((a, b) => {
-            if (b.excessCandidates !== a.excessCandidates) return b.excessCandidates - a.excessCandidates;
-            return a.date.localeCompare(b.date);
-        });
-    }, [sessions]);
+    // Share the Calendar's interval calculation; totals over a day are not concurrency.
+    const seatDays = useMemo(() => {
+        const dates: string[] = [];
+        const first = Date.UTC(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+        const end = Date.UTC(effectiveEndMonth.getFullYear(), effectiveEndMonth.getMonth()+1, 0);
+        for (let day=first;day<=end;day+=86400000) dates.push(new Date(day).toISOString().slice(0,10));
+        const branches = activeBranch === 'calicut' || activeBranch === 'cochin' ? [activeBranch] as const : ['calicut', 'cochin'] as const;
+        return dates.flatMap(date => branches.map(branch => analyseDay(seatSessions, branch, date)));
+    }, [sessions, seatSessions, activeBranch, currentMonth, effectiveEndMonth]);
+    const incompleteSeatData = loadError || seatDays.some(day => !day.complete);
+    const overlapAnalysis = useMemo((): OverlapInfo[] => seatDays.filter(day => day.overbooked.length).map(day => {
+        const conflictPeriods = day.overbooked.map(period => ({
+            start: formatSeatTime(period.start), end: period.end % 86400 === 0 ? '24:00' : formatSeatTime(period.end),
+            candidates: period.booked, capacity: day.capacity, excessCandidates: period.excess,
+            sessions: seatSessions.filter(session => period.session_ids.includes(session.id))
+        }));
+        return {date: day.date, branch: day.branch,
+            sessions: [...new Map(conflictPeriods.flatMap(period => period.sessions).map(row => [row.id, row])).values()],
+            conflictPeriods, totalCandidates: day.peak, capacity: day.capacity, excessCandidates: day.peak-day.capacity,
+            suggestions: ['Open Seat management to review the exact contributing exams and test provider-approved timing limits. Timing options never change bookings automatically.']};
+    }).sort((a,b) => b.excessCandidates-a.excessCandidates || a.date.localeCompare(b.date)), [seatDays, seatSessions]);
 
     // Calculate totals
     const totals = useMemo(() => {
@@ -1277,14 +1191,16 @@ ${overlap.suggestions.map(s => `      → ${s}`).join('\n')}
                                     exit={{ opacity: 0, y: -20 }}
                                     className="space-y-8"
                                 >
+                                    {onOpenSeatManagement && <button className={neumorphicBtn} onClick={() => onOpenSeatManagement()}>Open Seat management</button>}
+                                    {incompleteSeatData && <p role="alert" className="text-amber-300">Incomplete schedule · missing or invalid timings prevent confirmation of available seats. Review Seat management.</p>}
                                     {overlapAnalysis.length === 0 ? (
                                         <div className={`${neumorphicCard} p-16 flex flex-col items-center justify-center`}>
                                             <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-emerald-500/20 to-emerald-600/20 flex items-center justify-center mb-6">
                                                 <CheckCircle size={48} className="text-emerald-400" />
                                             </div>
-                                            <h3 className="text-2xl font-black text-white mb-2">No Overlap Conflicts</h3>
+                                            <h3 className="text-2xl font-black text-white mb-2">{incompleteSeatData ? 'Seat availability unknown' : 'No known overbooking'}</h3>
                                             <p className="text-gray-500 text-center max-w-md">
-                                                All scheduled sessions are within capacity limits with no time conflicts detected.
+                                                Known booked intervals do not exceed capacity. Full windows and booking-fit checks are available in Seat management.
                                             </p>
                                         </div>
                                     ) : (

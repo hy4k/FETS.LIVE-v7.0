@@ -1,6 +1,6 @@
-# Calendar seat management — discovery draft
+# Calendar seat management
 
-Status: implementation authorised by the feature request and confirmed operating rules below. No seat-management product changes or deployment yet. Actual provider-specific limits are pending; unset rules remain fixed rather than guessed.
+Status: implemented and under final verification; rollout evidence is recorded separately. Actual provider-specific limits are pending; unset rules remain fixed rather than guessed.
 
 ## Confirmed purpose
 
@@ -41,9 +41,13 @@ Builder defaults, to be shown to the user: recommendations are simulations for h
 - Deterministic boundary-event sweep using exact minute/second wall times in Asia/Kolkata; use half-open intervals[start,end) plus the confirmed post-exam buffer. Release and new start at the same timestamp do not overlap when buffer=0.
 - Sum all eligible active scheduled seats in the same confirmed pool. Exclude cancelled/zero-count sessions; retain missing-future imported bookings while cancellation review is pending. Define historical planned view separately from current operational state.
 - Calendar counts are authoritative aggregate reservations. Candidate rows may be used to split source-linked appointments for a recommendation, but must not be added again to Calendar counts. Do not fuzzy-match legacy candidates to infer individual movable exams.
-- Load complete scoped data with stable pagination, ignore provider presentation filters when calculating the shared centre total, and surface refresh/error/staleness. A failed/incomplete fetch cannot be labelled safe.
+- Load the authoritative seat Calendar/source/rule data in one scoped SQL snapshot; use stable pagination for the legacy visual Calendar, ignore provider presentation filters when calculating the shared centre total, and surface refresh/error/staleness. A failed/incomplete fetch cannot be labelled safe.
 - A what-if calculation never writes records. If saving/reviewing a selected plan is later included, recheck current source versions and canonical permissions, preserve source provenance and require an atomic reviewed operation; imported-source rules remain intact.
 - Never infer greater physical capacity from daily throughput. Maintenance/unavailable-workstation deductions can be explicit scenario inputs, labelled separately from the confirmed installed totals; persistence is a builder decision only if needed for the requested first version.
+
+## Reviewed boundary decisions
+
+An end earlier than start denotes a reservation continuing into the next local day; equal/missing times remain uncertain and also block the following day's safety claim. Overnight reservations stay fixed in timing simulations, and the booking checker accepts same-day intervals only. The source snapshot includes implicated Calendar links, branch aliases and anonymous unassigned rows so scope filtering cannot hide inconsistent reservations. Source/Calendar disagreements block safe-fit claims in every implicated date/centre. Unrelated clean other-centre records remain excluded.
 
 ## Fresh builder check
 
