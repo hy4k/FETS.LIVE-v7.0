@@ -156,4 +156,25 @@ describe('review-only bounded seat timing search', () => {
     expect(first.message).toMatch(/limit|budget/i);
     expect(analyseDay(rows(), 'calicut', date).peak).toBe(50);
   });
+
+  it('keeps overnight groups fixed even if an earlier same-day shift would remove the first-day overload', () => {
+    const sessions = [session(1, '23:00', '24:00', 40), session(2, '23:30', '00:30', 5, { client_name: 'Pearson VUE' })];
+    const result = findSuggestions(sessions, 'calicut', date, [fixedRule, rule(120, 0)], [], { ...future, window_start: '21:00', window_end: '24:00' });
+    expect(result).toMatchObject({ status: 'none', suggestions: [] });
+  });
+
+  it('keeps carry-in reservations fixed and resolves the next-day conflict by moving only same-day groups', () => {
+    const sessions = [session(1, '23:00', '00:30', 40, { client_name: 'Pearson VUE' }), session(2, '00:20', '00:40', 5, { date: '2026-11-14', client_name: 'Pearson VUE' })];
+    const result = findSuggestions(sessions, 'calicut', '2026-11-14', [rule(0, 10)], [], { ...future, window_start: '00:00', window_end: '01:00' });
+    expect(result.status).toBe('resolved');
+    expect(result.suggestions[0].moves.map(m => [m.session_id, m.minutes])).toEqual([[2, 10]]);
+    expect(result.suggestions[0].day.total).toBe(45);
+  });
+
+  it('uses the clipped recorded day span when an overnight reservation carries into the selected date', () => {
+    const sessions = [session(1, '23:00', '00:30', 40), session(2, '00:20', '00:40', 5, { date: '2026-11-14', client_name: 'Pearson VUE' }), session(3, '00:50', '01:00', 1, { date: '2026-11-14' })];
+    const result = findSuggestions(sessions, 'calicut', '2026-11-14', [rule(0, 10)], [], { now: future.now });
+    expect(result.status).toBe('resolved');
+    expect(result.suggestions[0].moves.map(m => m.session_id)).toEqual([2]);
+  });
 });

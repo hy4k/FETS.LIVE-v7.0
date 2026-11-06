@@ -85,8 +85,8 @@ export function findSuggestions(sessions: SeatSession[], branch: SeatBranch, dat
   }
   if (!baseline.overbooked.length) return empty('none', 'No recorded overload needs a timing change.');
   const dayStart = toSeatSecond(date, '00:00')!;
-  const windowStart = options.window_start === undefined ? Math.min(...baseline.atoms.map(atom => atom.start)) : toSeatSecond(date, options.window_start);
-  const windowEnd = options.window_end === undefined ? Math.max(...baseline.atoms.map(atom => atom.end)) : toSeatSecond(date, options.window_end);
+  const windowStart = options.window_start === undefined ? Math.max(dayStart, Math.min(...baseline.atoms.map(atom => atom.start))) : toSeatSecond(date, options.window_start);
+  const windowEnd = options.window_end === undefined ? Math.min(dayStart + 86400, Math.max(...baseline.atoms.map(atom => atom.end))) : toSeatSecond(date, options.window_end);
   const clock = options.now === undefined ? Date.now() : /^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/.test(options.now) ? Date.parse(options.now) : NaN;
   // Convert an actual instant to the Asia/Kolkata local wall-clock day index.
   const now = clock / 1000 + 5.5 * 3600;
@@ -94,7 +94,9 @@ export function findSuggestions(sessions: SeatSession[], branch: SeatBranch, dat
     return empty('incomplete', 'Use a valid same-day planning window and a valid current-time reference.');
   }
   const original = sessionAtoms(sessions, details).atoms.filter(atom => atom.branch === branch);
-  const futureAtoms = baseline.atoms.filter(atom => atom.movable && atom.start > now);
+  // Cross-midnight reservations contribute occupancy on both dates, but this
+  // same-day planner cannot authorise moving either their start or continuation.
+  const futureAtoms = baseline.atoms.filter(atom => atom.movable && atom.start > now && atom.start >= dayStart && atom.end <= dayStart + 86400);
   const movable = futureAtoms.map(atom => ({ atom, limits: limitsFor(atom, scopedRules) })).filter(({ limits }) => limits.earlier || limits.later);
   if (!movable.length) {
     if (futureAtoms.some(atom => !limitsFor(atom, scopedRules).configured)) return empty('needs_rules', 'Unset provider/exam rules are fixed. Configure permitted limits before a simulation.');

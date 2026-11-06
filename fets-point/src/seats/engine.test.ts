@@ -35,7 +35,6 @@ describe('seat interval planning', () => {
   it.each([
     ['missing times', session(1, null, null, 1)],
     ['equal times', session(1, '09:00', '09:00', 1)],
-    ['implicit overnight', session(1, '23:00', '01:00', 1)],
     ['malformed time', session(1, '9:00', '10:00', 1)],
     ['negative count', session(1, '09:00', '10:00', -1)],
     ['fractional count', session(1, '09:00', '10:00', 1.5)],
@@ -105,7 +104,7 @@ describe('seat interval planning', () => {
     expect(checkBooking(day, { start_time: '13:00', end_time: '14:00', count: 0.5 }).status).toBe('invalid');
   });
 
-  it('supports an explicit midnight end without assuming an overnight end date', () => {
+  it('supports an explicit midnight end with strict date/time parsing', () => {
     const day = analyseDay([session(1, '23:00', '24:00', 40)], 'calicut', date);
     expect(day).toMatchObject({ complete: true, peak: 40 });
     expect(toSeatSecond(date, '24:00')).toBe(1794614400);
@@ -114,5 +113,68 @@ describe('seat interval planning', () => {
     expect(formatSeatTime(1794564001)).toBe('10:00:01');
     expect(normaliseProvider('  pearson  vue ')).toBe('PEARSON VUE');
     expect(normaliseProvider('CMA US')).toBe('PROMETRIC');
+  });
+
+  it('counts an overnight reservation on both dates and releases at the next-day end', () => {
+    const rows = [session(1, '23:00', '01:00', 40)];
+    const first = analyseDay(rows, 'calicut', date);
+    const next = analyseDay(rows, 'calicut', '2026-11-14');
+    expect(first).toMatchObject({ complete: true, peak: 40, status: 'full' });
+    expect(first.segments.map(s => [formatSeatTime(s.start), formatSeatTime(s.end)])).toEqual([['23:00', '00:00']]);
+    expect(next).toMatchObject({ complete: true, peak: 40, total: 40, status: 'full' });
+    expect(next.segments.map(s => [formatSeatTime(s.start), formatSeatTime(s.end)])).toEqual([['00:00', '01:00']]);
+    expect(checkBooking(next, { start_time: '00:00', end_time: '00:30', count: 1 }).status).toBe('overbooked');
+    expect(checkBooking(next, { start_time: '01:00', end_time: '02:00', count: 1 }).status).toBe('fits');
+  });
+
+  it('replaces an agreed overnight Calendar group with source groups exactly once', () => {
+    const rows = [session(1, '23:00', '01:00', 5)];
+    const sources = [detail(2, { start_time: '23:00', end_time: '01:00' }), detail(3, { start_time: '23:00', end_time: '01:00', exam_code: 'B' })];
+    const next = analyseDay(rows, 'calicut', '2026-11-14', sources);
+    expect(next).toMatchObject({ complete: true, peak: 5, total: 5 });
+    expect(next.atoms.map(a => [a.basis, a.count])).toEqual([['source', 2], ['source', 3]]);
+  });
+
+  it('keeps overnight source mismatches blocking on the continuation date without inflating Calendar seats', () => {
+    const next = analyseDay([session(1, '23:00', '01:00', 5)], 'calicut', '2026-11-14', [detail(4, { start_time: '23:00', end_time: '01:00' })]);
+    expect(next).toMatchObject({ complete: false, peak: 5, total: 5, status: 'incomplete' });
+    expect(next.issues.some(issue => issue.kind === 'source_detail_mismatch')).toBe(true);
+    expect(checkBooking(next, { start_time: '01:00', end_time: '02:00', count: 1 }).status).toBe('unknown');
+  });
+
+  it.each([['equal', '23:00', '23:00'], ['missing', '23:00', null]] as const)('keeps prior-day %s timing uncertain on the next day', (_, start, end) => {
+    const next = analyseDay([session(1, start, end, 5)], 'calicut', '2026-11-14');
+    expect(next).toMatchObject({ complete: false, status: 'incomplete' });
+    expect(checkBooking(next, { start_time: '00:00', end_time: '01:00', count: 1 }).status).toBe('unknown');
+  });
+
+  it('scopes source date and centre discrepancies to both implicated pools without adding source counts', () => {
+    const rows = [session(1, '09:00', '10:00', 5)];
+    const sources = [detail(5, { date: '2026-11-14', branch_location: 'cochin' })];
+    const calendar = analyseDay(rows, 'calicut', date, sources);
+    const sourceDate = analyseDay(rows, 'cochin', '2026-11-14', sources);
+    expect(calendar).toMatchObject({ peak: 5, total: 5, complete: false });
+    expect(sourceDate).toMatchObject({ peak: 0, total: 0, complete: false, status: 'incomplete' });
+    expect(checkBooking(sourceDate, { start_time: '09:00', end_time: '10:00', count: 1 }).status).toBe('unknown');
+  });
+
+  it('blocks availability for an active source appointment whose Calendar reservation is missing', () => {
+    const sources = [detail(40, { session_id: 99, date: '2026-11-14' })];
+    const day = analyseDay([], 'calicut', '2026-11-14', sources);
+    expect(day).toMatchObject({ complete: false, status: 'incomplete', peak: 0, total: 0 });
+    expect(day.issues.some(issue => issue.kind === 'missing_calendar_session')).toBe(true);
+    expect(checkBooking(day, { start_time: '09:00', end_time: '10:00', count: 1 }).status).toBe('unknown');
+    expect(analyseDay([], 'cochin', '2026-11-14', sources).complete).toBe(true);
+    expect(analyseDay([], 'calicut', date, sources).complete).toBe(true);
+  });
+
+  it('propagates an orphan overnight source interval onto its continuation date', () => {
+    const next = analyseDay([], 'calicut', '2026-11-14', [detail(40, { session_id: 99, start_time: '23:00', end_time: '01:00' })]);
+    expect(next).toMatchObject({ complete: false, status: 'incomplete' });
+  });
+
+  it('excludes cancelled and zero-count orphan source appointments from uncertainty', () => {
+    const day = analyseDay([], 'calicut', date, [detail(40, { session_id: 99, status: 'cancelled' }), detail(0, { session_id: 100 })]);
+    expect(day).toMatchObject({ complete: true, status: 'available', peak: 0, issues: [] });
   });
 });

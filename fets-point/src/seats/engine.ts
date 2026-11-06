@@ -41,6 +41,14 @@ const cancelled = (value: string | null | undefined) => ['cancelled', 'canceled'
 const frozen = (value: string | null | undefined) => ['in_progress', 'checked_in', 'running', 'ongoing', 'started', 'completed', 'complete', 'finished', 'conducted', 'closed', 'checked_out'].includes(statusKey(value));
 const validCount = (count: number | null): count is number => typeof count === 'number' && Number.isSafeInteger(count) && count >= 0;
 
+/** A lower end clock explicitly continues onto the following local date. */
+function seatInterval(date: string | null, startTime: string | null | undefined, endTime: string | null | undefined): { start: number; end: number } | null {
+  const day = toSeatSecond(date, '00:00');
+  const start = toSeatSecond(date, startTime), end = toSeatSecond(date, endTime);
+  if (day === null || start === null || end === null || start >= day + 86400 || end === start) return null;
+  return { start, end: end < start ? end + 86400 : end };
+}
+
 /** Source groups replace Calendar counts only when every scope and count agrees. */
 export function sessionAtoms(sessions: SeatSession[], details: SeatDetail[] = []): { atoms: SeatAtom[]; issues: SeatIssue[] } {
   const atoms: SeatAtom[] = [];
@@ -63,14 +71,13 @@ export function sessionAtoms(sessions: SeatSession[], details: SeatDetail[] = []
     const count = session.candidate_count;
     if (!branch) issue(session.id, 'unknown_branch', 'The reservation has no recognised centre.');
     if (!validCount(count)) issue(session.id, 'invalid_count', 'The reservation needs a nonnegative whole candidate count.');
-    const dayStart = toSeatSecond(session.date, '00:00');
-    const start = toSeatSecond(session.date, session.start_time || '');
-    const end = toSeatSecond(session.date, session.end_time || '');
-    if (dayStart === null || start === null || end === null || start >= dayStart + 86400 || end <= start) {
-      issue(session.id, 'invalid_time', 'The reservation needs a valid date and explicit start/end with end after start.');
+    const interval = seatInterval(session.date, session.start_time, session.end_time);
+    if (!interval) {
+      issue(session.id, 'invalid_time', 'The reservation needs a valid date and distinct, explicit start/end times.');
       continue;
     }
     if (!branch || !validCount(count)) continue;
+    const { start, end } = interval;
     const atom: SeatAtom = {
       key: `${session.id}:calendar`, session_id: session.id, branch, date: session.date,
       provider: normaliseProvider(session.client_name || ''), exam_code: null,
@@ -80,11 +87,12 @@ export function sessionAtoms(sessions: SeatSession[], details: SeatDetail[] = []
     const source = detailGroups.get(session.id);
     if (!source?.length) { atoms.push(atom); continue; }
     const active = source.filter(detail => !cancelled(detail.status));
-    const agrees = active.length > 0 && active.every(detail =>
-      seatBranch(detail.branch_location) === branch && detail.date === session.date &&
-      !!detail.provider && normaliseProvider(detail.provider) === atom.provider &&
-      toSeatSecond(detail.date, detail.start_time) === start && toSeatSecond(detail.date, detail.end_time) === end && validCount(detail.count)
-    ) && active.reduce((sum, detail) => sum + detail.count, 0) === count;
+    const agrees = active.length > 0 && active.every(detail => {
+      const sourceInterval = seatInterval(detail.date, detail.start_time, detail.end_time);
+      return seatBranch(detail.branch_location) === branch && detail.date === session.date &&
+        !!detail.provider && normaliseProvider(detail.provider) === atom.provider &&
+        sourceInterval?.start === start && sourceInterval.end === end && validCount(detail.count);
+    }) && active.reduce((sum, detail) => sum + detail.count, 0) === count;
     if (!agrees) {
       issue(session.id, 'source_detail_mismatch', 'Source exam groups disagree with the Calendar reservation; Calendar count retained.');
       atoms.push(atom);
@@ -95,6 +103,11 @@ export function sessionAtoms(sessions: SeatSession[], details: SeatDetail[] = []
       if (detail.count === 0) return;
       atoms.push({ ...atom, key: `${session.id}:source:${index}`, exam_code: detail.exam_code?.trim().toUpperCase() || null, exam_name: detail.exam_title?.trim() || atom.exam_name, count: detail.count, movable: atom.movable && !frozen(detail.status), basis: 'source' });
     });
+  }
+  for (const [id, source] of detailGroups) {
+    if (!seen.has(id) && source.some(detail => !cancelled(detail.status) && detail.count !== 0)) {
+      issue(id, 'missing_calendar_session', 'A source appointment has no linked Calendar reservation in the loaded schedule.');
+    }
   }
   return { atoms, issues };
 }
@@ -125,10 +138,30 @@ export function analyseAtoms(atoms: SeatAtom[], branch: SeatBranch, date: string
 
 export function analyseDay(sessions: SeatSession[], branch: SeatBranch, date: string, details: SeatDetail[] = []): SeatDay {
   const { atoms, issues } = sessionAtoms(sessions, details);
+  const selectedDay = toSeatSecond(date, '00:00');
+  const affectsDay = (recordDate: string | null, startTime: string | null | undefined, endTime: string | null | undefined) => {
+    const recordDay = toSeatSecond(recordDate, '00:00');
+    if (recordDate === date || recordDay === null) return true;
+    if (selectedDay === null) return false;
+    const interval = seatInterval(recordDate, startTime, endTime);
+    if (interval) return interval.start < selectedDay + 86400 && interval.end > selectedDay;
+    // Unknown/equal timing cannot establish that yesterday's seats were released.
+    return recordDay === selectedDay - 86400;
+  };
+  const sourceScopes = new Map<number, SeatDetail[]>();
+  for (const detail of details) {
+    if (!cancelled(detail.status) && detail.count !== 0) sourceScopes.set(detail.session_id, [...(sourceScopes.get(detail.session_id) || []), detail]);
+  }
   const scopedIds = new Set(sessions.filter(session => {
     const centre = seatBranch(session.branch_location);
-    return (!centre || centre === branch) && (session.date === date || toSeatSecond(session.date, '00:00') === null);
+    return (!centre || centre === branch) && affectsDay(session.date, session.start_time, session.end_time);
   }).map(session => session.id));
+  for (const [id, source] of sourceScopes) {
+    if (source.some(detail => {
+      const sourceCentre = seatBranch(detail.branch_location);
+      return (!sourceCentre || sourceCentre === branch) && affectsDay(detail.date, detail.start_time, detail.end_time);
+    })) scopedIds.add(id);
+  }
   return analyseAtoms(atoms, branch, date, issues.filter(issue => issue.session_id === null || scopedIds.has(issue.session_id)));
 }
 
