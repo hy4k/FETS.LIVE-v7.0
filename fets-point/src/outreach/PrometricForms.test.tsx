@@ -74,16 +74,27 @@ beforeEach(() => {
 describe("Prometric guided forms", () => {
   it("opens a dialog at the beginning of its content while focusing its close control", () => {
     show(
-      <OutreachDialog title="Long call guide" onClose={() => {}}>
-        <div
-          ref={(node) => {
-            const dialog = node?.closest<HTMLElement>('[role="dialog"]');
-            if (dialog) dialog.scrollTop = 300;
-          }}
-        >
-          Conversation guide content
-        </div>
-      </OutreachDialog>
+      <section aria-label="Long institute workspace">
+        <OutreachDialog title="Long call guide" onClose={() => {}}>
+          <div
+            ref={(node) => {
+              const dialog = node?.closest<HTMLElement>('[role="dialog"]');
+              if (dialog) dialog.scrollTop = 300;
+            }}
+          >
+            Conversation guide content
+          </div>
+        </OutreachDialog>
+      </section>
+    );
+    expect(
+      screen.getByRole("region", { name: "Long institute workspace" })
+    ).not.toContainElement(screen.getByRole("dialog"));
+    expect(screen.getByRole("dialog").parentElement?.parentElement).toBe(
+      document.body
+    );
+    expect(screen.getByRole("dialog").parentElement).toHaveClass(
+      "po-workspace"
     );
     expect(screen.getByRole("dialog").scrollTop).toBe(0);
     expect(

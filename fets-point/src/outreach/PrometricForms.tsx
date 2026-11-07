@@ -5,6 +5,7 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { saveInstitute, recordCall, saveBatch, updateFollowup } from "./api";
 import { STAGES, OUTCOMES, FOLLOWUP_KINDS, CONCERNS, INTERESTS } from "./model";
@@ -1021,9 +1022,9 @@ export function OutreachDialog({
     if (ref.current) ref.current.scrollTop = 0;
     return () => previous?.focus();
   }, []);
-  return (
+  return createPortal(
     <div
-      className="po-dialog-backdrop"
+      className="po-workspace po-dialog-backdrop"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -1069,6 +1070,7 @@ export function OutreachDialog({
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

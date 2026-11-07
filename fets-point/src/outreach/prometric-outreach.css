@@ -990,6 +990,12 @@
   align-items: center;
   padding: 24px;
 }
+.po-workspace.po-dialog-backdrop {
+  width: 100vw;
+  height: 100dvh;
+  min-height: 0;
+  max-height: 100dvh;
+}
 .po-dialog {
   background: #fbfdf7;
   color: #3c5836;
