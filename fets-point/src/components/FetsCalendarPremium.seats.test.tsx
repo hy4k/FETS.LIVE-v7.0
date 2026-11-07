@@ -1,6 +1,8 @@
 import{afterEach,beforeEach,describe,expect,it,vi}from'vitest';
 import{fireEvent,render,screen,waitFor}from'@testing-library/react';
 import{QueryClient,QueryClientProvider}from'@tanstack/react-query';
+// Load the real lazy module before rendering so this test measures navigation, not Vite's cold transform latency.
+import '../seats/SeatManagement';
 import{FetsCalendarPremium}from'./FetsCalendarPremium';
 const rows=[{id:1,date:'2026-11-14',branch_location:'cochin',client_name:'PEARSON VUE',exam_name:'Pearson exam',start_time:'09:00',end_time:'12:00',candidate_count:20,user_id:'u'},{id:2,date:'2026-11-14',branch_location:'cochin',client_name:'PROMETRIC',exam_name:'CMA exam',start_time:'10:00',end_time:'13:00',candidate_count:15,user_id:'u'}];
 const state=vi.hoisted(()=>({error:false,refresh:vi.fn()}));

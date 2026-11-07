@@ -27,11 +27,11 @@ Files: CLI-created migration, scripts/tests/calendar-seat-capacity.mjs. New cale
 
 Files: new DaySeatPlanner.tsx/tests, CapacityEditor.tsx/tests; existing SeatManagement/Timeline/badges/API/context/CalendarAnalysis. Root integrates. Replace default provider-only workflow with daily controls; retain reusable rules under a separate section. Add manual starts, per-exam locks/limits, reset, original/preview timeline and ranked auto options. Capacity preview and explicit confirmation have distinct labels; shared extras update badges/booking checks and exact interval capacity labels. Accessible mobile layout uses current theme.
 
-- [x] Write failing behaviour/API tests, implement, GREEN focused tests and TypeScript; production build follows.
+- [x] Write failing behaviour/API tests, implement, GREEN focused tests and TypeScript; production build passed.
 
 ## Task 4 — Review and rollout
 
 - [x] Fresh independent whole-feature review, fix material findings.
-- [ ] Full frontend suite once (baseline5 failures), SQL and Pearson regressions as relevant; real-browser desktop/mobile interactions and overflow/contrast.
-- [ ] Inspect production anew, save configuration/rollback image; publish additive capacity API and frontend only. Verify business fingerprints, permissions, public assets/modules, runtime invariants.
-- [ ] Receipt, update draftPR55 and attach; report concrete usage and remaining limits.
+- [x] Full frontend suite once (baseline5 failures), SQL and Pearson regressions as relevant; real-browser desktop/mobile interactions and overflow/contrast.
+- [x] Inspect production anew, save configuration/rollback image; publish additive capacity API and frontend only. Verify business fingerprints, permissions, public assets/modules, runtime invariants.
+- [x] Receipt, update draftPR55 and attach; report concrete usage and remaining limits.
