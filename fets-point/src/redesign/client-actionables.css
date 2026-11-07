@@ -5,7 +5,7 @@
   color: #2e4638;
   font: inherit;
   --color-text-primary: #2e4638;
-  --color-text-secondary: #697b6c;
+  --color-text-secondary: #586b51;
 }
 .client-actionables header {
   max-width: 760px;
@@ -13,7 +13,7 @@
 }
 .client-actionables header > p {
   font-size: 12px;
-  color: #607968;
+  color: #586b51;
   margin: 0 0 14px;
 }
 .client-actionables h1 {
@@ -28,7 +28,7 @@
 .client-actionables header > span {
   font-size: 14px;
   line-height: 1.8;
-  color: #657969;
+  color: #586b51;
 }
 .client-actionable-boxes {
   display: grid;
@@ -66,7 +66,7 @@
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  color: #668269;
+  color: #586b51;
   margin-bottom: 35px;
 }
 .client-actionable-box h2 {
@@ -79,12 +79,12 @@
 .client-actionable-box strong {
   font-size: 13px;
   font-weight: 600;
-  color: #5d755f;
+  color: #586b51;
 }
 .client-actionable-box p {
   font-size: 13px;
   line-height: 1.8;
-  color: #70806c;
+  color: #586b51;
   max-width: 350px;
   margin: 15px 0 22px;
 }
@@ -110,7 +110,7 @@
   color: #82683b;
 }
 .client-prometric p {
-  color: #7a7058;
+  color: #6c6148;
 }
 .client-prometric .client-box-open {
   border-color: #e3d9ba;
