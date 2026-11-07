@@ -1,0 +1,92 @@
+{
+  "date": "2026-11-06",
+  "url": "https://fets.live",
+  "release": "20261106T180946Z-calendar-seats",
+  "frontend_commit": "3adfe15252a1baa14e8bc067ccfec99b1cdc228d",
+  "image": "sha256:1613d0d57890d85eadb7afafee0ff3e97514134160d61261f1d22e0bd6b4d391",
+  "previous_image": "sha256:48c9b0d2b95400cce8ba8e42cb77505530aee8d0fca5b93b82c50c640edaa6e2",
+  "index_sha256": "a132f3db250156c71e9310f6ad854a77042b6badbfa859a35010c40c9bf3e936",
+  "migration": {
+    "applied_version": "20261106181305",
+    "file": "supabase/migrations/20261106181305_calendar_seat_management.sql",
+    "sha256": "ca52cd3dec4c51d1f13449672d325d49d13a8524784bcfa65c04e045a0fe02f7",
+    "note": "Canonical filename follows the hosted migration history assigned at publication; CLI originally generated 20261106174633. SQL content unchanged."
+  },
+  "features": [
+    "Calendar peak/full/overbooked/incomplete seat badges from unfiltered shared-pool bookings",
+    "Exact boundary timelines and whole-interval booking checker",
+    "Centre/provider/exam timing rules using canonical authority and optimistic versioning",
+    "Review-only bounded timing simulations, fixed by default, no automatic booking writes"
+  ],
+  "validation": {
+    "new_frontend_tests": 101,
+    "full_suite": {
+      "passed": 580,
+      "failed_known_baseline": 5,
+      "skipped": 2,
+      "baseline_failures": [
+        "useCalendarSessions provider-remapping expectation",
+        "useChat send-payload and three DM RPC expectations"
+      ]
+    },
+    "typescript": true,
+    "production_build": true,
+    "settings_sql_suite": true,
+    "pearson_regression_suite": true,
+    "browser": {
+      "synthetic_checks": 82,
+      "widths": [
+        1440,
+        390
+      ],
+      "page_errors": 0,
+      "external_requests": 0,
+      "horizontal_overflow": false
+    },
+    "public_routes_assets": 59,
+    "production_lazy_modules": {
+      "shell": "RedesignShell-C1p1IE-L.js",
+      "seatModule": "SeatManagement-DbgKaf9M.js",
+      "seatManagementLoaded": true,
+      "defaultComponent": true,
+      "sharedComponents": [
+        "MyDeskPage",
+        "CalendarPage",
+        "RosterPage",
+        "RaiseCasePage",
+        "FieldLabel",
+        "ChipRow",
+        "ShiftHandoverPage"
+      ],
+      "moduleLoaded": true
+    },
+    "live_schedule": {
+      "calicut_2026_11_13": {
+        "peak": 50,
+        "capacity": 40,
+        "overlap": "09:00\u201313:30"
+      },
+      "cochin_2026_11_14": {
+        "peak": 35,
+        "capacity": 31,
+        "peak_window": "11:15\u201311:30"
+      },
+      "missing_times": "Reported incomplete, never guessed"
+    },
+    "independent_review": "Material issues reproduced, corrected and re-reviewed; no remaining blockers",
+    "business_records_unchanged": true,
+    "record_counts": {
+      "calendar_sessions": 3161,
+      "candidates": 6912
+    },
+    "security_advisors": "Existing warning/error counts unchanged. One additional INFO for private RLS rules table without direct grants/policies; checked entrypoints are the access path."
+  },
+  "preserved": [
+    "Original deployment checkout and .env/compose/nginx files",
+    "Runtime environment, ports, networks, labels and mounts",
+    "Other existing services",
+    "Calendar/candidate business data and Pearson provenance"
+  ],
+  "rollback_script": "/opt/fets-releases/20261106T180946Z-calendar-seats/rollback.sh",
+  "configuration": "40 Calicut /31 Kochi, one shared pool, immediate release at scheduled end. Real provider/exam flexibility remains unset until authorised staff configure it."
+}

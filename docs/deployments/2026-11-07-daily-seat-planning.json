@@ -1,0 +1,115 @@
+{
+  "date": "2026-11-07",
+  "url": "https://fets.live",
+  "release": "20261107T091011Z-daily-seat-planning",
+  "frontend_commit": "b583c9c38719820f5f8c12271cc734d1d673ac9e",
+  "image": "sha256:3629952e4fb7740dc02ea03a08a13977f5df529b3a4e9cdf9a0d730504248e4f",
+  "previous_image": "sha256:1613d0d57890d85eadb7afafee0ff3e97514134160d61261f1d22e0bd6b4d391",
+  "index_sha256": "0d5a36132b40ec8aa916dfb7fd9bedecac2ab4915a056160f27f7e60c0e1a3c8",
+  "migration": {
+    "applied_version": "20261107091417",
+    "file": "supabase/migrations/20261107091417_calendar_seat_capacity.sql",
+    "sha256": "ffd2d1f77b3d930a4d6a1eda3ee56c8d71eeb27442c9ec62c6d95a15a4695233",
+    "note": "CLI generated085928; canonical file renamed to match hosted publication history. SQL content unchanged."
+  },
+  "features": [
+    "Daily limits and per-exam locks across any provider",
+    "Duration-preserving manual start previews and bounded automatic options",
+    "Extra-system availability windows with separate preview and authorised shared confirmation",
+    "Confirmed capacity reflected in Calendar alerts, timelines, booking checks and analysis"
+  ],
+  "settings_authority": "Existing canonical verified centre membership and Calendar edit permissions; exact version required to update; private RLS table and checked entrypoints",
+  "validation": {
+    "typescript": true,
+    "production_build": true,
+    "new_tests_this_extension": 68,
+    "full_suite": {
+      "tests": 655,
+      "passed": 648,
+      "known_baseline_failures": 5,
+      "skipped": 2,
+      "baseline_failure_files": [
+        "src/test/useCalendarSessions.test.tsx: provider remapping expectation",
+        "src/test/useChat.test.tsx: send payload and three DM RPC expectations"
+      ]
+    },
+    "database": "New capacity, existing seat and Pearson regression scripts pass",
+    "browser": {
+      "assertions": 130,
+      "widths": [
+        1440,
+        390
+      ],
+      "page_errors": 0,
+      "external_requests": 0,
+      "source_hashes_verified": 11
+    },
+    "public_routes_assets": 59,
+    "production_module": {
+      "shell": "RedesignShell-Dg9R5c9C.js",
+      "seatModule": "SeatManagement-DA--SVgG.js",
+      "dailySeatPlannerLoaded": true,
+      "defaultComponent": true,
+      "sharedComponents": [
+        "MyDeskPage",
+        "CalendarPage",
+        "RosterPage",
+        "RaiseCasePage",
+        "FieldLabel",
+        "ChipRow",
+        "ShiftHandoverPage"
+      ],
+      "moduleLoaded": true
+    },
+    "independent_review": "Two findings corrected with RED/GREEN regression tests and re-reviewed; no remaining blockers",
+    "live_planning": {
+      "passed": true,
+      "read_only": true,
+      "original": {
+        "peak": 37,
+        "installed": 31,
+        "status": "overbooked",
+        "complete": false,
+        "issues": [
+          {
+            "kind": "source_detail_mismatch",
+            "session_id": 4538
+          }
+        ]
+      },
+      "preview_only": {
+        "extra": 6,
+        "from": "10:00",
+        "through": "12:15",
+        "overloaded_intervals": 0,
+        "status": "incomplete"
+      },
+      "expired_preview": {
+        "overloaded_intervals": 5
+      },
+      "calicut_2026_11_13": 25
+    },
+    "business_rows_unchanged_during_migration": true,
+    "business_mutations_issued_by_deployment": 0,
+    "later_business_observation": {
+      "before_counts": {
+        "calendar_sessions": 3158,
+        "candidates": 6927
+      },
+      "after_counts": {
+        "calendar_sessions": 3159,
+        "candidates": 6928
+      },
+      "note": "Concurrent application activity changed counts during later verification. Deployment issued no Calendar/candidate mutations; no attempt was made to overwrite those operational changes."
+    },
+    "security": "Warning/error counts unchanged. Added INFO for another private RLS table without direct grants/policies."
+  },
+  "preserved": [
+    "Original deployment checkout",
+    ".env/compose/nginx files",
+    "Runtime environment, routing, ports, networks, mounts and other services",
+    "Existing booking/candidate source provenance; no automatic reschedules"
+  ],
+  "rollback_script": "/opt/fets-releases/20261107T091011Z-daily-seat-planning/rollback.sh",
+  "limits": "Default daily simulation15min each direction, editable0..120; individual fixed exams, started/past/overnight and source-inconsistent records remain protected. Extra systems0..100 in explicit same-day interval; no real extra systems were configured by verification."
+}

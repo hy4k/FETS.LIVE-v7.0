@@ -1,64 +1,18 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { toast } from 'react-hot-toast'
-import { formatDateForIST } from '../utils/dateUtils'
+import { fetchCalendarRange } from '../seats/calendar-data'
 import { Session } from '../types' // Assuming a shared Session type
 
 const fetchCalendarSessions = async (currentDate: Date, activeBranch: string, applyFilter: (q: any) => any, isGlobalView: boolean) => {
-  const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
-  const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0)
-
-  const startDateIST = formatDateForIST(startOfMonth)
-  const endDateIST = formatDateForIST(endOfMonth)
-
-  let query = supabase
-    .from('calendar_sessions')
-    .select('*')
-    .gte('date', startDateIST)
-    .lte('date', endDateIST)
-    .order('date', { ascending: true })
-    .order('start_time', { ascending: true })
-
-  if (!isGlobalView) {
-    query = applyFilter(query)
-  }
-
-  let { data, error } = await query
-
-  // Handle fallback for legacy Calicut data without a branch_location
-  if (error || (!data || data.length === 0)) {
-    const isMissingColumnError = (error as any)?.message?.includes('branch_location')
-    if ((isMissingColumnError || data?.length === 0) && activeBranch === 'calicut' && !isGlobalView) {
-      const fallbackQuery = supabase
-        .from('calendar_sessions')
-        .select('*')
-        .gte('date', startDateIST)
-        .lte('date', endDateIST)
-        .order('date', { ascending: true })
-        .order('start_time', { ascending: true })
-
-      const { data: fallbackData, error: fallbackError } = await fallbackQuery
-      if (!fallbackError && fallbackData) {
-        data = fallbackData
-        error = null // Clear previous error
-      }
-    }
-  }
-
-  if (error) throw new Error(error.message)
+  const year=currentDate.getFullYear(),month=currentDate.getMonth()+1;
+  const startDateIST=`${year}-${String(month).padStart(2,'0')}-01`;
+  const endDateIST=`${year}-${String(month).padStart(2,'0')}-${new Date(Date.UTC(year,month,0)).getUTCDate()}`;
+  const data=await fetchCalendarRange(startDateIST,endDateIST,isGlobalView?'global':activeBranch,isGlobalView?undefined:applyFilter);
 
   const sessions = (data as Session[]) || []
-  return sessions.map(s => {
-    let cl = (s.client_name || '').trim();
-    if (!cl) {
-      const examUpper = (s.exam_name || '').toUpperCase().trim();
-      if (examUpper.includes('CELPIP') || examUpper.includes('CEL')) cl = 'CELPIP';
-      else if (examUpper.includes('CMA') || examUpper.includes('IMA')) cl = 'CMA US';
-      else if (examUpper.includes('PSI')) cl = 'PSI';
-      else cl = 'PEARSON VUE';
-    }
-    return { ...s, client_name: cl };
-  });
+  // Preserve source provider identity for both the Calendar and seat context.
+  return sessions.map(s => ({ ...s, client_name: (s.client_name || '').trim() }));
 }
 
 export const useCalendarSessions = (currentDate: Date, activeBranch: string, applyFilter: (q: any) => any, isGlobalView: boolean) => {
@@ -67,6 +21,7 @@ export const useCalendarSessions = (currentDate: Date, activeBranch: string, app
   return useQuery<Session[], Error>({
     queryKey,
     queryFn: () => fetchCalendarSessions(currentDate, activeBranch, applyFilter, isGlobalView),
+    staleTime:10000, refetchInterval:60000, refetchOnWindowFocus:true,
   })
 }
 
@@ -90,6 +45,7 @@ export const useSessionMutations = () => {
 
   const invalidateSessions = () => {
     queryClient.invalidateQueries({ queryKey: ['sessions', 'calendar'] })
+    queryClient.invalidateQueries({ queryKey: ['seat-context'] })
     queryClient.invalidateQueries({ queryKey: ['dashboardStats'] })
     queryClient.invalidateQueries({ queryKey: ['upcomingSchedule'] })
   }
