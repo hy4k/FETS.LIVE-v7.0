@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { analyseDay, formatSeatTime } from './engine';
-import { findSuggestions } from './solver';
-import type { SeatDetail, SeatRule, SeatSession, SeatSolverOptions } from './types';
+import { analyseDay, formatSeatTime, sessionAtoms } from './engine';
+import { findAtomSuggestions, findSuggestions } from './solver';
+import type { SeatAtomLimits, SeatCapacityWindow, SeatDetail, SeatRule, SeatSession, SeatSolverOptions } from './types';
 
 const date = '2026-11-13';
 const future: SeatSolverOptions = { now: '2026-11-12T00:00:00Z', window_start: '09:00', window_end: '12:00' };
@@ -176,5 +176,63 @@ describe('review-only bounded seat timing search', () => {
     const result = findSuggestions(sessions, 'calicut', '2026-11-14', [rule(0, 10)], [], { now: future.now });
     expect(result.status).toBe('resolved');
     expect(result.suggestions[0].moves.map(m => m.session_id)).toEqual([2]);
+  });
+});
+
+describe('daily atom limits and variable-capacity search', () => {
+  it('applies daily limits to any provider without requiring a reusable rule', () => {
+    const sessions = rows().map(row => row.id === 2 ? { ...row, client_name: 'Prometric' } : row);
+    const atoms = sessionAtoms(sessions).atoms;
+    const result = findAtomSuggestions(atoms, analyseDay(sessions, 'calicut', date), 'calicut', date, [], { ...future, atom_limits: { '1:calendar': { earlier_minutes: 0, later_minutes: 0 }, '2:calendar': { earlier_minutes: 0, later_minutes: 10 } } });
+    expect(result.status).toBe('resolved');
+    expect(result.suggestions[0].moves.map(move => [move.provider, move.minutes])).toEqual([['PROMETRIC', 10]]);
+  });
+
+  it('lets a per-exam lock override a permissive provider rule', () => {
+    const sessions = rows();
+    const result = findAtomSuggestions(sessionAtoms(sessions).atoms, analyseDay(sessions, 'calicut', date), 'calicut', date, [rule(15, 15), fixedRule], { ...future, atom_limits: { '2:calendar': { earlier_minutes: 15, later_minutes: 15, locked: true } } });
+    expect(result).toMatchObject({ status: 'none', suggestions: [] });
+  });
+
+  it('uses temporary systems to accept a safe move into an interval above installed capacity', () => {
+    const sessions = [...rows(), session(3, '10:00', '11:00', 40)];
+    const capacity: SeatCapacityWindow = { branch_location: 'calicut', date, extra_systems: 10, start_time: '10:00', end_time: '11:00' };
+    const result = findSuggestions(sessions, 'calicut', date, [rule(0, 10), fixedRule], [], { ...future, capacity_windows: [capacity] });
+    expect(result.status).toBe('resolved');
+    expect(result.suggestions[0]).toMatchObject({ remaining_excess: 0, resolved: true });
+    expect(result.suggestions[0].moves.map(move => move.minutes)).toEqual([10]);
+    expect(result.suggestions[0].day).toMatchObject({ capacity: 40, peak: 50, status: 'full' });
+  });
+
+  it('rejects moving a conflict beyond the exact end of temporary availability', () => {
+    const sessions = [...rows(), session(3, '10:00', '11:00', 40)];
+    const capacity: SeatCapacityWindow = { branch_location: 'calicut', date, extra_systems: 10, start_time: '10:00', end_time: '10:30' };
+    expect(findSuggestions(sessions, 'calicut', date, [rule(0, 10), fixedRule], [], { ...future, capacity_windows: [capacity] })).toMatchObject({ status: 'none', suggestions: [] });
+  });
+
+  it('reports the largest actual remaining excess rather than subtracting installed capacity from peak', () => {
+    const sessions = [session(1, '09:00', '10:00', 50), session(2, '09:50', '10:20', 10, { client_name: 'Pearson VUE' })];
+    const capacity: SeatCapacityWindow = { branch_location: 'calicut', date, extra_systems: 10, start_time: '09:00', end_time: '11:00' };
+    const result = findSuggestions(sessions, 'calicut', date, [rule(0, 9), fixedRule], [], { ...future, capacity_windows: [capacity] });
+    expect(result.status).toBe('partial');
+    expect(result.suggestions[0]).toMatchObject({ remaining_excess: 10, remaining_overload_seconds: 60 });
+    expect(result.suggestions[0].moves[0].minutes).toBe(9);
+  });
+
+  it('does not move anything when confirmed extra systems already cover the overload', () => {
+    const capacity: SeatCapacityWindow = { branch_location: 'calicut', date, extra_systems: 10, start_time: '09:00', end_time: '11:00' };
+    expect(findSuggestions(rows(), 'calicut', date, [rule(0, 10)], [], { ...future, capacity_windows: [capacity] })).toMatchObject({ status: 'none', suggestions: [] });
+  });
+
+  it.each<Record<string, SeatAtomLimits>>([
+    { '2:calendar': { earlier_minutes: 0.5, later_minutes: 10 } },
+    { 'old:key': { earlier_minutes: 0, later_minutes: 10 } },
+  ])('fails closed for malformed or stale exam limits %j', atom_limits => {
+    expect(findSuggestions(rows(), 'calicut', date, [rule(0, 10)], [], { ...future, atom_limits })).toMatchObject({ status: 'incomplete', suggestions: [] });
+  });
+
+  it('rejects a stale baseline that does not describe the supplied atoms', () => {
+    const sessions = rows();
+    expect(findAtomSuggestions(sessionAtoms(sessions.map(row => row.id === 2 ? { ...row, candidate_count: 9 } : row)).atoms, analyseDay(sessions, 'calicut', date), 'calicut', date, [rule(0, 10)], future)).toMatchObject({ status: 'incomplete', suggestions: [] });
   });
 });

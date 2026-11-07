@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { analyseDay, checkBooking, formatSeatTime, normaliseProvider, toSeatSecond } from './engine';
-import type { SeatDetail, SeatSession } from './types';
+import type { SeatCapacityWindow, SeatDetail, SeatSession } from './types';
 
 const date = '2026-11-13';
 const session = (id: number, start: string | null, end: string | null, count: number | null, extra: Partial<SeatSession> = {}): SeatSession => ({
@@ -9,6 +9,7 @@ const session = (id: number, start: string | null, end: string | null, count: nu
 const detail = (count: number, extra: Partial<SeatDetail> = {}): SeatDetail => ({
   session_id: 1, branch_location: 'calicut', provider: 'Pearson VUE', date, start_time: '09:00', end_time: '10:00', exam_code: 'A', exam_title: 'Exam A', count, status: 'registered', ...extra,
 });
+const capacityWindow = (extra: Partial<SeatCapacityWindow> = {}): SeatCapacityWindow => ({ branch_location: 'calicut', date, extra_systems: 10, start_time: '09:00', end_time: '10:00', ...extra });
 
 describe('seat interval planning', () => {
   it('releases seats at the exact handoff and retains exactly-full periods', () => {
@@ -176,5 +177,58 @@ describe('seat interval planning', () => {
   it('excludes cancelled and zero-count orphan source appointments from uncertainty', () => {
     const day = analyseDay([], 'calicut', date, [detail(40, { session_id: 99, status: 'cancelled' }), detail(0, { session_id: 100 })]);
     expect(day).toMatchObject({ complete: true, status: 'available', peak: 0, issues: [] });
+  });
+});
+
+describe('temporary workstation availability', () => {
+  it('splits occupancy at availability boundaries and expires the added systems exactly', () => {
+    const day = analyseDay([session(1, '08:30', '10:30', 45)], 'calicut', date, [], [capacityWindow()]);
+    expect(day.capacity).toBe(40);
+    expect(day.segments.map(s => [formatSeatTime(s.start), formatSeatTime(s.end), s.capacity, s.booked, s.free, s.excess])).toEqual([
+      ['00:00', '08:30', 40, 0, 40, 0], ['08:30', '09:00', 40, 45, -5, 5],
+      ['09:00', '10:00', 50, 45, 5, 0], ['10:00', '10:30', 40, 45, -5, 5], ['10:30', '00:00', 40, 0, 40, 0],
+    ]);
+    expect(day.overbooked.map(s => [formatSeatTime(s.start), formatSeatTime(s.end)])).toEqual([['08:30', '09:00'], ['10:00', '10:30']]);
+  });
+
+  it('derives available/full status from each actual capacity rather than installed capacity or peak', () => {
+    const window = capacityWindow({ start_time: '00:00', end_time: '24:00' });
+    expect(analyseDay([session(1, '09:00', '10:00', 45)], 'calicut', date, [], [window])).toMatchObject({ status: 'available', peak: 45, full: [], overbooked: [] });
+    const day = analyseDay([session(1, '09:00', '10:00', 50), session(2, '10:00', '11:00', 40)], 'calicut', date, [], [capacityWindow()]);
+    expect(day.status).toBe('full');
+    expect(day.full.map(s => [formatSeatTime(s.start), s.capacity, s.booked])).toEqual([['09:00', 50, 50], ['10:00', 40, 40]]);
+  });
+
+  it('uses the complete booking interval across added-capacity expiry and idle gaps', () => {
+    const day = analyseDay([session(1, '09:00', '09:15', 5), session(2, '10:15', '10:30', 5)], 'calicut', date, [], [capacityWindow()]);
+    expect(checkBooking(day, { start_time: '09:15', end_time: '10:00', count: 50 })).toMatchObject({ status: 'full', minimum_free: 50, peak_after: 50, conflicts: [] });
+    const fit = checkBooking(day, { start_time: '09:15', end_time: '10:15', count: 45 });
+    expect(fit).toMatchObject({ status: 'overbooked', minimum_free: 40, peak_after: 45 });
+    expect(fit.conflicts.map(s => [formatSeatTime(s.start), formatSeatTime(s.end), s.capacity, s.excess])).toEqual([['10:00', '10:15', 40, 5]]);
+    expect(checkBooking(day, { start_time: '10:00', end_time: '10:15', count: 40 }).status).toBe('full');
+  });
+
+  it('checks added capacity even on an otherwise completely empty day', () => {
+    const day = analyseDay([], 'calicut', date, [], [capacityWindow()]);
+    expect(checkBooking(day, { start_time: '09:00', end_time: '10:00', count: 50 })).toMatchObject({ status: 'full', minimum_free: 50, peak_after: 50 });
+    expect(checkBooking(day, { start_time: '08:59', end_time: '09:01', count: 50 }).status).toBe('overbooked');
+    expect(checkBooking(day, { start_time: '10:00', end_time: '11:00', count: 41 }).status).toBe('overbooked');
+  });
+
+  it('keeps date and centre capacity independent and preserves old segment shape when no systems are added', () => {
+    const rows = [session(1, '09:00', '10:00', 45)];
+    const original = analyseDay(rows, 'calicut', date);
+    expect(analyseDay(rows, 'calicut', date, [], [capacityWindow({ branch_location: 'cochin' }), capacityWindow({ date: '2026-11-14' })])).toEqual(original);
+    expect(analyseDay(rows, 'calicut', date, [], [capacityWindow({ extra_systems: 0 })])).toEqual(original);
+    const cochin = analyseDay([session(1, '09:00', '10:00', 36, { branch_location: 'cochin' })], 'cochin', date, [], [capacityWindow({ branch_location: 'cochin', extra_systems: 5 })]);
+    expect(cochin).toMatchObject({ capacity: 31, status: 'full', peak: 36 });
+  });
+
+  it.each([
+    { extra_systems: -1 }, { extra_systems: 1.5 }, { extra_systems: 101 }, { start_time: '10:00', end_time: '09:00' }, { start_time: '9:00' }, { end_time: '09:00' },
+  ])('fails closed for invalid relevant availability %j', invalid => {
+    const day = analyseDay([], 'calicut', date, [], [capacityWindow(invalid)]);
+    expect(day.complete).toBe(false);
+    expect(checkBooking(day, { start_time: '11:00', end_time: '12:00', count: 1 }).status).toBe('unknown');
   });
 });

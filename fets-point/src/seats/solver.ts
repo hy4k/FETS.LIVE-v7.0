@@ -1,5 +1,5 @@
-import { analyseAtoms, analyseDay, normaliseProvider, seatBranch, sessionAtoms, toSeatSecond } from './engine';
-import type { SeatAtom, SeatBranch, SeatDay, SeatDetail, SeatMove, SeatRule, SeatSession, SeatSolverOptions, SeatSuggestion, SeatSuggestions } from './types';
+import { analyseAtoms, analyseDay, normaliseProvider, seatBranch, seatCapacityIntervals, sessionAtoms, toSeatSecond } from './engine';
+import type { SeatAtom, SeatAtomLimits, SeatBranch, SeatCapacityWindow, SeatDay, SeatDetail, SeatMove, SeatRule, SeatSession, SeatSolverOptions, SeatSuggestion, SeatSuggestions } from './types';
 
 type Limits = { earlier: number; later: number; configured: boolean };
 type SearchState = { moves: SeatMove[]; day: SeatDay; integral: number; people: number; shift: number; signature: string };
@@ -8,7 +8,9 @@ const textKey = (value: string | null) => value?.trim().toUpperCase() || '';
 const excessIntegral = (day: SeatDay) => day.overbooked.reduce((sum, segment) => sum + segment.excess * (segment.end - segment.start), 0);
 const ruleLimit = (value: number) => Number.isInteger(value) && value >= 0 && value <= 120;
 
-function limitsFor(atom: SeatAtom, rules: SeatRule[]): Limits {
+function limitsFor(atom: SeatAtom, rules: SeatRule[], overrides: Record<string, SeatAtomLimits> = {}): Limits {
+  const override = overrides[atom.key];
+  if (override) return { earlier: override.locked ? 0 : override.earlier_minutes, later: override.locked ? 0 : override.later_minutes, configured: true };
   const providerRules = rules.filter(rule => normaliseProvider(rule.provider) === atom.provider);
   const code = atom.exam_code && providerRules.find(rule => textKey(rule.exam_code) === textKey(atom.exam_code) && !!textKey(rule.exam_code));
   const name = providerRules.find(rule => !!textKey(rule.exam_name) && textKey(rule.exam_name) === textKey(atom.exam_name));
@@ -37,7 +39,7 @@ function movedAtoms(original: SeatAtom[], moves: SeatMove[]): SeatAtom[] {
 }
 
 /** Check every changed boundary, including the neighbouring dates in the input. */
-function neverWorse(original: SeatAtom[], changed: SeatAtom[], capacity: number): boolean {
+function neverWorse(original: SeatAtom[], changed: SeatAtom[], capacity: number, branch: SeatBranch, windows: SeatCapacityWindow[]): boolean {
   const events = new Map<number, { before: number; after: number }>();
   const add = (at: number, count: number, side: 'before' | 'after') => {
     const event = events.get(at) || { before: 0, after: 0 };
@@ -46,11 +48,14 @@ function neverWorse(original: SeatAtom[], changed: SeatAtom[], capacity: number)
   };
   for (const atom of original) { add(atom.start, atom.count, 'before'); add(atom.end, -atom.count, 'before'); }
   for (const atom of changed) { add(atom.start, atom.count, 'after'); add(atom.end, -atom.count, 'after'); }
+  const { intervals } = seatCapacityIntervals(windows, branch);
+  for (const window of intervals) { add(window.start, 0, 'before'); add(window.end, 0, 'before'); }
   let before = 0, after = 0;
-  for (const [, event] of [...events].sort(([a], [b]) => a - b)) {
+  for (const [at, event] of [...events].sort(([a], [b]) => a - b)) {
     before += event.before;
     after += event.after;
-    if (Math.max(0, after - capacity) > Math.max(0, before - capacity)) return false;
+    const available = capacity + intervals.filter(window => window.start <= at && window.end > at).reduce((sum, window) => sum + window.extra, 0);
+    if (Math.max(0, after - available) > Math.max(0, before - available)) return false;
   }
   return true;
 }
@@ -59,7 +64,7 @@ function asSuggestion(state: SearchState, index: number): SeatSuggestion {
   return {
     id: `simulation-${index + 1}`, moves: state.moves, day: state.day, resolved: state.integral === 0,
     people_moved: state.people, seat_minutes: state.shift,
-    remaining_excess: Math.max(0, state.day.peak - state.day.capacity),
+    remaining_excess: Math.max(0, ...state.day.segments.map(segment => segment.excess)),
     remaining_overload_seconds: state.day.overbooked.reduce((sum, segment) => sum + segment.end - segment.start, 0),
   };
 }
@@ -70,9 +75,25 @@ function asSuggestion(state: SearchState, index: number): SeatSuggestion {
  * their remaining members keep the original interval. This is not exhaustive.
  */
 export function findSuggestions(sessions: SeatSession[], branch: SeatBranch, date: string, rules: SeatRule[], details: SeatDetail[] = [], options: SeatSolverOptions = {}): SeatSuggestions {
-  const baseline = analyseDay(sessions, branch, date, details);
+  const baseline = analyseDay(sessions, branch, date, details, options.capacity_windows);
+  return findAtomSuggestions(sessionAtoms(sessions, details).atoms, baseline, branch, date, rules, options);
+}
+
+/** Search the verified daily preview; manually placed atoms can remain fixed. */
+export function findAtomSuggestions(atoms: SeatAtom[], baseline: SeatDay, branch: SeatBranch, date: string, rules: SeatRule[], options: SeatSolverOptions = {}): SeatSuggestions {
   const empty = (status: SeatSuggestions['status'], message: string): SeatSuggestions => ({ status, suggestions: [], evaluated: 0, limited: false, message });
   if (!baseline.complete) return empty('incomplete', 'Complete the missing or inconsistent reservations before trying timing changes.');
+  const original = atoms.filter(atom => atom.branch === branch);
+  const current = analyseAtoms(original, branch, date, baseline.issues, options.capacity_windows);
+  if (baseline.branch !== branch || baseline.date !== date || !current.complete || new Set(original.map(atom => atom.key)).size !== original.length || JSON.stringify(current.atoms) !== JSON.stringify(baseline.atoms) || JSON.stringify(current.segments) !== JSON.stringify(baseline.segments)) {
+    return empty('incomplete', 'Refresh the daily preview before searching; its reservations or capacity have changed.');
+  }
+  const overrides = options.atom_limits || {};
+  for (const [key, limits] of Object.entries(overrides)) {
+    if (!current.atoms.some(atom => atom.key === key) || !limits || !ruleLimit(limits.earlier_minutes) || !ruleLimit(limits.later_minutes) || (limits.locked !== undefined && typeof limits.locked !== 'boolean')) {
+      return empty('incomplete', 'Daily exam limits need current exam keys and whole-minute limits from 0 to 120.');
+    }
+  }
   const scopedRules = rules.filter(rule => seatBranch(rule.branch_location) === branch);
   const ruleScopes = new Set<string>();
   for (const rule of scopedRules) {
@@ -93,13 +114,12 @@ export function findSuggestions(sessions: SeatSession[], branch: SeatBranch, dat
   if (windowStart === null || windowEnd === null || windowStart < dayStart || windowEnd > dayStart + 86400 || windowEnd <= windowStart || !Number.isFinite(now)) {
     return empty('incomplete', 'Use a valid same-day planning window and a valid current-time reference.');
   }
-  const original = sessionAtoms(sessions, details).atoms.filter(atom => atom.branch === branch);
   // Cross-midnight reservations contribute occupancy on both dates, but this
   // same-day planner cannot authorise moving either their start or continuation.
   const futureAtoms = baseline.atoms.filter(atom => atom.movable && atom.start > now && atom.start >= dayStart && atom.end <= dayStart + 86400);
-  const movable = futureAtoms.map(atom => ({ atom, limits: limitsFor(atom, scopedRules) })).filter(({ limits }) => limits.earlier || limits.later);
+  const movable = futureAtoms.map(atom => ({ atom, limits: limitsFor(atom, scopedRules, overrides) })).filter(({ limits }) => limits.earlier || limits.later);
   if (!movable.length) {
-    if (futureAtoms.some(atom => !limitsFor(atom, scopedRules).configured)) return empty('needs_rules', 'Unset provider/exam rules are fixed. Configure permitted limits before a simulation.');
+    if (futureAtoms.some(atom => !limitsFor(atom, scopedRules, overrides).configured)) return empty('needs_rules', 'Unset provider/exam rules are fixed. Configure permitted limits before a simulation.');
     return empty('none', 'No movable reservation has a permitted timing change within these limits.');
   }
   const budget = Number.isInteger(options.max_evaluations) && options.max_evaluations! >= 0 ? Math.min(options.max_evaluations!, 20000) : 3000;
@@ -132,8 +152,8 @@ export function findSuggestions(sessions: SeatSession[], branch: SeatBranch, dat
           seen.add(signature);
           evaluated++;
           const atoms = movedAtoms(original, moves);
-          if (!neverWorse(original, atoms, baseline.capacity)) continue;
-          const day = analyseAtoms(atoms, branch, date);
+          if (!neverWorse(original, atoms, baseline.capacity, branch, options.capacity_windows || [])) continue;
+          const day = analyseAtoms(atoms, branch, date, baseline.issues, options.capacity_windows);
           const candidate: SearchState = { moves, day, integral: excessIntegral(day), people: moves.reduce((sum, item) => sum + item.count, 0), shift: moves.reduce((sum, item) => sum + item.count * Math.abs(item.minutes), 0), signature };
           if (candidate.integral < baselineIntegral) improvements.push(candidate);
           next.push(candidate);

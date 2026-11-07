@@ -1,4 +1,4 @@
-import type { BookingFit, BookingRequest, SeatAtom, SeatBranch, SeatDay, SeatDetail, SeatIssue, SeatSegment, SeatSession } from './types';
+import type { BookingFit, BookingRequest, SeatAtom, SeatBranch, SeatCapacityWindow, SeatDay, SeatDetail, SeatIssue, SeatSegment, SeatSession } from './types';
 
 export function normaliseProvider(value: string): string {
   const name = value.trim().replace(/\s+/g, ' ').toUpperCase();
@@ -112,31 +112,51 @@ export function sessionAtoms(sessions: SeatSession[], details: SeatDetail[] = []
   return { atoms, issues };
 }
 
+/** Validated local intervals, shared by the occupancy sweep and timing search. */
+export function seatCapacityIntervals(windows: SeatCapacityWindow[], branch: SeatBranch, date?: string): { intervals: { start: number; end: number; extra: number }[]; issues: SeatIssue[] } {
+  const intervals: { start: number; end: number; extra: number }[] = [];
+  const issues: SeatIssue[] = [];
+  for (const window of windows) {
+    if (seatBranch(window.branch_location) !== branch || (date !== undefined && window.date !== date)) continue;
+    const day = toSeatSecond(window.date, '00:00');
+    const start = toSeatSecond(window.date, window.start_time), end = toSeatSecond(window.date, window.end_time);
+    if (day === null || start === null || end === null || start >= day + 86400 || end <= start || !Number.isInteger(window.extra_systems) || window.extra_systems < 0 || window.extra_systems > 100) {
+      issues.push({ session_id: null, kind: 'invalid_capacity_window', message: 'Additional systems need a same-day availability interval and a whole count from 0 to 100.', blocking: true });
+    } else if (window.extra_systems > 0) intervals.push({ start, end, extra: window.extra_systems });
+  }
+  return { intervals, issues };
+}
+
 /** Sweep all event boundaries; half-open intervals release seats at their end. */
-export function analyseAtoms(atoms: SeatAtom[], branch: SeatBranch, date: string, issues: SeatIssue[] = []): SeatDay {
+export function analyseAtoms(atoms: SeatAtom[], branch: SeatBranch, date: string, issues: SeatIssue[] = [], capacity_windows: SeatCapacityWindow[] = []): SeatDay {
   const capacity = branch === 'calicut' ? 40 : 31;
   const start = toSeatSecond(date, '00:00');
-  const dayIssues = start === null ? [...issues, { session_id: null, kind: 'invalid_date', message: 'Select a valid local date.', blocking: true }] : issues;
+  const availability = seatCapacityIntervals(capacity_windows, branch, date);
+  const dayIssues = [...issues, ...availability.issues, ...(start === null ? [{ session_id: null, kind: 'invalid_date', message: 'Select a valid local date.', blocking: true }] : [])];
   const selected = start === null ? [] : atoms.filter(atom => atom.branch === branch && atom.start < start + 86400 && atom.end > start);
-  const boundaries = start === null ? [] : [...new Set(selected.flatMap(atom => [Math.max(start, atom.start), Math.min(start + 86400, atom.end)]))].sort((a, b) => a - b);
+  const boundaries = start === null ? [] : [...new Set([
+    ...selected.flatMap(atom => [Math.max(start, atom.start), Math.min(start + 86400, atom.end)]),
+    ...(availability.intervals.length ? [start, start + 86400, ...availability.intervals.flatMap(window => [window.start, window.end])] : []),
+  ])].sort((a, b) => a - b);
   const segments: SeatSegment[] = [];
   for (let index = 0; index < boundaries.length - 1; index++) {
     const from = boundaries[index], through = boundaries[index + 1];
     const active = selected.filter(atom => atom.start < through && atom.end > from);
     const booked = active.reduce((sum, atom) => sum + atom.count, 0);
-    segments.push({ start: from, end: through, booked, free: capacity - booked, excess: Math.max(0, booked - capacity), session_ids: [...new Set(active.map(atom => atom.session_id))].sort((a, b) => a - b) });
+    const available = capacity + availability.intervals.filter(window => window.start <= from && window.end > from).reduce((sum, window) => sum + window.extra, 0);
+    segments.push({ start: from, end: through, booked, free: available - booked, excess: Math.max(0, booked - available), session_ids: [...new Set(active.map(atom => atom.session_id))].sort((a, b) => a - b), ...(availability.intervals.length ? { capacity: available } : {}) });
   }
   const peak = Math.max(0, ...segments.map(segment => segment.booked));
   const complete = !dayIssues.some(issue => issue.blocking);
   return {
     branch, date, capacity, peak, complete, issues: dayIssues,
-    status: peak > capacity ? 'overbooked' : !complete ? 'incomplete' : peak === capacity ? 'full' : 'available',
-    segments, full: segments.filter(segment => segment.booked === capacity), overbooked: segments.filter(segment => segment.excess > 0),
+    status: segments.some(segment => segment.excess > 0) ? 'overbooked' : !complete ? 'incomplete' : segments.some(segment => segment.free === 0) ? 'full' : 'available',
+    segments, full: segments.filter(segment => segment.free === 0), overbooked: segments.filter(segment => segment.excess > 0),
     total: selected.reduce((sum, atom) => sum + atom.count, 0), atoms: selected,
   };
 }
 
-export function analyseDay(sessions: SeatSession[], branch: SeatBranch, date: string, details: SeatDetail[] = []): SeatDay {
+export function analyseDay(sessions: SeatSession[], branch: SeatBranch, date: string, details: SeatDetail[] = [], capacity_windows: SeatCapacityWindow[] = []): SeatDay {
   const { atoms, issues } = sessionAtoms(sessions, details);
   const selectedDay = toSeatSecond(date, '00:00');
   const affectsDay = (recordDate: string | null, startTime: string | null | undefined, endTime: string | null | undefined) => {
@@ -162,7 +182,7 @@ export function analyseDay(sessions: SeatSession[], branch: SeatBranch, date: st
       return (!sourceCentre || sourceCentre === branch) && affectsDay(detail.date, detail.start_time, detail.end_time);
     })) scopedIds.add(id);
   }
-  return analyseAtoms(atoms, branch, date, issues.filter(issue => issue.session_id === null || scopedIds.has(issue.session_id)));
+  return analyseAtoms(atoms, branch, date, issues.filter(issue => issue.session_id === null || scopedIds.has(issue.session_id)), capacity_windows);
 }
 
 export function checkBooking(day: SeatDay, request: BookingRequest): BookingFit {
@@ -172,11 +192,18 @@ export function checkBooking(day: SeatDay, request: BookingRequest): BookingFit 
     return { status: 'invalid', minimum_free: null, peak_after: null, conflicts: [], message: 'Enter a positive whole count and a valid interval ending after its start.' };
   }
   const overlapping = day.segments.filter(segment => segment.start < end && segment.end > start);
-  const minimum_free = Math.min(day.capacity, ...overlapping.map(segment => segment.free));
-  const peak_after = day.capacity - minimum_free + request.count;
-  const conflicts = overlapping.filter(segment => segment.booked + request.count > day.capacity).map(segment => ({ ...segment, start: Math.max(segment.start, start), end: Math.min(segment.end, end), booked: segment.booked + request.count, free: segment.free - request.count, excess: segment.booked + request.count - day.capacity }));
-  if (request.count > day.capacity && !conflicts.length) conflicts.push({ start, end, booked: request.count, free: day.capacity - request.count, excess: request.count - day.capacity, session_ids: [] });
-  if (peak_after > day.capacity) return { status: 'overbooked', minimum_free, peak_after, conflicts, message: 'This interval exceeds the shared seat capacity.' };
+  const boundaries = [...new Set([start, end, ...overlapping.flatMap(segment => [Math.max(start, segment.start), Math.min(end, segment.end)])])].sort((a, b) => a - b);
+  const requested: SeatSegment[] = boundaries.slice(0, -1).map((from, index) => {
+    const through = boundaries[index + 1];
+    const segment = overlapping.find(item => item.start <= from && item.end >= through);
+    const capacity = segment?.capacity ?? day.capacity;
+    const booked = segment?.booked ?? 0;
+    return { start: from, end: through, booked, free: capacity - booked, excess: Math.max(0, booked - capacity), session_ids: segment?.session_ids ?? [], ...(segment?.capacity !== undefined ? { capacity } : {}) };
+  });
+  const minimum_free = Math.min(...requested.map(segment => segment.free));
+  const peak_after = Math.max(...requested.map(segment => segment.booked + request.count));
+  const conflicts = requested.filter(segment => segment.free < request.count).map(segment => ({ ...segment, booked: segment.booked + request.count, free: segment.free - request.count, excess: request.count - segment.free }));
+  if (conflicts.length) return { status: 'overbooked', minimum_free, peak_after, conflicts, message: 'This interval exceeds the shared seat capacity.' };
   if (!day.complete) return { status: 'unknown', minimum_free: null, peak_after: null, conflicts: [], message: 'Incomplete reservations prevent a safe fit result.' };
-  return { status: peak_after === day.capacity ? 'full' : 'fits', minimum_free, peak_after, conflicts, message: peak_after === day.capacity ? 'The booking fits and exactly fills the shared pool.' : 'The booking fits throughout the requested interval.' };
+  return { status: minimum_free === request.count ? 'full' : 'fits', minimum_free, peak_after, conflicts, message: minimum_free === request.count ? 'The booking fits and exactly fills the shared pool.' : 'The booking fits throughout the requested interval.' };
 }
