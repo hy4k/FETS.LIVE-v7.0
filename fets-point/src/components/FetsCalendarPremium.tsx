@@ -23,6 +23,7 @@ import { toast } from 'react-hot-toast'
 import '../styles/calendar-enhancements.css'
 import SeatCalendarBadges from '../seats/SeatCalendarBadges'
 import { analyseDay } from '../seats/engine'
+import { criticalLoad } from '../seats/presentation'
 import { useSeatContext } from '../seats/useSeatContext'
 
 const SeatManagement = lazy(() => import('../seats/SeatManagement'));
@@ -563,10 +564,10 @@ export function FetsCalendarPremium() {
           // Every provider uses the same physical centre pool; display filters never reduce demand.
           const dateStr = formatDateForIST(date)
           const seatDays = (activeBranch === 'global' ? ['calicut', 'cochin'] as const : activeBranch === 'calicut' || activeBranch === 'cochin' ? [activeBranch] as const : [])
-            .map(branch => analyseDay(seatSessions, branch, dateStr, seatContext.data?.details))
-          const worst = [...seatDays].sort((a,b) => b.peak / b.capacity - a.peak / a.capacity)[0]
-          const capacity = worst?.capacity || 1
-          const peak = seatsUnavailable ? 0 : worst?.peak || 0
+            .map(branch => analyseDay(seatSessions, branch, dateStr, seatContext.data?.details, seatContext.data?.capacity_adjustments))
+          const worst = [...seatDays].sort((a,b) => criticalLoad(b).booked / criticalLoad(b).capacity - criticalLoad(a).booked / criticalLoad(a).capacity)[0]
+          const capacity = worst ? criticalLoad(worst).capacity : 1
+          const peak = seatsUnavailable ? 0 : worst ? criticalLoad(worst).booked : 0
           const isOverloaded = peak > capacity
           const isPeak = peak === capacity
           const incomplete = seatsUnavailable || seatDays.some(day => !day.complete)
@@ -692,7 +693,7 @@ export function FetsCalendarPremium() {
                   )}
                 </div>
 
-                <SeatCalendarBadges sessions={seatSessions} details={seatContext.data?.details} date={dateStr} branch={activeBranch} unavailable={seatsUnavailable} onOpen={openSeatManagement} />
+                <SeatCalendarBadges sessions={seatSessions} details={seatContext.data?.details} capacityWindows={seatContext.data?.capacity_adjustments} date={dateStr} branch={activeBranch} unavailable={seatsUnavailable} onOpen={openSeatManagement} />
 
                 {/* Client / Session List */}
                 <div className="space-y-1 mt-2">

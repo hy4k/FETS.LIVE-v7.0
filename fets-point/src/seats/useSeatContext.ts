@@ -14,7 +14,7 @@ export function useSeatContext(branch:string,from:string,through:string){
     queryFn:async()=>{
       if(branch!=='global')return fetchSeatContext(branch as 'calicut'|'cochin',from,through);
       const rows=await Promise.all([fetchSeatContext('calicut',from,through),fetchSeatContext('cochin',from,through)]);
-      return{rules:rows.flatMap(r=>r.rules),details:rows.flatMap(r=>r.details),can_edit_rules:false,adjacent_sessions:rows.flatMap(r=>r.adjacent_sessions||[])};
+      return{rules:rows.flatMap(r=>r.rules),details:rows.flatMap(r=>r.details),can_edit_rules:false,adjacent_sessions:rows.flatMap(r=>r.adjacent_sessions||[]),capacity_adjustments:rows.flatMap(r=>r.capacity_adjustments||[])};
     },
     staleTime:10000,refetchInterval:60000,refetchOnWindowFocus:true,retry:1
   });

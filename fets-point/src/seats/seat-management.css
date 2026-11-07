@@ -123,3 +123,22 @@ body:not(.dark-mode) .fets-calendar-standalone-mint .seat-management select,
 [data-theme="light"] .seat-management select { color-scheme: light; }
 
 .seat-save-acknowledgement { font-size: 12px; color: var(--text-accent, #88bda4); padding: 12px 0 0; }
+
+.seat-plan-modes,.seat-plan-actions {display:flex;flex-wrap:wrap;gap:10px;margin:14px 0;}
+.seat-plan-modes button[aria-pressed="true"] {border-color:var(--accent-mint);background:var(--recessed-bg);}
+.seat-daily-planner {display:grid;gap:20px;min-width:0;}
+.seat-day-limits {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;}
+.seat-exam-list {display:grid;gap:12px;margin-top:8px;}
+.seat-exam-row {display:grid;gap:12px;padding:16px;background:var(--recessed-bg);border:1px solid var(--border-color);border-radius:9px;min-width:0;}
+.seat-exam-title {display:flex;flex-direction:column;gap:4px;overflow-wrap:anywhere;}
+.seat-exam-title strong {font-size:14px;}.seat-exam-title span {font-size:11px;color:var(--text-secondary);}
+.seat-management .seat-lock {display:flex;flex-direction:row;align-items:center;gap:8px;color:var(--text-primary);font-size:12px;}
+.seat-management .seat-lock input {min-height:0;height:16px;width:16px;accent-color:var(--accent-mint);flex:0 0 16px;}
+.seat-lock span {font-size:11px;color:var(--text-secondary);}
+.seat-exam-fields {display:grid;grid-template-columns:1fr 1fr 1.4fr;gap:10px;}
+.seat-capacity-editor,.seat-preview {border-top:1px solid var(--border-color);padding-top:20px;min-width:0;}
+.seat-confirmed-capacity {font-size:12px;color:var(--text-accent);margin-top:8px!important;}
+.seat-plan-errors {color:var(--seat-full);font-size:12px;padding-left:18px;}
+.seat-preview>section {margin-top:14px;}
+@media(max-width:900px){.seat-day-limits{grid-template-columns:1fr 1fr;}.seat-exam-fields{grid-template-columns:1fr 1fr;}.seat-exam-fields label:last-child{grid-column:1/-1;}}
+@media(max-width:500px){.seat-plan-modes button,.seat-plan-actions button{width:100%;}.seat-exam-row{padding:12px;}.seat-day-limits{gap:10px;}}

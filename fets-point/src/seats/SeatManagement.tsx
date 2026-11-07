@@ -3,6 +3,8 @@ import { analyseDay, checkBooking, formatSeatTime, normaliseProvider, toSeatSeco
 import { findSuggestions } from './solver';
 import { useSeatContext } from './useSeatContext';
 import SeatRules from './SeatRules';
+import DaySeatPlanner from './DaySeatPlanner';
+import{criticalLoad,criticalInterval,maximumExcess,capacityRange,intervalCapacity}from'./presentation';
 import SeatTimeline, { seatEndTime, seatRange } from './SeatTimeline';
 import type { BookingFit, SeatBranch, SeatContext, SeatDay, SeatRule, SeatSession, SeatSuggestions } from './types';
 import './seat-management.css';
@@ -21,14 +23,16 @@ const dayLabel = (iso: string) => dateAt(iso).toLocaleDateString('en-IN', { day:
 const statusLabel = (day: SeatDay) => day.overbooked.length ? 'Overbooked' : !day.complete ? 'Incomplete data' : day.full.length ? 'Full' : 'Below capacity';
 
 function DayOverview({ day, uncertain }: { day: SeatDay; uncertain: boolean }) {
-  const peak = day.segments.find(segment => segment.booked === day.peak);
+  const peak = criticalInterval(day);
+  const load = criticalLoad(day);
   return <section className="seat-day" aria-label={`${centreNames[day.branch]} · booked seats`}>
     <div className="seat-day-heading"><div><p className="seat-eyebrow">{centreNames[day.branch]} · {dayLabel(day.date)}</p>
-      <h3>{day.peak} / {day.capacity} seats{peak ? ` · ${seatRange(peak)}` : ''}</h3></div>
+      <h3>{load.booked} / {load.capacity} seats{peak ? ` · ${seatRange(peak)}` : ''}</h3></div>
       <span className={`seat-tag seat-tag-${day.overbooked.length ? 'overbooked' : uncertain || !day.complete ? 'incomplete' : day.full.length ? 'full' : 'available'}`}>{uncertain && !day.overbooked.length ? 'Incomplete data' : statusLabel(day)}</span>
     </div>
-    {day.overbooked.length > 0 ? <p className="seat-conflict-summary">{day.peak - day.capacity} seats over capacity</p> : day.full.length > 0 ? <p className="seat-full-summary">Full · no spare seats in this window</p> : !uncertain && day.complete && day.segments.length > 0 ? <p className="seat-muted">Peak booked seats across the recorded appointment span.</p> : null}
+    {day.overbooked.length > 0 ? <p className="seat-conflict-summary">{maximumExcess(day)} seats over capacity</p> : day.full.length > 0 ? <p className="seat-full-summary">Full · no spare seats in this window</p> : !uncertain && day.complete && day.segments.length > 0 ? <p className="seat-muted">Peak booked seats across the recorded appointment span.</p> : null}
     {(uncertain || !day.complete) && <p className="seat-incomplete-note">Incomplete data · available seats cannot be confirmed. Known full or overloaded periods still need attention.</p>}
+    {capacityRange(day)!==String(day.capacity)&&<p className="seat-muted">Installed {day.capacity} · confirmed capacity {capacityRange(day)} during the stated system availability windows.</p>}
     <SeatTimeline day={day} uncertain={uncertain} />
     {day.issues.length > 0 && <div className="seat-issues" role="note"><strong>Schedule details to review</strong><ul>{day.issues.map((issue, index) => <li key={`${issue.session_id}-${index}`}>{issue.session_id !== null ? `Session #${issue.session_id}: ` : ''}{issue.message}</li>)}</ul></div>}
   </section>;
@@ -53,6 +57,7 @@ function Workday({ day, sessions, context, unavailable, userId, onRuleSaved }: W
   const validWindow = windowFrom !== null && windowThrough !== null && windowThrough > windowFrom && windowFrom < toSeatSecond(day.date, '24:00')!;
   const selectedSuggestion = result?.suggestions.find(suggestion => suggestion.id === selected);
   const clear = () => { setResult(null); setSelected(null); };
+  useEffect(()=>{if(unavailable){setResult(null);setSelected(null);setFit(null);}},[unavailable]);
   const updateBooking = (setter: (value: string) => void, value: string) => { setter(value); setFit(null); clear(); };
   const onSaved = (rule: SeatRule) => { clear(); setFit(null); onRuleSaved(rule); };
   const providers = Array.from(new Set(sessions.filter(session => normalBranch(session.branch_location || '') === day.branch).map(session => normaliseProvider(session.client_name || '')).filter(Boolean))).sort();
@@ -66,12 +71,12 @@ function Workday({ day, sessions, context, unavailable, userId, onRuleSaved }: W
         <button type="submit" className="seat-button" disabled={blocked}>Check booking fit</button>
       </form>
       {blocked && <p className="seat-muted">Complete and refresh the schedule before confirming a booking fit.</p>}
-      {fit && <div className={`seat-fit seat-fit-${fit.status}`} role="status" aria-label="Booking fit result"><strong>{({ fits: 'Fits within planned capacity', full: 'Full at the tightest point', overbooked: 'Overbooked', unknown: 'Available seats unknown', invalid: 'Check booking inputs' })[fit.status]}</strong><p>{fit.message}</p>{fit.minimum_free !== null && <p>Minimum free before booking: {fit.minimum_free} seats · Peak after booking: {fit.peak_after} / {day.capacity}</p>}{fit.conflicts.length > 0 && <ul>{fit.conflicts.map((conflict, index) => <li key={index}>{seatRange(conflict)} · {conflict.booked} / {day.capacity} booked seats</li>)}</ul>}</div>}
+      {fit && <div className={`seat-fit seat-fit-${fit.status}`} role="status" aria-label="Booking fit result"><strong>{({ fits: 'Fits within planned capacity', full: 'Full at the tightest point', overbooked: 'Overbooked', unknown: 'Available seats unknown', invalid: 'Check booking inputs' })[fit.status]}</strong><p>{fit.message}</p>{fit.minimum_free !== null && <p>Minimum free before booking: {fit.minimum_free} seats · Peak after booking: {fit.peak_after} · installed {day.capacity}</p>}{fit.conflicts.length > 0 && <ul>{fit.conflicts.map((conflict, index) => <li key={index}>{seatRange(conflict)} · {conflict.booked} / {intervalCapacity(day,conflict)} booked seats</li>)}</ul>}</div>}
     </section>
     <section className="seat-simulation" aria-label="Try timing changes">
       <div className="seat-section-heading"><h3>Try timing changes</h3><span className="seat-tag">Simulation</span></div>
       <p className="seat-muted">Search configured provider and exam limits while preserving exam duration. Recorded appointments set the initial planning window; enter the permitted day limits explicitly as HH:MM (24:00 for midnight).</p>
-      <form className="seat-input-row" onSubmit={event => { event.preventDefault(); if (blocked || !hasRules || !validWindow) return; setSelected(null); setResult(findSuggestions(sessions, day.branch, day.date, rules, context?.details, { window_start: windowStart, window_end: windowEnd, now: new Date().toISOString(), max_evaluations: 3000, max_moves: 3 })); }}>
+      <form className="seat-input-row" onSubmit={event => { event.preventDefault(); if (blocked || !hasRules || !validWindow) return; setSelected(null); setResult(findSuggestions(sessions, day.branch, day.date, rules, context?.details, { window_start: windowStart, window_end: windowEnd, now: new Date().toISOString(), max_evaluations: 3000, max_moves: 3,capacity_windows:context?.capacity_adjustments })); }}>
         <label>Planning window start<input aria-label="Planning window start" type="text" placeholder="HH:MM" value={windowStart} onChange={event => { setWindowStart(event.target.value); clear(); }} required /></label>
         <label>Planning window end<input aria-label="Planning window end" type="text" placeholder="HH:MM" value={windowEnd} onChange={event => { setWindowEnd(event.target.value); clear(); }} required /></label>
         <button type="submit" className="seat-button" disabled={blocked || !hasRules || !validWindow}>Find timing options</button>
@@ -98,6 +103,7 @@ function Workday({ day, sessions, context, unavailable, userId, onRuleSaved }: W
 export default function SeatManagement({ sessions, currentDate, branch, userId, onSelectDate, onRefresh, dataLoading = false, dataError, isFetching = false }: SeatManagementProps) {
   const [date, setDate] = useState(localDate(currentDate));
   const [centre, setCentre] = useState<SeatBranch | 'global'>(normalBranch(branch));
+  const [planningMode,setPlanningMode]=useState<'day'|'provider'>('day');
   const [savedAcknowledgement, setSavedAcknowledgement] = useState<string | null>(null);
   useEffect(() => { setSavedAcknowledgement(null); }, [date, centre, userId]);
   const currentTime = currentDate.getTime();
@@ -114,7 +120,7 @@ export default function SeatManagement({ sessions, currentDate, branch, userId, 
     return [...sessions, ...extra];
   }, [sessions, context?.adjacent_sessions]);
   const centres: SeatBranch[] = centre === 'global' ? ['calicut', 'cochin'] : [centre];
-  const days = centres.map(item => analyseDay(combinedSessions, item, date, context?.details));
+  const days = centres.map(item => analyseDay(combinedSessions, item, date, context?.details,context?.capacity_adjustments));
   const contextError = contextQuery.isError ? contextQuery.error instanceof Error ? contextQuery.error.message : 'Timing rules and source details could not be loaded.' : null;
   const refreshing = isFetching || Boolean(contextQuery.isFetching);
   const unavailable = Boolean(dataLoading || dataError || contextQuery.isLoading || contextError || !context || refreshing);
@@ -122,15 +128,15 @@ export default function SeatManagement({ sessions, currentDate, branch, userId, 
     const list: SeatDay[] = [];
     for (let dayDate = monthFrom; dayDate <= monthThrough; dayDate = offsetDate(dayDate, 1)) {
       for (const item of centres) {
-        const day = analyseDay(combinedSessions, item, dayDate, context?.details);
+        const day = analyseDay(combinedSessions, item, dayDate, context?.details,context?.capacity_adjustments);
         if (day.full.length || day.overbooked.length || !day.complete) list.push(day);
       }
     }
     return list;
-  }, [combinedSessions, centre, monthFrom, monthThrough, context?.details]);
+  }, [combinedSessions, centre, monthFrom, monthThrough, context?.details,context?.capacity_adjustments]);
   const chooseDate = (next: string) => { if (!/^\d{4}-\d{2}-\d{2}$/.test(next)) return; setDate(next); onSelectDate?.(dateAt(next)); };
   // A refreshed source, rule, date, identity or input scope always starts a fresh review.
-  const reviewKey = JSON.stringify([date, centre, userId, combinedSessions, context?.rules, context?.details, unavailable, refreshing]);
+  const reviewKey = JSON.stringify([date, centre, userId, combinedSessions, context?.rules, context?.details,context?.capacity_adjustments]);
   return <section className="seat-management" aria-label="Calendar seat management">
     <header className="seat-header"><div><p className="seat-eyebrow">Calendar / shared workstation pools</p><h2>Seat management</h2><p className="seat-muted">All providers · scheduled start to end · seats release immediately at scheduled end · Asia/Kolkata</p></div><button type="button" className="seat-button seat-button-quiet" disabled={dataLoading || refreshing} onClick={() => { onRefresh?.(); void contextQuery.refetch(); }}>{refreshing ? 'Refreshing…' : 'Refresh schedule'}</button></header>
     <div className="seat-toolbar"><label>Centre<select aria-label="Seat management centre" value={centre} onChange={event => setCentre(event.target.value as SeatBranch | 'global')}>{normalBranch(branch) === 'global' ? <><option value="global">Both centres · separate pools</option><option value="calicut">Calicut · 40 seats</option><option value="cochin">Kochi · 31 seats</option></> : <option value={normalBranch(branch)}>{centreNames[normalBranch(branch) as SeatBranch]} · {normalBranch(branch) === 'calicut' ? 40 : 31} seats</option>}</select></label><label>Date<input aria-label="Seat management date" type="date" value={date} onChange={event => chooseDate(event.target.value)} /></label><span className="seat-muted">Booked-seat planning, based on the recorded schedule.</span></div>
@@ -138,8 +144,8 @@ export default function SeatManagement({ sessions, currentDate, branch, userId, 
     {refreshing && <p role="status" className="seat-incomplete-note">Refreshing schedule · previous calculations need a fresh review.</p>}
     {(dataError || contextError) && <p role="alert" className="seat-error-banner">{dataError || contextError} Available seats and timing recommendations cannot be confirmed until the data refreshes.</p>}
     {savedAcknowledgement && <p role="status" className="seat-save-acknowledgement">{savedAcknowledgement}</p>}
-    <div className="seat-layout"><aside className="seat-date-rail" aria-label="Dates needing attention"><div className="seat-section-heading"><h3>Month attention</h3><span>{attention.length}</span></div><p className="seat-muted">{dateAt(monthFrom).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} · full, overbooked or incomplete</p>{attention.length ? <ul>{attention.map(day => <li key={`${day.date}-${day.branch}`}><button type="button" className={`seat-alert-date ${date === day.date && (centre === 'global' || centre === day.branch) ? 'seat-alert-date-selected' : ''}`} onClick={() => chooseDate(day.date)} aria-current={date === day.date ? 'date' : undefined}><span><strong>{dateAt(day.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</strong><span>{centreNames[day.branch]}</span></span><span><strong>{day.peak} / {day.capacity}</strong><span>{statusLabel(day)}</span></span></button></li>)}</ul> : <p className="seat-empty">{unavailable ? 'Refresh to confirm month alerts.' : 'No known full or overloaded intervals this month.'}</p>}</aside>
-      <div className="seat-main" key={reviewKey}>{days.map(day => <DayOverview key={day.branch} day={day} uncertain={unavailable} />)}{centre === 'global' ? <><p className="seat-incomplete-note">Choose one centre to check a booking or review timing changes. Each centre has its own shared pool.</p><SeatRules branch={null} rules={context?.rules || []} providers={[]} canEdit={false} onSaved={() => {}} /></> : <Workday day={days[0]} sessions={combinedSessions} context={context} unavailable={unavailable} userId={userId} onRuleSaved={rule => setSavedAcknowledgement(`Shared timing rule saved for ${centreNames[rule.branch_location]}. Run a fresh search to review timing options.`)} />}</div>
+    <div className="seat-layout"><aside className="seat-date-rail" aria-label="Dates needing attention"><div className="seat-section-heading"><h3>Month attention</h3><span>{attention.length}</span></div><p className="seat-muted">{dateAt(monthFrom).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} · full, overbooked or incomplete</p>{attention.length ? <ul>{attention.map(day => <li key={`${day.date}-${day.branch}`}><button type="button" className={`seat-alert-date ${date === day.date && (centre === 'global' || centre === day.branch) ? 'seat-alert-date-selected' : ''}`} onClick={() => chooseDate(day.date)} aria-current={date === day.date ? 'date' : undefined}><span><strong>{dateAt(day.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</strong><span>{centreNames[day.branch]}</span></span><span><strong>{criticalLoad(day).booked} / {criticalLoad(day).capacity}</strong><span>{statusLabel(day)}</span></span></button></li>)}</ul> : <p className="seat-empty">{unavailable ? 'Refresh to confirm month alerts.' : 'No known full or overloaded intervals this month.'}</p>}</aside>
+      <div className="seat-main" key={reviewKey}>{days.map(day => <DayOverview key={day.branch} day={day} uncertain={unavailable} />)}{centre === 'global' ? <><p className="seat-incomplete-note">Choose one centre to check a booking or review timing changes. Each centre has its own shared pool.</p><SeatRules branch={null} rules={context?.rules || []} providers={[]} canEdit={false} onSaved={() => {}} /></> : <><div className="seat-plan-modes" role="group" aria-label="Planning approach"><button type="button" className="seat-button seat-button-quiet" aria-pressed={planningMode==='day'} onClick={()=>setPlanningMode('day')}>Plan this day</button><button type="button" className="seat-button seat-button-quiet" aria-pressed={planningMode==='provider'} onClick={()=>setPlanningMode('provider')}>Provider defaults</button></div>{planningMode==='day'?<DaySeatPlanner day={days[0]} sessions={combinedSessions} context={context} unavailable={unavailable} onCapacitySaved={record=>setSavedAcknowledgement(`Extra systems confirmed for ${centreNames[record.branch_location]} on ${record.date}. Calendar warnings now use this date's confirmed availability.`)} />:<Workday day={days[0]} sessions={combinedSessions} context={context} unavailable={unavailable} userId={userId} onRuleSaved={rule => setSavedAcknowledgement(`Shared timing rule saved for ${centreNames[rule.branch_location]}. Run a fresh search to review timing options.`)} />}</>}</div>
     </div>
   </section>;
 }

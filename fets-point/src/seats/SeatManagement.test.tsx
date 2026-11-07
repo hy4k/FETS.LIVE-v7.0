@@ -6,7 +6,7 @@ import type { SeatContext, SeatRule, SeatSession } from './types';
 
 const boundary = vi.hoisted(() => ({ context: null as SeatContext | null, error: false, fetching: false, save: vi.fn(), refetch: vi.fn() }));
 vi.mock('./useSeatContext', () => ({ useSeatContext: () => ({ data: boundary.context, isLoading: false, isError: boundary.error, error: boundary.error ? new Error('Context unavailable') : null, isFetching: boundary.fetching, refetch: boundary.refetch }) }));
-vi.mock('./api', () => ({ saveSeatRule: boundary.save }));
+vi.mock('./api', () => ({ saveSeatRule: boundary.save,saveSeatCapacity:vi.fn() }));
 const rule: SeatRule = { id: 'rule-1', branch_location: 'cochin', provider: 'PEARSON VUE', exam_code: null, exam_name: null, earlier_minutes: 30, later_minutes: 30, updated_at: '2026-11-01T00:00:00Z' };
 const sessions: SeatSession[] = [
   { id: 1, date: '2099-11-14', branch_location: 'cochin', client_name: 'PEARSON VUE', exam_name: 'Alpha exam', start_time: '10:00:00', end_time: '11:00:00', candidate_count: 20 },
@@ -17,6 +17,7 @@ function show(overrides: Partial<React.ComponentProps<typeof SeatManagement>> = 
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const props = { sessions, currentDate: new Date(2099, 10, 14), branch: 'cochin', userId: 'synthetic-user', ...overrides };
   const view = render(<QueryClientProvider client={client}><SeatManagement {...props} /></QueryClientProvider>);
+  const providerButton=screen.queryByRole('button',{name:'Provider defaults'});if(providerButton)fireEvent.click(providerButton);
   return { ...view, client, rerenderSeat: (next: typeof overrides) => view.rerender(<QueryClientProvider client={client}><SeatManagement {...props} {...next} /></QueryClientProvider>) };
 }
 beforeEach(() => { boundary.context = { rules: [], details: [], can_edit_rules: false }; boundary.error = false; boundary.fetching = false; boundary.save.mockReset(); boundary.refetch.mockReset(); });
@@ -41,6 +42,7 @@ describe('Calendar seat management', () => {
     expect(screen.getByText(/Choose one centre to check a booking/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Save timing rule' })).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Seat management centre'), { target: { value: 'cochin' } });
+    fireEvent.click(screen.getByRole('button',{name:'Provider defaults'}));
     expect(screen.getByRole('button', { name: 'Save timing rule' })).toBeInTheDocument();
   });
   it('labels exactly full without calling it overbooked', () => {
@@ -139,6 +141,7 @@ describe('Calendar seat management', () => {
     boundary.save.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
     const view = show({ branch: 'global' });
     fireEvent.change(screen.getByLabelText('Seat management centre'), { target: { value: 'cochin' } });
+    fireEvent.click(screen.getByRole('button',{name:'Provider defaults'}));
     fireEvent.change(screen.getByLabelText('Rule provider'), { target: { value: 'PEARSON VUE' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save timing rule' }));
     view.rerenderSeat({ branch: 'calicut' });
@@ -205,4 +208,22 @@ describe('seat management review boundaries', () => {
     expect(screen.getByLabelText('Planning window end')).toHaveValue('24:00');
     expect(screen.getByRole('button', { name: 'Find timing options' })).toBeEnabled();
   });
+});
+
+describe('daily draft refresh boundaries',()=>{
+ it('preserves manual draft controls during an identical background refresh while blocking calculations',()=>{
+  const client=new QueryClient({defaultOptions:{queries:{retry:false}}});
+  const props={sessions,currentDate:new Date(2099,10,14),branch:'cochin',userId:'synthetic-user'};
+  const view=render(<QueryClientProvider client={client}><SeatManagement {...props}/></QueryClientProvider>);
+  fireEvent.change(screen.getByLabelText('Day planning ends'),{target:{value:'12:00'}});
+  fireEvent.change(screen.getByLabelText('New start for Beta exam'),{target:{value:'10:45'}});
+  expect(screen.getByRole('region',{name:'Manual timing changes'})).toHaveTextContent('10:45–11:45');
+  view.rerender(<QueryClientProvider client={client}><SeatManagement {...props} isFetching/></QueryClientProvider>);
+  expect(screen.getByLabelText('New start for Beta exam')).toHaveValue('10:45');expect(screen.getByRole('button',{name:'Find options for this day'})).toBeDisabled();
+  view.rerender(<QueryClientProvider client={client}><SeatManagement {...props}/></QueryClientProvider>);
+  expect(screen.getByLabelText('New start for Beta exam')).toHaveValue('10:45');
+  boundary.context={...boundary.context!,adjacent_sessions:[{...sessions[0],candidate_count:21}]};
+  view.rerender(<QueryClientProvider client={client}><SeatManagement {...props}/></QueryClientProvider>);
+  expect(screen.getByLabelText('New start for Beta exam')).toHaveValue('');
+ });
 });

@@ -21,3 +21,13 @@ describe('Calendar concurrency badges',()=>{
   rerender(<SeatCalendarBadges sessions={[]} date="2026-11-14" branch="cochin" unavailable onOpen={()=>{}}/>);expect(screen.getByText(/seat data unavailable/i)).toBeInTheDocument();
  });
 });
+
+describe('confirmed additional systems in Calendar badges',()=>{
+ it('uses the capacity in each window rather than permanently increasing the centre',()=>{
+  const windows=[{branch_location:'cochin' as const,date:'2026-11-14',extra_systems:4,start_time:'10:00',end_time:'11:00'}];
+  const{rerender}=render(<SeatCalendarBadges sessions={[row(1,'10:00','11:00',35)]}date="2026-11-14"branch="cochin"capacityWindows={windows}onOpen={()=>{}}/>);
+  expect(screen.getByRole('button')).toHaveAttribute('data-seat-status','full');expect(screen.getByRole('button')).toHaveTextContent('35/35');
+  rerender(<SeatCalendarBadges sessions={[row(1,'10:00','12:00',35)]}date="2026-11-14"branch="cochin"capacityWindows={windows}onOpen={()=>{}}/>);
+  expect(screen.getByRole('button')).toHaveAttribute('data-seat-status','overbooked');expect(screen.getByRole('button')).toHaveTextContent('35/31');
+ });
+});

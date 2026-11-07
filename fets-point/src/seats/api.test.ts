@@ -5,9 +5,9 @@ vi.mock('../lib/supabase',()=>({supabase:{rpc:mocks.rpc}}));
 beforeEach(()=>{mocks.rpc.mockReset();});
 describe('seat rule/context boundaries',()=>{
  it('loads anonymous context together with complete boundary-date sessions',async()=>{
-  mocks.rpc.mockResolvedValue({data:{rules:[],details:[],can_edit_rules:false,adjacent_sessions:[{id:7,date:'2026-10-31',branch_location:'cochin'}]},error:null});
+  mocks.rpc.mockResolvedValue({data:{rules:[],details:[],can_edit_rules:false,capacity_adjustments:[],adjacent_sessions:[{id:7,date:'2026-10-31',branch_location:'cochin'}]},error:null});
   const d=await fetchSeatContext('cochin','2026-10-31','2026-12-01');
-  expect(mocks.rpc).toHaveBeenCalledWith('calendar_seat_context',{p_branch:'cochin',p_from:'2026-10-31',p_through:'2026-12-01'});expect(d.adjacent_sessions?.[0].id).toBe(7);expect(d.can_edit_rules).toBe(false);
+  expect(mocks.rpc).toHaveBeenCalledWith('calendar_seat_planning_context',{p_branch:'cochin',p_from:'2026-10-31',p_through:'2026-12-01'});expect(d.adjacent_sessions?.[0].id).toBe(7);expect(d.can_edit_rules).toBe(false);
  });
  it('does not turn failed or incomplete snapshot reads into an empty safe schedule',async()=>{
   mocks.rpc.mockResolvedValue({data:null,error:{message:'No centre access'}});await expect(fetchSeatContext('cochin','2026-11-01','2026-11-30')).rejects.toThrow('No centre access');

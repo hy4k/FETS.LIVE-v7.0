@@ -11,7 +11,7 @@ The user clarified that small timing changes can apply to any provider; feasibil
 - Authorised Calendar editors can confirm extra systems for one centre/date using a versioned protected settings API. Saving affects only shared capacity configuration, not business bookings. Ordinary centre members can preview/view but cannot save. SuperAdmin follows existing canonical authority. Editing saved settings invalidates the preview and requires a fresh source/version read; reset to0 removes added capacity.
 - Saved additional capacity is reflected in Calendar badges, the legacy overlap summary, booking-fit checks and simulations. Other dates and centres retain their own capacity. No silent permanent change to installed40/31.
 - Timeline and exact interval text show the capacity actually available in each interval. Red means booked seats exceed that interval's capacity, amber means full. Booking fit examines the whole requested interval including idle gaps/capacity changes.
-- All proposals remain review-only; no automatic exam rescheduling. Source refresh, identity/centre/date changes clear stale manual plans and results. In-flight capacity saves cannot show success under a different date/centre.
+- All proposals remain review-only; no automatic exam rescheduling. Actual source changes and identity/centre/date changes clear stale manual plans/results. Background refresh disables calculations and clears reviewed results, while preserving draft controls if the returned data is identical. In-flight capacity saves cannot show success under a different date/centre.
 
 ## Implementation choices
 

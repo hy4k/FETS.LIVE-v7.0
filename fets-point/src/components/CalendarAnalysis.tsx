@@ -23,6 +23,9 @@ import {
     Activity,
     Target
 } from 'lucide-react';
+import { fetchSeatPlanningRange } from '../seats/planning-range';
+import {intervalCapacity,criticalLoad,maximumExcess,uniqueContributors} from '../seats/presentation';
+import type{SeatContext}from'../seats/types';
 import { fetchCalendarRange } from '../seats/calendar-data';
 import { analyseDay, formatSeatTime } from '../seats/engine';
 import toast from 'react-hot-toast';
@@ -88,6 +91,7 @@ export const CalendarAnalysis: React.FC<CalendarAnalysisProps> = ({ onClose, act
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState(false);
     const readVersion = useRef(0);
+    const [seatContext,setSeatContext]=useState<SeatContext>();
     const [seatSessions, setSeatSessions] = useState<CalendarSession[]>([]);
     const [sessions, setSessions] = useState<CalendarSession[]>([]);
     const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -136,13 +140,14 @@ export const CalendarAnalysis: React.FC<CalendarAnalysisProps> = ({ onClose, act
             const first = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
             const last = new Date(effectiveEndMonth.getFullYear(), effectiveEndMonth.getMonth()+1, 0);
             const prior = new Date(first); prior.setDate(prior.getDate()-1);
-            const data = await fetchCalendarRange(iso(prior), iso(last), activeBranch || 'global') as CalendarSession[];
+            const [data,context]=await Promise.all([fetchCalendarRange(iso(prior),iso(last),activeBranch||'global'),fetchSeatPlanningRange(activeBranch||'global',iso(prior),iso(last))]);
             if (version !== readVersion.current) return;
-            setSeatSessions(data);
-            setSessions(data.filter(row => row.date >= iso(first)));
+            setSeatContext(context);
+            setSeatSessions([...data,...context.adjacent_sessions||[]] as CalendarSession[]);
+            setSessions(data.filter(row => row.date >= iso(first)) as CalendarSession[]);
         } catch {
             if (version !== readVersion.current) return;
-            setSessions([]); setSeatSessions([]); setLoadError(true);
+            setSessions([]); setSeatSessions([]);setSeatContext(undefined); setLoadError(true);
             toast.error('Failed to load complete session data');
         } finally {
             if (version === readVersion.current) setLoading(false);
@@ -284,18 +289,18 @@ export const CalendarAnalysis: React.FC<CalendarAnalysisProps> = ({ onClose, act
         const end = Date.UTC(effectiveEndMonth.getFullYear(), effectiveEndMonth.getMonth()+1, 0);
         for (let day=first;day<=end;day+=86400000) dates.push(new Date(day).toISOString().slice(0,10));
         const branches = activeBranch === 'calicut' || activeBranch === 'cochin' ? [activeBranch] as const : ['calicut', 'cochin'] as const;
-        return dates.flatMap(date => branches.map(branch => analyseDay(seatSessions, branch, date)));
-    }, [sessions, seatSessions, activeBranch, currentMonth, effectiveEndMonth]);
+        return dates.flatMap(date => branches.map(branch => analyseDay(seatSessions, branch, date,seatContext?.details,seatContext?.capacity_adjustments)));
+    }, [sessions, seatSessions, activeBranch, currentMonth, effectiveEndMonth,seatContext]);
     const incompleteSeatData = loadError || seatDays.some(day => !day.complete);
     const overlapAnalysis = useMemo((): OverlapInfo[] => seatDays.filter(day => day.overbooked.length).map(day => {
         const conflictPeriods = day.overbooked.map(period => ({
             start: formatSeatTime(period.start), end: period.end % 86400 === 0 ? '24:00' : formatSeatTime(period.end),
-            candidates: period.booked, capacity: day.capacity, excessCandidates: period.excess,
-            sessions: seatSessions.filter(session => period.session_ids.includes(session.id))
+            candidates: period.booked, capacity: intervalCapacity(day,period), excessCandidates: period.excess,
+            sessions: uniqueContributors(seatSessions,period.session_ids)
         }));
         return {date: day.date, branch: day.branch,
             sessions: [...new Map(conflictPeriods.flatMap(period => period.sessions).map(row => [row.id, row])).values()],
-            conflictPeriods, totalCandidates: day.peak, capacity: day.capacity, excessCandidates: day.peak-day.capacity,
+            conflictPeriods, totalCandidates: criticalLoad(day).booked, capacity: criticalLoad(day).capacity, excessCandidates: maximumExcess(day),
             suggestions: ['Open Seat management to review the exact contributing exams and test provider-approved timing limits. Timing options never change bookings automatically.']};
     }).sort((a,b) => b.excessCandidates-a.excessCandidates || a.date.localeCompare(b.date)), [seatDays, seatSessions]);
 
