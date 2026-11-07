@@ -12,6 +12,7 @@ import {
   CallEditor,
   InstituteEditor,
   FollowupEditor,
+  OutreachDialog,
 } from "./PrometricForms";
 import type {
   OutreachContext,
@@ -71,6 +72,24 @@ beforeEach(() => {
 });
 
 describe("Prometric guided forms", () => {
+  it("opens a dialog at the beginning of its content while focusing its close control", () => {
+    show(
+      <OutreachDialog title="Long call guide" onClose={() => {}}>
+        <div
+          ref={(node) => {
+            const dialog = node?.closest<HTMLElement>('[role="dialog"]');
+            if (dialog) dialog.scrollTop = 300;
+          }}
+        >
+          Conversation guide content
+        </div>
+      </OutreachDialog>
+    );
+    expect(screen.getByRole("dialog").scrollTop).toBe(0);
+    expect(
+      screen.getByRole("button", { name: "Close Long call guide" })
+    ).toHaveFocus();
+  });
   it("requires a business phone or email and assigns a staff-created institute to its viewer", async () => {
     show(<InstituteEditor context={context} onSaved={() => {}} />);
     fireEvent.change(screen.getByLabelText("Institute name"), {

@@ -1001,6 +1001,15 @@
   overflow-y: auto;
   padding: 27px;
 }
+/* Keep the outreach panel in its backdrop; the global mobile dialog rule uses a fixed flex layout. */
+.po-workspace .po-dialog[role="dialog"] {
+  position: relative;
+  inset: auto;
+  z-index: auto;
+  display: block;
+  align-items: normal;
+  justify-content: normal;
+}
 .po-dialog-heading {
   display: flex;
   justify-content: space-between;

@@ -1017,7 +1017,8 @@ export function OutreachDialog({
     const previous = document.activeElement as HTMLElement | null;
     ref.current
       ?.querySelector<HTMLElement>("button,input,select,textarea")
-      ?.focus();
+      ?.focus({ preventScroll: true });
+    if (ref.current) ref.current.scrollTop = 0;
     return () => previous?.focus();
   }, []);
   return (
