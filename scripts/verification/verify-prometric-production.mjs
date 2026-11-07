@@ -25,7 +25,12 @@ try {
     const module = await import('/assets/' + shell);
     const names = ['MyDeskPage','CalendarPage','RosterPage','RaiseCasePage','FieldLabel','ChipRow','ShiftHandoverPage'];
     const missing = names.filter(name => typeof window[name] !== 'function');
-    if (typeof module.default !== 'function' || missing.length) throw Error('Application exports missing: ' + missing.join(', '));
+    // Rollup may place the lazy module namespace inside a shared chunk export.
+    // Validate its complete source contract rather than a generated export name.
+    const shellModule = typeof module.default === 'function' ? module : Object.values(module).find(value =>
+      value && typeof value.default === 'function' && typeof value.RosterPage === 'function' &&
+      typeof value.TopNav === 'function' && value.deskOperationsModules);
+    if (!shellModule || missing.length) throw Error('Application exports missing: ' + missing.join(', '));
     const shellCode = await (await fetch('/assets/' + shell)).text();
     const outreach = shellCode.match(/PrometricWorkspace-[\w-]+\.js/)?.[0];
     if (!outreach) throw Error('Prometric lazy workspace not found');
