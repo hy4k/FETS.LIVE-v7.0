@@ -1,0 +1,17 @@
+export type OutreachStage='new'|'contacted'|'understanding_needs'|'interested'|'planning'|'active_partner'|'paused'|'closed';
+export type ContactPermission='not_asked'|'allowed'|'do_not_contact';
+export type ServiceInterest='not_discussed'|'centre_mock'|'platform'|'both'|'none';
+export type FollowupKind='retry_contact'|'requested_callback'|'send_information'|'arrange_mock'|'platform_discussion'|'internal_review'|'confirm_attendance';
+export type CallOutcome='not_reached'|'wrong_contact'|'callback_requested'|'feedback_received'|'interested'|'not_interested'|'do_not_contact'|'permission_update';
+export type OutreachInstitute={id:string;name:string;city:string;state:string;contact_name:string;contact_role:string;phone:string;email:string;website:string;preferred_centre:'calicut'|'cochin'|'undecided';owner_user_id:string;stage:OutreachStage;contact_permission:ContactPermission;interest:ServiceInterest;notes:string;last_contact_at:string|null;created_at:string;updated_at:string};
+export type OutreachStaff={user_id:string;full_name:string};
+export type OutreachFollowup={id:string;institute_id:string;call_id:string|null;kind:FollowupKind;title:string;due_at:string;status:'open'|'done'|'cancelled';completion_note:string;created_at:string;updated_at:string};
+export type MockBatch={id:string;institute_id:string;name:string;delivery:'fets_centre'|'institute_platform';centre:'calicut'|'cochin'|null;planned_date:string|null;status:'potential'|'confirmed'|'completed'|'cancelled';estimated:number;confirmed:number;attended:number;notes:string;created_at:string;updated_at:string};
+export type OutreachAnswers={annual_students:number|null;exam_cycle:string;booking_influence:string;main_worries:string;student_queries:string;current_mock_format:string;environment_gap:string;readiness_needs:string;expectations:string;improvements:string};
+export type OutreachCall={id:string;institute_id:string;actor_user_id:string;actor_name:string;occurred_at:string;channel:'phone'|'meeting'|'email'|'whatsapp'|'inbound'|'note';outcome:CallOutcome;contact_name:string;contact_role:string;summary:string;answers:OutreachAnswers;concerns:string[];interest:ServiceInterest;follow_up_permission:ContactPermission;advisory_interest:'not_asked'|'yes'|'no';close_reason:string;created_at:string};
+export type OutreachContext={viewer:{user_id:string;can_manage:boolean};staff:OutreachStaff[];institutes:OutreachInstitute[];followups:OutreachFollowup[];batches:MockBatch[]};
+export type OutreachDetail={institute:OutreachInstitute;calls:OutreachCall[];followups:OutreachFollowup[];batches:MockBatch[];has_more:boolean;next_cursor:{at:string;id:string}|null};
+export type InstituteInput=Omit<OutreachInstitute,'id'|'interest'|'last_contact_at'|'created_at'|'updated_at'> &{id:string|null;expected_updated_at:string|null;change_reason:string};
+export type CallInput=Omit<OutreachCall,'id'|'actor_user_id'|'actor_name'|'created_at'> &{request_id:string;expected_updated_at:string;stage:OutreachStage;next_step:{kind:FollowupKind;title:string;due_at:string}|null};
+export type BatchInput=Omit<MockBatch,'id'|'created_at'|'updated_at'> &{id:string|null;expected_updated_at:string|null};
+export type FollowupInput={id:string;expected_updated_at:string;status:'open'|'done'|'cancelled';due_at:string;note:string};

@@ -1,0 +1,158 @@
+.client-actionables {
+  min-height: 100%;
+  padding: clamp(24px, 5vw, 64px);
+  background: #f4f6ef;
+  color: #2e4638;
+  font: inherit;
+  --color-text-primary: #2e4638;
+  --color-text-secondary: #586b51;
+}
+.client-actionables header {
+  max-width: 760px;
+  margin-bottom: 36px;
+}
+.client-actionables header > p {
+  font-size: 12px;
+  color: #586b51;
+  margin: 0 0 14px;
+}
+.client-actionables h1 {
+  font-family: Georgia, serif;
+  font-size: clamp(30px, 4vw, 46px);
+  font-weight: 400;
+  letter-spacing: -1px;
+  line-height: 1.15;
+  color: #284835;
+  margin: 0 0 18px;
+}
+.client-actionables header > span {
+  font-size: 14px;
+  line-height: 1.8;
+  color: #586b51;
+}
+.client-actionable-boxes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  max-width: 1100px;
+}
+.client-actionable-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  min-height: 300px;
+  border: 1px solid #d0dbcc;
+  border-radius: 20px;
+  background: #fffef8;
+  padding: 30px;
+  text-align: left;
+  color: #2e4638;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  font: inherit;
+}
+.client-actionable-box:hover {
+  border-color: #738e73;
+  box-shadow: 0 12px 30px #294e2b0a;
+}
+.client-actionable-box:focus-visible,
+.client-back:focus-visible {
+  outline: 3px solid #528d79;
+  outline-offset: 4px;
+}
+.client-box-icon {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  color: #586b51;
+  margin-bottom: 35px;
+}
+.client-actionable-box h2 {
+  font-size: 32px;
+  font-weight: 650;
+  color: #284835;
+  letter-spacing: -1px;
+  margin: 0 0 6px;
+}
+.client-actionable-box strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: #586b51;
+}
+.client-actionable-box p {
+  font-size: 13px;
+  line-height: 1.8;
+  color: #586b51;
+  max-width: 350px;
+  margin: 15px 0 22px;
+}
+.client-box-open {
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: auto;
+  border-top: 1px solid #e1e7da;
+  padding-top: 16px;
+  width: 100%;
+  color: #365a3b;
+}
+.client-prometric {
+  background: #f6f0df;
+  border-color: #e3d9ba;
+}
+.client-prometric h2 {
+  color: #69542b;
+}
+.client-prometric .client-box-icon,
+.client-prometric strong,
+.client-prometric .client-box-open {
+  color: #82683b;
+}
+.client-prometric p {
+  color: #6c6148;
+}
+.client-prometric .client-box-open {
+  border-color: #e3d9ba;
+}
+.client-pearson-workspace {
+  min-height: 100%;
+  background: #f7f9f0;
+}
+.client-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 20px 24px 0;
+  padding: 9px 12px;
+  min-height: 40px;
+  border: 1px solid #d2decb;
+  border-radius: 8px;
+  background: transparent;
+  color: #526d4c;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+@media (max-width: 650px) {
+  .client-actionable-boxes {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .client-actionables {
+    padding: 26px 18px 80px;
+  }
+  .client-actionable-box {
+    min-height: 245px;
+    padding: 24px;
+  }
+  .client-box-icon {
+    margin-bottom: 22px;
+  }
+  .client-actionable-box h2 {
+    font-size: 29px;
+  }
+  .client-back {
+    margin-left: 15px;
+  }
+}

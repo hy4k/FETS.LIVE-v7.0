@@ -1,0 +1,40 @@
+{
+  "verified_at_utc": "2026-11-09T09:52:55.597414+00:00",
+  "release": "20261107T100937Z-prometric-outreach",
+  "frontend_commit": "e5affa71e9045c6e50742e4b7a692fb169fb9dfe",
+  "frontend_image": "sha256:d92816d72404933786f9ade563442a5c819d697d80ec2c7e73be49ebefcd6cc7",
+  "index_sha256": "5595c6cb25f21f291efcd8e086c2d26abc15d0de1ead71c4be2a5ca06d691064",
+  "previous_release": "20261107T091011Z-daily-seat-planning",
+  "rollback_image": "sha256:3629952e4fb7740dc02ea03a08a13977f5df529b3a4e9cdf9a0d730504248e4f",
+  "rollback_script": "/opt/fets-releases/20261107T100937Z-prometric-outreach/rollback.sh",
+  "rollback_archive": "/opt/fets-releases/20261107T100937Z-prometric-outreach/rollback-image.tar.gz",
+  "backend_migration": "20261107102057_prometric_institute_outreach",
+  "existing_business_fingerprints_unchanged_at_migration": true,
+  "new_business_records_seeded": false,
+  "configuration_and_other_services_preserved": true,
+  "public_routes_and_assets_verified": 163,
+  "real_production_shell_and_outreach_module_loaded": true,
+  "typescript_passed": true,
+  "new_frontend_tests_passed": 33,
+  "frontend_suite": {
+    "total": 688,
+    "passed": 681,
+    "baseline_failures": 5,
+    "skipped": 2,
+    "same_preexisting_failures": true
+  },
+  "browser": {
+    "checks": 168,
+    "viewports": [
+      1440,
+      390
+    ],
+    "screenshots": 42,
+    "failures": 0,
+    "external_requests": 0,
+    "minimum_measured_normal_text_contrast": 4.91
+  },
+  "database_workflow_checks_passed": true,
+  "new_security_warning_or_error": false,
+  "artifact_directory": "/root/.codex/artifacts/prometric-outreach-20261107"
+}

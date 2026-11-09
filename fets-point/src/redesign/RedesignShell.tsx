@@ -11016,7 +11016,7 @@ function App({ bridge, onLogout, activeBranch, onBranchChange, activeSubPage }) 
         {active === "desk" && <MyDeskPage branch={branch} setActive={setActive} setDrawer={setDrawer} bridge={bridge} />}
         {active === "business" && <BusinessPage branch={branch} />}
         {(active === "chat" || active === "fets-chat" || active === "lost-and-found") && <TeamChatWorkspace navigate={setActive} initialConversationId={chatTarget?.conversationId} initialTargetUser={chatTarget?.id ? chatTarget : undefined} />}
-        {(active === "news" || active === "actionables") && <ActionablesView branch={branch} navigate={setActive} />}
+        {(active === "news" || active === "actionables") && <ActionablesView branch={branch} navigate={setActive} clientMenu={active === "actionables"} />}
         {active === "attn-admin" && <AttendanceAdminPage branch={branch} />}
         {/* staff-requests route removed — exclusively handled in My Desk → ApplicationsHub */}
         {active === "staff-ot" && <OtToilClaimsHub branch={branch} />}
