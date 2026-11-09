@@ -427,7 +427,10 @@
     grid-row: 1;
   }
   .cal-entry-menu {
-    right: 0;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%) !important;
+    -webkit-transform: translateX(-50%) !important;
   }
   .cal-month-ledger {
     flex-wrap: wrap;

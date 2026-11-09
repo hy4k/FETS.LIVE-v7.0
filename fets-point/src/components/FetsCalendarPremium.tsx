@@ -8,10 +8,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useBranch } from '../hooks/useBranch'
 import { useBranchFilter } from '../hooks/useBranchFilter'
 import { useTheme } from '../hooks/useTheme'
-import {
-  formatDateForIST, getCurrentISTDateString,
-  isToday as isTodayIST, formatDateForDisplay
-} from '../utils/dateUtils'
+
 import { validateSessionCapacity } from '../utils/sessionUtils'
 import { useCalendarSessions, useSessionMutations } from '../hooks/useCalendarSessions'
 import { useClients, useClientExams } from '../hooks/useClients'
@@ -222,6 +219,11 @@ const timeToMinutes = (time: string): number => {
   return h * 60 + m
 }
 
+// Calendar Dates represent local civil fields, not appointment instants.
+// Only today's key is derived in India time; converting these Date objects
+// again would move dates in browsers west/east of the operating centres.
+const calendarDateKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function FetsCalendarPremium() {
   const { isDarkMode } = useTheme()
@@ -310,12 +312,12 @@ export function FetsCalendarPremium() {
   }, [sessions, searchQuery, examTypeFilter])
 
   const getSessionsForDate = useCallback((date: Date) => {
-    const dateStr = formatDateForIST(date)
+    const dateStr = calendarDateKey(date)
     return filteredSessions.filter(s => s.date === dateStr)
   }, [filteredSessions])
 
   const getAllSessionsForDate = useCallback((date: Date) => {
-    const dateStr = formatDateForIST(date)
+    const dateStr = calendarDateKey(date)
     return sessions.filter(s => s.date === dateStr)
   }, [sessions])
 
@@ -361,14 +363,14 @@ export function FetsCalendarPremium() {
 
   const getHeaderTitle = () => {
     if (viewMode === 'month' || viewMode === 'seats')
-      return currentDate.toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' })
+      return currentDate.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
     if (viewMode === 'week') {
       const wk = getWeekDays()
       const start = wk[0].toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
       const end = wk[6].toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
       return `${start} – ${end}`
     }
-    return currentDate.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' })
+    return currentDate.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
   }
 
   const openSeatManagement = (date: string) => {
@@ -397,9 +399,10 @@ export function FetsCalendarPremium() {
       })
     } else {
       setEditingSession(null)
-      const dateStr = date ? formatDateForIST(date) : getCurrentISTDateString()
+      const dateStr = date ? calendarDateKey(date) : indiaToday()
       setFormData({ client_name: '', exam_name: '', date: dateStr, candidate_count: 1, start_time: '09:00', end_time: '17:00', status: 'scheduled' })
     }
+    setShowDetailsModal(false)
     setShowModal(true)
   }
 
@@ -455,7 +458,7 @@ export function FetsCalendarPremium() {
     if (!confirm('Delete this session?')) return
     await deleteSession(id)
     if (selectedDate) {
-      const rem = sessions.filter(s => s.date === formatDateForIST(selectedDate) && s.id !== id)
+      const rem = sessions.filter(s => s.date === calendarDateKey(selectedDate) && s.id !== id)
       if (rem.length === 0) setShowDetailsModal(false)
     }
   }
@@ -465,7 +468,7 @@ export function FetsCalendarPremium() {
   const monthVolume = useMemo(() => volumeForSessions(sessions, monthRange.from, monthRange.through, indiaToday()), [sessions, monthRange.from, monthRange.through])
 
   const days = useMemo(() => getDaysInMonth(), [getDaysInMonth])
-  const isToday = (d: Date | null) => d ? isTodayIST(d) : false
+  const isToday = (d: Date | null) => d ? calendarDateKey(d) === indiaToday() : false
   const HOURS = Array.from({ length: 14 }, (_, i) => i + 7) // 7am–8pm
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -533,7 +536,7 @@ export function FetsCalendarPremium() {
           const clientEntries = Array.from(clientMap.values()).sort((a, b) => b.count - a.count)
 
           // Every provider uses the same physical centre pool; display filters never reduce demand.
-          const dateStr = formatDateForIST(date)
+          const dateStr = calendarDateKey(date)
           const seatDays = (activeBranch === 'global' ? ['calicut', 'cochin'] as const : activeBranch === 'calicut' || activeBranch === 'cochin' ? [activeBranch] as const : [])
             .map(branch => analyseDay(seatSessions, branch, dateStr, seatContext.data?.details, seatContext.data?.capacity_adjustments))
           const worst = [...seatDays].sort((a,b) => criticalLoad(b).booked / criticalLoad(b).capacity - criticalLoad(a).booked / criticalLoad(a).capacity)[0]
@@ -836,7 +839,7 @@ export function FetsCalendarPremium() {
   // DAY VIEW
   // ─────────────────────────────────────────────────────────────────────────
   const DayView = () => {
-    const dayStr = formatDateForIST(currentDate)
+    const dayStr = calendarDateKey(currentDate)
     const daySessions = filteredSessions
       .filter(s => s.date === dayStr)
       .sort((a, b) => {
@@ -854,7 +857,7 @@ export function FetsCalendarPremium() {
         <div className="px-6 py-5 bg-[var(--recessed-bg)] border-b border-[var(--border-color)] flex items-center justify-between">
           <div>
             <h3 className={`text-2xl font-black tracking-tight ${isToday(currentDate) ? 'text-[var(--accent-mint)]' : 'text-[var(--text-primary)]'}`}>
-              {currentDate.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Asia/Kolkata' })}
+              {currentDate.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}
             </h3>
             <p className="text-xs text-[var(--text-secondary)] mt-1 font-medium tracking-wide uppercase">
               {daySessions.length} sessions <span className="mx-1.5 text-[var(--border-color)]">•</span> {daySessions.reduce((s, x) => s + x.candidate_count, 0)} candidates
@@ -985,7 +988,7 @@ export function FetsCalendarPremium() {
           onAnalysis={() => setShowAnalysis(true)} onAdd={() => openModal()} onRoster={setRosterMode}
           onRefresh={() => { void refetch(); void seatContext.refetch() }}
         />
-        {rosterMode && <Suspense fallback={<p role="status">Opening candidate roster…</p>}><CalendarRosterDialog mode={rosterMode} day={formatDateForIST(selectedDate || currentDate)} branch={activeBranch} onClose={() => setRosterMode(null)} /></Suspense>}
+        {rosterMode && <Suspense fallback={<p role="status">Opening candidate roster…</p>}><CalendarRosterDialog mode={rosterMode} day={calendarDateKey(selectedDate || currentDate)} branch={activeBranch} onClose={() => setRosterMode(null)} /></Suspense>}
         {/* ── CALENDAR VIEWS ── */}
         {viewMode === 'month' && <MonthView />}
         {viewMode === 'week' && <WeekView />}

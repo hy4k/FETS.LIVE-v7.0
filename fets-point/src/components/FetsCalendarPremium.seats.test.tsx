@@ -42,4 +42,16 @@ describe('Calendar seat integration',()=>{
   const panel=await screen.findByRole('dialog',{name:'Calendar analytics'});
   expect(within(panel).getAllByDisplayValue('2026-12').length).toBeGreaterThan(0);
  });
+ it('keeps India civil dates through Today and Analytics drilldowns in any browser timezone',async()=>{
+  setup();fireEvent.click(screen.getByRole('button',{name:'Day'}));
+  expect(screen.getByRole('heading',{name:'Friday, 6 November 2026'})).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:'Analytics'}));
+  const panel=await screen.findByRole('dialog',{name:'Calendar analytics'});
+  fireEvent.click(await within(panel).findByRole('button',{name:/^14 November 2026:/}));
+  expect(screen.getByRole('heading',{name:'Saturday, 14 November 2026'})).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:'Seat management'}));
+  await waitFor(()=>expect(screen.getByLabelText('Seat management date')).toHaveValue('2026-11-14'));
+  fireEvent.click(screen.getByRole('button',{name:'Day'}));fireEvent.click(screen.getByRole('button',{name:'Today'}));
+  expect(screen.getByRole('heading',{name:'Friday, 6 November 2026'})).toBeInTheDocument();
+ });
 });
