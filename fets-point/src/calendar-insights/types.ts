@@ -10,6 +10,7 @@ export type InsightVolume = {
   unassignedCentres: number; invalidDates: number; conflictingIds: number[]; complete: boolean;
 };
 export type InsightProvider = {
+  /** share is 0..1; change is an absolute candidate-count delta, never a percentage. */
   name: string; candidates: number; sessionCount: number; share: number;
   previousCandidates: number | null; change: number | null;
 };

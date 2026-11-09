@@ -1,13 +1,9 @@
 import '../redesign/planning-pages.css'
 import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react'
-import {
-  Calendar, Upload, UserPlus, Plus, ChevronLeft, ChevronRight, Edit, Trash2, X, Check,
-  Clock, Users, Eye, MapPin, Building, Filter, TrendingUp, Search,
-  Columns, AlignJustify,
-  AlertCircle, Loader2, User, ChevronDown, LayoutGrid
-} from 'lucide-react'
+import { Calendar, Plus, Edit, Trash2, X, Clock, Users, Eye, MapPin, Filter, Loader2, User, ChevronDown } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CalendarAnalysis } from './CalendarAnalysis'
+import CalendarChrome from '../calendar-insights/CalendarChrome'
+import { calendarMonthRange, indiaToday, volumeForSessions } from '../calendar-insights/model'
 import { useAuth } from '../hooks/useAuth'
 import { useBranch } from '../hooks/useBranch'
 import { useBranchFilter } from '../hooks/useBranchFilter'
@@ -26,6 +22,7 @@ import { analyseDay } from '../seats/engine'
 import { criticalLoad } from '../seats/presentation'
 import { useSeatContext } from '../seats/useSeatContext'
 
+const CalendarAnalysis = lazy(() => import('./CalendarAnalysis').then(module => ({ default: module.CalendarAnalysis })));
 const SeatManagement = lazy(() => import('../seats/SeatManagement'));
 const CalendarRosterDialog = lazy(() => import('../roster/CalendarRosterDialog'));
 
@@ -234,14 +231,13 @@ export function FetsCalendarPremium() {
   const { applyFilter, isGlobalView } = useBranchFilter()
 
   // Date/View state
-  const [currentDate, setCurrentDate] = useState(new Date())
+  const [currentDate, setCurrentDate] = useState(() => new Date(indiaToday() + 'T12:00:00'))
   const [viewMode, setViewMode] = useState<CalendarViewMode>(() => window.innerWidth < 700 ? 'day' : 'month')
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
 
   // Filter/search state
   const [searchQuery, setSearchQuery] = useState('')
   const [examTypeFilter, setExamTypeFilter] = useState('all')
-  const [showFilters, setShowFilters] = useState(false)
 
   // Modal state
   const [rosterMode, setRosterMode] = useState<'upload' | 'manual' | null>(null)
@@ -464,34 +460,9 @@ export function FetsCalendarPremium() {
     }
   }
 
-  // ── Stats ─────────────────────────────────────────────────────────────────
-  const stats = useMemo(() => ({
-    total: sessions.filter(x => x.status !== 'cancelled').reduce((s, x) => s + x.candidate_count, 0),
-    totalSessions: sessions.length,
-    uniqueClients: new Set(sessions.map(s => getClient3LetterCode(s.client_name, s.exam_name))).size
-  }), [sessions])
-
-  const monthClientBreakdown = useMemo(() => {
-    const map = new Map<string, { code3: string; clientName: string; candidateCount: number; sessionCount: number; color: string }>()
-    sessions.forEach(s => {
-      const code3 = getClient3LetterCode(s.client_name, s.exam_name)
-      const color = getExamColor(code3).dot
-      const existing = map.get(code3)
-      if (existing) {
-        existing.candidateCount += s.candidate_count
-        existing.sessionCount += 1
-      } else {
-        map.set(code3, {
-          code3,
-          clientName: s.client_name || code3,
-          candidateCount: s.candidate_count,
-          sessionCount: 1,
-          color
-        })
-      }
-    })
-    return Array.from(map.values()).sort((a, b) => b.candidateCount - a.candidateCount)
-  }, [sessions])
+  const monthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`
+  const monthRange = calendarMonthRange(monthKey)
+  const monthVolume = useMemo(() => volumeForSessions(sessions, monthRange.from, monthRange.through, indiaToday()), [sessions, monthRange.from, monthRange.through])
 
   const days = useMemo(() => getDaysInMonth(), [getDaysInMonth])
   const isToday = (d: Date | null) => d ? isTodayIST(d) : false
@@ -1001,156 +972,20 @@ export function FetsCalendarPremium() {
   // MAIN RENDER
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div data-theme={isDarkMode ? 'dark' : 'light'} className="min-h-screen fets-calendar-standalone-mint sovereign-theme planning-calendar" style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}>
+    <div data-theme={isDarkMode ? 'dark' : 'light'} className="min-h-screen fets-calendar-standalone-mint sovereign-theme planning-calendar calendar-workspace" style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}>
       <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-6">
 
-        <header className="planning-header">
-          <div><span className="planning-eyebrow">FETS / THE CENTRE CALENDAR</span><h1>Make room for a good day<span>.</span></h1><p>Every session in view. A little more space to plan.</p></div>
-          <div className="planning-stamp"><Calendar size={22} /><span>{activeBranch === 'global' ? 'All centres' : activeBranch}<small>{getHeaderTitle()} · India time</small></span></div>
-        </header>
-        {isError && <div role="alert" className="planning-data-error">Calendar data could not be loaded. Refresh the page to try again; the totals are unavailable.</div>}
-        <section className="planning-summary" aria-label="Calendar summary">
-          <div><span>Scheduled candidates</span><strong>{isError ? '—' : stats.total.toLocaleString()}</strong><small>In the selected month</small></div>
-          <div><span>Exam sessions</span><strong>{isError ? '—' : stats.totalSessions}</strong><small>Plan the team around demand</small></div>
-          <div><span>Exam partners</span><strong>{isError ? '—' : stats.uniqueClients}</strong><small>{monthClientBreakdown.map(x => x.code3).join(' · ') || 'No sessions yet'}</small></div>
-          <aside><span>PLAN TOGETHER</span><h2>A session needs a team.</h2><p>Match busy days with the roster, then assign each person’s duties.</p><a href="/roster">Open the roster ↗</a></aside>
-        </section>
-
-        {canEdit && <div className="flex flex-wrap items-center gap-3 mb-5"><button onClick={() => setRosterMode('upload')} className="flex items-center gap-2 rounded-xl bg-[#315e4f] text-white px-5 py-3 text-sm font-bold"><Upload size={17}/> Upload roster</button><button onClick={() => setRosterMode('manual')} className="flex items-center gap-2 rounded-xl border border-[#bfd4c3] bg-white text-[#315e4f] px-5 py-3 text-sm font-bold"><UserPlus size={17}/> Add by hand</button><span className="text-xs text-[var(--text-secondary)]">One candidate list. Calendar totals update automatically.</span></div>}
+        <CalendarChrome
+          branchLabel={activeBranch === 'global' || !activeBranch ? 'Both centres' : activeBranch === 'cochin' ? 'Kochi' : activeBranch === 'calicut' ? 'Calicut' : activeBranch}
+          periodLabel={getHeaderTitle()} monthLabel={monthRange.label} view={viewMode} canEdit={canEdit}
+          summary={isError ? undefined : monthVolume} unavailable={isError} refreshing={isFetching}
+          search={searchQuery} provider={examTypeFilter} providerOptions={allAvailableClients}
+          onView={setViewMode} onNavigate={navigate} onToday={() => setCurrentDate(new Date(indiaToday() + 'T12:00:00'))}
+          onSearch={setSearchQuery} onProvider={setExamTypeFilter} onClear={() => { setSearchQuery(''); setExamTypeFilter('all') }}
+          onAnalysis={() => setShowAnalysis(true)} onAdd={() => openModal()} onRoster={setRosterMode}
+          onRefresh={() => { void refetch(); void seatContext.refetch() }}
+        />
         {rosterMode && <Suspense fallback={<p role="status">Opening candidate roster…</p>}><CalendarRosterDialog mode={rosterMode} day={formatDateForIST(selectedDate || currentDate)} branch={activeBranch} onClose={() => setRosterMode(null)} /></Suspense>}
-        {/* ── TOOLBAR ── */}
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-5 bg-[var(--card-bg)] rounded-xl border border-[var(--border-color)] px-4 py-3">
-          <div className="flex items-center gap-3 flex-wrap">
-            {/* View Mode Toggle */}
-            <div className="calendar-view-modes flex items-center bg-[var(--recessed-bg)] rounded-lg border border-[var(--border-color)] p-0.5">
-              {([
-                { mode: 'month' as CalendarViewMode, icon: <LayoutGrid size={14} />, label: 'Month' },
-                { mode: 'day'   as CalendarViewMode, icon: <AlignJustify size={14} />, label: 'Day' },
-                { mode: 'week'  as CalendarViewMode, icon: <Columns size={14} />,   label: 'Week' },
-                { mode: 'seats' as CalendarViewMode, icon: <Users size={14} />, label: 'Seat management' },
-              ]).map(({ mode, icon, label }) => (
-                <button key={mode}
-                  onClick={() => setViewMode(mode)}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all ${viewMode === mode
-                    ? 'bg-[var(--accent-mint)] text-white shadow'
-                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}>
-                  {icon} {label}
-                </button>
-              ))}
-            </div>
-
-            {/* Month/Week/Day Navigation */}
-            <div className="flex items-center bg-[var(--recessed-bg)] rounded-lg border border-[var(--border-color)]">
-              <button aria-label="Previous calendar period" onClick={() => navigate('prev')} className="p-2.5 hover:bg-[var(--card-bg)] rounded-l-lg transition-colors">
-                <ChevronLeft size={16} className="text-[var(--text-secondary)]" />
-              </button>
-              <span className="px-4 text-sm font-bold text-[var(--text-primary)] min-w-[160px] text-center">{getHeaderTitle()}</span>
-              <button aria-label="Next calendar period" onClick={() => navigate('next')} className="p-2.5 hover:bg-[var(--card-bg)] rounded-r-lg transition-colors">
-                <ChevronRight size={16} className="text-[var(--text-secondary)]" />
-              </button>
-            </div>
-            <button onClick={() => setCurrentDate(new Date())}
-              className="px-4 py-2.5 text-sm font-bold text-[var(--text-secondary)] bg-[var(--recessed-bg)] border border-[var(--border-color)] rounded-lg hover:border-[var(--accent-mint)] hover:text-[var(--accent-mint)] transition-colors">
-              Today
-            </button>
-          </div>
-
-          <div className="planning-calendar-actions flex items-center gap-2">
-            {/* Search */}
-            <div className="relative">
-              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Search sessions…"
-                className="pl-9 pr-3 py-2.5 bg-[var(--recessed-bg)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] placeholder-[var(--text-secondary)]/50 focus:outline-none focus:border-[var(--accent-mint)] w-40 md:w-48 transition-all"
-              />
-            </div>
-
-            {/* Exam Type Dropdown */}
-            <div className="relative hidden md:block">
-              <select 
-                value={examTypeFilter} 
-                onChange={e => setExamTypeFilter(e.target.value)}
-                className="pl-3 pr-8 py-2.5 bg-[var(--recessed-bg)] border border-[var(--border-color)] rounded-lg text-sm font-bold text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent-mint)] transition-all appearance-none"
-              >
-                <option value="all">All Clients</option>
-                {allAvailableClients.map(k => (
-                  <option key={k.code} value={k.code}>{k.label}</option>
-                ))}
-              </select>
-              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)] pointer-events-none" />
-            </div>
-
-            {/* Advanced Filters */}
-            <div className="relative">
-              <button onClick={() => setShowFilters(!showFilters)}
-                className={`p-2 rounded-lg border transition-colors ${showFilters ? 'bg-[var(--accent-mint)]/10 border-[var(--accent-mint)]/40 text-[var(--accent-mint)]' : 'bg-[var(--recessed-bg)] border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}>
-                <Filter size={14} />
-              </button>
-              <AnimatePresence>
-                {showFilters && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10, scale: 0.97 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -10, scale: 0.97 }}
-                    className="absolute right-0 mt-2 w-64 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl shadow-2xl z-30 p-4"
-                  >
-                    <p className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-3">Filters</p>
-                    <div className="space-y-3">
-                      <div>
-                        <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase">Client / Exam</label>
-                        <select value={examTypeFilter} onChange={e => setExamTypeFilter(e.target.value)}
-                          className="mt-1 w-full px-2 py-1.5 bg-[var(--recessed-bg)] border border-[var(--border-color)] rounded-lg text-xs text-[var(--text-primary)] focus:outline-none">
-                          <option value="all">All Clients</option>
-                          {allAvailableClients.map(k => (
-                            <option key={k.code} value={k.code}>{k.label}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <button onClick={() => { setExamTypeFilter('all'); setSearchQuery('') }}
-                        className="w-full py-1.5 text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-color)] rounded-lg transition-colors">
-                        Clear Filters
-                      </button>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
-            {/* Analysis */}
-            <button onClick={() => setShowAnalysis(true)}
-              className="px-4 py-2.5 text-sm font-bold text-[var(--text-secondary)] bg-[var(--recessed-bg)] border border-[var(--border-color)] rounded-lg hover:border-[var(--accent-mint)] hover:text-[var(--accent-mint)] transition-colors flex items-center gap-1.5">
-              <TrendingUp size={13} /> Analysis
-            </button>
-
-            {/* Add Session */}
-            <button onClick={() => openModal()}
-              disabled={!canEdit}
-              className="px-4 py-2 text-xs font-bold text-white bg-[var(--accent-mint)] hover:bg-[var(--accent-mint-hover)] rounded-lg shadow-sm transition-all flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
-              <Plus size={13} /> Add Session
-            </button>
-          </div>
-        </div>
-
-        {/* ── ACTIVE FILTERS CHIPS ── */}
-        {(searchQuery || examTypeFilter !== 'all') && (
-          <div className="flex items-center gap-2 mb-4 flex-wrap">
-            <span className="text-[11px] text-[var(--text-secondary)] font-medium">Active filters:</span>
-            {searchQuery && (
-              <span className="flex items-center gap-1 px-2 py-0.5 bg-[var(--accent-mint)]/10 border border-[var(--accent-mint)]/30 text-[var(--accent-mint)] rounded-full text-[10px] font-bold">
-                "{searchQuery}" <button onClick={() => setSearchQuery('')}><X size={10} /></button>
-              </span>
-            )}
-            {examTypeFilter !== 'all' && (
-              <span className="flex items-center gap-1 px-2 py-0.5 bg-[var(--recessed-bg)] border border-[var(--border-color)] text-[var(--text-primary)] rounded-full text-[10px] font-bold">
-                {examTypeFilter} <button onClick={() => setExamTypeFilter('all')}><X size={10} /></button>
-              </span>
-            )}
-          </div>
-        )}
-
         {/* ── CALENDAR VIEWS ── */}
         {viewMode === 'month' && <MonthView />}
         {viewMode === 'week' && <WeekView />}
@@ -1524,12 +1359,11 @@ export function FetsCalendarPremium() {
         )}
       </AnimatePresence>
 
-      {/* Analysis Modal */}
-      <AnimatePresence>
-        {showAnalysis && (
-          <CalendarAnalysis onClose={() => setShowAnalysis(false)} activeBranch={activeBranch} onOpenSeatManagement={date => { setShowAnalysis(false); if (date) openSeatManagement(date); else setViewMode('seats') }} />
-        )}
-      </AnimatePresence>
+      {showAnalysis && <Suspense fallback={<p role="status">Opening Calendar analytics…</p>}>
+        <CalendarAnalysis onClose={() => setShowAnalysis(false)} activeBranch={activeBranch} initialMonth={monthKey}
+          onOpenSeatManagement={date => { setShowAnalysis(false); if (date) openSeatManagement(date); else setViewMode('seats') }}
+          onOpenCalendarDate={date => { setShowAnalysis(false); setCurrentDate(new Date(date + 'T12:00:00')); setViewMode('day') }} />
+      </Suspense>}
 
       {/* Custom scrollbar styles */}
       <style>{`
