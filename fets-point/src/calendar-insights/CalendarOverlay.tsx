@@ -24,6 +24,7 @@ export function CalendarOverlay({
 }: CalendarOverlayProps) {
   const root = useRef<HTMLDivElement>(null);
   const close = useRef(onClose);
+  const focusFirst = useRef<() => void>(() => {});
   close.current = onClose;
 
   useLayoutEffect(() => {
@@ -90,7 +91,7 @@ export function CalendarOverlay({
     const firstButton = () =>
       focusables().find((element) => element.tagName === "BUTTON") ||
       root.current;
-    firstButton()?.focus({ preventScroll: true });
+    focusFirst.current = () => firstButton()?.focus({ preventScroll: true });
 
     const keyboard = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -141,6 +142,12 @@ export function CalendarOverlay({
       if (opener?.isConnected) opener.focus({ preventScroll: true });
     };
   }, []);
+
+  // Details and its edit form share this portal and original Calendar opener.
+  // Move focus to the new visible panel whenever that dialog mode changes.
+  useLayoutEffect(() => {
+    focusFirst.current();
+  }, [title]);
 
   return createPortal(
     <div

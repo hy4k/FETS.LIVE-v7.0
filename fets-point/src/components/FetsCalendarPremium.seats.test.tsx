@@ -62,6 +62,21 @@ describe('Calendar seat integration',()=>{
   expect(within(details).getByText('35 candidates')).toBeInTheDocument();
   expect(within(details).getAllByText(/Cancelled/).length).toBeGreaterThan(0);
  });
+ it('returns keyboard focus to the same Calendar date after closing its details',()=>{
+  setup();const day=screen.getByRole('button',{name:'View sessions for 14/11/2026'});day.focus();
+  fireEvent.keyDown(day,{key:'Enter'});const details=screen.getByRole('dialog',{name:'Session details'});
+  fireEvent.keyDown(details,{key:'Escape'});
+  expect(screen.getByRole('button',{name:'View sessions for 14/11/2026'})).toHaveFocus();
+  expect(day).toBeInTheDocument();
+ });
+ it('keeps one visible form and returns to its date when editing from session details',()=>{
+  setup();const day=screen.getByRole('button',{name:'View sessions for 14/11/2026'});day.focus();fireEvent.keyDown(day,{key:'Enter'});
+  const details=screen.getByRole('dialog',{name:'Session details'});const edit=within(details).getByRole('button',{name:'Edit Pearson exam'});edit.focus();fireEvent.click(edit);
+  const form=screen.getByRole('dialog',{name:'Edit session'});
+  expect(form.querySelectorAll(':scope > .fixed')).toHaveLength(1);
+  expect(within(form).getByRole('button',{name:'Close session form'})).toHaveFocus();
+  fireEvent.keyDown(form,{key:'Escape'});expect(screen.getByRole('button',{name:'View sessions for 14/11/2026'})).toHaveFocus();
+ });
  it('opens the real session form outside the scrolling Calendar and restores its launcher on Escape',()=>{
   setup();const launcher=screen.getByRole('button',{name:'Add session'});launcher.focus();fireEvent.click(launcher);
   const panel=screen.getByRole('dialog',{name:'Add session'});expect(panel.parentElement).toBe(document.body);

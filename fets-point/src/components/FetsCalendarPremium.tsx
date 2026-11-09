@@ -996,9 +996,10 @@ export function FetsCalendarPremium() {
         />
         {rosterMode && <Suspense fallback={<p role="status">Opening candidate roster…</p>}><CalendarRosterDialog mode={rosterMode} day={calendarDateKey(selectedDate || currentDate)} branch={activeBranch} onClose={() => setRosterMode(null)} /></Suspense>}
         {/* ── CALENDAR VIEWS ── */}
-        {viewMode === 'month' && <MonthView />}
-        {viewMode === 'week' && <WeekView />}
-        {viewMode === 'day' && <DayView />}
+        {/* These are pure JSX helpers. Keep their DOM stable across dialog state updates. */}
+        {viewMode === 'month' && MonthView()}
+        {viewMode === 'week' && WeekView()}
+        {viewMode === 'day' && DayView()}
         {viewMode === 'seats' && <Suspense fallback={<p role="status">Opening seat management…</p>}>
           <SeatManagement sessions={sessions} currentDate={currentDate} branch={activeBranch} userId={user?.id || ''}
             onSelectDate={setCurrentDate} onRefresh={() => { void refetch() }} dataLoading={loading}
@@ -1009,7 +1010,7 @@ export function FetsCalendarPremium() {
         title={showModal ? (editingSession ? 'Edit session' : 'Add session') : 'Session details'}
         onClose={closeModal} dark={isDarkMode}>
       {/* ════════════════════ DAILY DETAILS MODAL ════════════════════ */}
-      <AnimatePresence>
+      {!showModal && <AnimatePresence>
         {showDetailsModal && selectedDate && (() => {
           const daySessions = getSessionsForDate(selectedDate)
           const grouped = groupSessionsByKind(daySessions)
@@ -1037,7 +1038,7 @@ export function FetsCalendarPremium() {
                     </span>
                   </div>
                 </div>
-                <button onClick={closeModal}
+                <button aria-label="Close session details" onClick={closeModal}
                   className="w-9 h-9 rounded-xl bg-[var(--recessed-bg)]/40 flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--recessed-bg)]/80 transition-colors">
                   <X size={16} />
                 </button>
@@ -1144,7 +1145,7 @@ export function FetsCalendarPremium() {
                                         {canEdit && (session.id === undefined || session.id >= 0) && (
                                           <div className="ml-auto flex items-center gap-1">
                                             <button
-                                              onClick={(e) => { e.stopPropagation(); openModal(selectedDate!, session as Session) }}
+                                              aria-label={`Edit ${session.exam_name || 'session'}`} onClick={(e) => { e.stopPropagation(); openModal(selectedDate!, session as Session) }}
                                               className="p-1.5 rounded-lg text-[var(--text-secondary)] hover:text-[var(--accent-mint)] hover:bg-[var(--accent-mint)]/10 transition-colors"
                                             >
                                               <Edit size={13} />
@@ -1216,7 +1217,7 @@ export function FetsCalendarPremium() {
                                         </div>
                                         {canEdit && (
                                           <div className="flex items-center gap-0.5 shrink-0">
-                                            <button onClick={() => openModal(selectedDate!, session as Session)}
+                                            <button aria-label={`Edit ${session.exam_name || 'session'}`} onClick={() => openModal(selectedDate!, session as Session)}
                                               className="p-1 rounded text-[var(--text-secondary)] hover:text-[var(--accent-mint)] hover:bg-[var(--accent-mint)]/10 transition-colors">
                                               <Edit size={12} />
                                             </button>
@@ -1257,8 +1258,7 @@ export function FetsCalendarPremium() {
           </div>
           )
         })()}
-      </AnimatePresence>
-
+      </AnimatePresence>}
       {/* ════════════════════ ADD / EDIT SESSION MODAL ════════════════════ */}
       <AnimatePresence>
         {showModal && (
@@ -1276,7 +1276,7 @@ export function FetsCalendarPremium() {
                   <h3 className="text-lg font-extrabold text-[var(--text-primary)]">{editingSession ? 'Edit Session' : 'New Session'}</h3>
                   <p className="text-xs text-[var(--text-secondary)] mt-0.5">{editingSession ? 'Update session details' : 'Schedule a new exam session'}</p>
                 </div>
-                <button onClick={closeModal}
+                <button aria-label="Close session form" onClick={closeModal}
                   className="w-9 h-9 rounded-xl bg-[var(--recessed-bg)]/40 flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--recessed-bg)]/80 transition-colors">
                   <X size={16} />
                 </button>
