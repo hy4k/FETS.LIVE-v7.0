@@ -5,6 +5,8 @@ html.fets-calendar-overlay-open body {
 }
 
 .fets-calendar-overlay.fets-calendar-overlay[role="dialog"] {
+  /* The inherited planning palette is too faint on the booking form surfaces. */
+  --text-secondary: #50656b !important;
   position: fixed !important;
   inset: 0 !important;
   z-index: 2147482900 !important;
