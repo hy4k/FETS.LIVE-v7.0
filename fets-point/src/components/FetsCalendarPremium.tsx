@@ -3,7 +3,8 @@ import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from
 import { Calendar, Plus, Edit, Trash2, X, Clock, Users, Eye, MapPin, Filter, Loader2, User, ChevronDown } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import CalendarChrome from '../calendar-insights/CalendarChrome'
-import { calendarMonthRange, indiaToday, volumeForSessions } from '../calendar-insights/model'
+import CalendarOverlay from '../calendar-insights/CalendarOverlay'
+import { calendarMonthRange, indiaToday, isCancelled, volumeForSessions } from '../calendar-insights/model'
 import { useAuth } from '../hooks/useAuth'
 import { useBranch } from '../hooks/useBranch'
 import { useBranchFilter } from '../hooks/useBranchFilter'
@@ -16,6 +17,7 @@ import { toast } from 'react-hot-toast'
 import '../styles/calendar-enhancements.css'
 import SeatCalendarBadges from '../seats/SeatCalendarBadges'
 import { analyseDay } from '../seats/engine'
+import type { SeatSession } from '../seats/types'
 import { criticalLoad } from '../seats/presentation'
 import { useSeatContext } from '../seats/useSeatContext'
 
@@ -468,6 +470,9 @@ export function FetsCalendarPremium() {
   const monthVolume = useMemo(() => volumeForSessions(sessions, monthRange.from, monthRange.through, indiaToday()), [sessions, monthRange.from, monthRange.through])
 
   const days = useMemo(() => getDaysInMonth(), [getDaysInMonth])
+  // Use the same scheduled-volume rules as Analytics; cancelled records remain inspectable.
+  const scheduledVolume = (rows: Session[]) => volumeForSessions(rows as SeatSession[], monthRange.from, monthRange.through, indiaToday())
+  const candidateLabel = (session: Session, withUnit = true) => isCancelled(session) ? 'Cancelled' : Number.isSafeInteger(session.candidate_count) && session.candidate_count >= 0 ? `${session.candidate_count}${withUnit ? ' PAX' : ''}` : 'Count unknown'
   const isToday = (d: Date | null) => d ? calendarDateKey(d) === indiaToday() : false
   const HOURS = Array.from({ length: 14 }, (_, i) => i + 7) // 7am–8pm
 
@@ -484,7 +489,7 @@ export function FetsCalendarPremium() {
       >
         <span className="w-1.5 h-1.5 rounded-full shrink-0 ring-1 ring-white/10" style={{ backgroundColor: c.dot }} />
         <span className="font-bold truncate flex-1 tracking-tight">{getClientBadgeLabel(session)}</span>
-        <span className="font-extrabold tabular-nums opacity-90">{session.candidate_count}</span>
+        <span className="font-extrabold tabular-nums opacity-90">{candidateLabel(session, false)}</span>
       </div>
     )
   }
@@ -510,24 +515,25 @@ export function FetsCalendarPremium() {
           )
           const ds = getSessionsForDate(date)
           const allDs = getAllSessionsForDate(date)
-          const total = ds.reduce((s, x) => s + x.candidate_count, 0)
+          const dayVolume = scheduledVolume(ds)
+          const total = dayVolume.candidates
           const isCurrentDay = isToday(date)
           const isWeekend = date.getDay() === 0 || date.getDay() === 6
           
           // Group by 3-letter client code
           const clientMap = new Map<string, { code3: string; clientName: string; count: number; sessionCount: number; color: string }>()
-          ds.forEach(s => {
+          ds.filter(s => !isCancelled(s)).forEach(s => {
             const code3 = getClient3LetterCode(s.client_name, s.exam_name)
             const color = getExamColor(code3).dot
             const existing = clientMap.get(code3)
             if (existing) {
-              existing.count += s.candidate_count
+              existing.count += scheduledVolume([s]).candidates
               existing.sessionCount += 1
             } else {
               clientMap.set(code3, {
                 code3,
                 clientName: s.client_name || code3,
-                count: s.candidate_count,
+                count: scheduledVolume([s]).candidates,
                 sessionCount: 1,
                 color
               })
@@ -697,7 +703,7 @@ export function FetsCalendarPremium() {
                     <Users size={10} />
                     <span>{total} PAX</span>
                   </span>
-                  <span>{ds.length} sessions</span>
+                  <span>{dayVolume.sessionCount} sessions</span>
                 </div>
               )}
 
@@ -819,7 +825,7 @@ export function FetsCalendarPremium() {
                             </div>
                             <div className="text-[10px] text-[var(--accent-mint)] font-black flex items-center gap-1">
                               <Users size={9} className="shrink-0" />
-                              {s.candidate_count} PAX
+                              {candidateLabel(s)}
                             </div>
                           </div>
                         </div>
@@ -860,7 +866,7 @@ export function FetsCalendarPremium() {
               {currentDate.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}
             </h3>
             <p className="text-xs text-[var(--text-secondary)] mt-1 font-medium tracking-wide uppercase">
-              {daySessions.length} sessions <span className="mx-1.5 text-[var(--border-color)]">•</span> {daySessions.reduce((s, x) => s + x.candidate_count, 0)} candidates
+              {scheduledVolume(daySessions).sessionCount} scheduled sessions <span className="mx-1.5 text-[var(--border-color)]">•</span> {scheduledVolume(daySessions).candidates} candidates
             </p>
           </div>
           {canEdit && (
@@ -870,7 +876,7 @@ export function FetsCalendarPremium() {
             </button>
           )}
         </div>
-        {daySessions.some(s => !s.start_time) && <div className="p-4 border-b border-[var(--border-color)]"><strong className="text-sm">Time to be confirmed</strong>{daySessions.filter(s => !s.start_time).map(s => <button key={s.id} onClick={() => { setSelectedDate(currentDate); setShowDetailsModal(true) }} className="block text-sm mt-2">{s.client_name} · {s.exam_name || 'Exam not specified'} · {s.candidate_count} candidates</button>)}</div>}
+        {daySessions.some(s => !s.start_time) && <div className="p-4 border-b border-[var(--border-color)]"><strong className="text-sm">Time to be confirmed</strong>{daySessions.filter(s => !s.start_time).map(s => <button key={s.id} onClick={() => { setSelectedDate(currentDate); setShowDetailsModal(true) }} className="block text-sm mt-2">{s.client_name} · {s.exam_name || 'Exam not specified'} · {candidateLabel(s)}</button>)}</div>}
         {/* Timeline */}
         <div className="flex overflow-y-auto max-h-[600px] custom-scrollbar">
           {/* Hour labels */}
@@ -937,7 +943,7 @@ export function FetsCalendarPremium() {
                       </span>
                       <span className="text-xs flex items-center gap-1.5 font-black tracking-wider text-[var(--accent-mint)]">
                         <Users size={12} className="text-[var(--text-accent)]" />
-                        {s.candidate_count} PAX
+                        {candidateLabel(s)}
                       </span>
                       {(s as any).assigned_staff && (
                         <span className="text-xs flex items-center gap-1.5 font-semibold tracking-wider text-[var(--text-secondary)]">
@@ -999,6 +1005,9 @@ export function FetsCalendarPremium() {
             dataError={isError ? (error as Error)?.message || 'Calendar unavailable' : undefined} isFetching={isFetching} />
         </Suspense>}
       </div>
+      {(showDetailsModal || showModal) && <CalendarOverlay
+        title={showModal ? (editingSession ? 'Edit session' : 'Add session') : 'Session details'}
+        onClose={closeModal} dark={isDarkMode}>
       {/* ════════════════════ DAILY DETAILS MODAL ════════════════════ */}
       <AnimatePresence>
         {showDetailsModal && selectedDate && (() => {
@@ -1021,10 +1030,10 @@ export function FetsCalendarPremium() {
                     {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
                   </h3>
                   <div className="flex items-center gap-3 mt-1">
-                    <span className="text-xs font-bold text-[var(--text-secondary)]">{daySessions.length} sessions</span>
+                    <span className="text-xs font-bold text-[var(--text-secondary)]">{scheduledVolume(daySessions).sessionCount} scheduled sessions</span>
                     <span className="w-1 h-1 rounded-full bg-[var(--border-color)]" />
                     <span className="text-xs font-bold text-[var(--text-secondary)]">
-                      {daySessions.reduce((s, x) => s + x.candidate_count, 0)} candidates
+                      {scheduledVolume(daySessions).candidates} candidates
                     </span>
                   </div>
                 </div>
@@ -1041,7 +1050,7 @@ export function FetsCalendarPremium() {
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                       {grouped.map(({ kind, sessions: grpSessions }) => {
                         const band = getExamColor(kind)
-                        const totalPax = grpSessions.reduce((s, x) => s + x.candidate_count, 0)
+                        const totalPax = scheduledVolume(grpSessions).candidates
                         const isExpanded = expandedClient === kind
                         return (
                           <button
@@ -1061,7 +1070,7 @@ export function FetsCalendarPremium() {
                             </div>
                             <div className="flex items-baseline justify-between">
                               <span className="text-2xl font-extrabold tabular-nums" style={{ color: band.text }}>{totalPax}</span>
-                              <span className="text-[10px] font-bold text-[var(--text-secondary)]">{grpSessions.length} {grpSessions.length === 1 ? 'session' : 'sessions'}</span>
+                              <span className="text-[10px] font-bold text-[var(--text-secondary)]">{scheduledVolume(grpSessions).sessionCount} scheduled sessions</span>
                             </div>
                           </button>
                         )
@@ -1114,9 +1123,9 @@ export function FetsCalendarPremium() {
                                         </div>
                                         <div className="text-right shrink-0">
                                           <div className="text-2xl font-extrabold tabular-nums" style={{ color: c.text }}>
-                                            {session.candidate_count}
+                                            {candidateLabel(session, false)}
                                           </div>
-                                          <div className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">candidates</div>
+                                          <div className="text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">{isCancelled(session) ? 'excluded from totals' : 'candidates'}</div>
                                         </div>
                                       </div>
                                       <div className="flex items-center flex-wrap gap-3 mt-3 pt-3 border-t border-[var(--border-color)]/30">
@@ -1201,7 +1210,7 @@ export function FetsCalendarPremium() {
                                               {formatTime(session.start_time)} – {formatTime(session.end_time)}
                                             </span>
                                             <span className="flex items-center gap-1">
-                                              <Users size={10} /> {session.candidate_count}
+                                              <Users size={10} /> {candidateLabel(session)}
                                             </span>
                                           </div>
                                         </div>
@@ -1361,6 +1370,8 @@ export function FetsCalendarPremium() {
           </div>
         )}
       </AnimatePresence>
+
+      </CalendarOverlay>}
 
       {showAnalysis && <Suspense fallback={<p role="status">Opening Calendar analytics…</p>}>
         <CalendarAnalysis onClose={() => setShowAnalysis(false)} activeBranch={activeBranch} initialMonth={monthKey}

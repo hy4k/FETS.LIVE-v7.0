@@ -17,7 +17,7 @@ vi.mock('../seats/useSeatContext',()=>({useSeatContext:()=>({data:{rules:[],deta
 vi.mock('../calendar-insights/data',()=>({fetchInsightData:vi.fn(async()=>({sessions:[],previousSessions:[],context:{rules:[],details:[],can_edit_rules:false,adjacent_sessions:[]},previousError:null,seatError:null}))}));
 const setup=()=>render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><FetsCalendarPremium/></QueryClientProvider>);
 beforeEach(()=>{vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(new Date('2026-11-06T12:00:00Z'));state.error=false;state.refresh.mockReset();});
-afterEach(()=>vi.useRealTimers());
+afterEach(()=>{rows.splice(2);vi.useRealTimers()});
 describe('Calendar seat integration',()=>{
  it('keeps all providers in seat badges even while the visible schedule is searched',()=>{
   setup();expect(screen.getByRole('button',{name:/Kochi Overbooked: 35 of 31/})).toBeInTheDocument();
@@ -53,5 +53,19 @@ describe('Calendar seat integration',()=>{
   await waitFor(()=>expect(screen.getByLabelText('Seat management date')).toHaveValue('2026-11-14'));
   fireEvent.click(screen.getByRole('button',{name:'Day'}));fireEvent.click(screen.getByRole('button',{name:'Today'}));
   expect(screen.getByRole('heading',{name:'Friday, 6 November 2026'})).toBeInTheDocument();
+ });
+ it('excludes cancelled reservations from day totals while keeping their records available',()=>{
+  rows.push({...rows[0],id:3,candidate_count:999,exam_name:'Cancelled exam',status:'cancelled'} as typeof rows[number]);
+  setup();const day=screen.getByRole('button',{name:'View sessions for 14/11/2026'});
+  expect(within(day).getByText('35 PAX')).toBeInTheDocument();expect(within(day).queryByText('1034 PAX')).toBeNull();
+  fireEvent.click(day);const details=screen.getByRole('dialog',{name:'Session details'});
+  expect(within(details).getByText('35 candidates')).toBeInTheDocument();
+  expect(within(details).getAllByText(/Cancelled/).length).toBeGreaterThan(0);
+ });
+ it('opens the real session form outside the scrolling Calendar and restores its launcher on Escape',()=>{
+  setup();const launcher=screen.getByRole('button',{name:'Add session'});launcher.focus();fireEvent.click(launcher);
+  const panel=screen.getByRole('dialog',{name:'Add session'});expect(panel.parentElement).toBe(document.body);
+  expect(within(panel).getByRole('button',{name:'Cancel'})).toBeInTheDocument();
+  fireEvent.keyDown(panel,{key:'Escape'});expect(screen.queryByRole('dialog')).toBeNull();expect(launcher).toHaveFocus();
  });
 });

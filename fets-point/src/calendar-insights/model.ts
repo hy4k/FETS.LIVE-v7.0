@@ -36,7 +36,7 @@ const statusKey = (status: string | null | undefined) =>
     ?.trim()
     .toLowerCase()
     .replace(/[\s-]+/g, "_") || "";
-const isCancelled = (session: { status?: string | null }) =>
+export const isCancelled = (session: { status?: string | null }) =>
   ["cancelled", "canceled"].includes(statusKey(session.status));
 const validCount = (count: number | null): count is number =>
   typeof count === "number" && Number.isSafeInteger(count) && count >= 0;
