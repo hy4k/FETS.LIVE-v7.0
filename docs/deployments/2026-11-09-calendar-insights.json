@@ -1,0 +1,75 @@
+{
+  "verified_at_utc": "2026-11-09T18:14:04.342680+00:00",
+  "release": "20261109T112835Z-calendar-insights",
+  "frontend_commit": "5cff4c3a5d6ea2e6b335766af1337586b6a91057",
+  "frontend_image": "sha256:8409cb34685f6ccae526570e83dfaa170da724252b98751a26e3f4247a887b81",
+  "index_sha256": "b4aefda24a66afa9b44a24834f69278ad6e6a61586b6eabba80c5ef8fb3bd914",
+  "previous_release": "20261107T100937Z-prometric-outreach",
+  "rollback_image": "sha256:d92816d72404933786f9ade563442a5c819d697d80ec2c7e73be49ebefcd6cc7",
+  "rollback_script": "/opt/fets-releases/20261109T112835Z-calendar-insights/rollback.sh",
+  "rollback_archive": "/opt/fets-releases/20261109T112835Z-calendar-insights/rollback-image.tar.gz",
+  "database_changes": false,
+  "business_record_writes": false,
+  "dependency_changes": false,
+  "configuration_and_other_services_preserved": true,
+  "public_routes_and_assets_verified": 65,
+  "production_entry_and_lazy_modules_verified": {
+    "shell": "RedesignShell-CgwpLJYv.js",
+    "outreach": "PrometricWorkspace-6O2sNJ19.js",
+    "analytics": "CalendarAnalysis-Bkxamhjw.js",
+    "calendarFiles": [
+      "FetsCalendarPremium-B6j5Xp-g.js"
+    ],
+    "defaultComponent": true,
+    "sharedComponents": [
+      "MyDeskPage",
+      "CalendarPage",
+      "RosterPage",
+      "RaiseCasePage",
+      "FieldLabel",
+      "ChipRow",
+      "ShiftHandoverPage"
+    ],
+    "moduleLoaded": true,
+    "outreachModuleLoaded": true,
+    "calendarAnalyticsModuleLoaded": true
+  },
+  "production_check_scope": "Unauthenticated public routes, static asset bytes and actual production lazy-module evaluation; private workflows verified with isolated synthetic transport.",
+  "compiled_source_and_packaged_assets_match": true,
+  "typescript_passed": true,
+  "new_frontend_tests_passed": 78,
+  "frontend_suite": {
+    "total": 766,
+    "passed": 759,
+    "baseline_failures": 5,
+    "skipped": 2,
+    "same_preexisting_failures": true,
+    "preexisting_failure_names": [
+      "useCalendarSessions mapping logic should map Prometric clients correctly based on the exam name",
+      "useChat hooks useGetOrCreateDM should create a new DM conversation if none exists",
+      "useChat hooks useGetOrCreateDM should handle error when creating new DM conversation",
+      "useChat hooks useGetOrCreateDM should return an existing DM conversation",
+      "useChat hooks useSendMessage should send a message successfully"
+    ]
+  },
+  "browser": {
+    "checks": 296,
+    "viewports": [
+      1440,
+      768,
+      390
+    ],
+    "screenshots": 66,
+    "failures": 0,
+    "external_requests": 0,
+    "minimum_measured_normal_text_contrast": 4.54,
+    "civil_date_timezones": [
+      "America/Los_Angeles",
+      "Pacific/Kiritimati"
+    ],
+    "source_hashes_verified": 66,
+    "temporary_containers_removed": true
+  },
+  "artifact_directory": "/root/.codex/artifacts/calendar-insights-20261109",
+  "pull_request": "https://github.com/hy4k/FETS.LIVE-v7.0/pull/57"
+}
