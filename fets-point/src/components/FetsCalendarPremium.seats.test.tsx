@@ -57,7 +57,7 @@ describe('Calendar seat integration',()=>{
  it('excludes cancelled reservations from day totals while keeping their records available',()=>{
   rows.push({...rows[0],id:3,candidate_count:999,exam_name:'Cancelled exam',status:'cancelled'} as typeof rows[number]);
   setup();const day=screen.getByRole('button',{name:'View sessions for 14/11/2026'});
-  expect(within(day).getByText('35 PAX')).toBeInTheDocument();expect(within(day).queryByText('1034 PAX')).toBeNull();
+  expect(within(day).getByText('35 PAX')).toBeInTheDocument();expect(within(day).getByTitle('2 scheduled sessions')).toHaveTextContent('2s');expect(within(day).queryByText('1034 PAX')).toBeNull();
   fireEvent.click(day);const details=screen.getByRole('dialog',{name:'Session details'});
   expect(within(details).getByText('35 candidates')).toBeInTheDocument();
   expect(within(details).getAllByText(/Cancelled/).length).toBeGreaterThan(0);

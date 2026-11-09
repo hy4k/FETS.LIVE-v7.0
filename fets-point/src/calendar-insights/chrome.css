@@ -40,6 +40,10 @@
   outline-offset: 3px;
 }
 .cal-heading {
+  /* Mobile global transforms create sibling stacking contexts. Keep the menu
+     above the month ledger as well as above the rest of this heading. */
+  position: relative;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: space-between;

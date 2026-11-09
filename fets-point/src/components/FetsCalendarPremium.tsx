@@ -665,9 +665,9 @@ export function FetsCalendarPremium() {
                       {/* Session count pill */}
                       <span 
                         className="text-[9px] font-black text-[var(--text-secondary)] bg-[var(--recessed-bg)] px-1.5 py-0.5 rounded border border-[var(--border-color)] uppercase tracking-wider leading-none"
-                        title={`${ds.length} session${ds.length > 1 ? 's' : ''}`}
+                        title={`${dayVolume.sessionCount} scheduled session${dayVolume.sessionCount === 1 ? '' : 's'}`}
                       >
-                        {ds.length}s
+                        {dayVolume.sessionCount}s
                       </span>
                     </div>
                   )}
