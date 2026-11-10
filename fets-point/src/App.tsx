@@ -39,7 +39,6 @@ import { isMithunEmail } from './utils/authUtils';
 
 // Capacitor Imports
 import { App as CapacitorApp } from '@capacitor/app';
-import { PushNotifications } from '@capacitor/push-notifications';
 import { Device } from '@capacitor/device';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { StatusBar, Style } from '@capacitor/status-bar';
@@ -194,9 +193,19 @@ function AppContent() {
         if (info.platform === 'web') return;
         await StatusBar.setStyle({ style: Style.Light });
         await StatusBar.setBackgroundColor({ color: '#FACC15' });
-        let perm = await PushNotifications.checkPermissions();
-        if (perm.receive !== 'granted') perm = await PushNotifications.requestPermissions();
-        if (perm.receive === 'granted') await PushNotifications.register();
+        // Push registration is deliberately NOT done here.
+        //
+        // PushNotifications.register() calls FirebaseMessaging.getInstance(),
+        // and the Android project has no google-services.json, so Firebase is
+        // never initialised. The resulting IllegalStateException is thrown on
+        // Capacitor's native plugin thread: this try/catch never sees it and
+        // the whole process is killed. Version 35 shipped with that call and
+        // crashed for every user the moment they tapped "Allow" — and on every
+        // launch afterwards, because the permission stays granted.
+        //
+        // Do not restore the call until google-services.json for
+        // com.fets.staffapp is in fets-point/android/app/ and a build has been
+        // launched on a device with notification permission granted.
       } catch (err) {
         console.error('❌ Capacitor init error:', err);
       }
